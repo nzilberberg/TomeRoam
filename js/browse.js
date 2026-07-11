@@ -6,7 +6,7 @@
 // Books & Files rows carry data-book / data-track so the host's presence tick
 // keeps resume/peer numbers live.
 window.Browse = (() => {
-  let o = {};                     // { mount, fmt, onPlay, onPlayFile, onOpenAuthor, onOpenFiles, onBack, getChapterPct, getPeers, onRender }
+  let o = {};                     // { mount, fmt, onPlay, onPlayFile, onOpenAuthor, onOpenFiles, onBack, getResumeEntry, getPeers, onRender }
   let authorsCache = null;        // authors list is stable within a session (books are cached in plex.js)
 
   // ---- rendered-page CACHE -------------------------------------------------
@@ -217,6 +217,7 @@ window.Browse = (() => {
     const cover = b.thumb ? Plex.artUrl(b.thumb) : null;
     const total = b.leafCount || 0, done = b.viewedLeafCount || 0;
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const res = o.getResumeEntry ? o.getResumeEntry(b.ratingKey) : null;
     el.innerHTML = `
       <div class="covertap" title="Resume">
         <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">
@@ -241,12 +242,15 @@ window.Browse = (() => {
   // Per-chapter completion, most-truthful source first:
   //   1) our OWN recorded progress for this chapter (how far we actually played it —
   //      the honest per-chapter %, since Plex hides audiobook viewOffset over HTTP),
-  //   2) Plex viewCount>0 → finished (100),
-  //   3) otherwise 0 — we have no evidence it was played (NOT the old "everything
+  //   2) the live resume chapter's offset (a cold peer/plugin source),
+  //   3) Plex viewCount>0 → finished (100),
+  //   4) otherwise 0 — we have no evidence it was played (NOT the old "everything
   //      before your spot is 100%" guess, which painted skipped chapters full).
-  function filePct(t, book) {
+  function filePct(t, i, resume, resumeIdx, book) {
     const mine = o.getChapterPct ? o.getChapterPct(book, t.ratingKey, t.durationMs) : null;
     if (mine != null) return mine;
+    if (resume && String(t.ratingKey) === String(resume.track))
+      return t.durationMs ? Math.min(100, Math.round(((resume.offsetMs || 0) / t.durationMs) * 100)) : 0;
     if (t.viewCount > 0) return 100;
     return 0;
   }
@@ -254,12 +258,14 @@ window.Browse = (() => {
   function filesView(m, book, tracks) {
     m.innerHTML = '';
     m.appendChild(header(book.title || 'Book', true));
+    const resume = o.getResumeEntry ? o.getResumeEntry(book.ratingKey) : null;
+    const resumeIdx = resume ? tracks.findIndex((t) => String(t.ratingKey) === String(resume.track)) : -1;
 
     const list = document.createElement('div');
     list.className = 'filelist';
     tracks.forEach((t, i) => {
-      const pct = filePct(t, book.ratingKey);
-      const startMs = 0;   // tapping a specific chapter plays it from the start
+      const pct = filePct(t, i, resume, resumeIdx, book.ratingKey);
+      const startMs = (resume && String(t.ratingKey) === String(resume.track)) ? (resume.offsetMs || 0) : 0;
       const row = document.createElement('div');
       row.className = 'filerow'; row.dataset.track = t.ratingKey; row.dataset.book = book.ratingKey;
       row.innerHTML = `

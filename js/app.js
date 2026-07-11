@@ -789,7 +789,7 @@
 
   // Play a book chosen from the browse/home views (resumes if it's in progress).
   function playFromBrowse(albRk, meta) {
-    playBook({ book: albRk, track: null, offsetMs: 0 }, meta);
+    playBook(bookEntries[albRk] || { book: albRk, track: null, offsetMs: 0 }, meta);
   }
   // Play a specific file (chapter) picked in the files view.
   function playFileFromBrowse(book, track, startMs) {
@@ -865,11 +865,29 @@
 
   // Fetch + render the two home carousels (shared by initial load + pull-to-refresh).
   async function loadHomeData() {
-    // Continue Listening comes straight from Plex's recently-played (lastViewedAt) —
-    // the app is fully self-contained and needs no companion plugin. The exact
-    // resume OFFSET (which Plex hides for audiobooks) is filled per book from our
-    // own Progress/myProgress store by bestSource() when a tile is tapped.
-    const cont = await Plex.getContinueListening();   // Plex recently-played, newest first
+    // The whole-library fetch (cached) powers both carousels + browse. The LMS
+    // plugin's resume playlist is OPTIONAL — a best-effort ADDITIVE layer: when
+    // it's absent (app-only user) getResumeMap returns [], and a fetch error is
+    // swallowed, so the home feed always renders from Plex alone. When present it
+    // supplies exact resume offsets + surfaces books listened to on the LMS side.
+    const [resume, books] = await Promise.all([
+      Plex.getResumeMap().catch(() => []),
+      Plex.getBooks(),
+    ]);
+    for (const k in bookEntries) delete bookEntries[k];
+    for (const b of resume) bookEntries[b.book] = b;
+    const byRk = new Map(books.map((b) => [String(b.ratingKey), b]));
+
+    // Continue Listening = Plex recently-played (standalone source of truth),
+    // then any additional books the plugin knows about, most-recent first.
+    const cont = await Plex.getContinueListening();
+    const have = new Set(cont.map((b) => String(b.ratingKey)));
+    for (const rk of Object.keys(bookEntries)) {
+      if (!have.has(String(rk)) && byRk.has(String(rk))) { cont.push(byRk.get(String(rk))); have.add(String(rk)); }
+    }
+    const recencyOf = (b) => (bookEntries[b.ratingKey] ? bookEntries[b.ratingKey].ts || 0 : b.lastViewedAt || 0);
+    cont.sort((a, b) => recencyOf(b) - recencyOf(a));
+
     renderCarousel($('clRow'), cont);
     status(cont.length ? '' : 'No books in progress yet — pick one from Books or Authors.');
     renderCarousel($('raRow'), await Plex.getRecentlyAdded(15));
@@ -899,6 +917,7 @@
     const cover = b.thumb ? Plex.artUrl(b.thumb) : null;
     const total = b.leafCount || 0, done = b.viewedLeafCount || 0;
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const res = bookEntries[b.ratingKey];
     const el = document.createElement('div');
     el.className = 'tile';
     el.dataset.book = b.ratingKey;
@@ -920,6 +939,7 @@
 
   // ---- multi-device presence UI --------------------------------------------
   let peersNow = [];
+  const bookEntries = {};   // book -> cold entry (from the resume playlist)
 
   // How "current" a device state is, on the server clock: a playing device is
   // live NOW; a paused/idle one is as-of when it last published.
@@ -959,7 +979,7 @@
 
   function freshestResumeMs(book) {
     if (ctx && String(ctx.book) === String(book) && !audio.paused && audio.currentTime) return audio.currentTime * 1000;
-    return bestSource(book).pos;
+    return bestSource(book, bookEntries[book]).pos;
   }
 
   const cssEsc = (v) => (window.CSS && CSS.escape) ? CSS.escape(String(v)) : String(v);
@@ -1005,6 +1025,8 @@
       const times = best.totMs ? (fmt(best.cumMs / 1000) + ' / -' + fmt(Math.max(0, best.totMs - best.cumMs) / 1000 / spd())) : fmt(best.cumMs / 1000);
       return { name: best.mine ? '' : (best.name || ''), times, cls: best.mine ? 'mine' : 'peer', pct: best.totMs ? (best.cumMs / best.totMs) * 100 : null };
     }
+    const cold = bookEntries[book];   // plugin cold-resume fallback (no cross-device author)
+    if (cold && cold.offsetMs) return { name: '', times: fmt(cold.offsetMs / 1000), cls: '', pct: null };
     return { name: '', times: '', cls: '', pct: null };
   }
   // Chapter row: position / -remaining(at speed) · total-track-length.
@@ -1325,7 +1347,7 @@
     if (!ctx) return;
     const p = livePeerForCtx();
     if (p) {
-      const best = bestSource(ctx.book);
+      const best = bestSource(ctx.book, bookEntries[ctx.book]);
       const idx = ctx.tracks.findIndex((t) => String(t.ratingKey) === String(best.track));
       if (idx >= 0) {
         if (window.PBDebug) PBDebug.log('PLAY', `resume ADOPT ${p.name || 'peer'} idx=${idx} pos=${((best.pos || 0) / 1000).toFixed(1)}s`);
@@ -1736,6 +1758,7 @@
     delete myProgress[book];                                            // our own last spot on this device
     try { localStorage.setItem(MYPROG, JSON.stringify(myProgress)); } catch {}
     Progress.clearBook(book);                                           // durable per-chapter + book records (republishes our board)
+    delete bookEntries[book];                                           // cold resume the tile shows
     try { const last = JSON.parse(localStorage.getItem(LAST) || 'null'); if (last && String(last.book) === String(book)) localStorage.removeItem(LAST); } catch {}
     try { await loadHomeData(); } catch {}                              // fresh library → viewedLeafCount reset
     Browse.clearCache();
@@ -1821,6 +1844,7 @@
       mount: $('browse'), fmt,
       onPlay: playFromBrowse, onPlayFile: playFileFromBrowse,
       onOpenAuthor: openAuthor, onOpenFiles: openFiles, onBack: goBack,
+      getResumeEntry: (rk) => bookEntries[rk] || null,
       getChapterPct,
       getPeers: () => peersNow,
       onRender: renderPresence,   // paint live peer/resume numbers right after a render
