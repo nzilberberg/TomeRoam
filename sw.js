@@ -12,7 +12,7 @@
 //
 // BUILD must be bumped every deploy (keep it in sync with js/debug.js). Changing
 // these bytes is what makes the browser install a new SW.
-const BUILD = '2026-07-11.85';
+const BUILD = '2026-07-11.86';
 const CACHE = 'tomeroam-' + BUILD;
 
 const ASSETS = [

@@ -1,14 +1,12 @@
 // plex.js — all Plex/plex.tv interaction for the TomeRoam PWA.
 // The app talks ONLY to Plex: plex.tv for sign-in + server discovery, then the
-// Plex Media Server directly for library, media, progress writes, and the
-// hidden "__tomeroam_resume" playlist that carries cold-resume positions.
+// Plex Media Server directly for library, media, and progress writes.
 // No server of the user's own is involved.
 
 const Plex = (() => {
   const PRODUCT = 'TomeRoam Player';
   const VERSION = '0.1.0';
   const PLEXTV  = 'https://plex.tv';
-  const RESUME_PLAYLIST = '__tomeroam_resume';
   const PLEX_ID = 'com.plexapp.plugins.library';
 
   const LS = {
@@ -257,23 +255,6 @@ const Plex = (() => {
     return j.MediaContainer || {};
   }
 
-  // --- resume store (the hidden playlist the LMS plugin maintains) ----------
-  // The plugin stores compact keys to keep the blob small:
-  //   {"v":1,"books":[{"b":albumRK,"t":trackRK,"o":offsetMs,"ts":epoch}, ...]}
-  // We expand them to friendly names here. Returns most-recent first, or [].
-  async function getResumeMap() {
-    const list = await api('/playlists', { params: { playlistType: 'audio' } });
-    const pl = (list.Metadata || []).find((p) => p.title === RESUME_PLAYLIST);
-    if (!pl) return [];
-    const one = await api(`/playlists/${pl.ratingKey}`);
-    const summary = (one.Metadata && one.Metadata[0] && one.Metadata[0].summary) || '';
-    try {
-      const data = JSON.parse(summary);
-      const books = Array.isArray(data.books) ? data.books : [];
-      return books.map((x) => ({ book: x.b, track: x.t, offsetMs: x.o, ts: x.ts }));
-    } catch { return []; }
-  }
-
   // --- library --------------------------------------------------------------
   async function getAlbum(rk) {
     const mc = await api(`/library/metadata/${rk}`);
@@ -458,21 +439,6 @@ const Plex = (() => {
     }, {}, { retries: 2, timeoutMs: 8000 });
   }
 
-  // Drop one book from the plugin's __tomeroam_resume playlist immediately, so the
-  // tile's cold resume clears now rather than waiting for the plugin's next DB sync
-  // (which, post-unscrobble, will independently produce the same book-less summary).
-  async function removeBookFromResume(book) {
-    const list = await api('/playlists', { params: { playlistType: 'audio' } });
-    const pl = (list.Metadata || []).find((p) => p.title === RESUME_PLAYLIST);
-    if (!pl) return;
-    const one = await api(`/playlists/${pl.ratingKey}`);
-    const summary = (one.Metadata && one.Metadata[0] && one.Metadata[0].summary) || '';
-    let data; try { data = JSON.parse(summary); } catch { return; }
-    if (!Array.isArray(data.books)) return;
-    const kept = data.books.filter((x) => String(x.b) !== String(book));
-    if (kept.length !== data.books.length) { data.books = kept; await setPlaylistSummary(pl.ratingKey, JSON.stringify(data)); }
-  }
-
   // Clear ALL saved progress for a book: unplay every track on the server. That
   // also clears Plex's lastViewedAt, so the book drops out of Continue Listening.
   // Best-effort per track (one failure doesn't abort the rest). Returns the count reset.
@@ -559,7 +525,7 @@ const Plex = (() => {
 
   return {
     isSignedIn, signOut, startPin, pollPin, connect, getClientId: clientId, serverNow,
-    getResumeMap, getAlbum, getAlbumTracks,
+    getAlbum, getAlbumTracks,
     getAuthors, getBooks, getAuthorBooks, getAuthor, getContinueListening, getRecentlyAdded,
     getTrackInfo, clearCaches,
     streamUrl, artUrl, writeTimeline, getServerName, getBase, getConnKind,
