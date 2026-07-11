@@ -1,0 +1,325 @@
+// browse.js — full-library browse renderer (Authors / Books / an author's books
+// / a book's files) with a vertical A–Z quick-index. PURE RENDERER: navigation
+// is owned by the host via the History API, so Browse just paints whatever
+// screen descriptor it's handed and calls back (onOpenAuthor/onOpenFiles/onBack/
+// onPlay/onPlayFile) for actions. Authors is the light path (no time work);
+// Books & Files rows carry data-book / data-track so the host's presence tick
+// keeps resume/peer numbers live.
+window.Browse = (() => {
+  let o = {};                     // { mount, fmt, onPlay, onPlayFile, onOpenAuthor, onOpenFiles, onBack, getResumeEntry, getPeers, onRender }
+  let authorsCache = null;        // authors list is stable within a session (books are cached in plex.js)
+
+  // ---- rendered-page CACHE -------------------------------------------------
+  // Each browse screen is built ONCE into its own `.browsepage` node, kept
+  // attached (just hidden) inside o.mount. Navigating back to it — or clicking
+  // the same tab again, or swiping — just toggles visibility: the DOM (and its
+  // already-loaded cover <img>s) is reused, so nothing re-fetches or re-flashes.
+  // Cached pages stay in the document, so the host's presence tick keeps their
+  // resume/peer numbers live. LRU-capped to bound memory.
+  const pageCache = new Map();    // key -> { el, order }
+  const MAX_PAGES = 12;
+  let orderSeq = 0;
+  const keyOf = (d) => d.v === 'authorBooks' ? 'author:' + d.author.ratingKey
+    : d.v === 'files' ? 'files:' + d.book.ratingKey : d.v;
+
+  function init(opts) { o = opts; }
+  function reset() { authorsCache = null; pageCache.clear(); if (o.mount) o.mount.innerHTML = ''; }
+  // Drop cached pages so lists rebuild from fresh data (pull-to-refresh). Safe to
+  // call while browse is hidden (home). Removes the page nodes; keeps the mount.
+  function clearCache() { authorsCache = null; pageCache.forEach((v) => { if (v.el.parentNode) v.el.remove(); }); pageCache.clear(); }
+
+  const spinnerHTML = '<div class="center"><div class="spinner"></div></div>';
+
+  function showPage(key) {
+    for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
+  }
+  function evictLRU(keepKey) {
+    while (pageCache.size > MAX_PAGES) {
+      let oldK = null, oldO = Infinity;
+      for (const [k, v] of pageCache) if (k !== keepKey && v.order < oldO) { oldO = v.order; oldK = k; }
+      if (oldK == null) break;
+      const v = pageCache.get(oldK); if (v && v.el.parentNode) v.el.remove();
+      pageCache.delete(oldK);
+    }
+  }
+
+  // Fetch a screen's data (the ONLY async part); build is synchronous below so a
+  // concurrent nav can't interleave the shared paint target.
+  async function fetchFor(desc) {
+    if (desc.v === 'authors') { if (!authorsCache) authorsCache = await Plex.getAuthors(); return authorsCache; }
+    if (desc.v === 'books') return await Plex.getBooks();
+    if (desc.v === 'authorBooks') {
+      const [author, books] = await Promise.all([Plex.getAuthor(desc.author.ratingKey), Plex.getAuthorBooks(desc.author.ratingKey)]);
+      return { author: author || { ...desc.author, thumb: null, childCount: books.length, summary: '' }, books };
+    }
+    if (desc.v === 'files') return await Plex.getAlbumTracks(desc.book.ratingKey);
+  }
+  function buildFor(desc, data, el) {
+    if (desc.v === 'authors') listView(el, 'Authors', data, authorRow, false);
+    else if (desc.v === 'books') listView(el, 'Books', data, bookRow, false);
+    else if (desc.v === 'authorBooks') authorView(el, data.author, data.books);
+    else if (desc.v === 'files') filesView(el, desc.book, data);
+  }
+
+  // Render a screen from its descriptor: {v:'authors'|'books'|'authorBooks'|'files', ...}
+  async function render(desc) {
+    const key = keyOf(desc);
+    const hit = pageCache.get(key);
+    if (hit) {                        // CACHE HIT → instant, no rebuild, no image reload
+      hit.order = ++orderSeq;
+      showPage(key);
+      o.onRender();                   // refresh live resume/peer numbers on the shown page
+      return;
+    }
+    // CACHE MISS → fetch, then build into a fresh page node and show it. A brief
+    // spinner page covers the fetch so the previous page isn't left frozen.
+    const page = document.createElement('div');
+    page.className = 'browsepage';
+    page.innerHTML = spinnerHTML;
+    o.mount.appendChild(page);
+    pageCache.set(key, { el: page, order: ++orderSeq });
+    showPage(key);                    // show this fresh page, hide the rest
+    try {
+      const data = await fetchFor(desc);
+      // Still the current page? (a fast re-nav may have moved on — harmless either way)
+      page.innerHTML = '';
+      buildFor(desc, data, page);
+    } catch (e) { page.innerHTML = `<div class="empty">⚠️ ${e.message || 'Could not load.'}</div>`; }
+    window.scrollTo(0, 0);            // fresh page starts at the top
+    evictLRU(key);
+    o.onRender();
+  }
+
+  // ---- grouping by first sort-letter --------------------------------------
+  const letterOf = (s) => {
+    const c = (s || '').trim().charAt(0).toUpperCase();
+    return /[A-Z]/.test(c) ? c : '#';
+  };
+  const bySort = (a, b) =>
+    (a.titleSort || a.title || '').localeCompare(b.titleSort || b.title || '', undefined, { sensitivity: 'base', numeric: true });
+
+  function groupByLetter(items) {
+    const groups = new Map();
+    for (const it of items.slice().sort(bySort)) {
+      const L = letterOf(it.titleSort || it.title);
+      if (!groups.has(L)) groups.set(L, []);
+      groups.get(L).push(it);
+    }
+    const letters = [...groups.keys()].sort((a, b) => (a === '#' ? -1 : b === '#' ? 1 : a.localeCompare(b)));
+    return { groups, letters };
+  }
+
+  // ---- header (circle back button for drill-downs) ------------------------
+  function header(title, drill) {
+    const head = document.createElement('div');
+    head.className = 'browsehead';
+    if (drill) {
+      const b = document.createElement('button');
+      b.className = 'backbtn'; b.setAttribute('aria-label', 'Back'); b.textContent = '‹';
+      b.onclick = () => o.onBack();
+      head.appendChild(b);
+    }
+    if (title) {   // author page passes no title — just the back button
+      const h = document.createElement('div');
+      h.className = 'browsetitle'; h.textContent = title;
+      head.appendChild(h);
+    }
+    return head;
+  }
+
+  // ---- list views (Authors / Books / author's books) ----------------------
+  // Each *View builds into the passed page node `m` (a .browsepage in the cache),
+  // NOT directly into o.mount — so pages persist. Scroll/onRender are the host's
+  // (render()) job. Letter-group ids are page-scoped to stay unique across pages.
+  function listView(m, title, items, rowFn, drill) {
+    const { groups, letters } = groupByLetter(items);
+    m.innerHTML = '';
+    m.appendChild(header(`${title} · ${items.length}`, drill));
+    const list = document.createElement('div');
+    list.className = 'browselist';
+    for (const L of letters) {
+      const g = document.createElement('div');
+      g.className = 'lettergroup'; g.dataset.sec = L;
+      const lh = document.createElement('div');
+      lh.className = 'letterhead'; lh.textContent = L;
+      g.appendChild(lh);
+      for (const it of groups.get(L)) g.appendChild(rowFn(it));
+      list.appendChild(g);
+    }
+    m.appendChild(list);
+    m.appendChild(buildIndex(m, letters));
+  }
+
+  // Author page: back button only (no name beside it), a centered header block
+  // (avatar, bold name, "N books", blurb), then the letter-grouped book list.
+  function authorView(m, author, books) {
+    m.innerHTML = '';
+    m.appendChild(header('', true));
+    m.appendChild(authorHeader(author, books.length));
+    // No A–Z index here → book rows span the full width.
+    const list = document.createElement('div');
+    list.className = 'browselist authorlist';
+    for (const b of books.slice().sort(bySort)) list.appendChild(bookRow(b));
+    m.appendChild(list);
+  }
+
+  function authorHeader(author, count) {
+    const wrap = document.createElement('div');
+    wrap.className = 'authorhead';
+    const cover = author.thumb ? Plex.artUrl(author.thumb) : null;
+    wrap.innerHTML = `
+      ${cover ? `<img class="authoravatar" data-art="${cover}" decoding="async" alt="">` : '<div class="authoravatar art-failed"></div>'}
+      <div class="authorname"></div>
+      <div class="authorcount">${count} ${count === 1 ? 'book' : 'books'}</div>
+      <div class="authorblurb">
+        <div class="blurbtext"></div>
+        <button class="readmore" type="button">read more</button>
+      </div>`;
+    wrap.querySelector('.authorname').textContent = author.title;
+    const blurb = wrap.querySelector('.blurbtext');
+    const rm = wrap.querySelector('.readmore');
+    blurb.textContent = author.summary || '';
+    if (!author.summary) { wrap.querySelector('.authorblurb').style.display = 'none'; }
+    let overflows = false;
+    // Toggle: click the blurb (or the button) to expand; click the expanded
+    // blurb to collapse again.
+    const toggle = () => {
+      const open = blurb.classList.toggle('expanded');
+      rm.textContent = open ? 'read less' : 'read more';
+      rm.style.display = overflows ? 'block' : 'none';
+    };
+    blurb.addEventListener('click', toggle);
+    rm.addEventListener('click', toggle);
+    // Only offer "read more" if the blurb is actually clamped.
+    requestAnimationFrame(() => { overflows = blurb.scrollHeight > blurb.clientHeight + 2; rm.style.display = overflows ? 'block' : 'none'; });
+    return wrap;
+  }
+
+  function authorRow(a) {
+    const el = document.createElement('div');
+    el.className = 'book authrow';
+    const cover = a.thumb ? Plex.artUrl(a.thumb) : null;
+    el.innerHTML = `
+      <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">
+      <div class="meta"><div class="title"></div><div class="author"></div></div>
+      <span class="chev">›</span>`;
+    el.querySelector('.title').textContent = a.title;
+    el.querySelector('.author').textContent = a.childCount + (a.childCount === 1 ? ' book' : ' books');
+    el.onclick = () => o.onOpenAuthor(a);
+    return el;
+  }
+
+  // Cover = resume-from-last-position; rest of row = drill into files.
+  function bookRow(b) {
+    const el = document.createElement('div');
+    el.className = 'book';
+    el.dataset.book = b.ratingKey;
+    const cover = b.thumb ? Plex.artUrl(b.thumb) : null;
+    const total = b.leafCount || 0, done = b.viewedLeafCount || 0;
+    const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const res = o.getResumeEntry ? o.getResumeEntry(b.ratingKey) : null;
+    el.innerHTML = `
+      <div class="covertap" title="Resume">
+        <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">
+        <span class="playoverlay">▶</span>
+      </div>
+      <div class="meta">
+        <div class="title"></div>
+        <div class="author"></div>
+        <div class="pline"><div class="pname"></div><div class="ptimes"></div></div>
+        <div class="progress"><i style="width:${pct}%"></i></div>
+      </div>`;
+    el.querySelector('.title').textContent = b.title;
+    el.querySelector('.author').textContent = b.parentTitle || '';
+    el.querySelector('.covertap').addEventListener('click', (e) => { e.stopPropagation(); o.onPlay(b.ratingKey, b); });
+    el.addEventListener('click', () => o.onOpenFiles(b));
+    return el;
+  }
+
+  // ---- files view (a book's chapters) -------------------------------------
+  const peerText = (p) => (p.state === 'playing' ? '▶ ' : '⏸ ') + (p.name || 'device') + ' · ' + o.fmt(Presence.livePos(p) / 1000);
+
+  // Per-chapter completion, most-truthful source first:
+  //   1) our OWN recorded progress for this chapter (how far we actually played it —
+  //      the honest per-chapter %, since Plex hides audiobook viewOffset over HTTP),
+  //   2) the live resume chapter's offset (a cold peer/plugin source),
+  //   3) Plex viewCount>0 → finished (100),
+  //   4) otherwise 0 — we have no evidence it was played (NOT the old "everything
+  //      before your spot is 100%" guess, which painted skipped chapters full).
+  function filePct(t, i, resume, resumeIdx, book) {
+    const mine = o.getChapterPct ? o.getChapterPct(book, t.ratingKey, t.durationMs) : null;
+    if (mine != null) return mine;
+    if (resume && String(t.ratingKey) === String(resume.track))
+      return t.durationMs ? Math.min(100, Math.round(((resume.offsetMs || 0) / t.durationMs) * 100)) : 0;
+    if (t.viewCount > 0) return 100;
+    return 0;
+  }
+
+  function filesView(m, book, tracks) {
+    m.innerHTML = '';
+    m.appendChild(header(book.title || 'Book', true));
+    const resume = o.getResumeEntry ? o.getResumeEntry(book.ratingKey) : null;
+    const resumeIdx = resume ? tracks.findIndex((t) => String(t.ratingKey) === String(resume.track)) : -1;
+
+    const list = document.createElement('div');
+    list.className = 'filelist';
+    tracks.forEach((t, i) => {
+      const pct = filePct(t, i, resume, resumeIdx, book.ratingKey);
+      const startMs = (resume && String(t.ratingKey) === String(resume.track)) ? (resume.offsetMs || 0) : 0;
+      const row = document.createElement('div');
+      row.className = 'filerow'; row.dataset.track = t.ratingKey; row.dataset.book = book.ratingKey;
+      row.innerHTML = `
+        <div class="fmeta">
+          <div class="ftitle"></div>
+          <div class="fsub">${pct ? pct + '%' : ''} · ${o.fmt((t.durationMs || 0) / 1000)}</div>
+          <div class="progress"><i style="width:${pct}%"></i></div>
+          <div class="bufbar"></div>
+        </div>`;
+      row.querySelector('.ftitle').textContent = t.title || ('Chapter ' + (i + 1));
+      row.onclick = () => o.onPlayFile(book, t, startMs);
+      list.appendChild(row);
+    });
+    m.appendChild(list);
+  }
+
+  // ---- vertical A–Z quick index (haptic + highlight while sweeping) --------
+  // `m` is the owning page so section jumps resolve within THIS page (ids would
+  // collide now that multiple pages coexist in the cache — use data-sec instead).
+  function buildIndex(m, letters) {
+    const idx = document.createElement('div');
+    idx.className = 'alphaindex';
+    for (const L of letters) {
+      const s = document.createElement('span');
+      s.className = 'alpha'; s.textContent = L; s.dataset.letter = L;
+      idx.appendChild(s);
+    }
+    const spans = idx.querySelectorAll('.alpha');
+    const scrollTo = (L) => { const el = m.querySelector('.lettergroup[data-sec="' + L + '"]'); if (el) el.scrollIntoView({ block: 'start' }); };
+    let cur = null;
+    const highlight = (L) => {
+      if (L === cur) return false;                    // no change → no re-fire
+      cur = L;
+      spans.forEach((s) => s.classList.toggle('on', s.dataset.letter === L));
+      if (navigator.vibrate) navigator.vibrate(8);    // quick haptic (Android; iOS Safari ignores)
+      return true;
+    };
+    const clear = () => { cur = null; spans.forEach((s) => s.classList.remove('on')); };
+    const jump = (clientY) => {
+      if (!spans.length) return;
+      const rect = idx.getBoundingClientRect();
+      const r = Math.max(0, Math.min(0.9999, (clientY - rect.top) / rect.height));
+      const L = spans[Math.floor(r * spans.length)].dataset.letter;
+      highlight(L); scrollTo(L);
+    };
+    idx.addEventListener('click', (e) => { const t = e.target.closest('.alpha'); if (t) { highlight(t.dataset.letter); scrollTo(t.dataset.letter); setTimeout(clear, 180); } });
+    idx.addEventListener('pointermove', (e) => { if (e.buttons) jump(e.clientY); });
+    idx.addEventListener('pointerup', clear);
+    idx.addEventListener('pointerleave', clear);
+    idx.addEventListener('touchmove', (e) => { jump(e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+    idx.addEventListener('touchend', clear);
+    idx.addEventListener('touchcancel', clear);
+    return idx;
+  }
+
+  return { init, reset, render, clearCache };
+})();

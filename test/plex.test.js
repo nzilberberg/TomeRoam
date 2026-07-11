@@ -1,0 +1,51 @@
+// Tests for js/plex.js internals (connection ordering + book mapping), loaded
+// as the real module with browser globals stubbed by env.js.
+const { test } = require('node:test');
+const assert = require('node:assert');
+const { install } = require('./env.js');
+
+const storage = install();
+const Plex = require('../js/plex.js');
+const { kindOf, orderByLastKind, mapBook } = Plex._test;
+
+test('kindOf classifies local / relay / remote', () => {
+  assert.equal(kindOf({ local: true }), 'local');
+  assert.equal(kindOf({ relay: true }), 'relay');
+  assert.equal(kindOf({}), 'remote');
+});
+
+test('orderByLastKind: no remembered kind → original order untouched', () => {
+  storage.removeItem('pb_connKind');
+  const conns = [{ local: true, uri: 'a' }, { relay: true, uri: 'b' }];
+  assert.deepEqual(orderByLastKind(conns).map((c) => c.uri), ['a', 'b']);
+});
+
+test('orderByLastKind: the last-good kind is probed first (off-home → relay immediately)', () => {
+  storage.setItem('pb_connKind', 'relay');
+  const conns = [{ local: true, uri: 'lan1' }, { local: true, uri: 'lan2' }, { relay: true, uri: 'relay' }];
+  const out = orderByLastKind(conns).map((c) => c.uri);
+  assert.equal(out[0], 'relay');
+  assert.deepEqual(out.slice(1), ['lan1', 'lan2']);   // others keep their relative order
+});
+
+test('orderByLastKind: does not mutate its input', () => {
+  storage.setItem('pb_connKind', 'relay');
+  const conns = [{ local: true, uri: 'a' }, { relay: true, uri: 'b' }];
+  orderByLastKind(conns);
+  assert.deepEqual(conns.map((c) => c.uri), ['a', 'b']);
+});
+
+test('mapBook fills safe defaults for sparse Plex metadata', () => {
+  const b = mapBook({ ratingKey: '9' });
+  assert.equal(b.title, 'Book');
+  assert.equal(b.leafCount, 0);
+  assert.equal(b.viewedLeafCount, 0);
+  assert.equal(b.thumb, null);
+  assert.equal(b.titleSort, '');
+});
+
+test('mapBook falls back to parentThumb and titleSort to title', () => {
+  const b = mapBook({ ratingKey: '9', title: 'T', parentThumb: '/p' });
+  assert.equal(b.thumb, '/p');
+  assert.equal(b.titleSort, 'T');
+});

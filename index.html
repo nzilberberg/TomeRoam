@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- interactive-widget=overlays-content: the software keyboard overlays the
+       page instead of insetting the viewport — opts out of the iOS 26 stuck
+       bottom-inset bug that clipped ~50pt off the bottom of every screen. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, interactive-widget=overlays-content" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TomeRoam" />
+  <meta name="theme-color" content="#1b1e24" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="icon" href="icon.svg" />
+  <link rel="stylesheet" href="css/app.css" />
+  <title>TomeRoam Player</title>
+</head>
+<body>
+  <div class="app">
+    <!-- SIGN IN -->
+    <section id="signin" class="center hidden">
+      <div class="badge">🎧</div>
+      <h1>TomeRoam</h1>
+      <p>Your Plex audiobooks — that actually resume where you left off, on any device.</p>
+      <button id="signinBtn" class="btn">Sign in with Plex</button>
+      <p id="signinInfo" class="statusline"></p>
+      <a id="signinLink" class="hidden signinlink" target="_blank" rel="noopener"></a>
+    </section>
+
+    <!-- LIBRARY -->
+    <section id="library" class="hidden">
+      <!-- fixed header; content scrolls underneath -->
+      <div class="topbar">
+        <div class="brand" id="brandHome">
+          <img src="icon.svg" alt="" />
+          <h1>TomeRoam</h1>
+        </div>
+        <span class="spacer"></span>
+        <small id="serverName"></small>
+      </div>
+
+      <!-- HOME: Continue Listening + Recently Added carousels -->
+      <div id="home" class="view">
+        <div class="section-title">Continue Listening</div>
+        <div id="clStatus" class="statusline"></div>
+        <div id="clRow" class="carousel"></div>
+        <div class="section-title">Recently Added</div>
+        <div id="raStatus" class="statusline"></div>
+        <div id="raRow" class="carousel"></div>
+      </div>
+
+      <!-- BROWSE: Authors / Books (rendered by js/browse.js) -->
+      <div id="browse" class="view hidden"></div>
+
+      <!-- OPTIONS -->
+      <div id="options" class="view hidden">
+        <div class="section-title">Options</div>
+        <div id="deviceName" class="devicename"></div>
+        <div class="opt-row"><span class="opt-label">Skip back</span><span class="opt-ctl"><select id="optSkipBack"></select><span class="opt-unit">sec</span></span></div>
+        <div class="opt-row"><span class="opt-label">Skip forward</span><span class="opt-ctl"><select id="optSkipFwd"></select><span class="opt-unit">sec</span></span></div>
+        <div class="opt-row"><span class="opt-label">Buffer ahead</span><span class="opt-ctl"><select id="optBuffer"></select><span class="opt-unit">MB</span></span></div>
+        <div class="opt-row"><span class="opt-label">Fresh start on auto-advance</span><span class="opt-ctl"><button id="optFreshStart" class="toggle" role="switch"></button></span></div>
+        <div class="opt-row"><span class="opt-label">Reset chapter progress after</span><span class="opt-ctl"><select id="optResetGrace"></select><span class="opt-unit">sec</span></span></div>
+        <div class="opt-row"><span class="opt-label">Account</span><button id="signout" class="textbtn">Sign out</button></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- TRANSPORT (mini bar) -->
+  <div id="player" class="player hidden">
+    <div class="row">
+      <img id="pCover" class="cover" alt="" />
+      <div class="meta">
+        <div id="pTitle" class="title"></div>
+        <div id="pSub" class="sub"></div>
+      </div>
+      <div class="controls">
+        <button id="pBack" title="Skip back">⏪</button>
+        <button id="pPlay" class="play" title="Play/Pause">▶</button>
+        <button id="pFwd" title="Skip forward">⏩</button>
+      </div>
+    </div>
+    <div class="seekrow">
+      <span id="pCur">0:00</span>
+      <input id="pSeek" type="range" min="0" max="1000" value="0" />
+      <span id="pDur">0:00</span>
+    </div>
+  </div>
+
+  <!-- NOW PLAYING (full screen; opens from the transport) -->
+  <div id="nowplaying" class="nowplaying hidden">
+    <div class="np-body">
+      <img id="npArt" class="np-art" alt="" />
+      <div id="npTitle" class="np-title"></div>
+      <div id="npAuthor" class="np-author"></div>
+      <div id="npTrack" class="np-track"></div>
+      <input id="npSeek" class="np-seek" type="range" min="0" max="1000" value="0" />
+      <div class="np-times">
+        <span id="npCur">0:00</span>
+        <span id="npBookRem">-0:00</span>
+        <span id="npTrkRem">-0:00</span>
+      </div>
+      <div id="npControls" class="np-controls"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav id="navbar" class="navbar hidden">
+    <button class="navbtn" data-nav="home">
+      <svg class="navico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      <span class="navlbl">Home</span>
+    </button>
+    <button class="navbtn" data-nav="authors">
+      <svg class="navico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+      <span class="navlbl">Authors</span>
+    </button>
+    <button class="navbtn" data-nav="books">
+      <svg class="navico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 12l-2.5-1.5L13 14V4h5v10z"/></svg>
+      <span class="navlbl">Books</span>
+    </button>
+    <button class="navbtn" data-nav="options">
+      <svg class="navico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      <span class="navlbl">Options</span>
+    </button>
+    <!-- Now-Playing action pill: lives in the SAME bottom-bar slot as the nav
+         buttons (the one spot proven to render at the physical bottom on this
+         device); CSS swaps navbtns out / pill in while NP is open. -->
+    <div class="np-actions">
+      <span id="npSpeedMount" class="np-speedmount"></span>
+      <button id="npInfo" class="np-act" aria-label="Track info"><svg viewBox="0 0 24 24"><path d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m-1 15h2v-6h-2v6z"/></svg></button>
+      <button id="npAirplay" class="np-act" aria-label="AirPlay"><svg viewBox="0 0 24 24"><path d="M6 22h12l-6-6zM21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h4v-2H3V5h18v12h-4v2h4c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg></button>
+      <button id="npSleep" class="np-act" aria-label="Sleep timer"><svg viewBox="0 0 24 24"><path d="M12.34 2.02C6.59 1.82 2 6.42 2 12c0 5.52 4.48 10 10 10 3.71 0 6.93-2.02 8.66-5.02-7.51 1.99-13.34-3.85-11.34-11.34a9.99 9.99 0 0 0 3.02-3.62z"/></svg></button>
+      <button id="npMarks" class="np-act" aria-label="Bookmarks"><svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg></button>
+    </div>
+  </nav>
+
+  <!-- pull-to-refresh indicator (Home) -->
+  <div id="ptr" class="ptr"><div class="ptr-spin"></div></div>
+
+  <!-- track-info bottom sheet -->
+  <div id="infoSheet" class="sheet hidden">
+    <div class="sheet-scrim"></div>
+    <div class="sheet-panel">
+      <button id="sheetClose" class="sheet-close" aria-label="Close">✕</button>
+      <div id="sheetBlurb" class="sheet-blurb hidden"></div>
+      <div id="sheetRows" class="sheet-rows"></div>
+    </div>
+  </div>
+
+  <!-- long-press context menu for a book tile/row -->
+  <div id="bookMenu" class="bookmenu hidden">
+    <div class="bookmenu-scrim"></div>
+    <div class="bookmenu-card" role="menu">
+      <div id="bookMenuTitle" class="bmenu-title"></div>
+      <div id="bookMenuItems" class="bmenu-items"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="js/logic.js"></script>
+  <script src="js/debug.js"></script>
+  <script src="js/artloader.js"></script>
+  <script src="js/plex.js"></script>
+  <script src="js/presence.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/logpipe.js"></script>
+  <script src="js/speed.js"></script>
+  <script src="js/browse.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

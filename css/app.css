@@ -1,0 +1,534 @@
+:root {
+  color-scheme: dark;
+  --bg: #14171c;
+  --bg2: #1b1e24;
+  --card: #232833;
+  --card2: #2b3140;
+  --text: #e7ecf3;
+  --muted: #9aa4b2;
+  --accent: #e5a00d;
+  --accent-dim: #b98410;
+  --buffer: #5fa8e0;                 /* light-blue "buffered/banked" fill on the seek bars */
+  --seek-track: rgba(255,255,255,.14);
+  --radius: 14px;
+  --nav-h: 54px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Bottom clearance for the nav/transport stack: hug the physical bottom edge,
+     keeping only a sliver of the home-indicator inset (full --safe-bottom left a
+     dead near-black band under the nav buttons). 0 on squared-off screens. */
+  --nav-pad: max(0px, calc(var(--safe-bottom) - 25px));
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* html background = the canvas color iOS paints anywhere our layout doesn't
+   reach (over-scroll, viewport-bug gaps) — must match the app, never black. */
+html { background: #14171c; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
+  color: var(--text);
+  overscroll-behavior-y: contain;
+}
+
+/* Base bottom clearance = nav bar only; grows when the transport is showing.
+   The `+ 2px` is a harmless remnant of the abandoned "scroll runway" theory —
+   a tiny runway does NOT seat the fixed navbar (that was the whole .30-saga dead
+   end). The ACTUAL fix for the short-screen navbar displacement is real scroll
+   height on the base view: `body.home-tall .app` below. */
+.app { min-height: calc(100% + 2px); padding: calc(var(--safe-top) + 12px) 16px calc(var(--nav-pad) + 84px); max-width: 640px; margin: 0 auto; }
+body.has-player .app { padding-bottom: calc(var(--nav-pad) + 190px); }
+/* HOME is short (2 horizontal carousels) → its document ends up ~viewport-sized,
+   the state that displaces the fixed navbar ~5-10px UP on iOS 26 (a 1-2px runway
+   does NOT count as tall — that theory died in the .30 saga; only a genuinely
+   scrollable document seats the bar, which is why the tall Browse list is fine).
+   So when home is the base view, give it real scroll height like Browse has.
+   Trade-off: a little empty scroll room below the carousels. Tunable via 12vh. */
+body.home-tall .app { min-height: calc(100% + 12vh); }
+.hidden { display: none !important; }
+/* HOME while another view is active: parked OFF-SCREEN but STILL PAINTED (its own
+   compositing layer via will-change) — NOT display:none, which makes iOS drop the
+   decoded cover images so they flash/re-decode when home is shown again. Fixed +
+   translateX keeps it out of the document flow (document height comes from the
+   active in-flow view) and off-screen, while staying rendered so the covers stay
+   warm. pointer-events:none so it never intercepts taps on the active view. */
+#home.parked {
+  position: fixed; top: 0; left: 0; right: 0;
+  max-width: 640px; margin: 0 auto; padding-left: 16px; padding-right: 16px;   /* MATCH .app content width */
+  transform: translateX(-101vw);   /* fully off-screen (own layer keeps it painted) */
+  overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;
+}
+
+/* Page-carousel transitions. The incoming view slides in from the side that matches
+   the direction (forward = from the right, back = from the left). `.app` clips the
+   off-screen pane with overflow-x:clip (NOT hidden — clip doesn't make .app a scroll
+   container or a containing block, so the document scroll + fixed overlays are
+   untouched). The fixed overlays (#player/#nowplaying/#navbar) are OUTSIDE .app. */
+.app { overflow-x: clip; }
+@keyframes navInRight { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes navInLeft  { from { transform: translateX(-100%); } to { transform: none; } }
+.view.nav-in-right { animation: navInRight .26s cubic-bezier(.22,.61,.36,1) both; }
+.view.nav-in-left  { animation: navInLeft  .26s cubic-bezier(.22,.61,.36,1) both; }
+@media (prefers-reduced-motion: reduce) { .view.nav-in-right, .view.nav-in-left { animation: none; } }
+/* Options = additive overlay, same iOS-26 reasoning as Now-Playing: a fixed
+   panel with its own scroller painted over the UNTOUCHED tall screen (hiding
+   the tall view shrinks the document, which displaces the fixed nav bar).
+   z 25: covers page content, stays under topbar(30)/transport(35)/navbar(40). */
+#options {
+  position: fixed; left: 0; right: 0; top: 0; bottom: calc(var(--nav-h) + var(--nav-pad));
+  z-index: 25;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
+  padding: calc(var(--safe-top) + 58px) max(16px, calc((100% - 608px) / 2)) 40px;
+}
+body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
+/* body.np-locked is only a CSS hook for the navbar button/pill swap while
+   Now-Playing is open. Deliberately NO position:fixed / overflow lock here:
+   freezing the body shrank the document, and any content collapse trips
+   iOS 26's fixed-layer displacement (the black-band saga). The pull-down
+   bounce is blocked by a touchmove guard on the overlay instead. */
+
+/* header — fixed; content scrolls underneath */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(var(--safe-top) + 10px) 16px 10px;
+  background: rgba(20,23,28,.86); backdrop-filter: blur(14px);
+  border-bottom: 1px solid #ffffff14;
+}
+.topbar img { width: 30px; height: 30px; }
+.topbar h1 { font-size: 1.15rem; margin: 0; font-weight: 650; }
+.brand { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.topbar .spacer { flex: 1; }
+#library { padding-top: 46px; }   /* clear the fixed header */
+.iconbtn { background: none; border: 0; color: var(--muted); font-size: 1.2rem; padding: 8px; cursor: pointer; }
+.textbtn { background: none; border: 1px solid #ffffff22; border-radius: 999px; color: var(--muted); font-size: .78rem; padding: 5px 12px; cursor: pointer; }
+.textbtn:active { background: var(--card2); }
+#serverName { color: var(--muted); font-size: .78rem; }
+.statusline { color: var(--muted); font-size: .8rem; margin: 0 4px 12px; min-height: 1.1em; line-height: 1.4; }
+
+/* sign-in */
+.center { min-height: 70vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; }
+.center .badge { font-size: 3rem; }
+.center p { color: var(--muted); max-width: 20rem; line-height: 1.5; margin: 0; }
+.btn {
+  background: var(--accent); color: #201a05; border: 0; border-radius: 999px;
+  font-weight: 700; font-size: 1rem; padding: 13px 26px; cursor: pointer;
+}
+.btn:active { background: var(--accent-dim); }
+.btn.secondary { background: var(--card2); color: var(--text); }
+.signinlink { color: var(--accent); font-size: .85rem; text-decoration: underline; word-break: break-all; }
+
+/* section titles */
+.section-title { font-size: 1.15rem; font-weight: 700; letter-spacing: .01em; color: var(--text); margin: 22px 4px 10px; }
+
+/* continue-listening cards */
+.book {
+  display: flex; gap: 12px; align-items: center; background: var(--card);
+  border-radius: var(--radius); padding: 10px; margin-bottom: 10px; cursor: pointer;
+  transition: background .12s;
+}
+.book:active { background: var(--card2); }
+.book .cover { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; background: var(--card2); flex: none; }
+.book .meta { min-width: 0; flex: 1; }
+.book .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.book .author { color: var(--muted); font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.book .resume { color: var(--accent); font-size: .78rem; margin-top: 3px; }
+.book .peerbadge { color: #7fd18c; font-size: .74rem; margin-top: 2px; min-height: 0; }
+.book .peerbadge:empty { display: none; }
+.devicename { color: var(--muted); font-size: .74rem; margin: 0 4px 10px; cursor: pointer; text-decoration: underline dotted; }
+.book .progress { height: 3px; background: var(--card2); border-radius: 2px; margin-top: 7px; overflow: hidden; }
+.book .progress > i { display: block; height: 100%; background: var(--accent); }
+
+/* now-playing bar — sits directly ABOVE the bottom nav */
+.player {
+  position: fixed; left: 0; right: 0; bottom: calc(var(--nav-h) + var(--nav-pad));
+  padding: 10px 14px 10px;
+  background: rgba(20,23,28,.86); backdrop-filter: blur(14px);
+  border-top: 1px solid #ffffff14; z-index: 35;
+}
+.player .row { display: flex; align-items: center; gap: 12px; max-width: 640px; margin: 0 auto; }
+.player .cover { width: 46px; height: 46px; border-radius: 7px; object-fit: cover; background: var(--card2); flex: none; }
+.player .meta { flex: 1; min-width: 0; }
+.player .title { font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player .sub { color: var(--muted); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player .controls { display: flex; align-items: center; gap: 6px; }
+.player .controls button { background: none; border: 0; color: var(--text); font-size: 1.5rem; padding: 6px; cursor: pointer; }
+.player .play { font-size: 2rem !important; color: var(--accent) !important; }
+.player .seekrow { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 8px auto 0; font-variant-numeric: tabular-nums; font-size: .72rem; color: var(--muted); }
+/* Seek sliders: custom-styled (dropping native accent-color) so we can paint a
+   light-blue "buffered/banked" underlay (--buffered, set from the background
+   download's byte progress) behind the gold played fill (--played). Shared by
+   the mini transport (#pSeek) and the Now-Playing scrubber (.np-seek). */
+.player input[type=range], .np-seek {
+  -webkit-appearance: none; appearance: none;
+  background: transparent; cursor: pointer; touch-action: none;   /* let the slider own horizontal drags (esp. iOS) */
+  --played: 0%; --buffered: 0%; --seek-fill: var(--accent);       /* fill + handle colour; green while mirroring a peer */
+}
+.player input.peer[type=range], .np-seek.peer { --seek-fill: #46c46a; }   /* peer-owned = green (matches the peer text) */
+.player input[type=range] { flex: 1; height: 22px; }
+/* Tall (22px) track = a comfortable touch/drag target; the colored bar is drawn
+   as a thin 4px line centered in it (background-size), so it still LOOKS thin. */
+.player input[type=range]::-webkit-slider-runnable-track, .np-seek::-webkit-slider-runnable-track {
+  height: 22px; border-radius: 3px;
+  background:
+    linear-gradient(to right, var(--seek-fill) 0 var(--played), rgba(0,0,0,0) var(--played) 100%),
+    linear-gradient(to right, var(--buffer) 0 var(--buffered), var(--seek-track) var(--buffered) 100%);
+  background-repeat: no-repeat; background-position: center; background-size: 100% 4px;
+}
+.player input[type=range]::-webkit-slider-thumb, .np-seek::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; margin-top: 4px; border-radius: 50%;
+  background: var(--seek-fill); border: 2px solid rgba(255,255,255,.25);
+}
+.player input[type=range]::-moz-range-track, .np-seek::-moz-range-track {
+  height: 4px; border-radius: 3px;
+  background: linear-gradient(to right, var(--buffer) 0 var(--buffered), var(--seek-track) var(--buffered) 100%);
+}
+.player input[type=range]::-moz-range-progress, .np-seek::-moz-range-progress {
+  height: 4px; border-radius: 3px; background: var(--seek-fill);
+}
+.player input[type=range]::-moz-range-thumb, .np-seek::-moz-range-thumb {
+  width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--seek-fill);
+}
+
+/* playback-speed control (modular; temporary home: now-playing controls).
+   Sizing uses !important so it renders the same wherever el is mounted. */
+.speedwrap { position: relative; display: inline-flex; }
+.speedbtn {
+  background: none !important; border: 1px solid #ffffff2b; border-radius: 999px;
+  color: var(--text); font-size: .8rem !important; font-weight: 700;
+  padding: 5px 10px !important; cursor: pointer; font-variant-numeric: tabular-nums;
+  min-width: 42px; line-height: 1;
+}
+.speedbtn:active { background: var(--card2) !important; }
+.speedpop {
+  position: absolute; bottom: calc(100% + 8px); right: 0;
+  display: grid; grid-template-columns: 1fr; gap: 4px;   /* single vertical column */
+  max-height: 64vh; overflow-y: auto;
+  padding: 8px; background: var(--card); border: 1px solid #ffffff1f;
+  border-radius: 12px; box-shadow: 0 12px 34px #0009; z-index: 50;
+}
+.speedopt {
+  background: var(--card2) !important; border: 0; border-radius: 8px; color: var(--text);
+  font-size: .8rem !important; font-weight: 600; padding: 8px 6px !important; cursor: pointer;
+  font-variant-numeric: tabular-nums; min-width: 48px; line-height: 1;
+}
+.speedopt:active { background: #384252 !important; }
+.speedopt.active { background: var(--accent) !important; color: #201a05; }
+
+/* bottom nav bar (under the transport) */
+.navbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  height: calc(var(--nav-h) + var(--nav-pad)); padding-bottom: var(--nav-pad);
+  display: flex; align-items: stretch;
+  background: rgba(16,18,22,.96); backdrop-filter: blur(14px);
+  border-top: 1px solid #ffffff14;
+}
+.navbtn { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px 0; }
+.navico { width: 22px; height: 22px; fill: currentColor; }
+.navlbl { font-size: .62rem; font-weight: 600; letter-spacing: .01em; }
+.navbtn.active { color: var(--accent); }   /* gold tint, no top bar */
+.navbtn + .navbtn { border-left: 1px solid #ffffff1f; }   /* vertical divider between buttons */
+.navbtn:active { background: var(--card2); }
+
+/* browse views (Authors / Books) */
+.browsehead { display: flex; align-items: center; gap: 12px; margin: 2px 4px 12px; min-height: 56px; }
+.browsetitle { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+/* back = circle with a left chevron, ~2× the old button height */
+.backbtn {
+  width: 56px; height: 56px; flex: none; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--card2); border: 1px solid #ffffff22; color: var(--text);
+  font-size: 2.1rem; line-height: 1; padding: 0 4px 4px 0; cursor: pointer;
+}
+.backbtn:active { background: #384252; }
+.browselist { padding-right: 34px; }   /* room for the (now larger) A–Z index */
+.lettergroup { scroll-margin-top: 10px; }
+.letterhead { font-size: .72rem; font-weight: 700; color: var(--accent); letter-spacing: .05em; margin: 12px 4px 6px; }
+.book .chev { margin-left: auto; color: var(--muted); font-size: 1.3rem; padding-left: 6px; flex: none; }
+.book .resume:empty { display: none; }
+/* full book bars label the resume time; compact tiles show the bare time */
+.book .resume:not(:empty)::before { content: 'Resume · '; }
+
+/* home carousels (Continue Listening / Recently Added) */
+.carousel { display: flex; align-items: stretch; gap: 0; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; padding: 0; margin: 0 0 6px; scrollbar-width: none; }
+.carousel::-webkit-scrollbar { display: none; }
+.carousel-empty { padding: 16px 6px; }
+
+/* ~1/3-width vertical tile — fixed width, boxed, 5px margin all sides; text
+   rows carry min-heights so every tile ends up the SAME height. */
+.tile {
+  flex: 0 0 auto; width: 36%; margin: 5px; box-sizing: border-box;   /* ~20% larger than the old 30% */
+  scroll-snap-align: start; cursor: pointer;
+  background: var(--card); border: 1px solid #ffffff1f; border-radius: 12px; padding: 6px;
+  display: flex; flex-direction: column;
+}
+.tile .covertap { width: 100%; }
+.tile .cover { width: 100%; height: auto; aspect-ratio: 1 / 1; border-radius: 8px; object-fit: cover; background: var(--card2); }
+.tile .playoverlay { border-radius: 8px; }
+.ttitle { font-weight: 600; font-size: .82rem; line-height: 1.2; min-height: 1.2em; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tauthor { color: var(--muted); font-size: .74rem; line-height: 1.2; min-height: 1.2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tline { display: flex; align-items: baseline; gap: 6px; font-size: .72rem; line-height: 1.2; min-height: 1.2em; margin-top: 2px; overflow: hidden; }
+.tline .resume { color: var(--accent); white-space: nowrap; }
+.tline .resume:empty { display: none; }
+.tline .peerbadge { color: #7fd18c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tline .peerbadge:empty { display: none; }
+.tile .progress { height: 3px; background: var(--card2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.tile .progress > i { display: block; height: 100%; background: var(--accent); }
+
+/* ---- cover art loading states (skeleton → fade-in → branded fallback) ----
+   Covers stay in a subtle shimmering skeleton until loaded (artloader.js sets
+   .art-done), then fade in. A cover that fails after retries gets .art-failed:
+   the app logo on a flat card, never the browser's broken-image "?" glyph. */
+.cover, .authoravatar, .np-art { position: relative; }
+.cover:not(.art-done):not(.art-failed),
+.authoravatar:not(.art-done):not(.art-failed),
+.np-art:not(.art-done):not(.art-failed) {
+  background-color: var(--card2);
+  background-image: linear-gradient(100deg, rgba(255,255,255,0) 20%, rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 76%);
+  background-repeat: no-repeat;
+  background-size: 220% 100%;
+  animation: artShimmer 1.25s ease-in-out infinite;
+}
+@keyframes artShimmer { from { background-position: 165% 0; } to { background-position: -65% 0; } }
+.cover.art-done, .authoravatar.art-done, .np-art.art-done { animation: artFadeIn .3s ease both; }
+@keyframes artFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.cover.art-failed, .authoravatar.art-failed, .np-art.art-failed {
+  background: var(--card) url("../icon.svg") no-repeat center / 44%;
+  opacity: .85;
+}
+
+/* author page header block */
+.authorhead { display: flex; flex-direction: column; align-items: center; text-align: center; margin: 2px 4px 16px; }
+.authoravatar { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--card2); flex: none; }
+.authorname { font-weight: 800; font-size: 1.3rem; margin-top: 10px; }
+.authorcount { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+.authorblurb { align-self: stretch; margin-top: 16px; }   /* small gap under the count */
+.blurbtext { text-align: left; color: var(--text); font-size: .9rem; line-height: 1.5; cursor: pointer; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.blurbtext.expanded { -webkit-line-clamp: unset; display: block; overflow: visible; }
+.readmore { display: block; width: 100%; text-align: right; background: none; border: 0; color: var(--text); font-weight: 700; font-size: .85rem; padding: 4px 0 0; cursor: pointer; }
+.authorlist { padding-right: 0; }   /* no A–Z index here → full-width book bars */
+
+/* Options screen */
+.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 4px; border-bottom: 1px solid #ffffff12; }
+.opt-label { font-size: .95rem; }
+.opt-ctl { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .85rem; }
+.opt-ctl select { background: var(--card2); color: var(--text); border: 1px solid #ffffff22; border-radius: 8px; padding: 6px 8px; font-size: .9rem; }
+
+/* Now-Playing full screen — fills the whole height, action row pinned bottom */
+.nowplaying {
+  /* Explicit height: iOS Safari does NOT give flex children a definite height
+     when the container is sized only by inset-stretching — np-body stayed
+     content-height and the pill never reached the bottom (black band below). */
+  position: fixed; inset: 0; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;
+  overscroll-behavior: none;   /* never chain a bounce to the document */
+  display: flex; flex-direction: column;
+  background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
+  /* Full-bleed: content owns the whole height; close = swipe right / back.
+     The pill keeps a small 5px margin off the physical screen edge. */
+  padding: calc(var(--safe-top) + 14px) 20px 5px;
+}
+/* padding-bottom clears the navbar-hosted action pill */
+.np-body { max-width: 460px; width: 100%; margin: 0 auto; flex: 1; min-height: 100%; display: flex; flex-direction: column; padding-bottom: calc(var(--nav-h) + var(--nav-pad) + 10px); }
+.np-art { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 14px; background: var(--card2); display: block; }
+.np-title { font-size: 1.3rem; font-weight: 700; margin-top: 18px; }
+.np-author { color: var(--muted); font-size: 1rem; margin-top: 3px; }
+.np-track { color: var(--muted); font-size: .82rem; margin-top: 12px; }
+.np-seek { width: 100%; height: 26px; margin-top: 8px; }
+.np-times { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; font-size: .74rem; color: var(--muted); margin-top: 4px; }
+.np-times span:nth-child(2) { text-align: center; }
+/* auto top+bottom margins split np-body's spare height equally, vertically
+   centering the transport strip between the times row and the action pill */
+.np-controls { display: flex; align-items: center; justify-content: space-between; margin: auto 0; }
+/* prev/next −25% (40→30), skip +35% (54→73) */
+.np-rnd { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; background: none; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex: none; }
+.np-rnd svg { width: 14px; height: 14px; }
+.np-skip { width: 73px; height: 73px; background: none; border: 0; color: #fff; cursor: pointer; padding: 0; flex: none; }
+.np-skip svg { width: 100%; height: 100%; display: block; }
+.np-play { width: 66px; height: 66px; border-radius: 50%; background: var(--accent); border: 0; color: #201a05; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.np-play:active { background: var(--accent-dim); }
+.np-play svg { width: 32px; height: 32px; }
+/* pill around the bottom action icons; pinned to the bottom of the screen */
+/* The NP action pill lives INSIDE the navbar — the one slot proven to render
+   at the physical bottom of this device. Hidden on normal screens; while NP is
+   open (body.np-locked) the nav buttons swap out and the pill swaps in. */
+.navbar .np-actions {
+  display: none;
+  /* Absolutely pinned to the bar's own bottom edge (the bar's bottom IS the
+     physical screen bottom) — immune to flex alignment quirks. */
+  position: absolute; left: 0; right: 0; bottom: 5px;
+  width: calc(100% - 40px); max-width: 460px; margin: 0 auto;
+  align-items: center; justify-content: space-between; gap: 6px;
+  padding: 8px 16px; border: 1px solid #ffffff2e; border-radius: 999px;
+  background: rgba(22,26,33,.94);
+}
+body.np-locked .navbar .np-actions { display: flex; }
+body.np-locked .navbar .navbtn { display: none; }
+/* A DETACHED clone of the pill used only DURING an NP swipe: it rides with the NP
+   overlay (as a mover) so the pill travels off/in with NP, while np-locked is
+   dropped for the slide so the real nav buttons show + get revealed under NP. z
+   above the overlay (60) like the real pill; non-interactive (visual only). */
+.np-pill-float {
+  display: flex !important; position: fixed; left: 0; right: 0; bottom: 5px;
+  width: calc(100% - 40px); max-width: 460px; margin: 0 auto;
+  align-items: center; justify-content: space-between; gap: 6px;
+  padding: 8px 16px; border: 1px solid #ffffff2e; border-radius: 999px;
+  background: rgba(22,26,33,.94); z-index: 62; pointer-events: none;
+}
+/* On NP the bar itself goes chromeless (just the pill floating on the page)
+   and rises above the overlay (overlay z-index is 60). */
+body.np-locked .navbar { background: transparent; border-top: 0; backdrop-filter: none; z-index: 70; padding-bottom: 0; }
+.np-act { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px; }
+.np-act svg { width: 24px; height: 24px; fill: currentColor; }
+.np-speedmount { display: inline-flex; }
+.np-actions .speedbtn { border-color: #ffffff33; }
+
+/* pull-to-refresh spinner (Home) */
+.ptr {
+  position: fixed; left: 50%; top: calc(var(--safe-top) + 52px); z-index: 55;
+  transform: translateX(-50%); opacity: 0; pointer-events: none;
+}
+.ptr-spin { width: 26px; height: 26px; border: 3px solid #ffffff33; border-top-color: var(--accent); border-radius: 50%; }
+.ptr.ready .ptr-spin { border-top-color: var(--accent); transform: rotate(150deg); }
+.ptr.spin .ptr-spin { animation: spin .8s linear infinite; }
+
+/* track-info bottom sheet */
+.sheet { position: fixed; inset: 0; z-index: 80; }
+.sheet.hidden { display: none; }
+.sheet-scrim { position: absolute; inset: 0; background: #0009; opacity: 0; transition: opacity .25s; }
+.sheet.open .sheet-scrim { opacity: 1; }
+.sheet-panel {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--bg2); border: 1px solid #ffffffd0; border-bottom: none;
+  border-radius: 20px 20px 0 0; padding: 16px 18px calc(var(--safe-bottom) + 22px);
+  max-height: 82vh; overflow-y: auto;
+  transform: translateY(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1);
+}
+.sheet.open .sheet-panel { transform: translateY(0); }
+.sheet-close { position: absolute; top: 10px; right: 12px; background: none; border: 0; color: var(--muted); font-size: 1.15rem; cursor: pointer; padding: 4px 6px; }
+.sheet-blurb { color: var(--text); font-size: .9rem; line-height: 1.5; margin: 4px 28px 14px 0; }
+.sheet-blurb.hidden { display: none; }
+.sheet-row { display: flex; justify-content: space-between; gap: 12px; padding: 12px 2px; border-top: 1px solid #ffffff18; font-size: .9rem; }
+.sheet-row .sk { color: var(--muted); }
+.sheet-row .sv { font-variant-numeric: tabular-nums; }
+
+/* long-press book context menu — an animated pop-over centered over a scrim */
+.bookmenu { position: fixed; inset: 0; z-index: 85; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.bookmenu.hidden { display: none; }
+.bookmenu-scrim { position: absolute; inset: 0; background: #000a; opacity: 0; transition: opacity .18s ease; }
+.bookmenu.open .bookmenu-scrim { opacity: 1; }
+.bookmenu-card {
+  position: relative; width: min(320px, 100%);
+  background: var(--card); border: 1px solid #ffffff24; border-radius: 16px;
+  box-shadow: 0 18px 48px #000b; padding: 6px; overflow: hidden;
+  transform: scale(.9); opacity: 0; transform-origin: center;
+  transition: transform .2s cubic-bezier(.2,.9,.25,1.2), opacity .16s ease;
+}
+.bookmenu.open .bookmenu-card { transform: scale(1); opacity: 1; }
+.bmenu-title {
+  padding: 12px 12px 10px; font-size: .82rem; font-weight: 600; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #ffffff12; margin-bottom: 4px;
+}
+.bmenu-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: none; border: 0; border-radius: 11px; color: var(--text);
+  font-size: .95rem; padding: 13px 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.bmenu-item:active { background: var(--card2); }
+.bmenu-item .bmenu-ico { flex: none; width: 20px; height: 20px; color: var(--muted); }
+.bmenu-item .bmenu-ico svg { width: 100%; height: 100%; fill: currentColor; display: block; }
+.bmenu-item.danger { color: #ff6b6b; }
+.bmenu-item.danger .bmenu-ico { color: #ff6b6b; }
+.bmenu-item.confirming { background: #ff6b6b1e; }
+.bmenu-item[disabled] { opacity: .55; pointer-events: none; }
+
+/* suppress the iOS image-save callout / text selection on long-press targets */
+.tile, .tile img, .book, .book img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* progress line — book (tiles/rows) or chapter (file rows). Colour follows the
+   AUTHOR of the winning record: orange = this device, green = a peer (name prefix). */
+/* Book progress: peer name on its own line (green), times below it. */
+.pline { font-size: .74rem; line-height: 1.25; }
+.pline .pname, .pline .ptimes { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pline .pname { color: #46c46a; }                          /* peer name — only ever shown for a peer */
+.pline .ptimes { color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.1em; }
+.pline.mine .ptimes { color: var(--accent); }              /* you */
+.pline.peer .ptimes { color: #46c46a; }                    /* another device */
+/* Tiles: RESERVE the name line so the stack height is constant whether or not a
+   peer name is present (avoids the tile jumping when a peer appears/leaves). */
+.tile .pline .pname { min-height: 1.15em; }
+.book .pline .pname:empty { display: none; }               /* browse rows stay compact when there's no peer */
+.book .pline { margin-top: 2px; }
+.fsub.mine { color: var(--accent); }               /* chapter row, authored by you */
+.fsub.peer { color: #46c46a; }                     /* chapter row, authored by a peer */
+
+/* Options slide toggle */
+.toggle { position: relative; width: 44px; height: 26px; border-radius: 999px; border: 0;
+  background: var(--card2); cursor: pointer; padding: 0; transition: background .18s; flex: none; }
+.toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+  border-radius: 50%; background: #cdd4de; transition: transform .18s, background .18s; }
+.toggle[aria-checked="true"] { background: var(--accent-dim); }
+.toggle[aria-checked="true"]::after { transform: translateX(18px); background: var(--accent); }
+
+/* book-row cover = tap-to-resume, with a play affordance */
+.covertap { position: relative; flex: none; cursor: pointer; }
+.covertap .cover { display: block; }
+.playoverlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: rgba(0,0,0,.34); color: #fff; font-size: 1.3rem;
+  opacity: 0; transition: opacity .12s;
+}
+.covertap:active .playoverlay { opacity: 1; }
+
+/* files view (a book's chapters) */
+.filelist { padding-right: 4px; }
+.filerow { background: var(--card); border-radius: var(--radius); padding: 11px 12px; margin-bottom: 8px; cursor: pointer; transition: background .12s; }
+.filerow:active { background: var(--card2); }
+.ftitle { font-weight: 600; }
+.fsub { color: var(--muted); font-size: .78rem; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.fpeer { color: #7fd18c; font-size: .74rem; margin-top: 2px; }
+.fpeer:empty { display: none; }
+/* TWO stacked bars, flush (no gap): the top `.progress` is play position (gold
+   fill), the bottom `.bufbar` is buffered/downloaded (blue fill from --buffered,
+   set on the row by app.js). Rounded outer corners so the pair reads as one pill. */
+.filerow .progress { height: 3px; border-radius: 2px 2px 0 0; margin-top: 7px; overflow: hidden; background: var(--card2); }
+.filerow .progress > i { display: block; height: 100%; background: var(--accent); }
+.filerow .bufbar { --buffered: 0%; height: 3px; border-radius: 0 0 2px 2px; margin-top: 0; overflow: hidden;
+  background: linear-gradient(to right, var(--buffer) 0 var(--buffered), var(--card2) var(--buffered) 100%); }
+/* Currently-playing chapter: inverted (gold card, dark text) — updated live as the track changes. */
+.filerow.playing { background: var(--accent); }
+.filerow.playing:active { background: var(--accent-dim); }
+.filerow.playing .ftitle { color: #14171c; font-weight: 600; }
+.filerow.playing .fsub, .filerow.playing .fpeer { color: rgba(20,23,28,.82); }
+.filerow.playing .progress { background: rgba(20,23,28,.18); }
+.filerow.playing .progress > i { background: #14171c; }
+/* Buffered stays BLUE even on the gold playing row (it's the one chapter that
+   always has buffer), over a dark track so it reads on gold. */
+.filerow.playing .bufbar { background: linear-gradient(to right, var(--buffer) 0 var(--buffered), rgba(20,23,28,.18) var(--buffered) 100%); }
+
+/* vertical A–Z quick index — large touch targets. z BELOW the additive overlays
+   (options 25 / NP 60): the bar is fixed so it stays pinned while a long list
+   scrolls, but Options paints OVER the still-visible browse view, so a higher z
+   let the bar bleed onto the Options screen. It only needs to clear the list rows
+   (z 0); overlays now cover it, and it still rides with #browse when it transforms
+   during a swipe. */
+.alphaindex {
+  position: fixed; right: 1px; z-index: 24;
+  top: calc(var(--safe-top) + 66px); bottom: calc(var(--nav-h) + var(--nav-pad) + 16px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 4px 2px; user-select: none; touch-action: none; overflow: hidden;
+}
+body.has-player .alphaindex { bottom: calc(var(--nav-h) + var(--nav-pad) + 128px); }
+.alphaindex .alpha { font-size: 1.33rem; font-weight: 700; color: var(--muted); line-height: 1.05; padding: 0 4px; cursor: pointer; transition: transform .06s, color .06s; }
+.alphaindex .alpha:active, .alphaindex .alpha.on { color: var(--accent); transform: scale(1.35); }
+
+/* toast */
+.toast { position: fixed; left: 50%; bottom: calc(var(--nav-h) + 96px); transform: translateX(-50%); background: var(--card2); color: var(--text); padding: 10px 16px; border-radius: 999px; font-size: .85rem; box-shadow: 0 6px 24px #0007; opacity: 0; transition: opacity .2s; pointer-events: none; }
+body.has-player .toast { bottom: calc(var(--nav-h) + 150px); }
+.toast.show { opacity: 1; }
+
+.spinner { width: 26px; height: 26px; border: 3px solid #ffffff22; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { color: var(--muted); text-align: center; padding: 30px 10px; }

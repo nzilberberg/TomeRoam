@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <!-- AIA issuer certificates are published over plain http by the CA (the
+       downloaded DER is signature-verified in PlexDirectTrust, so cleartext
+       transport cannot be abused). Everything else stays https-only. -->
+  <base-config cleartextTrafficPermitted="false"/>
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="true">i.lencr.org</domain>
+  </domain-config>
+</network-security-config>
