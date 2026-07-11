@@ -865,23 +865,11 @@
 
   // Fetch + render the two home carousels (shared by initial load + pull-to-refresh).
   async function loadHomeData() {
-    // Resume offsets from the plugin's playlist power exact resume + the live
-    // numbers; the whole-library fetch (cached) powers both carousels + browse.
-    const [resume, books] = await Promise.all([Plex.getResumeMap(), Plex.getBooks()]);
-    for (const k in bookEntries) delete bookEntries[k];
-    for (const b of resume) bookEntries[b.book] = b;
-    const byRk = new Map(books.map((b) => [String(b.ratingKey), b]));
-
-    // Continue Listening = Plex's in-progress list, merged with any resume-map
-    // books Plex hasn't flagged yet, most-recent first.
-    const cont = await Plex.getContinueListening();
-    const have = new Set(cont.map((b) => String(b.ratingKey)));
-    for (const rk of Object.keys(bookEntries)) {
-      if (!have.has(String(rk)) && byRk.has(String(rk))) { cont.push(byRk.get(String(rk))); have.add(String(rk)); }
-    }
-    const recencyOf = (b) => (bookEntries[b.ratingKey] ? bookEntries[b.ratingKey].ts || 0 : b.lastViewedAt || 0);
-    cont.sort((a, b) => recencyOf(b) - recencyOf(a));
-
+    // Continue Listening comes straight from Plex's recently-played (lastViewedAt) —
+    // the app is fully self-contained and needs no companion plugin. The exact
+    // resume OFFSET (which Plex hides for audiobooks) is filled per book from our
+    // own Progress/myProgress store by bestSource() when a tile is tapped.
+    const cont = await Plex.getContinueListening();   // Plex recently-played, newest first
     renderCarousel($('clRow'), cont);
     status(cont.length ? '' : 'No books in progress yet — pick one from Books or Authors.');
     renderCarousel($('raRow'), await Plex.getRecentlyAdded(15));

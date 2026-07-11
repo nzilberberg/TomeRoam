@@ -375,10 +375,16 @@ const Plex = (() => {
 
   // Plex's own in-progress list: books partway through (some, not all, chapters
   // viewed), most-recently-listened first.
+  // Continue Listening = Plex's recently-played books (the source of truth for
+  // WHICH books + recency), newest first. IMPORTANT: the /all listing returns
+  // lastViewedAt but OMITS leafCount/viewedLeafCount (those need a per-album
+  // fetch), so we key off lastViewedAt — the old viewedLeafCount<leafCount filter
+  // silently matched nothing (both undefined) and let an external source take over.
+  // Resume OFFSET is Plex-hidden for audiobooks and comes from our own Progress store.
   async function getContinueListening() {
     const books = await getBooks();
     return books
-      .filter((b) => b.viewedLeafCount > 0 && b.viewedLeafCount < b.leafCount)
+      .filter((b) => b.lastViewedAt > 0)
       .sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
   }
 
@@ -467,14 +473,13 @@ const Plex = (() => {
     if (kept.length !== data.books.length) { data.books = kept; await setPlaylistSummary(pl.ratingKey, JSON.stringify(data)); }
   }
 
-  // Clear ALL saved progress for a book: unplay every track on the server, then
-  // remove the book from the resume store. Best-effort per track (one failure
-  // doesn't abort the rest). Returns the count of tracks reset.
+  // Clear ALL saved progress for a book: unplay every track on the server. That
+  // also clears Plex's lastViewedAt, so the book drops out of Continue Listening.
+  // Best-effort per track (one failure doesn't abort the rest). Returns the count reset.
   async function resetBookProgress(book, trackRks) {
     let done = 0;
     for (const rk of trackRks) { try { await unscrobble(rk); done++; } catch (e) { dbg('RESET', 'unscrobble ' + rk + ' failed'); } }
-    try { await removeBookFromResume(book); } catch (e) { dbg('RESET', 'resume-playlist rewrite failed'); }
-    clearCaches();   // force a fresh getBooks() so viewedLeafCount reflects the reset
+    clearCaches();   // force a fresh getBooks() so the reset is reflected
     return done;
   }
 
