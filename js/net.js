@@ -186,11 +186,13 @@ const Net = (() => {
     const s = document.createElement('style');
     s.id = 'pbnet-style';
     s.textContent = `
+      /* Hidden by default. A stray display:flex here (there used to be one) makes
+         an EMPTY gray bar stick over the UI forever — only .show may show it. */
       #pbnet{position:fixed;left:0;right:0;top:0;z-index:45;display:none;
         font:13px/1.3 system-ui,-apple-system,sans-serif;
         padding:calc(env(safe-area-inset-top) + 6px) 12px 6px;
         background:#2a2f3a;color:#e7ecf3;box-shadow:0 2px 10px rgba(0,0,0,.35);
-        display:flex;align-items:center;gap:10px}
+        align-items:center;gap:10px}
       #pbnet.show{display:flex}
       #pbnet.update{background:#1f3a2a}
       #pbnet .pbnet-msg{flex:1;min-width:0}

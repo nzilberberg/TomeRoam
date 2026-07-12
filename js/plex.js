@@ -170,7 +170,19 @@ const Plex = (() => {
     return null;
   }
 
-  async function connect() {
+  // Serialize connect(): many callers (playback, Progress, Presence, and now the
+  // Net reachability poller) can ask concurrently. Without a shared in-flight
+  // promise they each launch their own probe pass, which piles up on iOS and
+  // produces 16s＋ AbortError thrash (the codebase note: "connect() must stay
+  // sequential"). One shared attempt fixes that.
+  let connecting = null;
+  function connect() {
+    if (base) return Promise.resolve(base);
+    if (connecting) return connecting;
+    connecting = _connect().finally(() => { connecting = null; });
+    return connecting;
+  }
+  async function _connect() {
     if (base) return base;
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LS.server) || 'null'); } catch {}
@@ -296,12 +308,14 @@ const Plex = (() => {
   // /identity right now? Drops a dead base so the next call re-probes.
   async function ping() {
     try {
-      const b = await connect();
+      const b = base || await connect();
       const signal = AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined;
       const r = await fetch(`${b}/identity`, { headers: plexHeaders({ 'X-Plex-Token': token() }), signal });
-      if (!r.ok) { base = null; return false; }
-      return true;
-    } catch { base = null; return false; }
+      return !!(r && r.ok);
+      // NOTE: a probe must NOT null `base` — that was wiping the live connection
+      // mid-session and breaking the very next playback (AUD_ERR code=4). Real API
+      // calls (plexFetch) still drop a dead base to force a re-probe when needed.
+    } catch { return false; }
   }
 
   async function getAlbum(rk) {
