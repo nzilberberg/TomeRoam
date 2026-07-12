@@ -14,17 +14,20 @@
 //   * ATOMIC VERSIONED caches (`SHELL_CACHE` keyed by BUILD): a build's assets are
 //     precached together; the page is only ever served from ONE build's cache, so
 //     there is no mixed-build window (index.html from build 50 + JS from build 48).
-//   * SAFE UPDATES: a new SW precaches the new build into its own cache and then
-//     WAITS (no auto-skipWaiting). The page detects the waiting worker and shows
-//     "Update available — reload to apply"; only then do we activate + reload.
-//     So localStorage/token survive, and startup never blocks on an update check.
+//   * AUTO-TAKEOVER UPDATES: a new SW precaches its build then skipWaiting()s so
+//     it replaces the previous worker immediately; app.js reloads on
+//     controllerchange (deferred while audio plays) so the page lands fully on the
+//     new build. We do NOT rely on a "waiting + update prompt" flow — it could not
+//     dislodge a still-controlling old worker, which left devices on a stale
+//     index.html (see the install comment). localStorage/token survive across the
+//     swap, and startup still never blocks on the network (cache-first).
 //   * RUNTIME IMAGE CACHE for Plex cover art (separate, build-independent cache),
 //     with a bundled placeholder fallback. Media/API requests are never cached.
 //
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.3';
+const BUILD = '2026-07-12.4';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -62,14 +65,23 @@ const PLACEHOLDER = './img/placeholder-cover.svg';
 // ---- install: precache the new build --------------------------------------
 // Try the atomic addAll first (fast, consistent). If it rejects — e.g. a fresh
 // deploy where one asset 404s at the CDN edge for a moment — fall back to
-// best-effort per-asset caching so we grab everything that IS available. We do
-// NOT skipWaiting: a replacing worker waits for the update prompt.
+// best-effort per-asset caching so we grab everything that IS available.
 //
-// CRITICAL: install must never leave us in a state where the shell is empty AND
-// the old cache is gone. That's guarded in `activate` (it won't prune the old
-// cache until THIS shell is verified complete) and in `shellFirst` (it falls
-// back across ALL caches). This is the bug that bricked offline in .1.
+// We call skipWaiting() so this build TAKES OVER immediately. History (learned
+// the hard way in .1–.3): a "waiting" worker that only activates on the update
+// prompt could NOT replace the previous network-first SW while a client stayed
+// alive — the device kept running the OLD sw + a STALE index.html (fresh JS,
+// old HTML with no <script> tags for the new modules → window.Store/Net
+// undefined → offline broken). Auto-takeover + the controllerchange reload in
+// app.js is what actually ships a consistent build. Mixed builds are still
+// impossible because each build serves from its OWN versioned cache and the
+// reload lands entirely on the new one.
+//
+// The activate guard (won't prune old caches until THIS shell is verified
+// complete) + shellFirst's all-caches fallback keep offline working even if a
+// precache doesn't finish.
 self.addEventListener('install', (e) => {
+  self.skipWaiting();
   e.waitUntil((async () => {
     const c = await caches.open(SHELL_CACHE);
     try {

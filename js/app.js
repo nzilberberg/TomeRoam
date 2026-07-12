@@ -2014,8 +2014,14 @@
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController || reloaded) return;   // first install never reloads
       reloaded = true;
-      if (window.PBDebug) PBDebug.log('SW', 'new build active — reloading');
-      location.reload();
+      // A new build took over. Reload to land fully on it (avoids the mixed
+      // old-HTML/new-JS state) — but don't yank a listening session: if audio is
+      // playing, defer the reload until the next pause.
+      const go = () => { if (window.PBDebug) PBDebug.log('SW', 'new build active — reloading'); location.reload(); };
+      if (audio && !audio.paused) {
+        if (window.PBDebug) PBDebug.log('SW', 'new build active — reload deferred until pause');
+        audio.addEventListener('pause', go, { once: true });
+      } else go();
     });
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
       const offerIfWaiting = () => { if (reg.waiting && navigator.serviceWorker.controller && window.Net) Net.setUpdateReady(reg); };
