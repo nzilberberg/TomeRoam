@@ -333,6 +333,9 @@ const Net = (() => {
     init, state, checkAppHost, checkPlex, reconnectPass,
     setUpdateReady, applyUpdate, markCachedRead, noteFresh, setPendingCount,
     sanitizedState, kickPolling,
+    // Test-only: reach the pure banner/mode/health logic + mutate state, without
+    // the DOM/timers. No runtime behaviour change.
+    _test: { S, banner, detectMode, everythingHealthy, set: (o) => Object.assign(S, o) },
   };
 })();
 

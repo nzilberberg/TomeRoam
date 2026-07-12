@@ -61,3 +61,12 @@ test('the SW builds its version suffix from BUILD', () => {
 test('vendored eruda is never precached (500 KB, on-demand only)', () => {
   assert.ok(!/['"]\.?\/?js\/vendor\//.test(read('sw.js')), 'sw.js must not precache js/vendor/*');
 });
+
+// The root cause of the offline saga: a top-level `const Foo` is a lexical global,
+// NOT window.Foo. Modules read via window.<Name> MUST assign it explicitly.
+test('modules assign themselves to window (const is not window.X)', () => {
+  const mods = [['js/store.js', 'Store'], ['js/net.js', 'Net'], ['js/syncqueue.js', 'SyncQueue'], ['js/plex.js', 'Plex'], ['js/progress.js', 'Progress']];
+  for (const [file, name] of mods) {
+    assert.ok(read(file).includes(`window.${name} = ${name}`), `${file} must assign window.${name} = ${name}`);
+  }
+});

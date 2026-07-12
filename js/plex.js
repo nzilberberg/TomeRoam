@@ -652,7 +652,13 @@ const Plex = (() => {
     getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist,
     resetBookProgress,
     notificationWsUrl,
-    _test: { kindOf, orderByLastKind, mapBook },   // internals exposed for the unit tests only
+    // internals exposed for the unit tests only (no runtime behaviour change)
+    _test: {
+      kindOf, orderByLastKind, mapBook, mapTracks, curBase,
+      setBase: (b) => { base = b; },
+      resetConn: () => { base = null; connecting = null; },
+      isConnecting: () => !!connecting,
+    },
   };
 })();
 
