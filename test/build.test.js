@@ -1,6 +1,8 @@
-// Deploy-consistency guards: these catch the two mistakes that have actually
-// bitten this project — BUILD drifting between js/debug.js and sw.js, and a
-// new script file missing from the SW precache list.
+// Deploy-consistency guards. These catch the mistakes that have actually bitten
+// this project: BUILD drifting between files, a new script missing from the SW
+// precache, and — the big one — a stale index.html pairing with fresh JS. The
+// fix is version-stamped asset URLs (js/app.js?v=<BUILD>) that MUST match in
+// index.html, the meta tag, and the SW precache. These tests enforce that.
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { readFileSync } = require('node:fs');
@@ -8,25 +10,54 @@ const { join } = require('node:path');
 
 const root = join(__dirname, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
+const grab = (txt, re) => { const m = txt.match(re); return m && m[1]; };
 
-test('BUILD is identical in js/debug.js and sw.js', () => {
-  const dbg = read('js/debug.js').match(/const BUILD = '([^']+)'/);
-  const sw = read('sw.js').match(/const BUILD = '([^']+)'/);
-  assert.ok(dbg && sw, 'both files declare a BUILD const');
-  assert.equal(dbg[1], sw[1], `js/debug.js has ${dbg && dbg[1]} but sw.js has ${sw && sw[1]} — bump BOTH every deploy`);
+// All core script/style refs in index.html (vendor excluded — lazy-loaded).
+function htmlRefs() {
+  const html = read('index.html');
+  const refs = [
+    ...[...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]),
+    ...[...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]),
+  ];
+  return refs.filter((r) => !r.startsWith('js/vendor/'));
+}
+
+test('BUILD is identical across sw.js, debug.js, index.html meta, and build.json', () => {
+  const sw = grab(read('sw.js'), /const BUILD = '([^']+)'/);
+  const dbg = grab(read('js/debug.js'), /const BUILD = '([^']+)'/);
+  const meta = grab(read('index.html'), /name="tomeroam-build" content="([^"]+)"/);
+  const json = grab(read('build.json'), /"build":\s*"([^"]+)"/);
+  assert.ok(sw && dbg && meta && json, 'all four declare a build');
+  assert.equal(dbg, sw, `debug.js ${dbg} != sw.js ${sw}`);
+  assert.equal(meta, sw, `index.html meta ${meta} != sw.js ${sw}`);
+  assert.equal(json, sw, `build.json ${json} != sw.js ${sw}`);
 });
 
-test('every script in index.html is precached by the SW (vendor excluded)', () => {
-  const scripts = [...read('index.html').matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
-  assert.ok(scripts.length >= 7, 'found the script tags');
-  const assets = read('sw.js');
-  for (const s of scripts) {
-    if (s.startsWith('js/vendor/')) continue;   // lazy-loaded, deliberately not precached
-    assert.ok(assets.includes(`'./${s}'`), `${s} is missing from sw.js ASSETS`);
+test('every core asset in index.html is version-stamped ?v=<BUILD>', () => {
+  const build = grab(read('sw.js'), /const BUILD = '([^']+)'/);
+  const refs = htmlRefs();
+  assert.ok(refs.length >= 8, 'found the core script/style refs');
+  for (const r of refs) {
+    assert.ok(r.includes('?v=' + build), `${r} must be stamped ?v=${build} (prevents stale-HTML/fresh-JS mixing)`);
   }
 });
 
+test('every version-stamped index.html asset is precached by the SW', () => {
+  const sw = read('sw.js');
+  for (const r of htmlRefs()) {
+    const base = r.split('?')[0];                       // e.g. js/app.js
+    // sw.js lists it as `'./js/app.js' + V` — assert the base entry is present
+    // AND carries the "+ V" version suffix (so the cache key matches ?v=BUILD).
+    const esc = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp("'\\./" + esc + "'\\s*\\+\\s*V\\b");
+    assert.ok(re.test(sw), `${base} must be precached as './${base}' + V in sw.js ASSETS`);
+  }
+});
+
+test('the SW builds its version suffix from BUILD', () => {
+  assert.ok(/const V = '\?v=' \+ BUILD;/.test(read('sw.js')), 'sw.js must derive V from BUILD');
+});
+
 test('vendored eruda is never precached (500 KB, on-demand only)', () => {
-  // Look for a quoted ASSETS entry, not the word itself (a comment may mention it).
   assert.ok(!/['"]\.?\/?js\/vendor\//.test(read('sw.js')), 'sw.js must not precache js/vendor/*');
 });

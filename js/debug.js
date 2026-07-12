@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-12.4';
+  const BUILD = '2026-07-12.5';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -198,6 +198,15 @@
     const d = { build: BUILD, at: new Date().toISOString() };
     // Environment / mode
     d.mode = (window.Net && Net.state && Net.state().mode) || 'unknown';
+    // Build coherence (mixed-build detection) — the top-priority diagnostic.
+    d.appBuild = window.PB_BUILD || BUILD;
+    try { const m = document.querySelector('meta[name="tomeroam-build"]'); d.htmlBuild = (m && m.content) || null; } catch {}
+    d.globals = { Store: !!window.Store, Net: !!window.Net, SyncQueue: !!window.SyncQueue };
+    try {
+      const has = (n) => !!document.querySelector('script[src*="js/' + n + '"]');
+      d.scriptTags = { store: has('store.js'), net: has('net.js'), syncqueue: has('syncqueue.js') };
+    } catch {}
+    d.mixedBuild = !!((d.htmlBuild && d.appBuild && d.htmlBuild !== d.appBuild) || !d.globals.Store || !d.globals.Net || !d.globals.SyncQueue);
     // Service worker
     const sw = navigator.serviceWorker;
     d.swSupported = !!sw;
@@ -220,6 +229,7 @@
       d.shellComplete = cs.expected != null && cs.present === cs.expected;
       d.shellMissing = cs.missing || [];
       d.coverCacheCount = cs.imgCount;
+      d.shellBuild = cs.build;              // the BUILD the active SW reports
     }
     // IndexedDB structured data
     d.idbAvailable = !!(window.Store && Store.available);
@@ -253,6 +263,14 @@
     L.push(`TomeRoam diagnostics — ${d.at}`);
     L.push(`App build: ${d.build}   Mode: ${d.mode}`);
     if (n.hostedBuild) L.push(`Hosted build (build.json): ${n.hostedBuild}${n.hostedBuild !== d.build ? '  ← update available' : ''}`);
+    L.push('');
+    L.push('— Build coherence (mixed-build check) —');
+    L.push(`HTML build: ${d.htmlBuild || '?'}   JS build: ${d.appBuild || '?'}   SW build: ${d.shellBuild || '?'}`);
+    L.push(`active shell cache: ${d.shellCache || '(none)'}`);
+    const g = d.globals || {};
+    L.push(`globals loaded: Store=${!!g.Store} Net=${!!g.Net} SyncQueue=${!!g.SyncQueue}`);
+    if (d.scriptTags) L.push(`index.html <script> tags: store=${d.scriptTags.store} net=${d.scriptTags.net} syncqueue=${d.scriptTags.syncqueue}`);
+    L.push(`MIXED BUILD: ${d.mixedBuild ? 'YES  ⚠️  (use Hard Reset)' : 'no'}`);
     L.push('');
     L.push('— Service worker —');
     L.push(`supported=${d.swSupported}  registered=${d.swRegistered}  active=${d.swController}  state=${d.swState || '?'}  waiting=${d.swWaiting || false}`);

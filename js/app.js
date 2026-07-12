@@ -2041,6 +2041,75 @@
     }).catch(() => {});
   }
 
+  // ---- build-coherence guard ------------------------------------------------
+  // The mixed-build failure: a STALE index.html (served by an old worker) omits
+  // the <script> tags for newer modules, so window.Store/Net/SyncQueue are
+  // undefined even though other JS loaded fresh. Versioned asset URLs prevent NEW
+  // mixed builds; this guard catches a shell that's ALREADY stale and routes the
+  // user to a Hard Reset instead of silently running a broken half-app.
+  function htmlBuild() { try { const m = document.querySelector('meta[name="tomeroam-build"]'); return m && m.content || null; } catch { return null; } }
+  function missingGlobals() {
+    const m = [];
+    if (!window.Store) m.push('Store');
+    if (!window.Net) m.push('Net');
+    if (!window.SyncQueue) m.push('SyncQueue');
+    return m;
+  }
+  function checkBuildIntegrity() {
+    const missing = missingGlobals();
+    const hb = htmlBuild(), jb = window.PB_BUILD || null;
+    const skew = hb && jb && hb !== jb;     // HTML file build != loaded JS build
+    if (!missing.length && !skew) return true;
+    if (window.PBDebug) PBDebug.log('BUILD', `MISMATCH missing=[${missing.join(',')}] html=${hb} js=${jb}`);
+    showMismatchScreen({ missing, hb, jb });
+    return false;
+  }
+
+  // Full-screen recovery UI, injected + inline-styled so it renders even if the
+  // cached CSS or index.html body is stale/incomplete.
+  function showMismatchScreen({ missing, hb, jb }) {
+    if (document.getElementById('pb-mismatch')) return;
+    const el = document.createElement('div');
+    el.id = 'pb-mismatch';
+    el.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#14171c;color:#e7ecf3;'
+      + 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;'
+      + 'text-align:center;padding:28px;font:15px/1.5 system-ui,-apple-system,sans-serif';
+    el.innerHTML =
+      '<div style="font-size:40px">🧩</div>'
+      + '<div style="font-size:19px;font-weight:700">App update mismatch</div>'
+      + '<div style="max-width:420px;opacity:.85">The cached app shell is incomplete or stale, so the app can\'t start correctly. '
+      + 'Tap Hard Reset to refresh the local app cache. Your sign-in and saved data are kept.</div>'
+      + '<button id="pb-hardreset" style="margin-top:6px;background:#3a7bd5;color:#fff;border:0;border-radius:10px;'
+      + 'padding:13px 22px;font-size:16px;font-weight:600">Hard Reset / Reload App</button>'
+      + '<div style="margin-top:10px;font-size:12px;opacity:.5">missing: ' + (missing.join(', ') || 'none')
+      + ' · html ' + (hb || '?') + ' · js ' + (jb || '?') + '</div>';
+    document.body.appendChild(el);
+    el.querySelector('#pb-hardreset').addEventListener('click', hardReset);
+  }
+
+  // Unregister every service worker for this origin + delete all Cache Storage
+  // caches (the app shell), then reload with a cache-busting param so a fully
+  // fresh, coherent build is fetched from the network. Deliberately does NOT
+  // touch localStorage / IndexedDB, so the Plex token + cached library survive.
+  async function hardReset() {
+    const btn = document.getElementById('pb-hardreset');
+    if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+    try {
+      if (navigator.serviceWorker) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister().catch(() => {})));
+      }
+    } catch {}
+    try {
+      if (window.caches) { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k).catch(() => {}))); }
+    } catch {}
+    const u = new URL(location.href);
+    u.searchParams.set('reset', String(Date.now()));   // bust any HTTP cache
+    u.hash = '';
+    location.replace(u.toString());
+  }
+  window.PBHardReset = hardReset;   // reachable from diagnostics too
+
   async function init() {
     // Diagnostics: instrument the audio element (media events + stall watchdog)
     // and provide the state snapshot the log pipe / remote `state` command use.
@@ -2072,8 +2141,14 @@
       peers: peersNow.length,
       view: (currentDesc() && currentDesc().v) || 'home',
     }));
-    bind();
+    // Register/update the service worker FIRST — a mismatched shell needs the SW
+    // to fetch the coherent build, and controllerchange then reloads onto it.
     initServiceWorker();
+    // HARD GATE: if the loaded shell is stale/mixed (missing globals or an
+    // HTML/JS build skew), stop here and show the recovery screen. Do NOT run the
+    // app against a broken half-shell (that produced the "no Store" offline bug).
+    if (!checkBuildIntegrity()) return;
+    bind();
     // Offline resilience wiring: ask for persistent storage, bring up the pending
     // sync queue (its count drives the banner), and start the connectivity model.
     // Net's reconnect pass re-runs loadHomeData + flushes the queue when Plex

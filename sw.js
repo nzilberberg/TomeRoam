@@ -27,36 +27,41 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.4';
+const BUILD = '2026-07-12.5';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
 
 // The full app shell — everything needed to render the UI with zero network.
+// The css/js entries carry the SAME ?v=<BUILD> query index.html requests, so the
+// cache key matches the exact URL the browser asks for. This is what makes builds
+// coherent: a stale index.html asks for its OWN ?v= assets (all present together
+// in its build's cache) and can never pair with a different build's JS.
+const V = '?v=' + BUILD;
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './build.json',
-  './css/app.css',
+  './css/app.css' + V,
   './icon.svg',
   './img/placeholder-cover.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
-  './js/logic.js',
-  './js/debug.js',
-  './js/store.js',
-  './js/net.js',
-  './js/syncqueue.js',
-  './js/artloader.js',
-  './js/plex.js',
-  './js/presence.js',
-  './js/progress.js',
-  './js/logpipe.js',
-  './js/speed.js',
-  './js/browse.js',
-  './js/app.js',
+  './js/logic.js' + V,
+  './js/debug.js' + V,
+  './js/store.js' + V,
+  './js/net.js' + V,
+  './js/syncqueue.js' + V,
+  './js/artloader.js' + V,
+  './js/plex.js' + V,
+  './js/presence.js' + V,
+  './js/progress.js' + V,
+  './js/logpipe.js' + V,
+  './js/speed.js' + V,
+  './js/browse.js' + V,
+  './js/app.js' + V,
   // js/vendor/eruda.js deliberately NOT precached — 500 KB, lazy-loaded on demand.
 ];
 
