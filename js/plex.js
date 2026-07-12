@@ -189,8 +189,15 @@ const Plex = (() => {
     }
     if (!hit) { dbg('CONN', 'FAIL: no connection reachable'); throw new Error('Could not reach your Plex server.'); }
     base = hit;
+    // Remember the winning host so cover-art URLs resolve to the SAME origin when
+    // OFFLINE (base is null then) — that origin is the SW image cache's key, so
+    // previously-loaded covers keep rendering. Not used for API calls.
+    try { localStorage.setItem('pb_lastBase', base); } catch {}
     return base;
   }
+  // Base to build ART/stream URLs against even before/without a live connection
+  // (offline): the last host that worked. API calls still require connect().
+  const curBase = () => base || (() => { try { return localStorage.getItem('pb_lastBase') || ''; } catch { return ''; } })();
 
   // --- core API -------------------------------------------------------------
   // Resilient fetch for Plex calls — the relay is slow and lossy, so a single
@@ -275,13 +282,42 @@ const Plex = (() => {
   }
 
   // --- library --------------------------------------------------------------
-  async function getAlbum(rk) {
-    const mc = await api(`/library/metadata/${rk}`);
-    return (mc.Metadata || [])[0] || null;
+  // --- offline metadata cache hooks -----------------------------------------
+  // Every successful library read is written through to IndexedDB (js/store.js)
+  // and, when the network read fails, served back from it so the app renders a
+  // last-known library offline. `markCachedRead` tells the UI it's showing STALE
+  // data; `noteFresh` clears that. All guarded — the app runs without Store/Net.
+  const cacheHook = {
+    fresh(kind) { if (window.Net) Net.noteFresh(kind); },
+    stale(kind) { if (window.Net) Net.markCachedRead(kind); },
+  };
+
+  // Light reachability probe for js/net.js: does the current Plex base answer
+  // /identity right now? Drops a dead base so the next call re-probes.
+  async function ping() {
+    try {
+      const b = await connect();
+      const signal = AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined;
+      const r = await fetch(`${b}/identity`, { headers: plexHeaders({ 'X-Plex-Token': token() }), signal });
+      if (!r.ok) { base = null; return false; }
+      return true;
+    } catch { base = null; return false; }
   }
 
-  async function getAlbumTracks(rk) {
-    const mc = await api(`/library/metadata/${rk}/children`);
+  async function getAlbum(rk) {
+    try {
+      const mc = await api(`/library/metadata/${rk}`);
+      const a = (mc.Metadata || [])[0] || null;
+      if (a && window.Store) Store.cacheAlbum(a);
+      cacheHook.fresh('albums');
+      return a;
+    } catch (e) {
+      if (window.Store) { const c = await Store.cachedAlbum(rk); if (c) { cacheHook.stale('albums'); return c; } }
+      throw e;
+    }
+  }
+
+  function mapTracks(mc) {
     const tracks = (mc.Metadata || []).map((t) => {
       const part = t.Media && t.Media[0] && t.Media[0].Part && t.Media[0].Part[0];
       return {
@@ -296,6 +332,18 @@ const Plex = (() => {
     }).filter((t) => t.partKey);
     tracks.sort((a, b) => a.index - b.index);
     return tracks;
+  }
+
+  async function getAlbumTracks(rk) {
+    try {
+      const tracks = mapTracks(await api(`/library/metadata/${rk}/children`));
+      if (window.Store) Store.cacheTracks(rk, tracks);
+      cacheHook.fresh('tracks');
+      return tracks;
+    } catch (e) {
+      if (window.Store) { const c = await Store.cachedTracks(rk); if (c) { cacheHook.stale('tracks'); return c; } }
+      throw e;
+    }
   }
 
   // Media details for ONE track (for the track-info sheet): container, bitrate,
@@ -343,13 +391,21 @@ const Plex = (() => {
   // Authors (artists). Lightweight: title + thumb + album count only — NO
   // per-book progress/time work (this screen never shows times).
   async function getAuthors() {
-    const key = await getSectionKey();
-    const mc = await api(`/library/sections/${key}/all`, { params: { type: 8 }, headers: BIG });
-    return (mc.Metadata || []).map((a) => ({
-      ratingKey: a.ratingKey, title: a.title || 'Unknown',
-      titleSort: a.titleSort || a.title || '', thumb: a.thumb || null,
-      childCount: a.childCount || 0,
-    }));
+    try {
+      const key = await getSectionKey();
+      const mc = await api(`/library/sections/${key}/all`, { params: { type: 8 }, headers: BIG });
+      const authors = (mc.Metadata || []).map((a) => ({
+        ratingKey: a.ratingKey, title: a.title || 'Unknown',
+        titleSort: a.titleSort || a.title || '', thumb: a.thumb || null,
+        childCount: a.childCount || 0,
+      }));
+      if (window.Store && authors.length) Store.cacheAuthors(authors);
+      cacheHook.fresh('authors');
+      return authors;
+    } catch (e) {
+      if (window.Store) { const c = await Store.cachedAuthors(); if (c && c.length) { cacheHook.stale('authors'); return c; } }
+      throw e;
+    }
   }
 
   const mapBook = (b) => ({
@@ -367,10 +423,19 @@ const Plex = (() => {
   function clearCaches() { booksCache = null; }   // pull-to-refresh: force a fresh whole-library fetch
   async function getBooks() {
     if (booksCache) return booksCache;
-    const key = await getSectionKey();
-    const mc = await api(`/library/sections/${key}/all`, { params: { type: 9 }, headers: BIG });
-    booksCache = (mc.Metadata || []).map(mapBook);
-    return booksCache;
+    try {
+      const key = await getSectionKey();
+      const mc = await api(`/library/sections/${key}/all`, { params: { type: 9 }, headers: BIG });
+      booksCache = (mc.Metadata || []).map(mapBook);
+      if (window.Store && booksCache.length) Store.cacheBooks(booksCache);
+      cacheHook.fresh('books');
+      return booksCache;
+    } catch (e) {
+      // Offline / Plex down: fall back to the last-known library from IndexedDB
+      // so the home + browse screens still render (labeled stale by the UI).
+      if (window.Store) { const c = await Store.cachedBooks(); if (c && c.length) { booksCache = c; cacheHook.stale('books'); return c; } }
+      throw e;
+    }
   }
 
   // Plex's own in-progress list: books partway through (some, not all, chapters
@@ -412,7 +477,7 @@ const Plex = (() => {
 
   // --- media + art URLs -----------------------------------------------------
   function streamUrl(partKey) {
-    return base + partKey + (partKey.includes('?') ? '&' : '?') + 'X-Plex-Token=' + encodeURIComponent(token());
+    return curBase() + partKey + (partKey.includes('?') ? '&' : '?') + 'X-Plex-Token=' + encodeURIComponent(token());
   }
   // Ask PMS to resize + re-encode the cover to a small JPEG via its photo
   // transcoder, instead of shipping the full-res original (often 1500px+). On a
@@ -421,13 +486,15 @@ const Plex = (() => {
   // to get the raw original.
   function artUrl(thumb, size = 400) {
     if (!thumb) return null;
-    if (!size) return base + thumb + (thumb.includes('?') ? '&' : '?') + 'X-Plex-Token=' + encodeURIComponent(token());
+    const b = curBase();               // last-good host, so cached covers resolve offline
+    if (!b) return null;
+    if (!size) return b + thumb + (thumb.includes('?') ? '&' : '?') + 'X-Plex-Token=' + encodeURIComponent(token());
     const p = new URLSearchParams({
       width: String(size), height: String(size), minSize: '1', upscale: '1',
       url: thumb,                       // internal PMS resource path; URLSearchParams encodes it
       'X-Plex-Token': token(),
     });
-    return base + '/photo/:/transcode?' + p.toString();
+    return b + '/photo/:/transcode?' + p.toString();
   }
 
   // --- progress write-back (same endpoint official clients use) -------------
@@ -445,7 +512,8 @@ const Plex = (() => {
         p.set('hasMDE', '1');
         return url;
       }, {}, { retries: 2, timeoutMs: 8000 });
-    } catch (e) { /* best-effort; never block playback on a write */ }
+      return true;
+    } catch (e) { return false; }   // best-effort; caller may queue it for later (syncqueue)
   }
 
   // Mark an item unplayed on the server: clears viewCount AND the (API-hidden)
@@ -560,7 +628,7 @@ const Plex = (() => {
   }
 
   return {
-    isSignedIn, signOut, startPin, pollPin, connect, getClientId: clientId, serverNow,
+    isSignedIn, signOut, startPin, pollPin, connect, ping, getClientId: clientId, serverNow,
     getResumeMap, getAlbum, getAlbumTracks,
     getAuthors, getBooks, getAuthorBooks, getAuthor, getContinueListening, getRecentlyAdded,
     getTrackInfo, clearCaches,

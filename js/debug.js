@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-11.87';
+  const BUILD = '2026-07-12.1';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -158,6 +158,7 @@
       online: navigator.onLine, visible: !document.hidden,
       conn: (window.Plex && Plex.getConnKind && Plex.getConnKind()) || null,
       sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+      net: (window.Net && Net.sanitizedState) ? Net.sanitizedState() : null,
     };
     try { if (stateFn) Object.assign(o, stateFn()); } catch (e) { o.stateErr = e && e.message; }
     return o;
@@ -175,6 +176,169 @@
     s.onload = () => { try { window.eruda.init(); window.eruda.show(); log('ERUDA', 'console open'); } catch (e) { log('ERUDA', 'init failed ' + (e && e.message)); } };
     s.onerror = () => log('ERUDA', 'failed to load js/vendor/eruda.js');
     document.head.appendChild(s);
+  }
+
+  // ---- offline/cache diagnostics --------------------------------------------
+  // Gathers the full cache / service-worker / storage / connectivity / sync
+  // picture so caching behaviour is debuggable on-device. Everything here is
+  // token-free by construction; sanitize() strips URLs/IPs defensively too.
+  function askSw(msg, timeoutMs = 1500) {
+    return new Promise((resolve) => {
+      const sw = navigator.serviceWorker;
+      if (!sw || !sw.controller) return resolve(null);
+      let done = false;
+      const ch = new MessageChannel();
+      ch.port1.onmessage = (e) => { if (!done) { done = true; resolve(e.data); } };
+      try { sw.controller.postMessage(msg, [ch.port2]); } catch { return resolve(null); }
+      setTimeout(() => { if (!done) { done = true; resolve(null); } }, timeoutMs);
+    });
+  }
+
+  async function collectDiagnostics() {
+    const d = { build: BUILD, at: new Date().toISOString() };
+    // Environment / mode
+    d.mode = (window.Net && Net.state && Net.state().mode) || 'unknown';
+    // Service worker
+    const sw = navigator.serviceWorker;
+    d.swSupported = !!sw;
+    d.swController = !!(sw && sw.controller);
+    if (sw) {
+      try {
+        const reg = await sw.getRegistration();
+        d.swRegistered = !!reg;
+        const active = reg && (reg.active || reg.waiting || reg.installing);
+        d.swState = active ? active.state : 'none';
+        d.swWaiting = !!(reg && reg.waiting);
+      } catch { d.swRegistered = false; }
+    }
+    const cs = await askSw({ type: 'GET_CACHE_STATUS' });
+    if (cs) {
+      d.cacheNames = cs.cacheNames || [];
+      d.shellCache = cs.shellCache;
+      d.shellExpected = cs.expected;
+      d.shellPresent = cs.present;
+      d.shellComplete = cs.expected != null && cs.present === cs.expected;
+      d.shellMissing = cs.missing || [];
+      d.coverCacheCount = cs.imgCount;
+    }
+    // IndexedDB structured data
+    d.idbAvailable = !!(window.Store && Store.available);
+    if (d.idbAvailable) {
+      try {
+        d.cachedBooks = await Store.count('books');
+        d.cachedAuthors = await Store.count('authors');
+        d.cachedTracks = await Store.count('tracks');
+        d.lastBooksSync = await Store.syncedAt('books');
+        d.persistResult = await Store.diagGet('persist', 'unknown');
+        d.lastSyncResult = await Store.diagGet('lastSyncResult', null);
+        d.lastSyncAt = await Store.diagGet('lastSyncAt', 0);
+        const est = await Store.estimate();
+        d.storageSupported = est.supported;
+        if (est.supported) { d.storageUsed = est.usage; d.storageQuota = est.quota; }
+      } catch (e) { d.idbErr = e && e.message; }
+    }
+    // Pending sync
+    d.pendingSync = (window.SyncQueue) ? await SyncQueue.count() : 0;
+    // Connectivity model
+    if (window.Net && Net.sanitizedState) Object.assign(d, { net: Net.sanitizedState() });
+    return d;
+  }
+
+  const fmtBytes = (n) => { if (!n && n !== 0) return '?'; const u = ['B','KB','MB','GB']; let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return n.toFixed(i ? 1 : 0) + u[i]; };
+  const fmtTs = (ms) => (ms ? new Date(ms).toLocaleString() : 'never');
+
+  function diagText(d) {
+    const n = d.net || {};
+    const L = [];
+    L.push(`TomeRoam diagnostics — ${d.at}`);
+    L.push(`App build: ${d.build}   Mode: ${d.mode}`);
+    if (n.hostedBuild) L.push(`Hosted build (build.json): ${n.hostedBuild}${n.hostedBuild !== d.build ? '  ← update available' : ''}`);
+    L.push('');
+    L.push('— Service worker —');
+    L.push(`supported=${d.swSupported}  registered=${d.swRegistered}  active=${d.swController}  state=${d.swState || '?'}  waiting=${d.swWaiting || false}`);
+    L.push(`caches: ${(d.cacheNames || []).join(', ') || '(none)'}`);
+    L.push(`app-shell complete: ${d.shellComplete ? 'YES' : 'NO'} (${d.shellPresent}/${d.shellExpected})`);
+    if (d.shellMissing && d.shellMissing.length) L.push(`  missing: ${d.shellMissing.join(', ')}`);
+    L.push(`cover cache entries: ${d.coverCacheCount == null ? '?' : d.coverCacheCount}`);
+    L.push('');
+    L.push('— Structured data (IndexedDB) —');
+    L.push(`available=${d.idbAvailable}  books=${d.cachedBooks || 0}  authors=${d.cachedAuthors || 0}  tracks=${d.cachedTracks || 0}`);
+    L.push(`last metadata sync: ${fmtTs(d.lastBooksSync)}`);
+    L.push('');
+    L.push('— Persistent storage —');
+    L.push(`supported=${d.storageSupported}  persist=${d.persistResult || 'unknown'}`);
+    if (d.storageSupported) L.push(`used ${fmtBytes(d.storageUsed)} of ${fmtBytes(d.storageQuota)}`);
+    L.push('');
+    L.push('— Connectivity —');
+    L.push(`browserOnline=${n.browserThinksOnline}  appHost=${n.appHostReachable}  plex=${n.plexReachable}  plexAuth=${n.plexAuthValid}`);
+    L.push(`cachedShell=${n.cachedAppShellAvailable}  cachedMetadata=${n.cachedMetadataAvailable}`);
+    L.push(`last app-host check: ${fmtTs(n.lastAppHostCheck)} → ${n.lastAppHostResult || '?'}`);
+    L.push(`last Plex check: ${fmtTs(n.lastPlexCheck)} → ${n.lastPlexResult || '?'}`);
+    L.push(`last update check: ${fmtTs(n.lastUpdateCheck)} → ${n.lastUpdateResult || '?'}`);
+    L.push('');
+    L.push('— Sync queue —');
+    L.push(`pending=${d.pendingSync}  lastSyncAttempt=${fmtTs(d.lastSyncAt)}`);
+    if (d.lastSyncResult) L.push(`last result: ${JSON.stringify(d.lastSyncResult)}`);
+    return L.join('\n');
+  }
+
+  // Sanitize a diagnostics string for sharing: strip tokens, full URLs, and (in
+  // privacy mode) server names + local IPs. By construction the report already
+  // omits tokens/URLs; this is a belt-and-suspenders pass.
+  function sanitize(text) {
+    let s = String(text || '');
+    s = s.replace(/X-Plex-Token=[^&\s"]*/gi, 'X-Plex-Token=…');
+    s = s.replace(/https?:\/\/[^\s"]+/gi, '‹url›');
+    const privacy = (() => { try { return localStorage.getItem('pb_privacy') === '1'; } catch { return false; } })();
+    if (privacy) {
+      s = s.replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, '‹ip›');                 // IPv4
+      s = s.replace(/[0-9a-f]{8,}\.plex\.direct/gi, '‹host›.plex.direct'); // machine-id host
+    }
+    return s;
+  }
+
+  async function copyDiagnostics() {
+    const d = await collectDiagnostics();
+    const text = sanitize(diagText(d));
+    try { await navigator.clipboard.writeText(text); toast('Sanitized diagnostics copied'); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:50vh;z-index:10001';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      toast('Select all + Copy, then close the box');
+      setTimeout(() => ta.remove(), 15000);
+    }
+  }
+
+  // Diagnostics overlay (distinct from the rolling log): a snapshot of cache/SW/
+  // storage/connectivity/sync state, with a Copy-sanitized button.
+  let diagEl = null;
+  async function openDiag() {
+    injectStyle();
+    if (!diagEl) {
+      diagEl = document.createElement('div');
+      diagEl.id = 'pbdbg'; diagEl.classList.add('pbdiag');
+      diagEl.innerHTML =
+        `<div class="hd"><b>Cache &amp; Offline Diagnostics</b><span class="sum dim"></span>
+           <button data-a="copysan">Copy sanitized</button><button data-a="refresh">Refresh</button><button data-a="closediag">Close</button></div>
+         <pre class="body"></pre>`;
+      document.body.appendChild(diagEl);
+      diagEl.addEventListener('click', (e) => {
+        const a = e.target && e.target.dataset && e.target.dataset.a;
+        if (a === 'closediag') { diagEl.style.display = 'none'; }
+        else if (a === 'copysan') copyDiagnostics();
+        else if (a === 'refresh') fillDiag();
+      });
+    }
+    diagEl.style.display = 'flex';
+    fillDiag();
+  }
+  async function fillDiag() {
+    if (!diagEl) return;
+    const body = diagEl.querySelector('.body');
+    body.textContent = 'Collecting…';
+    const d = await collectDiagnostics();
+    body.textContent = diagText(d);
   }
 
   // ---- on-screen panel ------------------------------------------------------
@@ -272,9 +436,11 @@
     row.className = 'opt-row';
     row.innerHTML = '<span class="opt-label">Diagnostics</span>' +
       '<span class="opt-ctl"><button id="pbdbg-open" class="textbtn">Open log</button>' +
+      '<button id="pbdbg-diag" class="textbtn">Cache</button>' +
       '<button id="pbdbg-console" class="textbtn">Console</button></span>';
     opt.appendChild(row);
     row.querySelector('#pbdbg-open').addEventListener('click', open);
+    row.querySelector('#pbdbg-diag').addEventListener('click', openDiag);
     row.querySelector('#pbdbg-console').addEventListener('click', openConsole);
     const stamp = document.createElement('div');
     stamp.className = 'buildstamp';
@@ -300,5 +466,5 @@
     if (taps.length >= TAP_N) { taps = []; open(); }
   }, true);
 
-  window.PBDebug = { log, clear, open, close, asText, verbose, lastSeq, getSince, watchAudio, registerState, snapshot, openConsole };
+  window.PBDebug = { log, clear, open, close, asText, verbose, lastSeq, getSince, watchAudio, registerState, snapshot, openConsole, openDiag, collectDiagnostics, copyDiagnostics };
 })();

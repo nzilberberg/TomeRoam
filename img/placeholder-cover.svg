@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="Cover unavailable">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232833"/>
+      <stop offset="1" stop-color="#171a21"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#g)"/>
+  <g fill="#3a4150">
+    <path d="M150 118h100a14 14 0 0 1 14 14v150a14 14 0 0 1-14 14H150a14 14 0 0 1-14-14V132a14 14 0 0 1 14-14zm0 18a4 4 0 0 0-4 4v140h108V140a4 4 0 0 0-4-4z"/>
+    <rect x="160" y="150" width="80" height="12" rx="6"/>
+    <rect x="160" y="176" width="80" height="10" rx="5"/>
+    <rect x="160" y="198" width="60" height="10" rx="5"/>
+  </g>
+  <text x="200" y="326" text-anchor="middle" fill="#5a6273" font-family="system-ui,-apple-system,sans-serif" font-size="20" font-weight="600">TomeRoam</text>
+</svg>

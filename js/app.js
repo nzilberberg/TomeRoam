@@ -837,30 +837,67 @@
     history.replaceState({ v: 'app' }, '');
     applyScreen({ v: 'home' });
     $('serverName').textContent = '';
-    $('clRow').innerHTML = '<div class="center"><div class="spinner"></div></div>';
-    $('raRow').innerHTML = '';
-    status('Connecting to your Plex server…');
+    // Offline-first: paint the last-known library from IndexedDB immediately, so
+    // the app never shows a blank/spinner-forever screen while (or if) the network
+    // comes up. loadHomeData() overwrites this with fresh data once Plex answers.
+    const painted = await renderCachedHome();
+    if (!painted) { $('clRow').innerHTML = '<div class="center"><div class="spinner"></div></div>'; $('raRow').innerHTML = ''; }
+    status(painted ? '' : 'Connecting to your Plex server…');
     try {
       await Plex.connect();
       $('serverName').textContent = Plex.getServerName() || 'Plex';
       status('');
 
-      // Multi-device coordination: watch peers, yield when superseded.
-      Presence.init({ onPeers, onSupersede: onSuperseded });
-      // Durable cross-device progress: merge peers' boards, repaint on change.
-      Progress.init({ onMerged: () => { if (!document.hidden) renderPresence(); } });
-      Progress.setActive(true);
-      renderDeviceName();
-      startRenderTick();
+      startCoordination();
 
       // Bring the transport back to whatever was playing last (paused).
       await restoreLastPlayed();
 
       await loadHomeData();
     } catch (e) {
-      $('clRow').innerHTML = '';
-      status('⚠️ ' + (e.message || 'Could not load your library.'));
+      // Offline / Plex unreachable. Bring up durable-progress + presence anyway
+      // (they publish best-effort and recover on reconnect), restore the transport
+      // from cached metadata, and keep the cached home visible. The Net banner
+      // explains the state and its reconnect pass refreshes automatically.
+      startCoordination();
+      try { await restoreLastPlayed(); } catch {}
+      const shown = painted || await renderCachedHome();
+      if (!shown) { $('clRow').innerHTML = ''; status('⚠️ ' + (e.message || 'Could not load your library.')); }
+      else status('');
+      if (window.Net) Net.checkPlex();
     }
+  }
+
+  // Bring up multi-device coordination + durable progress + the render tick.
+  // Idempotent: enterApp may reach this via either the online or the offline
+  // (catch) path, and reconnects re-enter enterApp; init only the first time.
+  let coordUp = false;
+  function startCoordination() {
+    if (!coordUp) {
+      coordUp = true;
+      Presence.init({ onPeers, onSupersede: onSuperseded });
+      Progress.init({ onMerged: () => { if (!document.hidden) renderPresence(); } });
+    }
+    Progress.setActive(true);
+    renderDeviceName();
+    startRenderTick();
+  }
+
+  // Render the two home carousels from the last-known library in IndexedDB (no
+  // network). Mirrors loadHomeData's derivation (recently-played + recently-added)
+  // but purely from cache. Returns true if it painted anything. Covers come from
+  // the SW image cache via Plex.artUrl (resolved against the last-good host).
+  async function renderCachedHome() {
+    if (!window.Store) return false;
+    try {
+      const books = await Store.cachedBooks();
+      if (!books || !books.length) return false;
+      const cont = books.filter((b) => b.lastViewedAt > 0).sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
+      renderCarousel($('clRow'), cont);
+      renderCarousel($('raRow'), books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 15));
+      renderPresence();
+      return true;
+    } catch { return false; }
   }
 
   // Fetch + render the two home carousels (shared by initial load + pull-to-refresh).
@@ -1465,11 +1502,18 @@
     ctx.updatedAt = Plex.serverNow();    // this device just acted on this book
     const t = ctx.tracks[ctx.idx];
     if (!t || !audio.currentTime) return;
-    Plex.writeTimeline({
-      ratingKey: t.ratingKey, state,
-      timeMs: audio.currentTime * 1000,
-      durationMs: t.durationMs || (audio.duration || 0) * 1000,
-    });
+    const posMs = audio.currentTime * 1000;
+    const durMs = t.durationMs || (audio.duration || 0) * 1000;
+    const book = ctx.book, track = t.ratingKey;
+    const queue = () => { if (window.SyncQueue) SyncQueue.enqueue({ type: 'progress', bookKey: book, ratingKey: track, positionMs: posMs, durationMs: durMs, state, source: 'writeProgress' }); };
+    // Known-offline: skip the slow retrying write and queue straight away. The
+    // reconnect pass flushes it conflict-safely (syncqueue.js). Otherwise write
+    // live, and queue only if that write ultimately failed.
+    if (window.Net && Net.state().plexReachable === false) { queue(); }
+    else {
+      Promise.resolve(Plex.writeTimeline({ ratingKey: track, state, timeMs: posMs, durationMs: durMs }))
+        .then((ok) => { if (ok === false) queue(); }).catch(queue);
+    }
     saveLastPlayed();
   }
 
@@ -1952,16 +1996,31 @@
       toast('Service worker disabled for this session');
       return;
     }
-    // Reload only when a NEW worker replaces an existing one — not on first install.
+    // Cache-first SW (see sw.js): it serves the shell instantly and does NOT
+    // auto-skipWaiting. A new build precaches itself and WAITS; we surface it as
+    // "Update available — reload to apply" (Net banner) instead of a surprise
+    // reload. When the user applies it, the waiting worker activates and
+    // controllerchange fires → reload picks up the complete new build.
     const hadController = !!navigator.serviceWorker.controller;
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || reloaded) return;
+      if (!hadController || reloaded) return;   // first install never reloads
       reloaded = true;
-      if (window.PBDebug) PBDebug.log('SW', 'new build took over — reloading');
-      location.reload();                       // new build took over — pick it up
+      if (window.PBDebug) PBDebug.log('SW', 'new build active — reloading');
+      location.reload();
     });
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      const offerIfWaiting = () => { if (reg.waiting && navigator.serviceWorker.controller && window.Net) Net.setUpdateReady(reg); };
+      offerIfWaiting();
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          // Installed while an old worker still controls us = a new build is fully
+          // downloaded/cached and ready. Offer it (never auto-apply).
+          if (nw.state === 'installed' && navigator.serviceWorker.controller && window.Net) Net.setUpdateReady(reg);
+        });
+      });
       reg.update().catch(() => {});
       // Re-check for a new build every time the app returns to the foreground.
       document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
@@ -2001,6 +2060,15 @@
     }));
     bind();
     initServiceWorker();
+    // Offline resilience wiring: ask for persistent storage, bring up the pending
+    // sync queue (its count drives the banner), and start the connectivity model.
+    // Net's reconnect pass re-runs loadHomeData + flushes the queue when Plex
+    // returns. All guarded — the app still runs if any module failed to load.
+    if (window.Store) Store.persist();
+    if (window.SyncQueue) SyncQueue.init({ onChange: (n) => { if (window.Net) Net.setPendingCount(n); } });
+    if (window.Net) Net.init({
+      onReconnect: async () => { if (!$('library').classList.contains('hidden')) { try { await loadHomeData(); } catch {} } },
+    });
     if (Plex.isSignedIn()) return enterApp();
     show('signin');
   }
