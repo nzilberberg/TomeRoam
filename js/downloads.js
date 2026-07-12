@@ -186,6 +186,7 @@ const Downloads = (() => {
     // Stream the body so the file row's blue line grows as bytes arrive. If
     // streaming isn't available, fall back to a whole-blob fetch (no sub-progress).
     if (!total || !r.body || !r.body.getReader) { setTrackProgress(book, t.ratingKey, 0); return await r.blob(); }
+    const type = (r.headers.get('content-type') || 'audio/mpeg').split(';')[0];
     const reader = r.body.getReader();
     const chunks = []; let recv = 0;
     for (;;) {
@@ -194,7 +195,7 @@ const Downloads = (() => {
       chunks.push(value); recv += value.length;
       setTrackProgress(book, t.ratingKey, Math.min(1, recv / total));
     }
-    return new Blob(chunks, { type: 'audio/mpeg' });
+    return new Blob(chunks, { type });
   }
 
   // ---- remove ---------------------------------------------------------------

@@ -1321,10 +1321,19 @@
     };
     if (banked) useSrc(banked, 'banked');
     else if (window.Downloads && Downloads.trackDownloaded(t.ratingKey)) {
-      Downloads.getBlob(t.ratingKey).then((blob) => {
-        if (blob) { curObjUrl = URL.createObjectURL(blob); useSrc(curObjUrl, 'download'); }
-        else useSrc(Plex.streamUrl(t.partKey), 'stream');
-      }).catch(() => useSrc(Plex.streamUrl(t.partKey), 'stream'));
+      // Serve the downloaded blob through the SERVICE WORKER (`./__dl/<track>`),
+      // which supports HTTP range requests. iOS <audio> REJECTS a blob: object URL
+      // for media (needs range support) → AUDIO_ERR code=4; a SW-served range URL
+      // plays like normal HTTP. Fall back to an object URL only when no SW controls
+      // the page (e.g. desktop with SW disabled), where blob URLs do work.
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        useSrc('./__dl/' + encodeURIComponent(t.ratingKey), 'download');
+      } else {
+        Downloads.getBlob(t.ratingKey).then((blob) => {
+          if (blob) { curObjUrl = URL.createObjectURL(blob); useSrc(curObjUrl, 'download'); }
+          else useSrc(Plex.streamUrl(t.partKey), 'stream');
+        }).catch(() => useSrc(Plex.streamUrl(t.partKey), 'stream'));
+      }
     } else useSrc(Plex.streamUrl(t.partKey), 'stream');
   }
   let curObjUrl = null;   // object URL of the currently-loaded downloaded blob (revoked on next load)

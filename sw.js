@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.12';
+const BUILD = '2026-07-12.13';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -180,6 +180,14 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(probeOnly(req));
     return;
   }
+  // Downloaded audio → serve the IndexedDB blob as a RANGE-capable HTTP response.
+  // (`./__dl/<trackRatingKey>`.) iOS <audio> rejects blob: object URLs for media
+  // but plays a range-serving same-origin URL fine — this is what makes offline
+  // downloaded playback work on iOS.
+  if (sameOrigin && /\/__dl\//.test(url.pathname)) {
+    e.respondWith(serveDownloadedAudio(req, decodeURIComponent(url.pathname.split('/__dl/')[1] || '')));
+    return;
+  }
   // Same-origin = the app shell/static assets → cache-first (instant, offline).
   if (sameOrigin) {
     e.respondWith(shellFirst(req));
@@ -193,6 +201,64 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 });
+
+// Read one downloaded-audio record straight from IndexedDB (same DB store.js
+// writes: 'tomeroam' → 'audio', keyPath 'track'). Open WITHOUT a version so we
+// never trigger an upgrade from the worker.
+function swGetAudio(track) {
+  return new Promise((resolve) => {
+    let req; try { req = indexedDB.open('tomeroam'); } catch { return resolve(null); }
+    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        if (!db.objectStoreNames.contains('audio')) { resolve(null); return; }
+        const g = db.transaction('audio', 'readonly').objectStore('audio').get(String(track));
+        g.onsuccess = () => resolve(g.result || null);
+        g.onerror = () => resolve(null);
+      } catch { resolve(null); }
+    };
+  });
+}
+
+// 1-entry cache: iOS fires many range requests for the same track — avoid
+// re-reading the whole blob from IndexedDB each time.
+let _dlCache = { track: null, blob: null };
+async function dlBlob(track) {
+  if (_dlCache.track === String(track) && _dlCache.blob) return _dlCache.blob;
+  const rec = await swGetAudio(track);
+  _dlCache = { track: String(track), blob: (rec && rec.blob) || null };
+  return _dlCache.blob;
+}
+
+// Serve a downloaded track as a real, range-capable media response.
+async function serveDownloadedAudio(req, track) {
+  const blob = await dlBlob(track);
+  if (!blob) return new Response('Not downloaded', { status: 404 });
+  const size = blob.size, type = blob.type || 'audio/mpeg';
+  const range = req.headers.get('range');
+  if (range) {
+    const m = /bytes=(\d*)-(\d*)/.exec(range) || [];
+    let start = m[1] ? parseInt(m[1], 10) : 0;
+    let end = m[2] ? parseInt(m[2], 10) : size - 1;
+    if (isNaN(start)) start = 0;
+    if (isNaN(end) || end >= size) end = size - 1;
+    if (start > end || start >= size) {
+      return new Response('', { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
+    }
+    return new Response(blob.slice(start, end + 1), {
+      status: 206,
+      headers: {
+        'Content-Type': type, 'Content-Length': String(end - start + 1),
+        'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store',
+      },
+    });
+  }
+  return new Response(blob, {
+    status: 200,
+    headers: { 'Content-Type': type, 'Content-Length': String(size), 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' },
+  });
+}
 
 function isImageRequest(req, url) {
   if (req.destination === 'image') return true;
