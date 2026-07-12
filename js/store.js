@@ -172,4 +172,8 @@ const Store = (() => {
   };
 })();
 
+// Expose on window. A top-level `const Store` is a lexical global, NOT a property
+// of window — so `window.Store` would be undefined without this. Every guard that
+// reads `window.Store` depends on it.
+if (typeof window !== 'undefined') window.Store = Store;
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = Store;

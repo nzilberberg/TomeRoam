@@ -173,4 +173,7 @@ const Progress = (() => {
   };
 })();
 
+// Expose on window (top-level `const Progress` is a lexical global, not window.Progress);
+// net.js/syncqueue.js read `window.Progress`.
+if (typeof window !== 'undefined') window.Progress = Progress;
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = Progress;

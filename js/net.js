@@ -334,4 +334,6 @@ const Net = (() => {
   };
 })();
 
+// Expose on window (a top-level `const Net` is a lexical global, not window.Net).
+if (typeof window !== 'undefined') window.Net = Net;
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = Net;

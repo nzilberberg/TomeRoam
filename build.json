@@ -1,4 +1,4 @@
 {
-  "build": "2026-07-12.5",
+  "build": "2026-07-12.6",
   "note": "App-host reachability probe + update manifest. Bump `build` on every deploy in lockstep with sw.js and js/debug.js. GitHub Pages serves this file; the app fetches it (no-store) to check for updates and to test whether the app host is reachable. It is NOT a runtime dependency — the app runs fully from cache when this fetch fails."
 }

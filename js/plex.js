@@ -642,4 +642,7 @@ const Plex = (() => {
   };
 })();
 
+// Expose on window (top-level `const Plex` is a lexical global, not window.Plex);
+// net.js/store.js/debug.js read `window.Plex`.
+if (typeof window !== 'undefined') window.Plex = Plex;
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = Plex;

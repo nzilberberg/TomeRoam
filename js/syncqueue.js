@@ -198,4 +198,6 @@ const SyncQueue = (() => {
   };
 })();
 
+// Expose on window (a top-level `const SyncQueue` is a lexical global, not window.SyncQueue).
+if (typeof window !== 'undefined') window.SyncQueue = SyncQueue;
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = SyncQueue;

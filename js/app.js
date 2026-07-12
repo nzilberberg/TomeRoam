@@ -2074,17 +2074,22 @@
     el.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#14171c;color:#e7ecf3;'
       + 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;'
       + 'text-align:center;padding:28px;font:15px/1.5 system-ui,-apple-system,sans-serif';
+    const btn = 'border:0;border-radius:10px;padding:12px 20px;font-size:15px;font-weight:600';
     el.innerHTML =
       '<div style="font-size:40px">🧩</div>'
       + '<div style="font-size:19px;font-weight:700">App update mismatch</div>'
-      + '<div style="max-width:420px;opacity:.85">The cached app shell is incomplete or stale, so the app can\'t start correctly. '
-      + 'Tap Hard Reset to refresh the local app cache. Your sign-in and saved data are kept.</div>'
-      + '<button id="pb-hardreset" style="margin-top:6px;background:#3a7bd5;color:#fff;border:0;border-radius:10px;'
-      + 'padding:13px 22px;font-size:16px;font-weight:600">Hard Reset / Reload App</button>'
+      + '<div style="max-width:420px;opacity:.85">The cached app shell is incomplete or stale. '
+      + 'Hard Reset refreshes the local app cache (your sign-in and saved data are kept). '
+      + 'Or continue anyway — the app still runs, just without offline features.</div>'
+      + '<button id="pb-hardreset" style="margin-top:6px;background:#3a7bd5;color:#fff;' + btn + '">Hard Reset / Reload App</button>'
+      + '<button id="pb-continue" style="background:#2a2f3a;color:#e7ecf3;' + btn + '">Continue anyway</button>'
+      + '<button id="pb-openlog" style="background:transparent;color:#8fb7ff;border:0;font-size:14px;text-decoration:underline">Open log</button>'
       + '<div style="margin-top:10px;font-size:12px;opacity:.5">missing: ' + (missing.join(', ') || 'none')
       + ' · html ' + (hb || '?') + ' · js ' + (jb || '?') + '</div>';
     document.body.appendChild(el);
     el.querySelector('#pb-hardreset').addEventListener('click', hardReset);
+    el.querySelector('#pb-continue').addEventListener('click', () => { el.remove(); try { finishInit(); } catch (e) { if (window.PBDebug) PBDebug.log('BUILD', 'continue-anyway failed ' + (e && e.message)); } });
+    el.querySelector('#pb-openlog').addEventListener('click', () => { if (window.PBDebug) PBDebug.openDiag ? PBDebug.openDiag() : PBDebug.open(); });
   }
 
   // Unregister every service worker for this origin + delete all Cache Storage
@@ -2144,15 +2149,19 @@
     // Register/update the service worker FIRST — a mismatched shell needs the SW
     // to fetch the coherent build, and controllerchange then reloads onto it.
     initServiceWorker();
-    // HARD GATE: if the loaded shell is stale/mixed (missing globals or an
-    // HTML/JS build skew), stop here and show the recovery screen. Do NOT run the
-    // app against a broken half-shell (that produced the "no Store" offline bug).
+    // Build-coherence check: if the shell looks stale/mixed, show the recovery
+    // screen — but it's ESCAPABLE (Continue anyway / Open log), never a trap.
     if (!checkBuildIntegrity()) return;
+    finishInit();
+  }
+
+  // Everything after the coherence gate. Split out so the mismatch screen's
+  // "Continue anyway" can run it too (degraded — offline guards simply no-op).
+  function finishInit() {
     bind();
     // Offline resilience wiring: ask for persistent storage, bring up the pending
     // sync queue (its count drives the banner), and start the connectivity model.
-    // Net's reconnect pass re-runs loadHomeData + flushes the queue when Plex
-    // returns. All guarded — the app still runs if any module failed to load.
+    // All guarded — the app still runs if any module failed to load.
     if (window.Store) Store.persist();
     if (window.SyncQueue) SyncQueue.init({ onChange: (n) => { if (window.Net) Net.setPendingCount(n); } });
     if (window.Net) Net.init({
