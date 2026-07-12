@@ -24,7 +24,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.1';
+const BUILD = '2026-07-12.2';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -59,27 +59,58 @@ const ASSETS = [
 
 const PLACEHOLDER = './img/placeholder-cover.svg';
 
-// ---- install: precache the new build atomically ---------------------------
-// addAll is all-or-nothing: if any asset 404s the whole cache is discarded and
-// this build never activates — better a stale-but-consistent build than a mixed
-// one. We do NOT skipWaiting here: a replacing worker waits until the page opts
-// in (the update-prompt flow), so we never surprise-reload over playback.
+// ---- install: precache the new build --------------------------------------
+// Try the atomic addAll first (fast, consistent). If it rejects — e.g. a fresh
+// deploy where one asset 404s at the CDN edge for a moment — fall back to
+// best-effort per-asset caching so we grab everything that IS available. We do
+// NOT skipWaiting: a replacing worker waits for the update prompt.
+//
+// CRITICAL: install must never leave us in a state where the shell is empty AND
+// the old cache is gone. That's guarded in `activate` (it won't prune the old
+// cache until THIS shell is verified complete) and in `shellFirst` (it falls
+// back across ALL caches). This is the bug that bricked offline in .1.
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(SHELL_CACHE)
-      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
-      .catch((err) => { /* a bad asset must not half-install; log to SW console */ console.warn('[sw] precache failed', err); })
-  );
-});
-
-// ---- activate: drop old build caches, take control ------------------------
-self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => !KEEP.includes(k)).map((k) => caches.delete(k)));
-    await self.clients.claim();
+    const c = await caches.open(SHELL_CACHE);
+    try {
+      await c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })));
+    } catch (err) {
+      console.warn('[sw] atomic precache failed, retrying per-asset', err);
+      await Promise.all(ASSETS.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => {})));
+    }
   })());
 });
+
+// ---- activate: take control; prune old caches ONLY when it's safe ----------
+// We only delete previous caches once this build's shell is fully present —
+// otherwise a half-finished precache would leave nothing to serve offline. If
+// the shell is incomplete (and can't be completed right now, e.g. offline), we
+// KEEP the old caches so the app still loads from them via shellFirst's
+// all-caches fallback. A later activate (after an online session self-heals the
+// shell) does the pruning.
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    await self.clients.claim();
+    const complete = await ensureShellComplete();
+    if (!complete) { console.warn('[sw] shell incomplete — keeping old caches as fallback'); return; }
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => !KEEP.includes(k)).map((k) => caches.delete(k)));
+  })());
+});
+
+// True once every shell asset is cached. If some are missing, try to fetch the
+// stragglers (network may be up now) before reporting. Never throws.
+async function ensureShellComplete() {
+  try {
+    const c = await caches.open(SHELL_CACHE);
+    const missing = [];
+    for (const u of ASSETS) { if (!(await c.match(u))) missing.push(u); }
+    if (!missing.length) return true;
+    await Promise.all(missing.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => {})));
+    for (const u of ASSETS) { if (!(await c.match(u))) return false; }
+    return true;
+  } catch { return false; }
+}
 
 // The page asks a freshly-installed (waiting) worker to take over now.
 self.addEventListener('message', (e) => {
@@ -138,21 +169,24 @@ function isImageRequest(req, url) {
 
 async function shellFirst(req) {
   const cache = await caches.open(SHELL_CACHE);
-  const hit = await cache.match(req, { ignoreSearch: false }) || await cache.match(req.url);
+  // Look in THIS build's shell first, then across ALL caches (an older build's
+  // cache still counts — better a consistent older asset than a blank screen).
+  const hit = await cache.match(req) || await cache.match(req.url) || await caches.match(req) || await caches.match(req.url);
   if (hit) return hit;
   try {
     const fresh = await fetch(req);
-    // Runtime-cache same-origin assets we didn't precache (icons, etc.), but never
-    // the lazy vendor bundle.
+    // Runtime-cache same-origin assets (self-heals a shell whose precache didn't
+    // finish), but never the lazy vendor bundle.
     if (fresh && fresh.ok && !/\/js\/vendor\//.test(new URL(req.url).pathname)) {
       cache.put(req, fresh.clone()).catch(() => {});
     }
     return fresh;
   } catch {
-    // Offline + uncached. For a navigation, hand back the app shell so the SPA
-    // boots and renders its own offline state (never a browser error page).
+    // Offline + uncached. For a navigation, hand back the app shell (any cache) so
+    // the SPA boots and renders its own offline state (never a browser error page).
     if (req.mode === 'navigate') {
-      const shell = await cache.match('./index.html') || await cache.match('./');
+      const shell = await cache.match('./index.html') || await cache.match('./')
+        || await caches.match('./index.html') || await caches.match('./');
       if (shell) return shell;
     }
     return Response.error();
