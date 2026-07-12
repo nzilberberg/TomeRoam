@@ -303,6 +303,12 @@ const Plex = (() => {
     fresh(kind) { if (window.Net) Net.noteFresh(kind); },
     stale(kind) { if (window.Net) Net.markCachedRead(kind); },
   };
+  // When Net already KNOWS Plex is unreachable, skip the network attempt entirely
+  // and serve cache immediately — otherwise every offline browse pays a multi-
+  // second connect()+retry/backoff wait before the inevitable cache fallback
+  // (the "spinner over cached content" the user sees). Only true on a CONFIRMED
+  // offline; when reachability is unknown/true we still try the network.
+  const offlineKnown = () => !!(window.Net && Net.state && Net.state().plexReachable === false);
 
   // Light reachability probe for js/net.js: does the current Plex base answer
   // /identity right now? Drops a dead base so the next call re-probes.
@@ -319,6 +325,10 @@ const Plex = (() => {
   }
 
   async function getAlbum(rk) {
+    if (offlineKnown() && window.Store) {
+      const c = await Store.cachedAlbum(rk);
+      if (c) { cacheHook.stale('albums'); return c; }
+    }
     try {
       const mc = await api(`/library/metadata/${rk}`);
       const a = (mc.Metadata || [])[0] || null;
@@ -349,6 +359,10 @@ const Plex = (() => {
   }
 
   async function getAlbumTracks(rk) {
+    if (offlineKnown() && window.Store) {
+      const c = await Store.cachedTracks(rk);
+      if (c) { cacheHook.stale('tracks'); return c; }
+    }
     try {
       const tracks = mapTracks(await api(`/library/metadata/${rk}/children`));
       if (window.Store) Store.cacheTracks(rk, tracks);
@@ -405,6 +419,10 @@ const Plex = (() => {
   // Authors (artists). Lightweight: title + thumb + album count only — NO
   // per-book progress/time work (this screen never shows times).
   async function getAuthors() {
+    if (offlineKnown() && window.Store) {
+      const c = await Store.cachedAuthors();
+      if (c && c.length) { cacheHook.stale('authors'); return c; }
+    }
     try {
       const key = await getSectionKey();
       const mc = await api(`/library/sections/${key}/all`, { params: { type: 8 }, headers: BIG });
@@ -437,6 +455,13 @@ const Plex = (() => {
   function clearCaches() { booksCache = null; }   // pull-to-refresh: force a fresh whole-library fetch
   async function getBooks() {
     if (booksCache) return booksCache;
+    // Confirmed offline → serve cache immediately (no slow network wait). NB: we
+    // do NOT assign booksCache here, so a later reconnect re-fetches fresh instead
+    // of being stuck on the stale copy for the whole session (review bug 4).
+    if (offlineKnown() && window.Store) {
+      const c = await Store.cachedBooks();
+      if (c && c.length) { cacheHook.stale('books'); dbg('CACHE', 'getBooks offline-fast: ' + c.length); return c; }
+    }
     try {
       const key = await getSectionKey();
       const mc = await api(`/library/sections/${key}/all`, { params: { type: 9 }, headers: BIG });
@@ -446,10 +471,10 @@ const Plex = (() => {
       dbg('CACHE', 'getBooks live: ' + booksCache.length + ' books');
       return booksCache;
     } catch (e) {
-      // Offline / Plex down: fall back to the last-known library from the cache
-      // (localStorage mirror / IndexedDB) so home + browse still render (stale).
+      // Offline / Plex down: fall back to the last-known library from the cache.
+      // Return it WITHOUT caching as the session copy (so reconnect re-fetches).
       dbg('CACHE', 'getBooks FAILED (' + ((e && e.message) || 'err') + ') — trying cache');
-      if (window.Store) { const c = await Store.cachedBooks(); if (c && c.length) { booksCache = c; cacheHook.stale('books'); return c; } }
+      if (window.Store) { const c = await Store.cachedBooks(); if (c && c.length) { cacheHook.stale('books'); return c; } }
       throw e;
     }
   }
