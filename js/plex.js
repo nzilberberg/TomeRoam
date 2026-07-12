@@ -429,10 +429,12 @@ const Plex = (() => {
       booksCache = (mc.Metadata || []).map(mapBook);
       if (window.Store && booksCache.length) Store.cacheBooks(booksCache);
       cacheHook.fresh('books');
+      dbg('CACHE', 'getBooks live: ' + booksCache.length + ' books');
       return booksCache;
     } catch (e) {
-      // Offline / Plex down: fall back to the last-known library from IndexedDB
-      // so the home + browse screens still render (labeled stale by the UI).
+      // Offline / Plex down: fall back to the last-known library from the cache
+      // (localStorage mirror / IndexedDB) so home + browse still render (stale).
+      dbg('CACHE', 'getBooks FAILED (' + ((e && e.message) || 'err') + ') — trying cache');
       if (window.Store) { const c = await Store.cachedBooks(); if (c && c.length) { booksCache = c; cacheHook.stale('books'); return c; } }
       throw e;
     }

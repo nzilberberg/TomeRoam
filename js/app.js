@@ -862,8 +862,15 @@
       startCoordination();
       try { await restoreLastPlayed(); } catch {}
       const shown = painted || await renderCachedHome();
-      if (!shown) { $('clRow').innerHTML = ''; status('⚠️ ' + (e.message || 'Could not load your library.')); }
-      else status('');
+      if (window.PBDebug) PBDebug.log('CACHE', 'enterApp offline: shown=' + shown + ' err=' + (e && e.message));
+      if (!shown) {
+        // Nothing cached yet — the app has never completed an online library load
+        // on this device (or the cache was cleared). Tell the user how to enable
+        // offline instead of a scary generic error.
+        $('clRow').innerHTML = '';
+        $('raRow').innerHTML = '';
+        status('No saved library yet — open the app once while connected to Plex to enable offline use.');
+      } else status('');
       if (window.Net) Net.checkPlex();
     }
   }
@@ -888,16 +895,17 @@
   // but purely from cache. Returns true if it painted anything. Covers come from
   // the SW image cache via Plex.artUrl (resolved against the last-good host).
   async function renderCachedHome() {
-    if (!window.Store) return false;
+    if (!window.Store) { if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: no Store'); return false; }
     try {
       const books = await Store.cachedBooks();
+      if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books');
       if (!books || !books.length) return false;
       const cont = books.filter((b) => b.lastViewedAt > 0).sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
       renderCarousel($('clRow'), cont);
       renderCarousel($('raRow'), books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 15));
       renderPresence();
       return true;
-    } catch { return false; }
+    } catch (e) { if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome threw ' + (e && e.message)); return false; }
   }
 
   // Fetch + render the two home carousels (shared by initial load + pull-to-refresh).

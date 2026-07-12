@@ -94,17 +94,49 @@ const Store = (() => {
   // ---- typed metadata cache (write-through from plex.js) --------------------
   // Each cache write stamps a per-kind timestamp in kv so the UI can say
   // "showing cached library from 8:42 PM" and diagnostics can show freshness.
-  function stampSync(kind) { return kvSet('sync:' + kind, Date.now()); }
-  function syncedAt(kind)  { return kvGet('sync:' + kind, 0); }
+  // ---- localStorage MIRROR --------------------------------------------------
+  // IndexedDB is unreliable in iOS Home-Screen PWAs (can be missing, blocked, or
+  // silently wiped). localStorage, by contrast, provably persists on this device
+  // (the Plex token lives there). The offline-critical metadata is small (a few
+  // hundred compact records), so we mirror it to localStorage and read from
+  // whichever store actually has data. This is what makes offline content render
+  // even when IndexedDB is empty.
+  const LSK = { books: 'pb_cache_books', authors: 'pb_cache_authors', sync: 'pb_cache_sync' };
+  function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { dbg('CACHE', 'ls set failed ' + k + ' (' + (e && e.name) + ')'); return false; } }
+  function lsGet(k) { try { const j = localStorage.getItem(k); return j ? JSON.parse(j) : null; } catch { return null; } }
+  const trKey = (book) => 'pb_cache_tr_' + book;
+  const albKey = (rk) => 'pb_cache_alb_' + rk;
 
-  const cacheBooks   = (list) => replaceAll('books', list).then(() => stampSync('books'));
-  const cachedBooks  = ()     => getAll('books');
-  const cacheAuthors = (list) => replaceAll('authors', list).then(() => stampSync('authors'));
-  const cachedAuthors= ()     => getAll('authors');
-  const cacheTracks  = (book, tracks) => put('tracks', { book: String(book), tracks, ts: Date.now() });
-  const cachedTracks = (book) => get('tracks', String(book)).then((r) => (r && r.tracks) || null);
-  const cacheAlbum   = (alb)  => (alb && alb.ratingKey != null ? put('albums', alb) : Promise.resolve());
-  const cachedAlbum  = (rk)   => get('albums', rk);
+  function stampSync(kind) {
+    const t = Date.now();
+    const m = lsGet(LSK.sync) || {}; m[kind] = t; lsSet(LSK.sync, m);
+    return kvSet('sync:' + kind, t);
+  }
+  async function syncedAt(kind) {
+    const v = await kvGet('sync:' + kind, 0);
+    if (v) return v;
+    const m = lsGet(LSK.sync) || {}; return m[kind] || 0;
+  }
+
+  async function cacheBooks(list) {
+    const ok = lsSet(LSK.books, list);                    // reliable mirror FIRST
+    replaceAll('books', list);                            // IDB best-effort (fire-and-forget)
+    await stampSync('books');
+    dbg('CACHE', 'wrote ' + (list ? list.length : 0) + ' books (ls=' + ok + ')');
+  }
+  async function cachedBooks() {
+    const idb = await getAll('books');
+    if (idb && idb.length) { dbg('CACHE', 'read ' + idb.length + ' books (idb)'); return idb; }
+    const ls = lsGet(LSK.books);
+    dbg('CACHE', 'read ' + (ls ? ls.length : 0) + ' books (ls)');
+    return ls || [];
+  }
+  async function cacheAuthors(list) { lsSet(LSK.authors, list); replaceAll('authors', list); await stampSync('authors'); dbg('CACHE', 'wrote ' + (list ? list.length : 0) + ' authors'); }
+  async function cachedAuthors() { const idb = await getAll('authors'); if (idb && idb.length) return idb; return lsGet(LSK.authors) || []; }
+  async function cacheTracks(book, tracks) { lsSet(trKey(book), tracks); put('tracks', { book: String(book), tracks, ts: Date.now() }); }
+  async function cachedTracks(book) { const r = await get('tracks', String(book)); if (r && r.tracks) return r.tracks; return lsGet(trKey(book)); }
+  async function cacheAlbum(alb) { if (!alb || alb.ratingKey == null) return; lsSet(albKey(alb.ratingKey), alb); put('albums', alb); }
+  async function cachedAlbum(rk) { const r = await get('albums', rk); if (r) return r; return lsGet(albKey(rk)); }
 
   // ---- persistent storage ---------------------------------------------------
   // Ask the browser not to evict our origin's storage under pressure. Best-effort;
