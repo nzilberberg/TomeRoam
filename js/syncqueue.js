@@ -29,6 +29,7 @@ const SyncQueue = (() => {
     startupWriteSuppressionMs: 8 * 1000,   // ignore writes generated within this of app start (restore churn)
     nearZeroProgressThresholdMs: 5 * 1000, // <=5s counts as "near zero" — never auto-written
     completionThresholdMs:    30 * 1000,   // within 30s of the end = effectively complete
+    conflictTtlMs: 7 * 24 * 3600 * 1000,   // unresolved conflict rows expire after a week
   };
 
   const hasWin = typeof window !== 'undefined';
@@ -77,7 +78,14 @@ const SyncQueue = (() => {
     return rec.id;
   }
 
-  async function count()  { return storeReady() ? Store.count(STORE) : 0; }
+  // Pending count = items that can still sync. Conflict rows are deliberately
+  // excluded: they are held, not pending, and counting them kept the "N changes
+  // will sync" banner + the reachability poller alive forever.
+  async function count() {
+    if (!storeReady()) return 0;
+    const items = await Store.getAll(STORE);
+    return items.filter((q) => q.conflictStatus !== 'conflict').length;
+  }
   async function all()    { return storeReady() ? Store.getAll(STORE) : []; }
   async function clear()  { if (storeReady()) { await Store.clear(STORE); fireChange(); } }
   async function remove(id) { if (storeReady()) { await Store.del(STORE, id); fireChange(); } }
@@ -149,26 +157,44 @@ const SyncQueue = (() => {
     flushing = true;
     const res = { written: 0, dropped: 0, conflicts: 0, skipped: 0, failed: 0 };
     try {
-      // Pull the latest peer boards so conflict decisions use current remote state.
-      try { if (window.Progress && Progress.refresh) { Progress.refresh(); } } catch {}
+      // Pull the latest peer boards so conflict decisions use current remote
+      // state — awaited: the flush that matters most runs right after a reconnect,
+      // when the merged Progress data is exactly as stale as the outage was long.
+      try { if (window.Progress && Progress.refresh) { await Progress.refresh(); } } catch {}
       const items = await Store.getAll(STORE);
       for (const it of items) {
         if (it.type !== 'progress') { res.skipped++; continue; }   // other types handled elsewhere/future
+        // Conflicts that nobody resolved eventually expire: the held position is
+        // long-stale by then and an immortal row would pin the pending counter
+        // (and the reachability poller) forever.
+        if (it.conflictStatus === 'conflict' && it.conflictAt && now() - it.conflictAt > T.conflictTtlMs) {
+          await Store.del(STORE, it.id); res.dropped++;
+          dbg('SYNCQ', `conflict expired book=${it.bookKey}`);
+          continue;
+        }
         const verdict = decide(it);
-        if (verdict === 'skip') { res.skipped++; continue; }
+        // A near-zero non-explicit position will never be written by design —
+        // delete it, or it sits in the queue forever holding the pending count up.
+        if (verdict === 'skip') { await Store.del(STORE, it.id); res.skipped++; continue; }
         if (verdict === 'drop') { await Store.del(STORE, it.id); res.dropped++; continue; }
         if (verdict === 'conflict') {
-          it.conflictStatus = 'conflict'; it.updatedAt = now();
+          // Keep updatedAt untouched: decide() compares it against the remote
+          // clock, and refreshing it here would keep "local newer" true forever.
+          it.conflictStatus = 'conflict';
+          it.conflictAt = it.conflictAt || now();
           await Store.put(STORE, it); res.conflicts++;
           dbg('SYNCQ', `CONFLICT held book=${it.bookKey} local=${(it.positionMs/1000)|0}s < remote`);
           continue;
         }
         // verdict === 'write'
         try {
-          await Plex.writeTimeline({
+          // writeTimeline resolves FALSE on failure (it never throws) — treat
+          // that as a failed attempt, not a success to delete.
+          const ok = await Plex.writeTimeline({
             ratingKey: it.ratingKey, state: it.state || 'paused',
             timeMs: it.positionMs, durationMs: it.durationMs || 0,
           });
+          if (ok === false) throw new Error('writeTimeline failed');
           await Store.del(STORE, it.id);
           res.written++;
           dbg('SYNCQ', `synced book=${it.bookKey} pos=${(it.positionMs/1000)|0}s`);

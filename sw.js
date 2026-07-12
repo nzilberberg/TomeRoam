@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.7';
+const BUILD = '2026-07-12.8';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -133,7 +133,22 @@ async function ensureShellComplete() {
 self.addEventListener('message', (e) => {
   const d = e.data || {};
   if (d.type === 'SKIP_WAITING') { self.skipWaiting(); return; }
-  if (d.type === 'GET_CACHE_STATUS') { cacheStatus().then((s) => { try { e.ports[0] && e.ports[0].postMessage(s); } catch {} }); }
+  if (d.type === 'GET_CACHE_STATUS') { cacheStatus().then((s) => { try { e.ports[0] && e.ports[0].postMessage(s); } catch {} }); return; }
+  // artloader reports a cover whose <img> fired `error`. An opaque no-cors
+  // response hides its HTTP status, so a Plex error page can get cached as an
+  // "image" — the <img> decode failure is the only place that's observable.
+  // Evict the entry so the retry goes back to the network instead of re-hitting
+  // the poisoned cache (imageKey strips the pbr= retry cache-buster, so without
+  // this every retry would be served the same bad bytes).
+  if (d.type === 'EVICT_IMG' && d.url) {
+    const work = (async () => {
+      try {
+        const c = await caches.open(IMG_CACHE);
+        await c.delete(imageKey(new URL(d.url)));
+      } catch {}
+    })();
+    if (e.waitUntil) e.waitUntil(work);
+  }
 });
 
 // Diagnostics: which shell assets are actually present in the current cache.
@@ -156,10 +171,12 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // build.json = the update/reachability probe → always try network first (so
-  // update checks are real), fall back to the precached copy when offline.
+  // build.json = the update/reachability probe → network only, no cache fallback
+  // (a cached copy would fake "app host reachable" while offline, and each
+  // ?ts= probe URL is unique so runtime-caching them grew the shell cache by one
+  // dead entry per poll). The precached copy exists only for shell completeness.
   if (sameOrigin && /\/build\.json$/.test(url.pathname)) {
-    e.respondWith(networkFirst(req));
+    e.respondWith(probeOnly(req));
     return;
   }
   // Same-origin = the app shell/static assets → cache-first (instant, offline).
@@ -210,16 +227,14 @@ async function shellFirst(req) {
   }
 }
 
-async function networkFirst(req) {
-  const cache = await caches.open(SHELL_CACHE);
+// Reachability probe passthrough: hit the network, report failure honestly.
+// Deliberately NO cache write and NO cache fallback — Net.checkAppHost's whole
+// job is to learn whether the app host is reachable RIGHT NOW.
+async function probeOnly(req) {
   try {
-    const fresh = await fetch(new Request(req.url, { cache: 'no-store' }));
-    if (fresh && fresh.ok) { cache.put(req, fresh.clone()).catch(() => {}); return fresh; }
-    const hit = await cache.match(req.url);
-    return hit || fresh;
+    return await fetch(new Request(req.url, { cache: 'no-store' }));
   } catch {
-    const hit = await cache.match(req.url);
-    return hit || Response.error();
+    return Response.error();
   }
 }
 

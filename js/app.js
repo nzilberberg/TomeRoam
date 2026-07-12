@@ -2004,11 +2004,12 @@
       toast('Service worker disabled for this session');
       return;
     }
-    // Cache-first SW (see sw.js): it serves the shell instantly and does NOT
-    // auto-skipWaiting. A new build precaches itself and WAITS; we surface it as
-    // "Update available — reload to apply" (Net banner) instead of a surprise
-    // reload. When the user applies it, the waiting worker activates and
-    // controllerchange fires → reload picks up the complete new build.
+    // Cache-first SW (see sw.js): serves the shell instantly and AUTO-TAKES-OVER
+    // on update (skipWaiting in install — a waiting worker could never dislodge a
+    // still-controlling old SW, which stranded devices on stale HTML in .1–.3).
+    // controllerchange below reloads onto the new build, deferred while audio is
+    // playing; in that deferred window the Net banner's "Update available —
+    // reload" offers a manual way to apply it sooner.
     const hadController = !!navigator.serviceWorker.controller;
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -2165,7 +2166,13 @@
     if (window.Store) Store.persist();
     if (window.SyncQueue) SyncQueue.init({ onChange: (n) => { if (window.Net) Net.setPendingCount(n); } });
     if (window.Net) Net.init({
-      onReconnect: async () => { if (!$('library').classList.contains('hidden')) { try { await loadHomeData(); } catch {} } },
+      onReconnect: async () => {
+        if ($('library').classList.contains('hidden')) return;
+        // Clear the in-memory caches first: getBooks()'s offline fallback poisons
+        // booksCache with the STALE cached library, and without this the "refresh"
+        // just re-renders that stale data with no network fetch at all.
+        try { Plex.clearCaches(); Browse.clearCache(); await loadHomeData(); } catch {}
+      },
     });
     if (Plex.isSignedIn()) return enterApp();
     show('signin');

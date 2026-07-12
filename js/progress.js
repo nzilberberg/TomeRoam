@@ -153,7 +153,9 @@ const Progress = (() => {
     else if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
   function flush() { if (dirty) publish(); }   // reconnect / backgrounding
-  function refresh() { if (active) poll(); }   // piggyback an external read trigger
+  // Piggyback an external read trigger. Returns the poll promise so callers that
+  // NEED the merged data current (syncqueue's conflict decisions) can await it.
+  function refresh() { return active ? poll() : Promise.resolve(); }
 
   return {
     init, setSeed, setActive, flush, refresh,

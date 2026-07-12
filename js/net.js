@@ -168,6 +168,13 @@ const Net = (() => {
     if (document.hidden) return;                         // will re-arm on foreground
     // Prefer Plex (the thing playback needs); check app host less often.
     await checkPlex();
+    // Plex reachable but writes still queued = no false→true transition will ever
+    // fire the reconnect pass (this very state is why everythingHealthy() keeps
+    // us polling — e.g. a write failed during a blip that never flipped
+    // plexReachable). Drain the queue directly or it sits forever.
+    if (S.plexReachable === true && S.pendingSyncCount > 0 && window.SyncQueue) {
+      try { await SyncQueue.flush(); } catch {}
+    }
     if (stepIdx % 3 === 0) await checkAppHost();
     scheduleNext();
   }
@@ -283,9 +290,15 @@ const Net = (() => {
   }
   function noteFresh(kind) {
     delete S.cachedReadKinds[kind];
-    if (S.plexReachable !== true) { S.plexReachable = true; }
-    if (window.Store) Store.stampSync && (S.cachedMetaSyncedAt = Date.now());
+    const was = S.plexReachable;
+    S.plexReachable = true;
+    S.cachedMetaSyncedAt = Date.now();   // a live read just landed; plex.js stamps the store itself
     emit();
+    // The data path usually observes recovery BEFORE the poller (a library read
+    // succeeds first and flips plexReachable here). checkPlex then never sees a
+    // false→true transition — it was consumed here — so it would never run the
+    // reconnect pass (metadata refresh + sync-queue flush). Run it ourselves.
+    if (was === false) reconnectPass('data-path-recovered');
   }
   function setPendingCount(n) { S.pendingSyncCount = n | 0; emit(); scheduleNext(); }
 

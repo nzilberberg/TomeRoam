@@ -60,18 +60,24 @@ const Store = (() => {
       const os = t.objectStore(store);
       let out;
       try { out = fn(os); } catch (e) { dbg('IDB', 'tx fn threw ' + (e && e.message)); }
-      t.oncomplete = () => resolve(out && out.result !== undefined ? out.result : out);
+      t.oncomplete = () => {
+        // Unwrap by TYPE, not by `result !== undefined`: a get() on a MISSING key
+        // has result === undefined, and the old check leaked the raw IDBRequest
+        // to callers (truthy! — cachedAlbum returned it as a bogus "album").
+        const isReq = typeof IDBRequest !== 'undefined' && out instanceof IDBRequest;
+        resolve(isReq ? out.result : out);
+      };
       t.onerror = t.onabort = () => resolve(undefined);
     }));
   }
 
   // ---- generic accessors ----------------------------------------------------
-  const get    = (store, key) => tx(store, 'readonly', (os) => os.get(key)).then((r) => (r && r.result !== undefined ? r.result : r));
-  const getAll = (store)      => tx(store, 'readonly', (os) => os.getAll()).then((r) => (Array.isArray(r) ? r : (r && r.result) || []));
+  const get    = (store, key) => tx(store, 'readonly', (os) => os.get(key));
+  const getAll = (store)      => tx(store, 'readonly', (os) => os.getAll()).then((r) => (Array.isArray(r) ? r : []));
   const put    = (store, val) => tx(store, 'readwrite', (os) => os.put(val));
   const del    = (store, key) => tx(store, 'readwrite', (os) => os.delete(key));
   const clear  = (store)      => tx(store, 'readwrite', (os) => os.clear());
-  const count  = (store)      => tx(store, 'readonly', (os) => os.count()).then((r) => (typeof r === 'number' ? r : (r && r.result) || 0));
+  const count  = (store)      => tx(store, 'readonly', (os) => os.count()).then((r) => (typeof r === 'number' ? r : 0));
 
   // Bulk replace a keyed collection in one transaction (clear + put many).
   function replaceAll(store, list) {

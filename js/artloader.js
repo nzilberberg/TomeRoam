@@ -65,6 +65,15 @@
       };
       const onE = () => {
         img.removeAttribute('src');                          // kill the broken-image "?" glyph immediately
+        // The failure may be a POISONED SW cache entry: an opaque no-cors error
+        // response cached as a cover (its HTTP status is invisible to the SW —
+        // only this <img> error observes the bad bytes). Evict it so the retry
+        // refetches from the network; without this, retries were pointless (the
+        // SW strips the pbr= buster and would replay the same cached entry).
+        try {
+          const c = navigator.serviceWorker && navigator.serviceWorker.controller;
+          if (c) c.postMessage({ type: 'EVICT_IMG', url: art });
+        } catch {}
         if (tries < MAX_RETRY) {
           img.dataset.artRetry = String(tries + 1);
           const delay = Math.min(700 * 2 ** tries, 6000) + Math.floor(Math.random() * 300);
