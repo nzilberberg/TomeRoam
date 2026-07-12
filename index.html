@@ -13,11 +13,11 @@
   <!-- Single build stamp for this shell. MUST match js/debug.js BUILD, sw.js
        BUILD, build.json, and the ?v= on every asset below. A test guards it.
        app.js compares this to the loaded JS build to detect a stale/mixed shell. -->
-  <meta name="tomeroam-build" content="2026-07-12.9" />
+  <meta name="tomeroam-build" content="2026-07-12.10" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="icon" href="icon.svg" />
-  <link rel="stylesheet" href="css/app.css?v=2026-07-12.9" />
+  <link rel="stylesheet" href="css/app.css?v=2026-07-12.10" />
   <title>TomeRoam Player</title>
 </head>
 <body>
@@ -52,6 +52,10 @@
         <div class="section-title">Recently Added</div>
         <div id="raStatus" class="statusline"></div>
         <div id="raRow" class="carousel"></div>
+        <div id="dlSection" class="hidden">
+          <div class="section-title">Downloaded</div>
+          <div id="dlRow" class="carousel"></div>
+        </div>
       </div>
 
       <!-- BROWSE: Authors / Books (rendered by js/browse.js) -->
@@ -95,7 +99,12 @@
   <!-- NOW PLAYING (full screen; opens from the transport) -->
   <div id="nowplaying" class="nowplaying hidden">
     <div class="np-body">
-      <img id="npArt" class="np-art" alt="" />
+      <div class="np-art-wrap">
+        <img id="npArt" class="np-art" alt="" />
+        <!-- download control: down-arrow → progress ring → X (complete). Long-press
+             = context menu (Download/Remove + Manage). Shares Downloads state. -->
+        <button id="npDl" class="np-dl hidden" aria-label="Download"></button>
+      </div>
       <div id="npTitle" class="np-title"></div>
       <div id="npAuthor" class="np-author"></div>
       <div id="npTrack" class="np-track"></div>
@@ -165,18 +174,19 @@
 
   <!-- Build-stamped so a stale index.html can never pair with fresh JS (or vice
        versa): each ?v= must match the meta build above + sw.js precache. -->
-  <script src="js/logic.js?v=2026-07-12.9"></script>
-  <script src="js/debug.js?v=2026-07-12.9"></script>
-  <script src="js/store.js?v=2026-07-12.9"></script>
-  <script src="js/artloader.js?v=2026-07-12.9"></script>
-  <script src="js/plex.js?v=2026-07-12.9"></script>
-  <script src="js/presence.js?v=2026-07-12.9"></script>
-  <script src="js/progress.js?v=2026-07-12.9"></script>
-  <script src="js/syncqueue.js?v=2026-07-12.9"></script>
-  <script src="js/net.js?v=2026-07-12.9"></script>
-  <script src="js/logpipe.js?v=2026-07-12.9"></script>
-  <script src="js/speed.js?v=2026-07-12.9"></script>
-  <script src="js/browse.js?v=2026-07-12.9"></script>
-  <script src="js/app.js?v=2026-07-12.9"></script>
+  <script src="js/logic.js?v=2026-07-12.10"></script>
+  <script src="js/debug.js?v=2026-07-12.10"></script>
+  <script src="js/store.js?v=2026-07-12.10"></script>
+  <script src="js/artloader.js?v=2026-07-12.10"></script>
+  <script src="js/plex.js?v=2026-07-12.10"></script>
+  <script src="js/presence.js?v=2026-07-12.10"></script>
+  <script src="js/progress.js?v=2026-07-12.10"></script>
+  <script src="js/syncqueue.js?v=2026-07-12.10"></script>
+  <script src="js/net.js?v=2026-07-12.10"></script>
+  <script src="js/downloads.js?v=2026-07-12.10"></script>
+  <script src="js/logpipe.js?v=2026-07-12.10"></script>
+  <script src="js/speed.js?v=2026-07-12.10"></script>
+  <script src="js/browse.js?v=2026-07-12.10"></script>
+  <script src="js/app.js?v=2026-07-12.10"></script>
 </body>
 </html>

@@ -1,0 +1,215 @@
+// downloads.js — offline audiobook downloads (Downloads).
+//
+// Persists whole books' audio Blobs to IndexedDB (Store 'audio' + 'dl' index) so
+// they survive restarts and play with NO network. This is the ONE source of
+// truth for download state — every indicator (tile badge, Now-Playing art button,
+// files-view lines, Home "Downloaded" carousel, Downloads screen) subscribes here,
+// so progress stays in lockstep everywhere.
+//
+// Model per book: { status: 'none'|'queued'|'downloading'|'done'|'error',
+//   done, total, bytes, size, meta:{title,author,thumb,book}, error }.
+//
+// Wi-Fi gating: audiobooks are big, so downloads default to Wi-Fi-only. Connection
+// TYPE (wifi vs cellular) is only knowable via the Network Information API
+// (`navigator.connection.type`), which exists on Android/Chromium but NOT iOS
+// Safari. So: where we can detect cellular we offer "Queue for Wi-Fi"; where we
+// CAN'T (iOS), we let the user choose ("Download now" vs "Queue"). Queued books
+// auto-start when connectivity returns.
+const Downloads = (() => {
+  const LS = { wifi: 'pb_dl_wifionly', max: 'pb_dl_max', queue: 'pb_dl_queue' };
+  const DEFAULT_MAX = 4 * 1024 * 1024 * 1024;   // 4 GB (see storage research)
+
+  const dbg = (t, m) => { if (window.PBDebug) PBDebug.log(t, m); };
+  const available = () => !!(window.Store && Store.available && typeof fetch !== 'undefined');
+
+  const books = {};                 // bookKey -> state
+  const dlTracks = new Set();       // ratingKeys of downloaded tracks (blue-line lookup)
+  let usedBytes = 0;                // total bytes of completed downloads
+  let subs = [];
+  let queue = loadQueue();          // [{ book, meta }]
+  let current = null;               // bookKey downloading now
+  let abortCur = null;              // AbortController for the in-flight fetch
+
+  // ---- settings -------------------------------------------------------------
+  const wifiOnly = () => { try { return localStorage.getItem(LS.wifi) !== '0'; } catch { return true; } };
+  const setWifiOnly = (on) => { try { localStorage.setItem(LS.wifi, on ? '1' : '0'); } catch {} if (on === false) pump(); };
+  const maxBytes = () => { try { return parseInt(localStorage.getItem(LS.max), 10) || DEFAULT_MAX; } catch { return DEFAULT_MAX; } };
+  const setMaxBytes = (n) => { try { localStorage.setItem(LS.max, String(n | 0)); } catch {} notify(); };
+
+  // ---- connection detection (see header) ------------------------------------
+  function connType() { try { const c = navigator.connection; return (c && c.type) || null; } catch { return null; } }
+  // true = unmetered (wifi/ethernet), false = metered (cellular), null = unknown.
+  function unmetered() {
+    const t = connType();
+    if (!t) return null;
+    if (t === 'wifi' || t === 'ethernet') return true;
+    if (t === 'cellular' || t === 'wimax' || t === 'other') return false;
+    return null;
+  }
+  // Pure decision: given the wifi-only pref + detected metering, what to do?
+  // { start } → go now; { confirm, canOverride } → UI asks (canOverride = we can't
+  // tell, so offer "Download now" alongside "Queue").
+  function decideStart(wo, um) {
+    if (!wo) return { start: true };
+    if (um === true) return { start: true };
+    if (um === false) return { confirm: true, canOverride: false };
+    return { confirm: true, canOverride: true };   // unknown (iOS) → user chooses
+  }
+  const canStartNow = () => { const d = decideStart(wifiOnly(), unmetered()); return !!d.start; };
+
+  // ---- state + subscribers --------------------------------------------------
+  function stateOf(book) { return books[String(book)] || { status: 'none', done: 0, total: 0, bytes: 0, size: 0 }; }
+  function setState(book, patch) {
+    const k = String(book);
+    books[k] = Object.assign({ status: 'none', done: 0, total: 0, bytes: 0, size: 0 }, books[k], patch);
+    notify(k);
+  }
+  function subscribe(cb) { subs.push(cb); return () => { subs = subs.filter((f) => f !== cb); }; }
+  function notify(book) { for (const cb of subs) { try { cb(book || null); } catch {} } }
+
+  const isDownloaded = (book) => stateOf(book).status === 'done';
+  const isBusy = (book) => { const s = stateOf(book).status; return s === 'downloading' || s === 'queued'; };
+  const trackDownloaded = (track) => dlTracks.has(String(track));
+  // Fraction 0..1 for the ring (chapter granularity).
+  const frac = (done, total) => (total > 0 ? Math.min(1, done / total) : 0);
+  function progress(book) { const s = stateOf(book); return frac(s.done, s.total); }
+
+  const getBlob = (track) => (available() ? Store.getAudio(track) : Promise.resolve(null));
+
+  // ---- cap / quota ----------------------------------------------------------
+  const capFits = (used, need, max) => used + need <= max;
+  async function quotaFits(need) {
+    try { const e = await Store.estimate(); if (e && e.supported && e.quota) return (e.usage || 0) + need <= e.quota * 0.95; } catch {}
+    return true;   // unknown quota → allow (cap still applies)
+  }
+  const trackBytes = (tracks) => tracks.reduce((n, t) => n + (t.size || 0), 0);
+
+  // ---- queue persistence ----------------------------------------------------
+  function loadQueue() { try { const q = JSON.parse(localStorage.getItem(LS.queue) || '[]'); return Array.isArray(q) ? q : []; } catch { return []; } }
+  function saveQueue() { try { localStorage.setItem(LS.queue, JSON.stringify(queue.map((e) => ({ book: e.book, meta: e.meta })))); } catch {} }
+
+  // ---- public request/enqueue ----------------------------------------------
+  // The book menu / NP button calls this. Returns the decision so the UI can show
+  // the Wi-Fi confirm modal when needed. `meta` = { title, author, thumb }.
+  function request(book, meta) {
+    return decideStart(wifiOnly(), unmetered());   // UI acts on this, then calls start()/queue()
+  }
+  function start(book, meta) { enqueue(book, meta); pump(); }
+  function queueFor(book, meta) { enqueue(book, meta, true); }   // explicit queue (wait for wifi)
+
+  function enqueue(book, meta, queuedByUser) {
+    const k = String(book);
+    if (isDownloaded(k) || current === k || queue.some((e) => e.book === k)) return;
+    queue.push({ book: k, meta: meta || {} }); saveQueue();
+    setState(k, { status: 'queued', meta: meta || {}, done: 0, total: (meta && meta.total) || 0 });
+    dbg('DL', `queued book=${k} ${meta && meta.title || ''}`);
+  }
+
+  // ---- the download loop ----------------------------------------------------
+  async function pump() {
+    if (current || !queue.length || !available()) return;
+    if (!canStartNow()) { dbg('DL', 'holding queue — waiting for Wi-Fi'); return; }
+    const { book, meta } = queue[0];
+    current = book; abortCur = new AbortController();
+    setState(book, { status: 'downloading', done: 0, bytes: 0 });
+    dbg('DL', `start book=${book}`);
+    try {
+      const tracks = (meta && meta.tracks) || await Plex.getAlbumTracks(book);
+      const total = tracks.length;
+      const need = trackBytes(tracks);
+      setState(book, { total, size: need });
+      if (!capFits(usedBytes, need, maxBytes())) throw new Error('Not enough download space — free some in Downloads.');
+      if (!(await quotaFits(need))) throw new Error('Device storage is full.');
+      let done = 0, bytes = 0;
+      for (const t of tracks) {
+        if (!current || abortCur.signal.aborted) throw new Error('cancelled');
+        if (await Store.hasAudio(t.ratingKey)) { done++; setState(book, { done }); continue; }
+        const blob = await fetchTrack(t, abortCur.signal);
+        await Store.putAudio(t.ratingKey, book, blob);
+        dlTracks.add(String(t.ratingKey));
+        bytes += blob.size; done++; usedBytes += blob.size;
+        setState(book, { done, bytes });
+      }
+      await Store.putDl({
+        book: String(book), title: (meta && meta.title) || '', author: (meta && meta.author) || '',
+        thumb: (meta && meta.thumb) || null, tracks: tracks.map((t) => String(t.ratingKey)),
+        size: bytes, ts: Date.now(),
+      });
+      setState(book, { status: 'done', done: total, total, size: bytes });
+      dbg('DL', `done book=${book} ${(bytes / 1048576).toFixed(0)}MB`);
+    } catch (e) {
+      const msg = (e && e.message) || 'download failed';
+      if (msg === 'cancelled') { setState(book, { status: 'none' }); dbg('DL', `cancelled book=${book}`); }
+      else { setState(book, { status: 'error', error: msg }); dbg('DL', `FAIL book=${book} ${msg}`); }
+    } finally {
+      queue = queue.filter((e) => e.book !== String(book)); saveQueue();
+      current = null; abortCur = null;
+      pump();   // next in queue
+    }
+  }
+
+  async function fetchTrack(t, signal) {
+    const url = Plex.streamUrl(t.partKey);
+    const r = await fetch(url, { signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.blob();
+  }
+
+  // ---- remove ---------------------------------------------------------------
+  async function remove(book) {
+    const k = String(book);
+    if (current === k && abortCur) { try { abortCur.abort(); } catch {} }
+    queue = queue.filter((e) => e.book !== k); saveQueue();
+    try {
+      const rec = await Store.getDl(k);
+      const tracks = (rec && rec.tracks) || [];
+      for (const tr of tracks) { await Store.delAudio(tr); dlTracks.delete(String(tr)); }
+      if (rec && rec.size) usedBytes = Math.max(0, usedBytes - rec.size);
+      await Store.delDl(k);
+    } catch (e) { dbg('DL', 'remove err ' + (e && e.message)); }
+    setState(k, { status: 'none', done: 0, total: 0, bytes: 0, size: 0 });
+    dbg('DL', `removed book=${k}`);
+  }
+
+  // ---- listing / storage info ----------------------------------------------
+  async function listDownloaded() {
+    if (!available()) return [];
+    try { const rows = await Store.allDl(); return rows.sort((a, b) => (b.ts || 0) - (a.ts || 0)); } catch { return []; }
+  }
+  async function storageInfo() {
+    const est = await Store.estimate();
+    return { used: usedBytes, max: maxBytes(), quota: est.supported ? est.quota : 0, quotaUsage: est.supported ? est.usage : 0, quotaSupported: !!est.supported };
+  }
+
+  // ---- lifecycle ------------------------------------------------------------
+  async function init() {
+    if (!available()) { dbg('DL', 'unavailable (no IndexedDB)'); return; }
+    try {
+      const rows = await Store.allDl();
+      usedBytes = 0;
+      for (const r of rows) {
+        books[String(r.book)] = { status: 'done', done: (r.tracks || []).length, total: (r.tracks || []).length, bytes: r.size || 0, size: r.size || 0, meta: { title: r.title, author: r.author, thumb: r.thumb } };
+        for (const tr of (r.tracks || [])) dlTracks.add(String(tr));
+        usedBytes += r.size || 0;
+      }
+      dbg('DL', `restored ${rows.length} downloaded book(s), ${(usedBytes / 1048576).toFixed(0)}MB`);
+    } catch (e) { dbg('DL', 'init err ' + (e && e.message)); }
+    // Auto-resume queued downloads when connectivity/Wi-Fi returns.
+    try { if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', () => pump()); } catch {}
+    window.addEventListener('online', () => pump());
+    notify();
+    pump();   // resume anything queued from a prior session (if Wi-Fi allows)
+  }
+
+  return {
+    init, available, subscribe,
+    request, start, queueFor, remove,
+    stateOf, isDownloaded, isBusy, trackDownloaded, progress, getBlob,
+    listDownloaded, storageInfo,
+    wifiOnly, setWifiOnly, maxBytes, setMaxBytes, DEFAULT_MAX,
+    _test: { decideStart, capFits, frac, unmetered },
+  };
+})();
+
+if (typeof window !== 'undefined') window.Downloads = Downloads;
+if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = Downloads;

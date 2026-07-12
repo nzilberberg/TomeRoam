@@ -16,7 +16,7 @@
 // offline cache). NEVER throws into callers.
 const Store = (() => {
   const DB = 'tomeroam';
-  const VER = 1;
+  const VER = 2;   // v2 added the `audio` + `dl` stores (offline downloads)
   // Object stores. `kv` is a generic key→value bag (settings, timestamps, route,
   // env, misc). The rest are keyed collections.
   const STORES = {
@@ -27,6 +27,8 @@ const Store = (() => {
     albums:  { keyPath: 'ratingKey' },    // per-book detail (getAlbum result)
     sync:    { keyPath: 'id' },           // pending-sync queue items
     diag:    { keyPath: 'k' },            // diagnostics metadata bag
+    audio:   { keyPath: 'track' },        // downloaded audio Blobs: { track, book, blob, size, ts }
+    dl:      { keyPath: 'book' },          // downloaded-book index: { book, title, author, thumb, tracks:[rk], size, ts }
   };
 
   const dbg = (t, m) => { if (window.PBDebug) PBDebug.log(t, m); };
@@ -167,6 +169,20 @@ const Store = (() => {
     catch { return { supported: false }; }
   }
 
+  // ---- downloaded audio (offline downloads) ---------------------------------
+  // Big binary Blobs live ONLY in IndexedDB (never localStorage). If IDB is
+  // unavailable these all no-op / return null, and Downloads reports unavailable.
+  const putAudio = (track, book, blob) => put('audio', { track: String(track), book: String(book), blob, size: (blob && blob.size) || 0, ts: Date.now() });
+  const getAudio = (track) => get('audio', String(track)).then((r) => (r && r.blob) || null);
+  const hasAudio = (track) => get('audio', String(track)).then((r) => !!(r && r.blob));
+  const delAudio = (track) => del('audio', String(track));
+  // Per-book download index (metadata so the Downloaded carousel + Downloads
+  // screen work with zero network).
+  const putDl = (rec) => put('dl', rec);
+  const getDl = (book) => get('dl', String(book));
+  const allDl = () => getAll('dl');
+  const delDl = (book) => del('dl', String(book));
+
   return {
     available, open,
     get, getAll, put, del, clear, count, replaceAll,
@@ -175,6 +191,7 @@ const Store = (() => {
     cacheBooks, cachedBooks, cacheAuthors, cachedAuthors,
     cacheTracks, cachedTracks, cacheAlbum, cachedAlbum,
     persist, estimate,
+    putAudio, getAudio, hasAudio, delAudio, putDl, getDl, allDl, delDl,
   };
 })();
 

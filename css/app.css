@@ -8,7 +8,8 @@
   --muted: #9aa4b2;
   --accent: #e5a00d;
   --accent-dim: #b98410;
-  --buffer: #5fa8e0;                 /* light-blue "buffered/banked" fill on the seek bars */
+  --buffer: #8b93a3;                 /* light-GRAY = incidental buffering */
+  --downloaded: #5fa8e0;             /* blue = a persisted offline DOWNLOAD */
   --seek-track: rgba(255,255,255,.14);
   --radius: 14px;
   --nav-h: 54px;
@@ -532,3 +533,73 @@ body.has-player .toast { bottom: calc(var(--nav-h) + 150px); }
 .spinner { width: 26px; height: 26px; border: 3px solid #ffffff22; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty { color: var(--muted); text-align: center; padding: 30px 10px; }
+
+/* ===================== OFFLINE DOWNLOADS UI ===================== */
+/* Downloaded track line = blue (override the gray --buffer); transport seek bars
+   with .dl-src likewise turn their buffered underlay blue. */
+.filerow .bufbar.downloaded { --buffer: var(--downloaded); }
+input.dl-src { --buffer: var(--downloaded); }
+
+/* Tile corner badge: progress ring (conic --p) → check when done. */
+.covertap { position: relative; }
+.dlbadge { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; z-index: 3;
+  background: rgba(10,12,16,.72); box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.dlbadge svg { width: 14px; height: 14px; fill: #fff; }
+.dlbadge.ring { background: conic-gradient(var(--downloaded) var(--p,0%), rgba(255,255,255,.22) 0); }
+.dlbadge.ring::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: rgba(10,12,16,.9); }
+.dlbadge.ring svg { position: relative; z-index: 1; }
+.dlbadge.ring.queued { opacity: .8; animation: dlpulse 1.4s ease-in-out infinite; }
+.dlbadge.done { background: var(--downloaded); }
+.dlbadge.done svg { fill: #06121d; }
+.dlbadge.err { background: #b4462f; color: #fff; font-weight: 700; font-size: 15px; }
+@keyframes dlpulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* Now-Playing art download button. */
+.np-art-wrap { position: relative; display: block; width: 100%; }
+.np-dl { position: absolute; right: 8px; bottom: 8px; width: 40px; height: 40px; border-radius: 50%;
+  border: 0; background: rgba(10,12,16,.78); box-shadow: 0 2px 8px rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; padding: 0; }
+.np-dl svg { width: 20px; height: 20px; fill: #fff; }
+.np-dl.ring { background: conic-gradient(var(--downloaded) var(--p,0%), rgba(255,255,255,.22) 0); }
+.np-dl.ring::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: rgba(10,12,16,.92); }
+.np-dl.ring svg { position: relative; z-index: 1; }
+.np-dl.ring.queued { animation: dlpulse 1.4s ease-in-out infinite; }
+.np-dl.done { background: var(--downloaded); }
+.np-dl.done svg { fill: #06121d; }
+
+/* Generic modal. */
+.pbmodal-scrim { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center; padding: 24px; }
+.pbmodal { background: var(--card, #1b1e24); color: var(--fg, #e7ecf3); border-radius: 16px;
+  max-width: 420px; width: 100%; padding: 20px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+.pbmodal-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.pbmodal-body { font-size: 14px; opacity: .9; line-height: 1.5; }
+.pbmodal-body p { margin: 0 0 6px; }
+.pbmodal-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.pbmodal-btn { border: 0; border-radius: 9px; padding: 10px 16px; font-size: 14px; font-weight: 600;
+  background: rgba(255,255,255,.1); color: inherit; }
+.pbmodal-btn.primary { background: var(--downloaded); color: #06121d; }
+.pbmodal-btn.danger { background: #b4462f; color: #fff; }
+
+/* Downloads management screen (slide-over). */
+.dlscreen { position: fixed; inset: 0; z-index: 8000; background: var(--bg, #14171c); color: var(--fg,#e7ecf3);
+  transform: translateX(100%); transition: transform .22s ease; display: flex; flex-direction: column; }
+.dlscreen.open { transform: translateX(0); }
+.dlscreen-bar { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.08); }
+.dlscreen-bar b { flex: 1; text-align: center; font-size: 16px; }
+.dlscreen-bar .dlscreen-close { background: none; border: 0; color: var(--accent); font-size: 15px; }
+.dlscreen-bar span { width: 48px; }
+.dlscreen-body { flex: 1; overflow: auto; padding: 12px 16px calc(env(safe-area-inset-bottom) + 24px); }
+.dlusage { margin: 10px 0 4px; }
+.dlbar { height: 8px; border-radius: 4px; background: var(--seek-track); overflow: hidden; }
+.dlbar i { display: block; height: 100%; background: var(--downloaded); }
+.dlusage-txt { font-size: 12px; opacity: .7; margin-top: 5px; }
+.dllist { margin-top: 6px; }
+.dlrow { display: flex; align-items: center; gap: 12px; padding: 11px 2px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.dlrow-meta { flex: 1; min-width: 0; }
+.dlrow-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dlrow-sub { font-size: 12px; opacity: .65; }
+.dlrow-del { background: none; border: 0; padding: 6px; }
+.dlrow-del svg { width: 20px; height: 20px; fill: #b4462f; }

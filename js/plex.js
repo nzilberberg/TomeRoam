@@ -352,6 +352,7 @@ const Plex = (() => {
         viewCount: t.viewCount || 0,
         viewOffset: t.viewOffset || 0,
         partKey: part ? part.key : null,
+        size: (part && part.size) || 0,      // bytes — for download cap/quota math
       };
     }).filter((t) => t.partKey);
     tracks.sort((a, b) => a.index - b.index);

@@ -209,6 +209,9 @@
   // this; 'progress' aborts an in-flight bank the moment the element resumes.
   function pumpBank() {
     if (!BANKING_ENABLED || !ctx) return;
+    // A fully-downloaded book is already local — no look-ahead buffering needed
+    // (the user asked us not to re-buffer downloaded content over the network).
+    if (window.Downloads && Downloads.isDownloaded(ctx.book)) return;
     // Evict INTELLIGENTLY: figure out the window we intend to hold (current + the
     // forward run that fits budget/cap — see bankWindowMax, which counts already-banked
     // files toward the budget so they're kept, not re-fetched), then drop only what's
@@ -903,6 +906,7 @@
       const cont = books.filter((b) => b.lastViewedAt > 0).sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
       renderCarousel($('clRow'), cont);
       renderCarousel($('raRow'), books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 15));
+      renderDownloadedCarousel();
       renderPresence();
       return true;
     } catch (e) { if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome threw ' + (e && e.message)); return false; }
@@ -936,6 +940,7 @@
     renderCarousel($('clRow'), cont);
     status(cont.length ? '' : 'No books in progress yet — pick one from Books or Authors.');
     renderCarousel($('raRow'), await Plex.getRecentlyAdded(15));
+    renderDownloadedCarousel();
     renderPresence();   // paint live numbers on the fresh tiles
   }
 
@@ -979,6 +984,7 @@
     el.querySelector('.tauthor').textContent = b.parentTitle || '';
     el.querySelector('.covertap').addEventListener('click', (e) => { e.stopPropagation(); playFromBrowse(b.ratingKey, b); });
     el.addEventListener('click', () => openFiles(b));
+    setDlBadge(el, b.ratingKey);   // download progress ring / check
     return el;
   }
 
@@ -1127,14 +1133,17 @@
     rows.forEach((row) => {
       const track = row.dataset.track, book = row.dataset.book;
       const idx = ctx ? ctx.tracks.findIndex((t) => String(t.ratingKey) === String(track)) : -1;
+      // A persisted DOWNLOAD is a full blue line; incidental buffering is gray.
+      const dled = !!(window.Downloads && Downloads.trackDownloaded(track));
       let buf = 0;
-      if (idx >= 0) {
-        if (banks.has(idx)) buf = 100;                       // whole chapter downloaded
+      if (dled) buf = 100;
+      else if (idx >= 0) {
+        if (banks.has(idx)) buf = 100;                       // whole chapter buffered in memory
         else if (ctx.idx === idx) buf = nativeBufferedPct(); // playing → native stream buffer
-        else if (bankingIdx === idx) buf = bankPct;          // downloading now
+        else if (bankingIdx === idx) buf = bankPct;          // buffering now
       }
       const bufbar = row.querySelector('.bufbar');
-      if (bufbar) bufbar.style.setProperty('--buffered', Math.round(buf) + '%');
+      if (bufbar) { bufbar.style.setProperty('--buffered', Math.round(buf) + '%'); bufbar.classList.toggle('downloaded', dled); }
       row.classList.toggle('playing', idx >= 0 && idx === ctx.idx);
       paintFileRowSub(row, chapterLine(book, track, idx >= 0 ? (ctx.tracks[idx].durationMs || 0) : 0));
     });
@@ -1286,12 +1295,6 @@
     // otherwise stream. Then re-point the meter + prefetch window at this track.
     const banked = bankedUrl(idx);
     Progress.setSeed(t.ratingKey);   // give the durable-progress board a track to seed its playlist
-    if (window.PBDebug) PBDebug.log('PLAY', `startTrack idx=${idx} seek=${(seekSec || 0).toFixed(1)}s src=${banked ? 'banked' : 'stream'} autoplay=${autoplay}`);
-    audio.src = banked || Plex.streamUrl(t.partKey);
-    audio.load();
-    refreshMeter();
-    pumpBank();
-    updateFileRows();   // move the "playing" highlight + buffered line to this chapter now
     const onMeta = () => {
       if (gen !== loadGen) return;               // superseded by a newer load — ignore
       loadRetry = 0;                             // got metadata → connection is good again
@@ -1301,7 +1304,28 @@
       else updateSeekUI();                                     // restored-paused: paint the bar at the saved spot
     };
     audio.addEventListener('loadedmetadata', onMeta, { once: true });
+    refreshMeter();
+    updateFileRows();   // move the "playing" highlight + buffered line to this chapter now
+    // Point the element at (in order of preference) an in-memory bank, a persisted
+    // OFFLINE DOWNLOAD (plays with no network), or the live stream. Downloaded
+    // blobs resolve async from IndexedDB, so set src in a small helper guarded by
+    // the load generation.
+    const useSrc = (src, kind) => {
+      if (gen !== loadGen) return;
+      if (window.PBDebug) PBDebug.log('PLAY', `startTrack idx=${idx} seek=${(seekSec || 0).toFixed(1)}s src=${kind} autoplay=${autoplay}`);
+      if (curObjUrl) { try { URL.revokeObjectURL(curObjUrl); } catch {} curObjUrl = null; }
+      audio.src = src; audio.load();
+      pumpBank();   // no-ops for a fully-downloaded book (see pumpBank guard)
+    };
+    if (banked) useSrc(banked, 'banked');
+    else if (window.Downloads && Downloads.trackDownloaded(t.ratingKey)) {
+      Downloads.getBlob(t.ratingKey).then((blob) => {
+        if (blob) { curObjUrl = URL.createObjectURL(blob); useSrc(curObjUrl, 'download'); }
+        else useSrc(Plex.streamUrl(t.partKey), 'stream');
+      }).catch(() => useSrc(Plex.streamUrl(t.partKey), 'stream'));
+    } else useSrc(Plex.streamUrl(t.partKey), 'stream');
   }
+  let curObjUrl = null;   // object URL of the currently-loaded downloaded blob (revoked on next load)
 
   // ---- last-played memory (local; survives reloads) ------------------------
   function saveLastPlayed() {
@@ -1539,6 +1563,7 @@
     $('pSub').textContent = `${ctx.album.parentTitle || ''} · ${t.title || 'Chapter ' + (ctx.idx + 1)}`;
     setArt($('pCover'), ctx.coverUrl);
     updatePlayIcon();
+    if (window.Downloads) refreshDlUi(ctx.book);   // NP button + transport meter colour for this book
     if (npOpen) updateNowPlaying();
   }
   function updatePlayIcon() { $('pPlay').textContent = audio.paused ? '▶' : '⏸'; if (npOpen) updateNpPlayIcon(); }
@@ -1669,6 +1694,7 @@
     $('npTitle').textContent = ctx.album.title || 'Book';
     $('npAuthor').textContent = ctx.album.parentTitle || '';
     $('npTrack').textContent = t.title || ('Chapter ' + (ctx.idx + 1));
+    updateNpDl();
     buildNpControls();
     if (!npSpeedCtl) {
       npSpeedCtl = SpeedControl.create({ initial: audio.playbackRate || 1, onChange: onSpeedChange });
@@ -1759,12 +1785,29 @@
   let bookMenuOpen = false;
   let longPressAt = 0;   // timestamp a long-press opened the menu → swallow the click it spawns
 
+  const DLICO = {
+    down: '<svg viewBox="0 0 24 24"><path d="M12 3v10m0 0 4-4m-4 4-4-4M5 20h14"/></svg>',
+    check: '<svg viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z"/></svg>',
+    x: '<svg viewBox="0 0 24 24"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z"/></svg>',
+    gear: '<svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8 4 2-1.5-2-3.5-2.4.8a6 6 0 0 0-1.6-1L15.6 4H8.4L8 6.8a6 6 0 0 0-1.6 1L4 7 2 10.5 4 12l-2 1.5L4 17l2.4-.8a6 6 0 0 0 1.6 1L8.4 20h7.2l.4-2.8a6 6 0 0 0 1.6-1L20 17l2-3.5L20 12z"/></svg>',
+  };
   function bookMenuItems(book, title) {
-    return [{
+    const items = [];
+    const dl = window.Downloads;
+    if (dl && dl.available()) {
+      const st = dl.stateOf(book).status;
+      if (st === 'done') items.push({ label: 'Remove download', ico: DLICO.trash, confirm: true, run: () => dl.remove(book) });
+      else if (st === 'downloading' || st === 'queued') items.push({ label: st === 'queued' ? 'Cancel queued download' : 'Cancel download', ico: DLICO.x, run: () => dl.remove(book) });
+      else items.push({ label: 'Download book', ico: DLICO.down, run: () => startBookDownload(book, title) });
+      items.push({ label: 'Manage downloads', ico: DLICO.gear, run: () => openDownloadsScreen() });
+    }
+    items.push({
       label: 'Reset Progress', danger: true, confirm: true,
       ico: '<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>',
       run: () => doResetProgress(book, title),
-    }];
+    });
+    return items;
   }
 
   function openBookMenu(book, title) {
@@ -1818,6 +1861,202 @@
     if (d && d.v !== 'home' && d.v !== 'nowplaying' && d.v !== 'options') applyScreen(d, { render: true, resetScroll: false });
     renderPresence();
     toast(`Progress reset — ${title || 'book'}`);
+  }
+
+  // ============================ OFFLINE DOWNLOADS UI ========================
+  const GB = 1024 * 1024 * 1024;
+  const fmtGB = (n) => (n >= GB ? (n / GB).toFixed(n >= 10 * GB ? 0 : 1) + ' GB' : (n / (1024 * 1024)).toFixed(0) + ' MB');
+
+  // Generic centered modal: { title, body(html), buttons:[{label,cls,run}] }.
+  function modal({ title, body, buttons }) {
+    const scrim = document.createElement('div');
+    scrim.className = 'pbmodal-scrim';
+    const card = document.createElement('div');
+    card.className = 'pbmodal';
+    card.innerHTML = `<div class="pbmodal-title"></div><div class="pbmodal-body"></div><div class="pbmodal-btns"></div>`;
+    card.querySelector('.pbmodal-title').textContent = title || '';
+    card.querySelector('.pbmodal-body').innerHTML = body || '';
+    const close = () => { scrim.remove(); };
+    (buttons || [{ label: 'OK' }]).forEach((b) => {
+      const btn = document.createElement('button');
+      btn.className = 'pbmodal-btn' + (b.cls ? ' ' + b.cls : '');
+      btn.textContent = b.label;
+      btn.addEventListener('click', () => { close(); if (b.run) b.run(); });
+      card.querySelector('.pbmodal-btns').appendChild(btn);
+    });
+    scrim.appendChild(card);
+    scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
+    document.body.appendChild(scrim);
+    return close;
+  }
+
+  // Build download metadata (title/author/thumb) from the in-memory library.
+  async function dlMeta(book, title) {
+    let b = null;
+    try { b = (await Plex.getBooks()).find((x) => String(x.ratingKey) === String(book)); } catch {}
+    return { title: (b && b.title) || title || 'Book', author: (b && b.parentTitle) || '', thumb: (b && b.thumb) || null };
+  }
+
+  async function startBookDownload(book, title) {
+    const dl = window.Downloads;
+    if (!dl || !dl.available()) return toast('Downloads unavailable on this device');
+    const meta = await dlMeta(book, title);
+    const d = dl.request(book, meta);
+    if (d.start) { dl.start(book, meta); toast('Downloading “' + meta.title + '”'); return; }
+    // Off Wi-Fi (or can't tell): explain + offer to queue (and, when we can't
+    // detect the connection, allow downloading now).
+    const buttons = [];
+    if (d.canOverride) buttons.push({ label: 'Download now', cls: 'primary', run: () => { dl.start(book, meta); toast('Downloading…'); } });
+    buttons.push({ label: 'Queue for Wi‑Fi', cls: d.canOverride ? '' : 'primary', run: () => { dl.queueFor(book, meta); toast('Queued — will start on Wi‑Fi'); } });
+    buttons.push({ label: 'Cancel' });
+    modal({
+      title: 'Download over cellular?',
+      body: '<p>You\'re not on Wi‑Fi. Audiobooks are large, so “Wi‑Fi only” is on. '
+        + 'You can queue this to start automatically when Wi‑Fi returns'
+        + (d.canOverride ? ', or download now anyway.' : '.') + '</p>',
+      buttons,
+    });
+  }
+
+  // ---- the Downloads management screen (Options + "Manage downloads") -------
+  let dlScreenEl = null, dlScreenUnsub = null;
+  function openDownloadsScreen() {
+    const dl = window.Downloads;
+    if (!dl || !dl.available()) return toast('Downloads unavailable on this device');
+    if (!dlScreenEl) {
+      dlScreenEl = document.createElement('div');
+      dlScreenEl.id = 'dlscreen';
+      dlScreenEl.className = 'dlscreen';
+      dlScreenEl.innerHTML =
+        `<div class="dlscreen-bar"><button class="dlscreen-close" aria-label="Close">‹ Back</button><b>Downloads</b><span></span></div>
+         <div class="dlscreen-body">
+           <div class="opt-row"><span class="opt-label">Wi‑Fi only</span><span class="opt-ctl"><button id="dlWifi" class="toggle" role="switch"></button></span></div>
+           <div class="opt-row"><span class="opt-label">Max download space</span><span class="opt-ctl"><select id="dlMax"></select></span></div>
+           <div id="dlUsage" class="dlusage"></div>
+           <div class="section-title">Downloaded books</div>
+           <div id="dlList" class="dllist"></div>
+         </div>`;
+      document.body.appendChild(dlScreenEl);
+      dlScreenEl.querySelector('.dlscreen-close').addEventListener('click', closeDownloadsScreen);
+      const sel = dlScreenEl.querySelector('#dlMax');
+      [1, 2, 4, 8, 16].forEach((g) => { const o = document.createElement('option'); o.value = String(g * GB); o.textContent = g + ' GB'; sel.appendChild(o); });
+      sel.addEventListener('change', (e) => { dl.setMaxBytes(parseInt(e.target.value, 10)); renderDlUsage(); });
+      const wifi = dlScreenEl.querySelector('#dlWifi');
+      wifi.addEventListener('click', () => { const on = dl.wifiOnly(); dl.setWifiOnly(!on); wifi.setAttribute('aria-checked', on ? 'false' : 'true'); });
+    }
+    dlScreenEl.classList.add('open');
+    const wifi = dlScreenEl.querySelector('#dlWifi');
+    wifi.setAttribute('aria-checked', dl.wifiOnly() ? 'true' : 'false');
+    dlScreenEl.querySelector('#dlMax').value = String(dl.maxBytes());
+    renderDlList(); renderDlUsage();
+    if (!dlScreenUnsub) dlScreenUnsub = dl.subscribe(() => { if (dlScreenEl && dlScreenEl.classList.contains('open')) { renderDlList(); renderDlUsage(); } });
+  }
+  function closeDownloadsScreen() { if (dlScreenEl) dlScreenEl.classList.remove('open'); }
+  // Add a "Downloads" row to the Options screen (guarded so it appears once).
+  function injectDownloadsOptionRow() {
+    const opt = $('options');
+    if (!opt || !window.Downloads || !Downloads.available() || document.getElementById('optDownloads')) return;
+    const row = document.createElement('div');
+    row.className = 'opt-row';
+    row.innerHTML = '<span class="opt-label">Downloads</span><span class="opt-ctl"><button id="optDownloads" class="textbtn">Manage</button></span>';
+    // Keep it near the top of Options (before the diagnostics/build stamp).
+    const firstBtn = opt.querySelector('.opt-row');
+    opt.insertBefore(row, firstBtn ? firstBtn.nextSibling : null);
+    row.querySelector('#optDownloads').addEventListener('click', openDownloadsScreen);
+  }
+  async function renderDlUsage() {
+    const box = dlScreenEl && dlScreenEl.querySelector('#dlUsage'); if (!box) return;
+    const info = await Downloads.storageInfo();
+    const pct = info.max ? Math.min(100, Math.round((info.used / info.max) * 100)) : 0;
+    const q = info.quotaSupported ? ` · device free ≈ ${fmtGB(Math.max(0, info.quota - info.quotaUsage))}` : '';
+    box.innerHTML = `<div class="dlbar"><i style="width:${pct}%"></i></div><div class="dlusage-txt">${fmtGB(info.used)} of ${fmtGB(info.max)}${q}</div>`;
+  }
+  async function renderDlList() {
+    const host = dlScreenEl && dlScreenEl.querySelector('#dlList'); if (!host) return;
+    const rows = await Downloads.listDownloaded();
+    if (!rows.length) { host.innerHTML = '<div class="empty">No downloaded books yet.</div>'; return; }
+    host.innerHTML = '';
+    for (const r of rows) {
+      const row = document.createElement('div');
+      row.className = 'dlrow';
+      row.innerHTML = `<div class="dlrow-meta"><div class="dlrow-title"></div><div class="dlrow-sub"></div></div><button class="dlrow-del" aria-label="Remove">${DLICO.trash}</button>`;
+      row.querySelector('.dlrow-title').textContent = r.title || 'Book';
+      row.querySelector('.dlrow-sub').textContent = `${r.author || ''}${r.author ? ' · ' : ''}${fmtGB(r.size || 0)}`;
+      row.querySelector('.dlrow-del').addEventListener('click', () => {
+        modal({ title: 'Remove download?', body: `<p>Delete the downloaded audio for “${(r.title || 'this book').replace(/</g, '&lt;')}”? You can re-download it later.</p>`,
+          buttons: [{ label: 'Remove', cls: 'danger', run: () => Downloads.remove(r.book) }, { label: 'Cancel' }] });
+      });
+      host.appendChild(row);
+    }
+  }
+
+  // ---- shared indicators (tile badge, NP button, files rows, carousel) -----
+  function setDlBadge(el, book) {
+    if (!window.Downloads || !Downloads.available()) return;
+    const host = el.querySelector('.covertap') || el;
+    let badge = host.querySelector('.dlbadge');
+    const st = Downloads.stateOf(book);
+    if (st.status === 'none') { if (badge) badge.remove(); return; }
+    if (!badge) { badge = document.createElement('div'); badge.className = 'dlbadge'; host.appendChild(badge); }
+    if (st.status === 'done') { badge.className = 'dlbadge done'; badge.style.removeProperty('--p'); badge.innerHTML = DLICO.check; }
+    else if (st.status === 'error') { badge.className = 'dlbadge err'; badge.textContent = '!'; }
+    else { badge.className = 'dlbadge ring' + (st.status === 'queued' ? ' queued' : ''); badge.style.setProperty('--p', Math.round(Downloads.progress(book) * 100) + '%'); badge.innerHTML = DLICO.down; }
+  }
+
+  // Now-Playing art button: down-arrow → progress ring → X (complete).
+  function updateNpDl() {
+    const btn = $('npDl'); if (!btn) return;
+    if (!ctx || !window.Downloads || !Downloads.available()) { btn.classList.add('hidden'); return; }
+    btn.classList.remove('hidden');
+    const st = Downloads.stateOf(ctx.book);
+    btn.className = 'np-dl';
+    if (st.status === 'done') { btn.classList.add('done'); btn.innerHTML = DLICO.x; btn.title = 'Remove download'; }
+    else if (st.status === 'downloading' || st.status === 'queued') { btn.classList.add('ring'); if (st.status === 'queued') btn.classList.add('queued'); btn.style.setProperty('--p', Math.round(Downloads.progress(ctx.book) * 100) + '%'); btn.innerHTML = DLICO.down; btn.title = 'Downloading'; }
+    else { btn.style.removeProperty('--p'); btn.innerHTML = DLICO.down; btn.title = 'Download'; }
+  }
+
+  // Update every on-screen indicator for a book (or all, if book is null).
+  function refreshDlUi(book) {
+    const sel = book ? `.tile[data-book="${book}"], .book[data-book="${book}"]` : '.tile[data-book], .book[data-book]';
+    document.querySelectorAll(sel).forEach((el) => setDlBadge(el, el.dataset.book));
+    if (ctx && (!book || String(book) === String(ctx.book))) updateNpDl();
+    // Transport buffered-meter colour: blue when the loaded book is downloaded.
+    const dled = !!(ctx && window.Downloads && Downloads.isDownloaded(ctx.book));
+    const a = $('pSeek'), b = $('npSeek');
+    if (a) a.classList.toggle('dl-src', dled);
+    if (b) b.classList.toggle('dl-src', dled);
+    if (!$('home').classList.contains('hidden')) renderDownloadedCarousel();
+    try { updateFileRows(); } catch {}
+  }
+
+  // Home "Downloaded" carousel — the downloaded books, from the offline index.
+  async function renderDownloadedCarousel() {
+    const section = $('dlSection'), row = $('dlRow');
+    if (!section || !row || !window.Downloads || !Downloads.available()) { if (section) section.classList.add('hidden'); return; }
+    const rows = await Downloads.listDownloaded();
+    if (!rows.length) { section.classList.add('hidden'); row.innerHTML = ''; return; }
+    section.classList.remove('hidden');
+    row.innerHTML = '';
+    for (const r of rows) row.appendChild(renderTile({ ratingKey: r.book, title: r.title, parentTitle: r.author, thumb: r.thumb }));
+  }
+
+  // NP art button: tap acts contextually; long-press opens the shared book menu.
+  function bindNpDownload() {
+    const btn = $('npDl'); if (!btn) return;
+    let lpTimer = null, lp = false;
+    const startLp = () => { lp = false; clearTimeout(lpTimer); lpTimer = setTimeout(() => { lp = true; if (ctx) openBookMenu(ctx.book, ctx.album.title); }, 500); };
+    const cancelLp = () => clearTimeout(lpTimer);
+    btn.addEventListener('pointerdown', startLp);
+    btn.addEventListener('pointerup', cancelLp);
+    btn.addEventListener('pointerleave', cancelLp);
+    btn.addEventListener('click', () => {
+      if (lp) { lp = false; return; }
+      if (!ctx || !window.Downloads || !Downloads.available()) return;
+      const st = Downloads.stateOf(ctx.book).status;
+      if (st === 'done') modal({ title: 'Remove download?', body: `<p>Delete the downloaded audio for “${(ctx.album.title || 'this book').replace(/</g, '&lt;')}”?</p>`, buttons: [{ label: 'Remove', cls: 'danger', run: () => Downloads.remove(ctx.book) }, { label: 'Cancel' }] });
+      else if (st === 'downloading' || st === 'queued') Downloads.remove(ctx.book);   // cancel in progress
+      else startBookDownload(ctx.book, ctx.album.title);
+    });
   }
 
   function openBookForEl(el) {
@@ -1950,6 +2189,7 @@
       if (npEl.scrollHeight <= npEl.clientHeight + 1 && !e.target.closest('input')) e.preventDefault();
     }, { passive: false });
     bindScrub($('npSeek'));
+    bindNpDownload();
     $('npInfo').addEventListener('click', openInfoSheet);
     $('npSleep').addEventListener('click', () => toast('Sleep timer — coming soon'));
     $('npMarks').addEventListener('click', () => toast('Bookmarks — coming soon'));
@@ -2174,6 +2414,10 @@
         try { Plex.clearCaches(); Browse.clearCache(); await loadHomeData(); } catch {}
       },
     });
+    // Offline downloads: restore the downloaded-book index + subscribe so every
+    // indicator (tile badge, NP button, files rows, Downloaded carousel) tracks
+    // the one shared download state.
+    if (window.Downloads) { Downloads.init(); Downloads.subscribe(refreshDlUi); injectDownloadsOptionRow(); }
     if (Plex.isSignedIn()) return enterApp();
     show('signin');
   }
