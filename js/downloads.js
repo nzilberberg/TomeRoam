@@ -46,16 +46,17 @@ const Downloads = (() => {
     if (t === 'cellular' || t === 'wimax' || t === 'other') return false;
     return null;
   }
-  // Pure decision: given the wifi-only pref + detected metering, what to do?
-  // { start } → go now; { confirm, canOverride } → UI asks (canOverride = we can't
-  // tell, so offer "Download now" alongside "Queue").
+  // Pure decision for a NEW request: { start } → begin now; { confirm } → ask (only
+  // when we can DETECT cellular — Android). We can't detect connection type on iOS
+  // (no API), so "unknown" just starts: Wi-Fi-only can't be enforced there, and a
+  // modal the user can't satisfy (no way to prove Wi-Fi) would trap the download.
   function decideStart(wo, um) {
     if (!wo) return { start: true };
     if (um === true) return { start: true };
-    if (um === false) return { confirm: true, canOverride: false };
-    return { confirm: true, canOverride: true };   // unknown (iOS) → user chooses
+    if (um === null) return { start: true };        // can't detect (iOS) → just download
+    return { confirm: true };                        // detected cellular → offer to queue for Wi-Fi
   }
-  const canStartNow = () => { const d = decideStart(wifiOnly(), unmetered()); return !!d.start; };
+  const canStartNow = () => !!decideStart(wifiOnly(), unmetered()).start;
 
   // ---- state + subscribers --------------------------------------------------
   function stateOf(book) { return books[String(book)] || { status: 'none', done: 0, total: 0, bytes: 0, size: 0 }; }
@@ -86,30 +87,50 @@ const Downloads = (() => {
 
   // ---- queue persistence ----------------------------------------------------
   function loadQueue() { try { const q = JSON.parse(localStorage.getItem(LS.queue) || '[]'); return Array.isArray(q) ? q : []; } catch { return []; } }
-  function saveQueue() { try { localStorage.setItem(LS.queue, JSON.stringify(queue.map((e) => ({ book: e.book, meta: e.meta })))); } catch {} }
+  function saveQueue() { try { localStorage.setItem(LS.queue, JSON.stringify(queue.map((e) => ({ book: e.book, meta: e.meta, force: e.force })))); } catch {} }
+
+  // ---- per-track byte progress (the growing blue line while downloading) ----
+  let curDl = { track: null, frac: 0 };
+  let lastProgAt = 0;
+  function setTrackProgress(book, track, frac) {
+    curDl = { track: String(track), frac };
+    const t = Date.now();
+    if (t - lastProgAt > 250) { lastProgAt = t; notify(book); }   // throttle repaints
+  }
+  // 1 = fully downloaded; 0..1 = the track downloading right now; 0 = neither.
+  function trackProgress(track) {
+    if (dlTracks.has(String(track))) return 1;
+    if (curDl.track === String(track)) return curDl.frac;
+    return 0;
+  }
 
   // ---- public request/enqueue ----------------------------------------------
   // The book menu / NP button calls this. Returns the decision so the UI can show
   // the Wi-Fi confirm modal when needed. `meta` = { title, author, thumb }.
   function request(book, meta) {
-    return decideStart(wifiOnly(), unmetered());   // UI acts on this, then calls start()/queue()
+    return decideStart(wifiOnly(), unmetered());   // UI acts on this, then calls start()/queueFor()
   }
-  function start(book, meta) { enqueue(book, meta); pump(); }
-  function queueFor(book, meta) { enqueue(book, meta, true); }   // explicit queue (wait for wifi)
+  // start() = user chose to download NOW → force (bypass the Wi-Fi gate; an explicit
+  // action shouldn't be second-guessed). queueFor() = user chose to wait for Wi-Fi.
+  function start(book, meta) { enqueue(book, meta, true); pump(); }
+  function queueFor(book, meta) { enqueue(book, meta, false); pump(); }
 
-  function enqueue(book, meta, queuedByUser) {
+  function enqueue(book, meta, force) {
     const k = String(book);
     if (isDownloaded(k) || current === k || queue.some((e) => e.book === k)) return;
-    queue.push({ book: k, meta: meta || {} }); saveQueue();
+    queue.push({ book: k, meta: meta || {}, force: !!force }); saveQueue();
     setState(k, { status: 'queued', meta: meta || {}, done: 0, total: (meta && meta.total) || 0 });
-    dbg('DL', `queued book=${k} ${meta && meta.title || ''}`);
+    dbg('DL', `queued book=${k} force=${!!force} ${meta && meta.title || ''}`);
   }
 
   // ---- the download loop ----------------------------------------------------
   async function pump() {
     if (current || !queue.length || !available()) return;
-    if (!canStartNow()) { dbg('DL', 'holding queue — waiting for Wi-Fi'); return; }
-    const { book, meta } = queue[0];
+    const head = queue[0];
+    // A forced (user-initiated "download now") item ignores the Wi-Fi gate; a
+    // queued-for-Wi-Fi item waits until we're on an unmetered connection.
+    if (!head.force && !canStartNow()) { dbg('DL', 'holding queue — waiting for Wi-Fi'); return; }
+    const { book, meta } = head;
     current = book; abortCur = new AbortController();
     setState(book, { status: 'downloading', done: 0, bytes: 0 });
     dbg('DL', `start book=${book}`);
@@ -124,12 +145,14 @@ const Downloads = (() => {
       for (const t of tracks) {
         if (!current || abortCur.signal.aborted) throw new Error('cancelled');
         if (await Store.hasAudio(t.ratingKey)) { done++; setState(book, { done }); continue; }
-        const blob = await fetchTrack(t, abortCur.signal);
+        const blob = await fetchTrack(t, book, abortCur.signal);
         await Store.putAudio(t.ratingKey, book, blob);
         dlTracks.add(String(t.ratingKey));
+        curDl = { track: null, frac: 0 };            // this track is now 100% (via dlTracks)
         bytes += blob.size; done++; usedBytes += blob.size;
         setState(book, { done, bytes });
       }
+      curDl = { track: null, frac: 0 };
       await Store.putDl({
         book: String(book), title: (meta && meta.title) || '', author: (meta && meta.author) || '',
         thumb: (meta && meta.thumb) || null, tracks: tracks.map((t) => String(t.ratingKey)),
@@ -142,17 +165,30 @@ const Downloads = (() => {
       if (msg === 'cancelled') { setState(book, { status: 'none' }); dbg('DL', `cancelled book=${book}`); }
       else { setState(book, { status: 'error', error: msg }); dbg('DL', `FAIL book=${book} ${msg}`); }
     } finally {
+      curDl = { track: null, frac: 0 };
       queue = queue.filter((e) => e.book !== String(book)); saveQueue();
       current = null; abortCur = null;
       pump();   // next in queue
     }
   }
 
-  async function fetchTrack(t, signal) {
+  async function fetchTrack(t, book, signal) {
     const url = Plex.streamUrl(t.partKey);
     const r = await fetch(url, { signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    return await r.blob();
+    const total = t.size || parseInt(r.headers.get('content-length') || '0', 10) || 0;
+    // Stream the body so the file row's blue line grows as bytes arrive. If
+    // streaming isn't available, fall back to a whole-blob fetch (no sub-progress).
+    if (!total || !r.body || !r.body.getReader) { setTrackProgress(book, t.ratingKey, 0); return await r.blob(); }
+    const reader = r.body.getReader();
+    const chunks = []; let recv = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value); recv += value.length;
+      setTrackProgress(book, t.ratingKey, Math.min(1, recv / total));
+    }
+    return new Blob(chunks, { type: 'audio/mpeg' });
   }
 
   // ---- remove ---------------------------------------------------------------
@@ -204,7 +240,7 @@ const Downloads = (() => {
   return {
     init, available, subscribe,
     request, start, queueFor, remove,
-    stateOf, isDownloaded, isBusy, trackDownloaded, progress, getBlob,
+    stateOf, isDownloaded, isBusy, trackDownloaded, trackProgress, progress, getBlob,
     listDownloaded, storageInfo,
     wifiOnly, setWifiOnly, maxBytes, setMaxBytes, DEFAULT_MAX,
     _test: { decideStart, capFits, frac, unmetered },

@@ -228,10 +228,12 @@ window.Browse = (() => {
         <div class="author"></div>
         <div class="pline"><div class="pname"></div><div class="ptimes"></div></div>
         <div class="progress"><i style="width:${pct}%"></i></div>
-      </div>`;
+      </div>
+      <button class="dlbtn" data-book="${b.ratingKey}" aria-label="Download"></button>`;
     el.querySelector('.title').textContent = b.title;
     el.querySelector('.author').textContent = b.parentTitle || '';
     el.querySelector('.covertap').addEventListener('click', (e) => { e.stopPropagation(); o.onPlay(b.ratingKey, b); });
+    if (o.bindDlBtn) o.bindDlBtn(el.querySelector('.dlbtn'), b);   // offline-download button
     el.addEventListener('click', () => o.onOpenFiles(b));
     return el;
   }

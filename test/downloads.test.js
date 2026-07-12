@@ -22,12 +22,12 @@ test('Wi-Fi-Only ON + detected Wi-Fi → start', () => {
   assert.deepEqual(decideStart(true, true), { start: true });
 });
 
-test('Wi-Fi-Only ON + detected cellular → confirm, no override (must queue)', () => {
-  assert.deepEqual(decideStart(true, false), { confirm: true, canOverride: false });
+test('Wi-Fi-Only ON + detected cellular → confirm (offer to queue for Wi-Fi)', () => {
+  assert.deepEqual(decideStart(true, false), { confirm: true });
 });
 
-test('Wi-Fi-Only ON + unknown connection (iOS) → confirm WITH override (user chooses)', () => {
-  assert.deepEqual(decideStart(true, null), { confirm: true, canOverride: true });
+test('Wi-Fi-Only ON + unknown connection (iOS) → start (can\'t enforce; don\'t trap)', () => {
+  assert.deepEqual(decideStart(true, null), { start: true });
 });
 
 test('capFits enforces the download-space budget', () => {

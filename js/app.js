@@ -1133,17 +1133,19 @@
     rows.forEach((row) => {
       const track = row.dataset.track, book = row.dataset.book;
       const idx = ctx ? ctx.tracks.findIndex((t) => String(t.ratingKey) === String(track)) : -1;
-      // A persisted DOWNLOAD is a full blue line; incidental buffering is gray.
-      const dled = !!(window.Downloads && Downloads.trackDownloaded(track));
-      let buf = 0;
-      if (dled) buf = 100;
+      // Download (persisted OR in-flight) = BLUE and grows with bytes; incidental
+      // buffering = GRAY. dlProg is 1 when downloaded, 0..1 for the track that's
+      // downloading right now, else 0.
+      const dlProg = window.Downloads ? Downloads.trackProgress(track) : 0;
+      let buf = 0, isDl = false;
+      if (dlProg > 0) { buf = dlProg * 100; isDl = true; }
       else if (idx >= 0) {
         if (banks.has(idx)) buf = 100;                       // whole chapter buffered in memory
         else if (ctx.idx === idx) buf = nativeBufferedPct(); // playing → native stream buffer
         else if (bankingIdx === idx) buf = bankPct;          // buffering now
       }
       const bufbar = row.querySelector('.bufbar');
-      if (bufbar) { bufbar.style.setProperty('--buffered', Math.round(buf) + '%'); bufbar.classList.toggle('downloaded', dled); }
+      if (bufbar) { bufbar.style.setProperty('--buffered', Math.round(buf) + '%'); bufbar.classList.toggle('downloaded', isDl); }
       row.classList.toggle('playing', idx >= 0 && idx === ctx.idx);
       paintFileRowSub(row, chapterLine(book, track, idx >= 0 ? (ctx.tracks[idx].durationMs || 0) : 0));
     });
@@ -1786,7 +1788,7 @@
   let longPressAt = 0;   // timestamp a long-press opened the menu → swallow the click it spawns
 
   const DLICO = {
-    down: '<svg viewBox="0 0 24 24"><path d="M12 3v10m0 0 4-4m-4 4-4-4M5 20h14"/></svg>',
+    down: '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>',
     check: '<svg viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>',
     trash: '<svg viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z"/></svg>',
     x: '<svg viewBox="0 0 24 24"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6 16.9 4.3z"/></svg>',
@@ -1903,18 +1905,15 @@
     const meta = await dlMeta(book, title);
     const d = dl.request(book, meta);
     if (d.start) { dl.start(book, meta); toast('Downloading “' + meta.title + '”'); return; }
-    // Off Wi-Fi (or can't tell): explain + offer to queue (and, when we can't
-    // detect the connection, allow downloading now).
-    const buttons = [];
-    if (d.canOverride) buttons.push({ label: 'Download now', cls: 'primary', run: () => { dl.start(book, meta); toast('Downloading…'); } });
-    buttons.push({ label: 'Queue for Wi‑Fi', cls: d.canOverride ? '' : 'primary', run: () => { dl.queueFor(book, meta); toast('Queued — will start on Wi‑Fi'); } });
-    buttons.push({ label: 'Cancel' });
+    // Detected cellular + Wi-Fi-only is on: offer to queue until Wi-Fi returns.
     modal({
       title: 'Download over cellular?',
-      body: '<p>You\'re not on Wi‑Fi. Audiobooks are large, so “Wi‑Fi only” is on. '
-        + 'You can queue this to start automatically when Wi‑Fi returns'
-        + (d.canOverride ? ', or download now anyway.' : '.') + '</p>',
-      buttons,
+      body: '<p>You\'re on cellular and “Wi‑Fi only” is on. Audiobooks are large, so '
+        + 'this will start automatically when Wi‑Fi returns.</p>',
+      buttons: [
+        { label: 'Queue for Wi‑Fi', cls: 'primary', run: () => { dl.queueFor(book, meta); toast('Queued — will start on Wi‑Fi'); } },
+        { label: 'Cancel' },
+      ],
     });
   }
 
@@ -2003,22 +2002,37 @@
     else { badge.className = 'dlbadge ring' + (st.status === 'queued' ? ' queued' : ''); badge.style.setProperty('--p', Math.round(Downloads.progress(book) * 100) + '%'); badge.innerHTML = DLICO.down; }
   }
 
-  // Now-Playing art button: down-arrow → progress ring → X (complete).
+  // Shared download BUTTON (Now-Playing + book-list rows): down-arrow → progress
+  // ring → X (complete). Distinct from the tile corner BADGE (which shows a check).
+  function applyDlBtn(btn, book) {
+    const st = window.Downloads ? Downloads.stateOf(book).status : 'none';
+    btn.className = 'dlbtn';
+    if (st === 'done') { btn.classList.add('done'); btn.style.removeProperty('--p'); btn.innerHTML = DLICO.x; btn.title = 'Remove download'; }
+    else if (st === 'downloading' || st === 'queued') { btn.classList.add('ring'); if (st === 'queued') btn.classList.add('queued'); btn.style.setProperty('--p', Math.round(Downloads.progress(book) * 100) + '%'); btn.innerHTML = DLICO.down; btn.title = 'Cancel download'; }
+    else { btn.style.removeProperty('--p'); btn.innerHTML = DLICO.down; btn.title = 'Download'; }
+  }
+  // Tap action for a download button: contextual on the current state.
+  function dlBtnAction(book, title) {
+    if (!window.Downloads || !Downloads.available()) return;
+    const st = Downloads.stateOf(book).status;
+    if (st === 'done') modal({ title: 'Remove download?', body: `<p>Delete the downloaded audio for “${(title || 'this book').replace(/</g, '&lt;')}”?</p>`, buttons: [{ label: 'Remove', cls: 'danger', run: () => Downloads.remove(book) }, { label: 'Cancel' }] });
+    else if (st === 'downloading' || st === 'queued') Downloads.remove(book);   // cancel
+    else startBookDownload(book, title);
+  }
   function updateNpDl() {
     const btn = $('npDl'); if (!btn) return;
     if (!ctx || !window.Downloads || !Downloads.available()) { btn.classList.add('hidden'); return; }
     btn.classList.remove('hidden');
-    const st = Downloads.stateOf(ctx.book);
-    btn.className = 'np-dl';
-    if (st.status === 'done') { btn.classList.add('done'); btn.innerHTML = DLICO.x; btn.title = 'Remove download'; }
-    else if (st.status === 'downloading' || st.status === 'queued') { btn.classList.add('ring'); if (st.status === 'queued') btn.classList.add('queued'); btn.style.setProperty('--p', Math.round(Downloads.progress(ctx.book) * 100) + '%'); btn.innerHTML = DLICO.down; btn.title = 'Downloading'; }
-    else { btn.style.removeProperty('--p'); btn.innerHTML = DLICO.down; btn.title = 'Download'; }
+    applyDlBtn(btn, ctx.book);
   }
 
   // Update every on-screen indicator for a book (or all, if book is null).
   function refreshDlUi(book) {
     const sel = book ? `.tile[data-book="${book}"], .book[data-book="${book}"]` : '.tile[data-book], .book[data-book]';
     document.querySelectorAll(sel).forEach((el) => setDlBadge(el, el.dataset.book));
+    // Book-list rows (Books / author→books) carry an explicit .dlbtn.
+    const bsel = book ? `.dlbtn[data-book="${book}"]` : '.dlbtn[data-book]';
+    document.querySelectorAll(bsel).forEach((b) => applyDlBtn(b, b.dataset.book));
     if (ctx && (!book || String(book) === String(ctx.book))) updateNpDl();
     // Transport buffered-meter colour: blue when the loaded book is downloaded.
     const dled = !!(ctx && window.Downloads && Downloads.isDownloaded(ctx.book));
@@ -2051,11 +2065,7 @@
     btn.addEventListener('pointerleave', cancelLp);
     btn.addEventListener('click', () => {
       if (lp) { lp = false; return; }
-      if (!ctx || !window.Downloads || !Downloads.available()) return;
-      const st = Downloads.stateOf(ctx.book).status;
-      if (st === 'done') modal({ title: 'Remove download?', body: `<p>Delete the downloaded audio for “${(ctx.album.title || 'this book').replace(/</g, '&lt;')}”?</p>`, buttons: [{ label: 'Remove', cls: 'danger', run: () => Downloads.remove(ctx.book) }, { label: 'Cancel' }] });
-      else if (st === 'downloading' || st === 'queued') Downloads.remove(ctx.book);   // cancel in progress
-      else startBookDownload(ctx.book, ctx.album.title);
+      if (ctx) dlBtnAction(ctx.book, ctx.album.title);
     });
   }
 
@@ -2138,7 +2148,9 @@
       getResumeEntry: (rk) => bookEntries[rk] || null,
       getChapterPct,
       getPeers: () => peersNow,
-      onRender: renderPresence,   // paint live peer/resume numbers right after a render
+      // Wire a book-row download button (browse.js renders the element).
+      bindDlBtn: (btn, b) => { btn.addEventListener('click', (e) => { e.stopPropagation(); dlBtnAction(b.ratingKey, b.title); }); applyDlBtn(btn, b.ratingKey); },
+      onRender: () => { renderPresence(); refreshDlUi(); },   // paint live numbers + download buttons after a render
     });
     document.querySelectorAll('#navbar [data-nav]').forEach((b) => b.addEventListener('click', () => {
       const n = b.dataset.nav;

@@ -555,18 +555,21 @@ input.dl-src { --buffer: var(--downloaded); }
 .dlbadge.err { background: #b4462f; color: #fff; font-weight: 700; font-size: 15px; }
 @keyframes dlpulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 
-/* Now-Playing art download button. */
 .np-art-wrap { position: relative; display: block; width: 100%; }
-.np-dl { position: absolute; right: 8px; bottom: 8px; width: 40px; height: 40px; border-radius: 50%;
-  border: 0; background: rgba(10,12,16,.78); box-shadow: 0 2px 8px rgba(0,0,0,.5);
-  display: flex; align-items: center; justify-content: center; padding: 0; }
-.np-dl svg { width: 20px; height: 20px; fill: #fff; }
-.np-dl.ring { background: conic-gradient(var(--downloaded) var(--p,0%), rgba(255,255,255,.22) 0); }
-.np-dl.ring::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: rgba(10,12,16,.92); }
-.np-dl.ring svg { position: relative; z-index: 1; }
-.np-dl.ring.queued { animation: dlpulse 1.4s ease-in-out infinite; }
-.np-dl.done { background: var(--downloaded); }
-.np-dl.done svg { fill: #06121d; }
+
+/* Shared download BUTTON (Now-Playing + book-list rows). One size everywhere.
+   Dark-grey fill → conic progress ring while downloading → X when done. */
+.dlbtn { flex: none; position: relative; width: 34px; height: 34px; border-radius: 50%;
+  border: 0; padding: 0; background: #2a2f3a; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  display: inline-flex; align-items: center; justify-content: center; }
+.dlbtn svg { width: 18px; height: 18px; fill: #e7ecf3; position: relative; z-index: 1; }
+.dlbtn.ring { background: conic-gradient(var(--downloaded) var(--p,0%), rgba(255,255,255,.18) 0); }
+.dlbtn.ring::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: #2a2f3a; }
+.dlbtn.ring.queued { animation: dlpulse 1.4s ease-in-out infinite; }
+.dlbtn.done { background: #3a4150; }
+.dlbtn.done svg { fill: #cbd5e6; }
+/* NP button sits under the art, aligned to its lower-right. */
+.np-dl-row { display: flex; justify-content: flex-end; margin-top: 8px; }
 
 /* Generic modal. */
 .pbmodal-scrim { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.55);
