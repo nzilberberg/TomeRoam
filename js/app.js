@@ -1903,9 +1903,24 @@
     const dl = window.Downloads;
     if (!dl || !dl.available()) return toast('Downloads unavailable on this device');
     const meta = await dlMeta(book, title);
+    const go = () => { dl.start(book, meta); toast('Downloading “' + meta.title + '”'); };
+
+    // iOS (can't detect connection type): the toggle is "Confirm downloads".
+    // ON → a carrier-charges disclaimer; OFF → just start. Never a "queue for
+    // Wi-Fi" (we can't detect Wi-Fi returning, so it would never resume — a lie).
+    if (!dl.wifiDetectable()) {
+      if (!dl.wifiOnly()) return go();
+      return void modal({
+        title: 'Download this book?',
+        body: '<p>Audiobooks are large. If you\'re on cellular, this download may use '
+          + 'your carrier\'s data and could incur charges.</p>',
+        buttons: [{ label: 'Download', cls: 'primary', run: go }, { label: 'Cancel' }],
+      });
+    }
+
+    // Android (real detection): Wi-Fi-only. On cellular, offer to queue until Wi-Fi.
     const d = dl.request(book, meta);
-    if (d.start) { dl.start(book, meta); toast('Downloading “' + meta.title + '”'); return; }
-    // Detected cellular + Wi-Fi-only is on: offer to queue until Wi-Fi returns.
+    if (d.start) return go();
     modal({
       title: 'Download over cellular?',
       body: '<p>You\'re on cellular and “Wi‑Fi only” is on. Audiobooks are large, so '
@@ -1929,7 +1944,7 @@
       dlScreenEl.innerHTML =
         `<div class="dlscreen-bar"><button class="dlscreen-close" aria-label="Close">‹ Back</button><b>Downloads</b><span></span></div>
          <div class="dlscreen-body">
-           <div class="opt-row"><span class="opt-label">Wi‑Fi only</span><span class="opt-ctl"><button id="dlWifi" class="toggle" role="switch"></button></span></div>
+           <div class="opt-row"><span class="opt-label" id="dlWifiLabel">Wi‑Fi only</span><span class="opt-ctl"><button id="dlWifi" class="toggle" role="switch"></button></span></div>
            <div class="opt-row"><span class="opt-label">Max download space</span><span class="opt-ctl"><select id="dlMax"></select></span></div>
            <div id="dlUsage" class="dlusage"></div>
            <div class="section-title">Downloaded books</div>
@@ -1944,6 +1959,9 @@
       wifi.addEventListener('click', () => { const on = dl.wifiOnly(); dl.setWifiOnly(!on); wifi.setAttribute('aria-checked', on ? 'false' : 'true'); });
     }
     dlScreenEl.classList.add('open');
+    // iOS can't detect Wi-Fi vs cellular, so the same toggle is relabeled
+    // "Confirm downloads" there (ON = show a carrier-charges prompt before each).
+    dlScreenEl.querySelector('#dlWifiLabel').textContent = dl.wifiDetectable() ? 'Wi‑Fi only' : 'Confirm downloads';
     const wifi = dlScreenEl.querySelector('#dlWifi');
     wifi.setAttribute('aria-checked', dl.wifiOnly() ? 'true' : 'false');
     dlScreenEl.querySelector('#dlMax').value = String(dl.maxBytes());

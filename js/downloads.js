@@ -38,6 +38,12 @@ const Downloads = (() => {
 
   // ---- connection detection (see header) ------------------------------------
   function connType() { try { const c = navigator.connection; return (c && c.type) || null; } catch { return null; } }
+  // Can this platform actually tell Wi-Fi from cellular? Only if the Network
+  // Information API exposes `.type` (Android/Chromium WebView). Safari/iOS does
+  // NOT — so Wi-Fi-only is unenforceable there and we hide it rather than lie
+  // (we can't detect a Wi-Fi RETURN either, so a "queue for Wi-Fi" would never
+  // resume). Native apps like Prologue use NWPathMonitor; a web app can't.
+  function wifiDetectable() { try { return !!(navigator.connection && typeof navigator.connection.type === 'string'); } catch { return false; } }
   // true = unmetered (wifi/ethernet), false = metered (cellular), null = unknown.
   function unmetered() {
     const t = connType();
@@ -242,7 +248,7 @@ const Downloads = (() => {
     request, start, queueFor, remove,
     stateOf, isDownloaded, isBusy, trackDownloaded, trackProgress, progress, getBlob,
     listDownloaded, storageInfo,
-    wifiOnly, setWifiOnly, maxBytes, setMaxBytes, DEFAULT_MAX,
+    wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, DEFAULT_MAX,
     _test: { decideStart, capFits, frac, unmetered },
   };
 })();
