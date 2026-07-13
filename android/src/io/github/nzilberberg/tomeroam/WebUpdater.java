@@ -50,6 +50,10 @@ final class WebUpdater {
     };
 
     private static final Pattern REF = Pattern.compile("(?:src|href)\\s*=\\s*\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
+    // The build stamp embedded in index.html (<meta name="tomeroam-build" content="...">).
+    // Used to prove the fetched index belongs to the SAME build as build.json before
+    // staging — see the coherence note in stageBuild().
+    private static final Pattern INDEX_BUILD = Pattern.compile("tomeroam-build\"\\s+content=\"([^\"]+)\"");
     private static final Pattern NATIVE_VER = Pattern.compile("\"nativeVersion\"\\s*:\\s*(\\d+)");
     // The MINIMUM native version the published web build requires. The leading
     // quote in each pattern keeps the keys distinct: "nativeVersion" cannot match
@@ -122,6 +126,28 @@ final class WebUpdater {
         try {
             String index = httpGetText(PAGES + "/index.html");
             if (index == null || index.isEmpty()) return false;
+
+            // COHERENCE GUARD. `build` is what build.json reported, but index.html is
+            // fetched separately from a CDN that propagates a deploy file-by-file, so a
+            // stale index (or an incoherent deploy where build.json moved ahead of
+            // index.html) could otherwise be staged and mislabeled as the new build.
+            // The web shell is already mixed-build-proof WITHIN one coherent snapshot
+            // because index.html stamps every asset ?v=<BUILD> and only ever requests
+            // its own build's files — but that guarantee dies the moment we assemble a
+            // shell from index.html + separately-fetched assets across a propagation
+            // window. So require the fetched index's OWN embedded stamp to equal the
+            // build we're installing; if it doesn't, abort and retry on a later launch
+            // once propagation settles (the live copy is never touched). If the stamp
+            // can't be found at all (unexpected index format), don't hard-block updates
+            // forever — fall through to the old behavior and log it.
+            Matcher bm = INDEX_BUILD.matcher(index);
+            String indexBuild = bm.find() ? bm.group(1) : null;
+            if (indexBuild == null) {
+                Log.i(TAG, "stage: no build stamp in index.html; proceeding without coherence check");
+            } else if (!indexBuild.equals(build)) {
+                Log.i(TAG, "stage: incoherent deploy — build.json=" + build + " but index.html=" + indexBuild + "; retry later");
+                return false;
+            }
 
             Set<String> files = new LinkedHashSet<>();
             for (String e : STATIC_EXTRAS) files.add(e);
