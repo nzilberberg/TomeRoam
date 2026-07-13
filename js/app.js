@@ -893,6 +893,14 @@
     // Plex connects, instead of a lone spinner. loadHomeData overwrites them.
     if (!painted) { renderSkeletonCarousel($('clRow'), 4); renderSkeletonCarousel($('raRow'), 6); }
     status(painted ? '' : 'Connecting to your Plex server…');
+    // Commit ONE paint of the cached home before the startup storm (connect probe +
+    // restoreLastPlayed's audio setup + the 181-page warmer) monopolises the main
+    // thread. Without this, iOS builds the tiles but defers PAINTING them — cover
+    // boxes composite (cheap) while the title/author TEXT stays unrasterized for
+    // seconds until the churn settles, so the home shows blank-titled tiles on every
+    // launch. A double-rAF forces a clean frame first; the 200ms cap keeps it from
+    // hanging if the tab is hidden (rAF wouldn't fire).
+    await new Promise((r) => { const done = () => r(); requestAnimationFrame(() => requestAnimationFrame(done)); setTimeout(done, 200); });
     try {
       await Plex.connect();
       $('serverName').textContent = Plex.getServerName() || 'Plex';
