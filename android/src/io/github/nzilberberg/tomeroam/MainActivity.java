@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
     // updater, manifest) — NOT for web-only builds. When build.json publishes a
     // higher nativeVersion, ApkUpdater offers a one-tap APK self-update; ordinary
     // web pushes flow silently via WebUpdater and never touch this number.
-    private static final int NATIVE_VERSION = 2;
+    private static final int NATIVE_VERSION = 3;
 
     private WebView web;
     private File webRoot;   // writable web root (filesDir/web/current); null -> serve from assets
