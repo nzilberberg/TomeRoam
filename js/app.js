@@ -893,6 +893,12 @@
     // Plex connects, instead of a lone spinner. loadHomeData overwrites them.
     if (!painted) { renderSkeletonCarousel($('clRow'), 4); renderSkeletonCarousel($('raRow'), 6); }
     status(painted ? '' : 'Connecting to your Plex server…');
+    // DIAGNOSTIC: time-to-first-frame after the cached home is built. If this fires
+    // promptly (~16–32ms) the paint isn't the bottleneck and the blank-title theory
+    // is wrong; if it's delayed by seconds, the main thread is blocked BEFORE the
+    // first frame commits (confirms the deferral, and that the yield below helps).
+    const _tPaint = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    requestAnimationFrame(() => { const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); if (window.PBDebug) PBDebug.log('PAINT', `home first frame +${Math.round(now - _tPaint)}ms (painted=${painted})`); });
     // Commit ONE paint of the cached home before the startup storm (connect probe +
     // restoreLastPlayed's audio setup + the 181-page warmer) monopolises the main
     // thread. Without this, iOS builds the tiles but defers PAINTING them — cover
