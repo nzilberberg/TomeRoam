@@ -318,6 +318,16 @@ const Net = (() => {
     };
   }
 
+  // Wall-clock of the last time we were backgrounded, so resume can tell a real
+  // (suspend-capable) background from a momentary glance.
+  let hiddenAt = 0;
+  // Force the Plex layer to abandon its current base + any in-flight (possibly
+  // frozen) connect() attempt, so the very next request re-probes from scratch.
+  // Cheap: a probe is a single /identity call. Guarded — the app runs without Plex.
+  function dropConn(why) {
+    if (window.Plex && Plex.resetConn) { Plex.resetConn(); dbg('CONN', 'reset (' + why + ')'); }
+  }
+
   // ---- lifecycle ------------------------------------------------------------
   async function init({ onChange, onReconnect: recb } = {}) {
     if (onChange) cbChange = onChange;
@@ -327,10 +337,27 @@ const Net = (() => {
 
     window.addEventListener('online', () => {
       S.browserThinksOnline = true; dbg('NET', 'online hint'); emit();
+      // Wi-Fi/cell just came back: the base we were bound to (e.g. conn=local on
+      // the old network) is almost certainly dead. Drop it so the next call
+      // re-probes a working connection instead of eating 15s×retries per request.
+      dropConn('online');
       kickPolling(true); checkPlex(); checkAppHost();
     });
     window.addEventListener('offline', () => { S.browserThinksOnline = false; dbg('NET', 'offline hint'); emit(); });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) { kickPolling(true); if (!everythingHealthy()) runPoll(); } });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      // Resuming from background. If a connect()/fetch was in flight when the OS
+      // SUSPENDED the app, its AbortSignal.timeout froze too — the shared
+      // `connecting` promise (and any await behind it, incl. pull-to-refresh) can
+      // hang for the whole suspend, and a relay endpoint may have rotated away. If
+      // we were hidden long enough to have been suspended, force-drop base + the
+      // in-flight connect so the next request re-probes fresh instead of waiting on
+      // the stale one. A brief glance (short gap) can't have suspended us — skip the
+      // churn; a healthy connection self-heals when its abort timer catches up.
+      if (hiddenAt && Date.now() - hiddenAt > 15000) dropConn('resume');
+      hiddenAt = 0;
+      kickPolling(true); if (!everythingHealthy()) runPoll();
+    });
 
     emit();
     // First background probes (do NOT block startup — fire and forget). We check

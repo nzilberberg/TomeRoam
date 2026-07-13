@@ -21,6 +21,7 @@ import android.os.Message;
 import android.view.KeyEvent;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.webkit.JavascriptInterface;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -167,10 +168,16 @@ public class MainActivity extends Activity {
             }
         });
 
+        // Bridge exposed to the web app as window.TomeRoamNative (only
+        // @JavascriptInterface methods are reachable). Lets Options → App update
+        // apply a staged OTA build on the user's command.
+        web.addJavascriptInterface(new AppBridge(), "TomeRoamNative");
+
         web.loadUrl(APP_URL);
 
-        // Check GitHub for a newer web build (silent OTA) and, rarely, a newer
-        // native APK — after the page starts loading so startup isn't delayed.
+        // Check GitHub for a newer web build (staged silently, applied on user
+        // command / next cold launch) and, rarely, a newer native APK — after the
+        // page starts loading so startup isn't delayed.
         WebUpdater.checkAsync(this, web, NATIVE_VERSION);
     }
 
@@ -231,5 +238,25 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (web != null) web.destroy();
         super.onDestroy();
+    }
+
+    // Bridge exposed to the web app as window.TomeRoamNative. Only methods marked
+    // @JavascriptInterface are reachable from JS. Kept intentionally tiny.
+    private final class AppBridge {
+        @JavascriptInterface
+        public int nativeVersion() { return NATIVE_VERSION; }
+
+        // Apply a web build WebUpdater has already staged: promote it to the active
+        // root and reload. Invoked only when the user taps Options → App update — we
+        // no longer auto-apply mid-session. No-op if nothing valid is staged.
+        @JavascriptInterface
+        public void applyUpdate() {
+            runOnUiThread(() -> {
+                if (WebFiles.promoteStagedIfReady(MainActivity.this)) {
+                    webRoot = WebFiles.currentDir(MainActivity.this);
+                    web.loadUrl(APP_URL);
+                }
+            });
+        }
     }
 }

@@ -996,9 +996,17 @@
     if (refreshing) return;
     refreshing = true;
     $('ptr').classList.add('spin');
+    // Watchdog: never let the spinner/lock wedge. A refresh awaits a live library
+    // fetch; on the slow/lossy relay (or if a connection stalls) that can take a
+    // long time, and if the app is suspended mid-fetch the abort timer freezes so
+    // the await may not settle until resume. Release the UI after a bounded wait
+    // regardless — loadHomeData still renders if/when it eventually resolves.
+    let released = false;
+    const release = () => { if (released) return; released = true; refreshing = false; setPtr(0); $('ptr').classList.remove('spin'); };
+    const watchdog = setTimeout(() => { if (!released) { release(); toast('Still refreshing — showing what we have'); } }, 12000);
     try { Plex.clearCaches(); Browse.clearCache(); await loadHomeData(); }
-    catch (e) { toast(e.message || 'Refresh failed'); }
-    finally { refreshing = false; setPtr(0); $('ptr').classList.remove('spin'); }
+    catch (e) { if (!released) toast(e.message || 'Refresh failed'); }
+    finally { clearTimeout(watchdog); release(); }
   }
 
   function renderCarousel(row, books) {
@@ -2452,6 +2460,41 @@
   // Service worker registration + auto-update handling (the SW itself is
   // CACHE-FIRST — see sw.js). Escape hatch: load the app with #nosw (or ?nosw=1)
   // to tear the SW + caches down if it ever misbehaves.
+  // ---- app-update button (Options) -----------------------------------------
+  // We no longer silently reload a running app to apply an update — a surprise
+  // mid-session reload is disruptive (and alarming if it were ever the native
+  // shell). The update is still fetched/staged in the BACKGROUND (native
+  // WebUpdater for the APK; the service worker for the PWA); this Options button
+  // is gray/disabled until that SAME "ready" signal fires, then lights up. The
+  // update is applied (promote + reload) only when the user taps it. A staged
+  // build also still applies on the next COLD launch (the non-disruptive path).
+  function markUpdateAvailable(build) {
+    const btn = $('optUpdate');
+    if (!btn) return;
+    btn.disabled = false;
+    btn.textContent = 'Update & restart';
+    btn.title = build ? ('New build ' + build) : 'A new version is ready';
+  }
+  function applyAppUpdate() {
+    const btn = $('optUpdate');
+    if (btn && btn.disabled) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+    // APK: promote the staged web build natively + reload.
+    try { if (window.TomeRoamNative && TomeRoamNative.applyUpdate) { TomeRoamNative.applyUpdate(); return; } } catch {}
+    // PWA: activate the waiting service worker + reload onto the new build.
+    try { if (window.Net && Net.applyUpdate) { Net.applyUpdate(); return; } } catch {}
+    try { location.reload(); } catch {}
+  }
+  function initUpdateButton() {
+    const btn = $('optUpdate');
+    if (!btn) return;
+    btn.addEventListener('click', applyAppUpdate);
+    // APK native OTA: WebUpdater fires an event AND sets a global when a build is
+    // staged (the global covers the race where staging finished before this ran).
+    window.addEventListener('tomeroam-update-ready', (e) => markUpdateAvailable(e && e.detail));
+    if (window.__tomeroamUpdateReady) markUpdateAvailable(window.__tomeroamUpdateReady);
+  }
+
   function initServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
     if (/[?#&]nosw/.test(location.href)) {
@@ -2460,25 +2503,21 @@
       toast('Service worker disabled for this session');
       return;
     }
-    // Cache-first SW (see sw.js): serves the shell instantly and AUTO-TAKES-OVER
-    // on update (skipWaiting in install — a waiting worker could never dislodge a
-    // still-controlling old SW, which stranded devices on stale HTML in .1–.3).
-    // controllerchange below reloads onto the new build, deferred while audio is
-    // playing; in that deferred window the Net banner's "Update available —
-    // reload" offers a manual way to apply it sooner.
+    // Cache-first SW (see sw.js): serves the shell instantly and still calls
+    // skipWaiting()+clients.claim() so the new worker TAKES CONTROL immediately (a
+    // waiting worker could never dislodge a still-controlling old SW, which
+    // stranded devices on stale HTML in .1–.3 — we keep that property). What we NO
+    // LONGER do is force a page reload when it takes over: a surprise mid-session
+    // reload is disruptive. The running page keeps its current coherent build; the
+    // new one is applied only when the user taps Options → App update (or on the
+    // next natural reload/cold launch). No mixed state results — the page never
+    // re-fetches its own shell mid-run, and any future load is fully the new build.
     const hadController = !!navigator.serviceWorker.controller;
-    let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || reloaded) return;   // first install never reloads
-      reloaded = true;
-      // A new build took over. Reload to land fully on it (avoids the mixed
-      // old-HTML/new-JS state) — but don't yank a listening session: if audio is
-      // playing, defer the reload until the next pause.
-      const go = () => { if (window.PBDebug) PBDebug.log('SW', 'new build active — reloading'); location.reload(); };
-      if (audio && !audio.paused) {
-        if (window.PBDebug) PBDebug.log('SW', 'new build active — reload deferred until pause');
-        audio.addEventListener('pause', go, { once: true });
-      } else go();
+      if (!hadController) return;   // first install: nothing to offer
+      if (window.PBDebug) PBDebug.log('SW', 'new build active — offering (no auto-reload)');
+      markUpdateAvailable(null);
+      if (window.Net) Net.setUpdateReady();
     });
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
       const offerIfWaiting = () => { if (reg.waiting && navigator.serviceWorker.controller && window.Net) Net.setUpdateReady(reg); };
@@ -2599,7 +2638,12 @@
     // All guarded — the app still runs if any module failed to load.
     if (window.Store) Store.persist();
     if (window.SyncQueue) SyncQueue.init({ onChange: (n) => { if (window.Net) Net.setPendingCount(n); } });
+    // Light the Options "App update" button when an update is staged/ready — the
+    // native OTA path fires an event/global (handled in initUpdateButton); the PWA
+    // service-worker path surfaces via Net's updateReady state below.
+    initUpdateButton();
     if (window.Net) Net.init({
+      onChange: (st) => { if (st && st.updateReady) markUpdateAvailable(null); },
       onReconnect: async () => {
         if ($('library').classList.contains('hidden')) return;
         // Clear the in-memory caches first: getBooks()'s offline fallback poisons

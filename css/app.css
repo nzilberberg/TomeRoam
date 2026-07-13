@@ -331,6 +331,13 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
 .skrow .skline { height: .82rem; margin: 3px 0; }
 .skrow .skline.short { width: 45%; }
 
+/* Options "App update" button: gray + inert until an update is staged/ready (the
+   same signal that used to force a live reload), then lights to the accent and
+   becomes tappable to apply (promote + reload) on the user's command. */
+.updbtn { border: 0; border-radius: 8px; padding: 7px 14px; font-size: .85rem; font-weight: 600; background: var(--card2); color: var(--muted); cursor: default; }
+.updbtn:not(:disabled) { background: var(--accent); color: #1b1e24; cursor: pointer; }
+.updbtn:not(:disabled):active { filter: brightness(.92); }
+
 /* author page header block */
 .authorhead { display: flex; flex-direction: column; align-items: center; text-align: center; margin: 2px 4px 16px; }
 .authoravatar { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--card2); flex: none; }

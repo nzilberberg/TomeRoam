@@ -109,8 +109,8 @@ final class WebUpdater {
 
         Log.i(TAG, "web update " + currentBuild + " -> " + remoteBuild + " staging");
         if (stageBuild(act, remoteBuild)) {
-            Log.i(TAG, "web update " + remoteBuild + " staged");
-            maybeApplyNow(act, web);
+            Log.i(TAG, "web update " + remoteBuild + " staged (awaiting user apply)");
+            signalUpdateReady(act, web, remoteBuild);
         }
     }
 
@@ -155,20 +155,23 @@ final class WebUpdater {
         }
     }
 
-    // Apply the staged build immediately if the user is not mid-listen; otherwise
-    // leave it for the next cold launch (WebFiles promotes it then). Reloading
-    // while audio plays would interrupt playback — the one thing we won't do.
-    private static void maybeApplyNow(final Activity act, final WebView web) {
+    // Tell the web layer a new build is staged and ready. It lights the Options
+    // "App update" button (sets a global for the race where staging finished before
+    // the page's listener existed, and fires an event for the live case). We do NOT
+    // reload on our own — a surprise mid-session reload is disruptive. The user
+    // applies it via MainActivity.AppBridge.applyUpdate (Options → App update), or
+    // it applies on the next cold launch (WebFiles promotes staged at boot).
+    private static void signalUpdateReady(final Activity act, final WebView web, final String build) {
+        final String b = jsStr(build);
         act.runOnUiThread(() -> web.evaluateJavascript(
-            "(function(){var a=document.querySelector('audio');return a&&!a.paused&&!a.ended?'1':'0';})()",
-            value -> {
-                boolean playing = value != null && value.contains("1");
-                if (playing) return;
-                if (WebFiles.promoteStagedIfReady(act)) {
-                    Log.i(TAG, "applying web update now (idle) — reloading");
-                    web.loadUrl("https://tomeroam.local/index.html?nosw=1");
-                }
-            }));
+            "window.__tomeroamUpdateReady=" + b + ";"
+            + "try{window.dispatchEvent(new CustomEvent('tomeroam-update-ready',{detail:" + b + "}));}catch(e){}",
+            null));
+    }
+
+    // Single-quote a string for safe inlining into the evaluateJavascript snippet.
+    private static String jsStr(String s) {
+        return "'" + (s == null ? "" : s.replace("\\", "\\\\").replace("'", "\\'")) + "'";
     }
 
     // ---- helpers --------------------------------------------------------------
