@@ -2695,7 +2695,18 @@
         // fetch so we pull genuinely fresh data, not the cache-first copy. (Clear
         // the in-memory caches too: getBooks()'s offline fallback may have left the
         // STALE library in booksCache.)
-        try { Plex.clearCaches(); Browse.clearCache(); await loadHomeData({ force: true }); } catch {}
+        try {
+          Plex.clearCaches(); Browse.clearCache();
+          // Browse.clearCache() removed every rendered browse page — INCLUDING the
+          // one on screen. Re-render the current browse view FIRST (cache-first, so
+          // it repaints instantly from IDB and revalidates in place) — BEFORE the
+          // awaited home refresh, which can take seconds on the relay. Otherwise a
+          // reconnect that lands while browsing leaves the page the user is looking
+          // at blank (the "cleared the whole page" bug).
+          const d = currentDesc();
+          if (d && d.v !== 'home' && d.v !== 'nowplaying' && d.v !== 'options') applyScreen(d, { render: true, resetScroll: false });
+          await loadHomeData({ force: true });
+        } catch {}
       },
     });
     // Offline downloads: restore the downloaded-book index + subscribe so every
