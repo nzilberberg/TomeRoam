@@ -893,20 +893,17 @@
     // Plex connects, instead of a lone spinner. loadHomeData overwrites them.
     if (!painted) { renderSkeletonCarousel($('clRow'), 4); renderSkeletonCarousel($('raRow'), 6); }
     status(painted ? '' : 'Connecting to your Plex server…');
-    // DIAGNOSTIC: time-to-first-frame after the cached home is built. If this fires
-    // promptly (~16–32ms) the paint isn't the bottleneck and the blank-title theory
-    // is wrong; if it's delayed by seconds, the main thread is blocked BEFORE the
-    // first frame commits (confirms the deferral, and that the yield below helps).
+    // DIAGNOSTIC (blank-title bug): the +16ms first-frame timing disproved a paint
+    // deferral, so measure the actual unknowns — is there title text in the DOM at
+    // paint, and does the cached data carry it. `domTitle` = the first tile's title
+    // as painted; `dataTitle` (logged in renderCachedHome) = the cached book's title.
     const _tPaint = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    requestAnimationFrame(() => { const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); if (window.PBDebug) PBDebug.log('PAINT', `home first frame +${Math.round(now - _tPaint)}ms (painted=${painted})`); });
-    // Commit ONE paint of the cached home before the startup storm (connect probe +
-    // restoreLastPlayed's audio setup + the 181-page warmer) monopolises the main
-    // thread. Without this, iOS builds the tiles but defers PAINTING them — cover
-    // boxes composite (cheap) while the title/author TEXT stays unrasterized for
-    // seconds until the churn settles, so the home shows blank-titled tiles on every
-    // launch. A double-rAF forces a clean frame first; the 200ms cap keeps it from
-    // hanging if the tab is hidden (rAF wouldn't fire).
-    await new Promise((r) => { const done = () => r(); requestAnimationFrame(() => requestAnimationFrame(done)); setTimeout(done, 200); });
+    requestAnimationFrame(() => {
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      const tt = document.querySelector('#clRow .ttitle, #raRow .ttitle');
+      const ntiles = document.querySelectorAll('#clRow .tile, #raRow .tile').length;
+      if (window.PBDebug) PBDebug.log('PAINT', `home first frame +${Math.round(now - _tPaint)}ms painted=${painted} tiles=${ntiles} domTitle="${tt ? (tt.textContent || '').slice(0, 24) : '(no .ttitle)'}"`);
+    });
     try {
       await Plex.connect();
       $('serverName').textContent = Plex.getServerName() || 'Plex';
@@ -969,7 +966,7 @@
     if (!window.Store) { if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: no Store'); return false; }
     try {
       const books = await Store.cachedBooks();
-      if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books');
+      if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books, dataTitle="' + (books && books[0] ? String(books[0].title || '(empty)').slice(0, 24) : '(none)') + '"');
       if (!books || !books.length) return false;
       const { cont, recentlyAdded } = PBLogic.homeFeeds(books, bookEntries);
       renderCarousel($('clRow'), cont);
