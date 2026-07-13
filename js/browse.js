@@ -30,6 +30,22 @@ window.Browse = (() => {
 
   const spinnerHTML = '<div class="center"><div class="spinner"></div></div>';
 
+  // First-load placeholder: for a list view (Authors/Books) show shimmering
+  // skeleton rows so the list's SHAPE is visible while it fetches, instead of a
+  // spinner; the file/details view keeps the spinner (short, non-list). Pure
+  // bundled markup, replaced by buildFor() once data arrives.
+  function skelRows(n) {
+    let h = '';
+    for (let i = 0; i < (n || 9); i++) {
+      h += '<div class="book skrow" aria-hidden="true"><div class="skel skart"></div>'
+        + '<div class="skmeta"><div class="skel skline"></div><div class="skel skline short"></div></div></div>';
+    }
+    return h;
+  }
+  function placeholderFor(desc) {
+    return desc.v === 'files' ? spinnerHTML : `<div class="browselist">${skelRows(9)}</div>`;
+  }
+
   function showPage(key) {
     for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
   }
@@ -75,7 +91,7 @@ window.Browse = (() => {
     // spinner page covers the fetch so the previous page isn't left frozen.
     const page = document.createElement('div');
     page.className = 'browsepage';
-    page.innerHTML = spinnerHTML;
+    page.innerHTML = placeholderFor(desc);
     o.mount.appendChild(page);
     pageCache.set(key, { el: page, order: ++orderSeq });
     showPage(key);                    // show this fresh page, hide the rest

@@ -51,6 +51,10 @@ final class WebUpdater {
 
     private static final Pattern REF = Pattern.compile("(?:src|href)\\s*=\\s*\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
     private static final Pattern NATIVE_VER = Pattern.compile("\"nativeVersion\"\\s*:\\s*(\\d+)");
+    // The MINIMUM native version the published web build requires. The leading
+    // quote in each pattern keeps the keys distinct: "nativeVersion" cannot match
+    // inside "minNativeVersion".
+    private static final Pattern MIN_NATIVE_VER = Pattern.compile("\"minNativeVersion\"\\s*:\\s*(\\d+)");
 
     private static volatile boolean running = false;
 
@@ -74,9 +78,24 @@ final class WebUpdater {
         String remoteBuild = WebFiles.parseBuild(meta);
         if (remoteBuild == null) return;
 
-        // Track B: native shell update (rare) — only when the published nativeVersion
-        // is higher than what this APK was built with.
+        // Track B: native shell update. Two tiers, distinguished so version-number
+        // ticks never nag (see build.json):
+        //   HARD floor — the published web build REQUIRES a newer native shell than
+        //     this APK provides (minNativeVersion > baked). We must NOT auto-swap to
+        //     that web build (it wouldn't run against this shell), so we skip Track A
+        //     entirely and show an insistent, re-prompting "update required" dialog.
+        //     A freshly built APK satisfies its own floor, so this only ever fires on
+        //     an OLD APK meeting a later, floor-raising web build.
+        //   SOFT offer — a newer native shell merely EXISTS (nativeVersion > baked);
+        //     the current web still runs fine, so we offer a dismissible one-tap
+        //     update and continue serving/staging web as normal.
+        int remoteMinNative = parseMinNativeVersion(meta);
         int remoteNative = parseNativeVersion(meta);
+        if (remoteMinNative > nativeVersion) {
+            Log.i(TAG, "web build requires native " + remoteMinNative + " > baked " + nativeVersion + " — update required");
+            act.runOnUiThread(() -> ApkUpdater.promptRequired(act, remoteNative));
+            return;   // do not stage/apply a web build this shell can't run
+        }
         if (remoteNative > nativeVersion) {
             act.runOnUiThread(() -> ApkUpdater.prompt(act, remoteNative));
         }
@@ -157,6 +176,14 @@ final class WebUpdater {
     private static int parseNativeVersion(String json) {
         if (json == null) return 0;
         Matcher m = NATIVE_VER.matcher(json);
+        return m.find() ? Integer.parseInt(m.group(1)) : 0;
+    }
+
+    // Absent field ⇒ 0 (no floor), so older build.json files never trigger the
+    // required-update path.
+    private static int parseMinNativeVersion(String json) {
+        if (json == null) return 0;
+        Matcher m = MIN_NATIVE_VER.matcher(json);
         return m.find() ? Integer.parseInt(m.group(1)) : 0;
     }
 

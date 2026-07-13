@@ -886,7 +886,10 @@
     // the app never shows a blank/spinner-forever screen while (or if) the network
     // comes up. loadHomeData() overwrites this with fresh data once Plex answers.
     const painted = await renderCachedHome();
-    if (!painted) { $('clRow').innerHTML = '<div class="center"><div class="spinner"></div></div>'; $('raRow').innerHTML = ''; }
+    // No cached library yet (first-ever launch / cleared cache): paint SKELETON
+    // carousels so the home screen shows its real structure immediately while
+    // Plex connects, instead of a lone spinner. loadHomeData overwrites them.
+    if (!painted) { renderSkeletonCarousel($('clRow'), 4); renderSkeletonCarousel($('raRow'), 6); }
     status(painted ? '' : 'Connecting to your Plex server…');
     try {
       await Plex.connect();
@@ -1003,6 +1006,19 @@
     if (!books.length) { row.innerHTML = '<div class="empty carousel-empty">Nothing here yet.</div>'; return; }
     for (const b of books) row.appendChild(renderTile(b));
   }
+
+  // Paint the SHAPE of a carousel (shimmering tile placeholders) before any data
+  // exists — a cold or offline first load then shows the home layout instead of a
+  // spinner. Purely bundled CSS/markup (no network); replaced on first real render.
+  function skeletonTiles(n) {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      h += '<div class="tile sktile" aria-hidden="true">'
+        + '<div class="skel skart"></div><div class="skel skline"></div><div class="skel skline short"></div></div>';
+    }
+    return h;
+  }
+  function renderSkeletonCarousel(row, n) { if (row) row.innerHTML = skeletonTiles(n || 5); }
 
   // 1/3-width tile, stacked vertically: art, title, author, resume·peer line,
   // progress bar. data-book keeps resume/peer numbers live via the presence tick.
@@ -2482,12 +2498,17 @@
     }).catch(() => {});
   }
 
-  // ---- build-coherence guard ------------------------------------------------
-  // The mixed-build failure: a STALE index.html (served by an old worker) omits
-  // the <script> tags for newer modules, so window.Store/Net/SyncQueue are
-  // undefined even though other JS loaded fresh. Versioned asset URLs prevent NEW
-  // mixed builds; this guard catches a shell that's ALREADY stale and routes the
-  // user to a Hard Reset instead of silently running a broken half-app.
+  // ---- shell-integrity breadcrumb (NOT a boot gate) -------------------------
+  // Versioned asset URLs (?v=<BUILD>) + the atomic versioned SW cache make a
+  // mixed HTML/JS shell impossible by construction, so the old blocking "update
+  // mismatch" screen only ever FALSE-fired — and once (pre-.6, when window.Store
+  // was always undefined) it trapped devices in an infinite Hard-Reset loop. A
+  // mere build-number tick is never a reason to interrupt the user. So we no
+  // longer gate boot on this: we just log any oddity and continue. The one
+  // genuine "this build needs a newer app" case — a web build that requires a
+  // native capability an OLD APK lacks — is enforced natively by WebUpdater's
+  // `minNativeVersion` floor (build.json), never here. Hard Reset stays reachable
+  // from diagnostics (window.PBHardReset) for manual recovery.
   function htmlBuild() { try { const m = document.querySelector('meta[name="tomeroam-build"]'); return m && m.content || null; } catch { return null; } }
   function missingGlobals() {
     const m = [];
@@ -2496,41 +2517,12 @@
     if (!window.SyncQueue) m.push('SyncQueue');
     return m;
   }
-  function checkBuildIntegrity() {
+  function logShellIntegrity() {
     const missing = missingGlobals();
     const hb = htmlBuild(), jb = window.PB_BUILD || null;
-    const skew = hb && jb && hb !== jb;     // HTML file build != loaded JS build
-    if (!missing.length && !skew) return true;
-    if (window.PBDebug) PBDebug.log('BUILD', `MISMATCH missing=[${missing.join(',')}] html=${hb} js=${jb}`);
-    showMismatchScreen({ missing, hb, jb });
-    return false;
-  }
-
-  // Full-screen recovery UI, injected + inline-styled so it renders even if the
-  // cached CSS or index.html body is stale/incomplete.
-  function showMismatchScreen({ missing, hb, jb }) {
-    if (document.getElementById('pb-mismatch')) return;
-    const el = document.createElement('div');
-    el.id = 'pb-mismatch';
-    el.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#14171c;color:#e7ecf3;'
-      + 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;'
-      + 'text-align:center;padding:28px;font:15px/1.5 system-ui,-apple-system,sans-serif';
-    const btn = 'border:0;border-radius:10px;padding:12px 20px;font-size:15px;font-weight:600';
-    el.innerHTML =
-      '<div style="font-size:40px">🧩</div>'
-      + '<div style="font-size:19px;font-weight:700">App update mismatch</div>'
-      + '<div style="max-width:420px;opacity:.85">The cached app shell is incomplete or stale. '
-      + 'Hard Reset refreshes the local app cache (your sign-in and saved data are kept). '
-      + 'Or continue anyway — the app still runs, just without offline features.</div>'
-      + '<button id="pb-hardreset" style="margin-top:6px;background:#3a7bd5;color:#fff;' + btn + '">Hard Reset / Reload App</button>'
-      + '<button id="pb-continue" style="background:#2a2f3a;color:#e7ecf3;' + btn + '">Continue anyway</button>'
-      + '<button id="pb-openlog" style="background:transparent;color:#8fb7ff;border:0;font-size:14px;text-decoration:underline">Open log</button>'
-      + '<div style="margin-top:10px;font-size:12px;opacity:.5">missing: ' + (missing.join(', ') || 'none')
-      + ' · html ' + (hb || '?') + ' · js ' + (jb || '?') + '</div>';
-    document.body.appendChild(el);
-    el.querySelector('#pb-hardreset').addEventListener('click', hardReset);
-    el.querySelector('#pb-continue').addEventListener('click', () => { el.remove(); try { finishInit(); } catch (e) { if (window.PBDebug) PBDebug.log('BUILD', 'continue-anyway failed ' + (e && e.message)); } });
-    el.querySelector('#pb-openlog').addEventListener('click', () => { if (window.PBDebug) PBDebug.openDiag ? PBDebug.openDiag() : PBDebug.open(); });
+    if ((missing.length || (hb && jb && hb !== jb)) && window.PBDebug) {
+      PBDebug.log('BUILD', `shell note (continuing) missing=[${missing.join(',')}] html=${hb} js=${jb}`);
+    }
   }
 
   // Unregister every service worker for this origin + delete all Cache Storage
@@ -2590,14 +2582,16 @@
     // Register/update the service worker FIRST — a mismatched shell needs the SW
     // to fetch the coherent build, and controllerchange then reloads onto it.
     initServiceWorker();
-    // Build-coherence check: if the shell looks stale/mixed, show the recovery
-    // screen — but it's ESCAPABLE (Continue anyway / Open log), never a trap.
-    if (!checkBuildIntegrity()) return;
+    // Shell integrity is a breadcrumb now, not a gate — log any oddity and boot
+    // anyway (versioned assets make a real mixed build impossible; the "needs a
+    // newer app" case is enforced natively via minNativeVersion). Never blocks.
+    logShellIntegrity();
     finishInit();
   }
 
-  // Everything after the coherence gate. Split out so the mismatch screen's
-  // "Continue anyway" can run it too (degraded — offline guards simply no-op).
+  // Everything after SW registration + the integrity breadcrumb. Kept as its own
+  // function (harmless split; the offline-module guards below simply no-op if a
+  // module failed to load).
   function finishInit() {
     bind();
     // Offline resilience wiring: ask for persistent storage, bring up the pending

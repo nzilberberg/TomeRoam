@@ -41,6 +41,8 @@ final class ApkUpdater {
 
     private ApkUpdater() {}
 
+    // SOFT: a newer native shell merely exists; the current app still runs fine.
+    // Dismissible, shown at most once per process so web-only updates never nag.
     static void prompt(final Activity act, final int remoteNative) {
         if (prompted || act.isFinishing()) return;
         prompted = true;
@@ -49,6 +51,25 @@ final class ApkUpdater {
             .setMessage("A new version of TomeRoam is ready to install. Update now?")
             .setPositiveButton("Update", (d, w) -> ensurePermissionThenInstall(act))
             .setNegativeButton("Later", null)
+            .show();
+    }
+
+    // HARD: the latest web build requires a newer native shell than this APK has,
+    // so the app is pinned to its current (older) web build until updated. More
+    // insistent than the soft offer — it bypasses the once-per-process guard (this
+    // matters, so re-prompt each launch) and can't be dismissed by tapping outside.
+    // "Not now" still lets them keep using the current version (we never bricked it
+    // — the incompatible web build was simply not applied).
+    static void promptRequired(final Activity act, final int remoteNative) {
+        if (act.isFinishing()) return;
+        prompted = true;
+        new AlertDialog.Builder(act)
+            .setTitle("Update required")
+            .setMessage("The latest version of TomeRoam needs a newer app than the one installed. "
+                + "Update the app to continue getting the newest version.")
+            .setCancelable(false)
+            .setPositiveButton("Update", (d, w) -> ensurePermissionThenInstall(act))
+            .setNegativeButton("Not now", null)
             .show();
     }
 
