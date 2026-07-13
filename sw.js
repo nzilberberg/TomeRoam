@@ -240,22 +240,13 @@ async function serveDownloadedAudio(req, track) {
   const size = blob.size, type = blob.type || 'audio/mpeg';
   const range = req.headers.get('range');
   if (range) {
-    const m = /bytes=(\d*)-(\d*)/.exec(range) || [];
-    let start, end;
-    if (!m[1] && m[2]) {
-      // Suffix range "bytes=-N" = the LAST N bytes (MP4/M4B tail-metadata reads
-      // use these). Serving the head instead corrupts decoding silently.
-      const n = parseInt(m[2], 10) || 0;
-      start = Math.max(0, size - n); end = size - 1;
-    } else {
-      start = m[1] ? parseInt(m[1], 10) : 0;
-      end = m[2] ? parseInt(m[2], 10) : size - 1;
-    }
-    if (isNaN(start)) start = 0;
-    if (isNaN(end) || end >= size) end = size - 1;
-    if (start > end || start >= size) {
+    // Range math lives in SWKit.parseRange (unit-tested) — incl. the suffix
+    // "bytes=-N" case (M4B tail reads) that was once served as the file head.
+    const r = SWKit.parseRange(range, size);
+    if (r.status === 416) {
       return new Response('', { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
     }
+    const { start, end } = r;
     return new Response(blob.slice(start, end + 1), {
       status: 206,
       headers: {
@@ -268,14 +259,6 @@ async function serveDownloadedAudio(req, track) {
     status: 200,
     headers: { 'Content-Type': type, 'Content-Length': String(size), 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' },
   });
-}
-
-function isImageRequest(req, url) {
-  if (req.destination === 'image') return true;
-  if (/\.(png|jpe?g|gif|webp|svg|avif)(\?|$)/i.test(url.pathname)) return true;
-  if (/\/photo\/:\/transcode/.test(url.pathname)) return true;   // Plex cover transcode
-  if (/\/(thumb|art|poster|composite)\b/i.test(url.pathname)) return true;
-  return false;
 }
 
 async function shellFirst(req) {
