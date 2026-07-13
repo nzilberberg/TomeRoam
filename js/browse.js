@@ -5,7 +5,7 @@
 // onPlay/onPlayFile) for actions. Authors is the light path (no time work);
 // Books & Files rows carry data-book / data-track so the host's presence tick
 // keeps resume/peer numbers live.
-window.Browse = (() => {
+const Browse = (() => {
   let o = {};                     // { mount, fmt, onPlay, onPlayFile, onOpenAuthor, onOpenFiles, onBack, getResumeEntry, getChapterPct, bindDlBtn, onRender }
   let authorsCache = null;        // authors list is stable within a session (books are cached in plex.js)
 
@@ -421,5 +421,12 @@ window.Browse = (() => {
     return idx;
   }
 
-  return { init, reset, render, clearCache, patchRows, bookSig };
+  return { init, reset, render, clearCache, patchRows, bookSig,
+    // internals exposed for unit tests only (no runtime behaviour change)
+    _test: { keepCover, authorSig, bookSig, bookRow, authorRow } };
 })();
+
+// Expose on window (top-level `const Browse` is a lexical global, not
+// window.Browse); app.js reads `window.Browse`.
+if (typeof window !== 'undefined') window.Browse = Browse;
+if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = Browse;
