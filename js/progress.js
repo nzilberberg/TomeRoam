@@ -20,18 +20,21 @@ const Progress = (() => {
   const MAX_JSON = 7000;             // keep the published summary comfortably under Plex's limit
   const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine' };
 
-  let boardKey = null, seed = null;
+  let seed = null;
   let mine = load();                  // our OWN authored records (persisted, survives offline)
   let merged = { books: {} };         // merged view across mine + peers (the app's source of truth)
   let peerBoards = [];
   let pubTimer = null, pollTimer = null, active = false, dirty = false;
+  let prunedSession = false;          // one-shot stale-board sweep per app launch
   let cbMerged = () => {};
 
   const now = () => (typeof Plex !== 'undefined' && Plex.serverNow ? Plex.serverNow() : Date.now());
   const myId = () => (typeof Plex !== 'undefined' && Plex.getClientId ? Plex.getClientId() : 'me');
-  const shortId = () => String(myId() || 'dev').replace(/[^a-z0-9]/gi, '').slice(-8);
   const myName = () => (typeof Presence !== 'undefined' && Presence.name ? Presence.name() : 'device');
   const dbg = (t, m) => { if (typeof PBDebug !== 'undefined') PBDebug.log(t, m); };
+  // Our own hidden-playlist board (shared primitive in plex.js). Guarded for the
+  // Node unit tests, which load this module without plex.js.
+  const board = (typeof Plex !== 'undefined' && Plex.makeBoard) ? Plex.makeBoard(PREFIX, LS.board) : null;
 
   function load() {
     try { const o = JSON.parse(localStorage.getItem(LS.mine) || 'null'); if (o && o.books) return o; } catch {}
@@ -66,24 +69,12 @@ const Progress = (() => {
 
   // ---- publish (own board only, debounced) ----------------------------------
   function schedulePublish() { dirty = true; if (pubTimer || !active) return; pubTimer = setTimeout(() => { pubTimer = null; publish(); }, PUB_DEBOUNCE); }
-  async function ensureBoard() {
-    if (boardKey) return boardKey;
-    const saved = localStorage.getItem(LS.board);
-    if (saved) { boardKey = saved; return boardKey; }
-    if (!seed) return null;
-    try { boardKey = await Plex.createPlaylist(PREFIX + shortId(), seed); if (boardKey) localStorage.setItem(LS.board, boardKey); }
-    catch (e) { dbg('PROG', 'board create failed'); }
-    return boardKey;
-  }
   async function publish() {
-    if (!dirty) return;
-    const rk = await ensureBoard();
-    if (!rk) return;
-    try {
-      const st = await Plex.setPlaylistSummary(rk, serialize());
-      if (st >= 200 && st < 300) dirty = false;
-      else if (st === 404) { boardKey = null; localStorage.removeItem(LS.board); }   // gone → recreate; transient → keep board, retry (no churn)
-    } catch (e) { dbg('PROG', 'publish failed ' + (e && e.message)); }
+    if (!dirty || !board) return;
+    // board.publish handles ensure/create, and 404 → recreate-next-time vs
+    // transient → keep-board (no churn). 2xx = our records are on the server.
+    const status = await board.publish(serialize(), () => seed);
+    if (status >= 200 && status < 300) dirty = false;
   }
   function packAll() {
     const o = { v: 1, id: myId(), name: myName(), books: {} };
@@ -111,11 +102,40 @@ const Progress = (() => {
   // ---- read + merge ---------------------------------------------------------
   async function poll() {
     try {
-      const boards = await Plex.listBoards(PREFIX);
-      peerBoards = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } })
-        .filter((p) => p && p.id && p.id !== myId());
+      const boards = await board.readAll();
+      const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
+      peerBoards = parsed.filter((p) => p && p.id && p.id !== myId());
       rebuild(); cbMerged();
+      // Once per launch, sweep boards from long-retired devices — presence prunes
+      // its pb_dev_ ghosts, but pb_prog_ boards used to live forever, inflating
+      // every read and pinning stale LWW records into every merge. A board whose
+      // NEWEST record is months old is dead weight; a live device just recreates
+      // + republishes its board from local `mine` on its next record.
+      if (!prunedSession) { prunedSession = true; pruneStaleBoards(boards, parsed); }
     } catch (e) { /* transient — next tick retries */ }
+  }
+
+  const STALE_BOARD_MS = 60 * 24 * 3600 * 1000;   // no record newer than ~2 months → prune
+  function newestTs(p) {
+    let ts = 0;
+    for (const bk in ((p && p.books) || {})) {
+      const b = p.books[bk];
+      if (b.bk && (b.bk.ts || 0) > ts) ts = b.bk.ts;
+      for (const tr in (b.tr || {})) { const t = (b.tr[tr] || [])[2] || 0; if (t > ts) ts = t; }
+    }
+    return ts;
+  }
+  async function pruneStaleBoards(boards, parsed) {
+    for (let i = 0; i < boards.length; i++) {
+      const b = boards[i], p = parsed[i];
+      if (!b || b.ratingKey == null) continue;
+      if (String(b.ratingKey) === String(board.key())) continue;   // never our own (by key)
+      if (p && p.id && p.id === myId()) continue;                  // never our own (by id)
+      const dead = !p || now() - newestTs(p) > STALE_BOARD_MS;
+      if (!dead) continue;
+      dbg('PROG', `pruning stale board ${b.ratingKey} (${(p && p.name) || 'unparseable'})`);
+      try { await Plex.deletePlaylist(b.ratingKey); } catch { /* retry next launch */ }
+    }
   }
   function rebuild() {
     const m = { books: {} };

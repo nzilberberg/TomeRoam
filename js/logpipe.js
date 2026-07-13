@@ -33,8 +33,11 @@ const LogPipe = (() => {
     setTimeout(() => t.classList.remove('show'), 2800);
   };
 
-  let timer = null, boardKey = null, busy = false;
+  let timer = null, busy = false;
   let lastSent = 0, lastBeat = 0;
+  // Our log board (shared hidden-playlist primitive in plex.js). Guarded for
+  // Node, where this module can load without plex.js.
+  const board = (typeof Plex !== 'undefined' && Plex.makeBoard) ? Plex.makeBoard(LOG_PREFIX, LS.board) : null;
 
   const isOn = () => { try { return localStorage.getItem(ON_KEY) === '1'; } catch { return false; } };
   function setOn(v) {
@@ -60,17 +63,6 @@ const LogPipe = (() => {
     return tracks[0].ratingKey;
   }
 
-  async function ensureBoard() {
-    if (boardKey) return boardKey;
-    const saved = localStorage.getItem(LS.board);
-    if (saved) { boardKey = saved; return boardKey; }
-    const seed = await findSeed();
-    if (!seed) return null;
-    boardKey = await Plex.createPlaylist(LOG_PREFIX + shortId(), seed);
-    if (boardKey) { localStorage.setItem(LS.board, boardKey); dbg('PIPE', 'log board created'); }
-    return boardKey;
-  }
-
   async function tick() {
     if (busy || !isOn()) return;
     busy = true;
@@ -83,18 +75,18 @@ const LogPipe = (() => {
   // the reader dedupes) + a fresh snapshot. Skipped entirely when nothing new
   // and the heartbeat isn't due, so an idle app writes at most every 30s.
   async function flush(force) {
+    if (!board) return;
     const cur = PBDebug.lastSeq();
     const beat = Date.now() - lastBeat > BEAT_MS;
     if (!force && cur === lastSent && !beat) return;
-    const rk = await ensureBoard();
-    if (!rk) return;
     const head = { id: shortId(), name: Presence.name(), build: window.PB_BUILD, at: Date.now(), seq: cur, snap: PBDebug.snapshot() };
     const budget = MAX_PAYLOAD - JSON.stringify(head).length - 20;
     const all = PBDebug.getSince(0).map((l) => `${l.s}|${l.text}`);
     const { lines } = PBLogic.fitLines(all, budget);
-    const st = await Plex.setPlaylistSummary(rk, JSON.stringify({ ...head, lines }));
-    if (st >= 200 && st < 300) { lastSent = cur; lastBeat = Date.now(); }
-    else if (st === 404) { boardKey = null; localStorage.removeItem(LS.board); }   // board really gone → recreate next tick (transient failures keep it)
+    // board.publish handles create-once + 404 → recreate-next-tick (transient
+    // failures keep the board — no churn). findSeed only runs when creating.
+    const status = await board.publish(JSON.stringify({ ...head, lines }), findSeed);
+    if (status >= 200 && status < 300) { lastSent = cur; lastBeat = Date.now(); }
   }
 
   // ---- remote commands -------------------------------------------------------

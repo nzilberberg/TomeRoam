@@ -152,12 +152,17 @@
   //   1) fully download the CURRENT file first (closes that tail hole), then
   //   2) prefetch the nearest upcoming file(s) within the budget (which excludes the
   //      current file) + the total OOM cap. Played files are evicted in pumpBank().
+  // A track whose bytes are ALREADY on disk (a pinned download or the persisted
+  // buffer) never needs banking: startTrack plays it via the SW range path with
+  // zero network, so fetching it again from Plex just burns bandwidth (post-
+  // restart this used to re-download the very chapter sitting in IndexedDB).
+  const locallyStored = (i) => !!(window.Downloads && Downloads.trackLocal && ctx.tracks[i] && Downloads.trackLocal(ctx.tracks[i].ratingKey));
   function nextToBank() {
     if (!ctx) return null;
     const budget = bankBudgetBytes();
-    if (!banks.has(ctx.idx) && !skipBank.has(ctx.idx) && fitsTotal(estBytes(ctx.tracks[ctx.idx]))) return ctx.idx;   // 1) current, whole
+    if (!banks.has(ctx.idx) && !skipBank.has(ctx.idx) && !locallyStored(ctx.idx) && fitsTotal(estBytes(ctx.tracks[ctx.idx]))) return ctx.idx;   // 1) current, whole
     for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {   // 2) forward window
-      if (banks.has(i) || skipBank.has(i)) continue;
+      if (banks.has(i) || skipBank.has(i) || locallyStored(i)) continue;
       const est = estBytes(ctx.tracks[i]);
       return (lookAheadUsed() + est <= budget && fitsTotal(est)) ? i : null;   // nearest unbanked upcoming file, if it fits
     }
@@ -288,37 +293,31 @@
     if (!t || !t.partKey) return;
     const ctl = new AbortController(); bankCtl = ctl; bankingIdx = idx;
     try {
-      const res = await fetch(Plex.streamUrl(t.partKey), { signal: ctl.signal });
-      if (!res.ok || !res.body) return;
-      const total = +(res.headers.get('Content-Length') || 0);
-      if (total > MAX_TRACK_BANK_BYTES) {                 // too big to hold in memory → stream it, don't bank
-        skipBank.add(idx); try { await res.body.cancel(); } catch {}
-        return;
-      }
-      const reader = res.body.getReader();
-      const chunks = []; let received = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        received += value.length;
-        if (received > MAX_TRACK_BANK_BYTES) {             // missing/short Content-Length but it's huge → bail
-          skipBank.add(idx); try { await reader.cancel(); } catch {}
-          if (ctx && ctx.idx === idx) { bankPct = 0; paintMeter(); }   // won't bank → native buffer drives it
-          return;
-        }
-        chunks.push(value);
-        if (total && ctx && ctx.idx === idx) { bankPct = (received / total) * 100; paintMeter(); }   // meter tracks the CURRENT track only
-      }
-      const blob = new Blob(chunks, { type: res.headers.get('Content-Type') || 'audio/mpeg' });
-      banks.set(idx, { url: URL.createObjectURL(blob), bytes: received });
+      // The one shared streaming byte-loop (downloads use it too). OVERSIZE —
+      // whether from Content-Length up front or discovered mid-stream — means
+      // "too big to hold in memory": stream it live instead, don't keep retrying.
+      const { blob, bytes } = await Downloads.fetchAudioBlob(Plex.streamUrl(t.partKey), {
+        signal: ctl.signal,
+        maxBytes: MAX_TRACK_BANK_BYTES,
+        onProgress: (received, total) => {
+          if (total && ctx && ctx.idx === idx) { bankPct = (received / total) * 100; paintMeter(); }   // meter tracks the CURRENT track only
+        },
+      });
+      banks.set(idx, { url: URL.createObjectURL(blob), bytes });
       // Durable write-through: whatever banking chose to buffer also persists so it
       // survives a restart + plays offline (gray line). Banking SELECTION is
       // unchanged; this just saves the bytes it already fetched. Fire-and-forget.
       if (window.Downloads && Downloads.bufferTrack) Downloads.bufferTrack(bankBook, t.ratingKey, blob);
       if (ctx && ctx.idx === idx) paintMeter();   // banks.has(idx) now true → meterPct() = 100
       updateFileRows();                            // this chapter's blue line → full (downloaded)
-      if (window.PBDebug) PBDebug.log('BANK_DONE', `idx=${idx} bytes=${received} used=${usedBytes()}`);
-    } catch (e) { /* aborted, CORS, or network — skip this one */ }
+      if (window.PBDebug) PBDebug.log('BANK_DONE', `idx=${idx} bytes=${bytes} used=${usedBytes()}`);
+    } catch (e) {
+      if (e && e.code === 'OVERSIZE') {
+        skipBank.add(idx);
+        if (ctx && ctx.idx === idx) { bankPct = 0; paintMeter(); }   // won't bank → native buffer drives the meter
+      }
+      /* else: aborted, CORS, or network — skip this one */
+    }
     finally { if (bankCtl === ctl) { bankCtl = null; bankingIdx = -1; if (!ctl.signal.aborted) pumpBank(); } }   // chain the next wanted track
   }
 
@@ -533,6 +532,13 @@
       // Prefer the saved dataset.sl (survives display:none, where scrollLeft reads 0).
       s.forEach((el, i) => { if (c[i]) c[i].scrollLeft = (+el.dataset.sl || el.scrollLeft || 0); });
     }
+    // The fixed full-viewport pane both snapshot builders mount into.
+    function ghostWrap() {
+      const wrap = document.createElement('div');
+      wrap.className = 'nav-ghost';
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';
+      return wrap;
+    }
     function ghostApp() {
       const clone = document.querySelector('.app').cloneNode(true);
       // #library's topbar clearance is id-based CSS (#library{padding-top:46px}) and
@@ -546,9 +552,7 @@
       freezeArt(clone);
       clone.style.margin = '0 auto';                                  // keep .app's centering (was '0' → left-aligned vs the real page)
       clone.style.transform = 'translateY(' + (-(window.scrollY || 0)) + 'px)';
-      const wrap = document.createElement('div');
-      wrap.className = 'nav-ghost';
-      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';
+      const wrap = ghostWrap();
       wrap.appendChild(clone);
       document.body.appendChild(wrap);
       copyScroll(document.querySelector('.app'), clone);   // match carousel scroll to the live page
@@ -596,8 +600,7 @@
       freezeArt(clone);
       const lib = document.createElement('div'); lib.style.paddingTop = '46px'; lib.appendChild(clone);
       const box = document.createElement('div'); box.className = 'app'; box.style.margin = '0 auto'; box.appendChild(lib);
-      const wrap = document.createElement('div'); wrap.className = 'nav-ghost';
-      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';
+      const wrap = ghostWrap();
       wrap.appendChild(box); document.body.appendChild(wrap);
       copyScroll($('home'), clone);   // match carousel scroll so the snapshot shows the same tiles as the live home
       return wrap;
@@ -883,8 +886,9 @@
   }
 
   // Bring up multi-device coordination + durable progress + the render tick.
-  // Idempotent: enterApp may reach this via either the online or the offline
-  // (catch) path, and reconnects re-enter enterApp; init only the first time.
+  // Idempotent: enterApp reaches this via either the online or the offline
+  // (catch) path; init only the first time. (Reconnects do NOT re-enter enterApp
+  // — Net's reconnect pass calls loadHomeData directly.)
   let coordUp = false;
   function startCoordination() {
     if (!coordUp) {
@@ -1020,7 +1024,7 @@
     if (mine) cands.push({ track: mine.track, pos: mine.pos || 0, ts: mine.ts || 0 });
     const p = peerFor(book);         // a live peer's pos is EXTRAPOLATED to now
     if (p) cands.push({ track: p.track, pos: Presence.livePos(p), ts: recency(p) });
-    const best = PBLogic.pickResume(cands);
+    let best = PBLogic.pickResume(cands);   // `let`: the live-playback branch below REPLACES it (a const here threw on every same-book tile tap)
     // If we're actively PLAYING this book, the live playhead is the freshest source,
     // full stop — use it stamped NOW. (The old `ctx.updatedAt > best.ts` failed on a
     // TIE: updatedAt equals the last recorded ts from the same play session, so a
@@ -1030,11 +1034,6 @@
       best = { track: ctx.tracks[ctx.idx].ratingKey, pos: audio.currentTime * 1000, ts: Plex.serverNow() };
     }
     return best;
-  }
-
-  function freshestResumeMs(book) {
-    if (ctx && String(ctx.book) === String(book) && !audio.paused && audio.currentTime) return audio.currentTime * 1000;
-    return bestSource(book, bookEntries[book]).pos;
   }
 
   const cssEsc = (v) => (window.CSS && CSS.escape) ? CSS.escape(String(v)) : String(v);
@@ -1107,9 +1106,14 @@
     const sub = row.querySelector('.fsub'); if (sub) { sub.textContent = line.text; sub.className = 'fsub' + (line.cls ? ' ' + line.cls : ''); }
   }
 
-  // Update the book progress line (+ time-based bar) on every visible tile/row.
-  function updateBookLines() {
-    document.querySelectorAll('.tile[data-book], .book[data-book]').forEach((el) => {
+  // Update the book progress line (+ time-based bar) on tiles/rows — every one,
+  // or (from the ~4 Hz timeupdate path) just the one book's, so a long Books list
+  // isn't recomputed four times a second while playing.
+  function updateBookLines(book) {
+    const sel = book != null
+      ? `.tile[data-book="${cssEsc(book)}"], .book[data-book="${cssEsc(book)}"]`
+      : '.tile[data-book], .book[data-book]';
+    document.querySelectorAll(sel).forEach((el) => {
       const line = bookLine(el.dataset.book);
       const pl = el.querySelector('.pline');
       if (pl) {
@@ -1199,10 +1203,10 @@
     const pos = dur ? Math.min(dur, Presence.livePos(p) / 1000) : Presence.livePos(p) / 1000;
     const pct = dur ? Math.min(100, (pos / dur) * 100) : 0;
     $('pCur').textContent = fmt(pos);
-    const s = $('pSeek'); if (s && !s.dragging) { s.value = pct * 10; s.style.setProperty('--played', pct + '%'); }
+    paintSeek($('pSeek'), pct);
     if (npOpen) {
       $('npCur').textContent = fmt(pos);
-      const ns = $('npSeek'); if (ns && !ns.dragging) { ns.value = pct * 10; ns.style.setProperty('--played', pct + '%'); }
+      paintSeek($('npSeek'), pct);
     }
   }
   // Scrubbed the green (peer-mirrored) bar → take OWNERSHIP: a fresh grab claim makes
@@ -1252,45 +1256,41 @@
     cacheTracks(book, t);
     return t;
   }
-  async function playBook(entry, alb) {
+  // ONE begin-playback path for both entries (they used to be near-identical
+  // copies, and the .75 regression came from exactly that drift):
+  //   * playBook   — book-level (tile/cover ▶): the resume point is ARBITRATED
+  //     by bestSource, computed BEFORE recording our own outgoing spot (recording
+  //     stamps our possibly-behind position with a FRESH ts, which would then
+  //     beat a faster peer on a same-book takeover → you'd resume behind it).
+  //   * playBookAt — an EXPLICIT track/offset (files view): nothing to arbitrate.
+  async function beginPlayback(book, alb, resolveTarget) {
     try {
-      const tracks = await tracksForBook(entry.book);
+      const tracks = await tracksForBook(book);
       if (!tracks.length) return toast('No playable files for this book.');
-      // Resume from the MOST-RECENTLY-updated source (cold value, a live peer
-      // extrapolated to now, or our own paused spot) — captures rewinds too.
-      // Compute this BEFORE recording our own outgoing spot: recording stamps our
-      // (possibly-behind) position with a FRESH ts, which would then beat a faster
-      // peer on a same-book takeover → you'd resume behind it. That was the .75
-      // regression (playBook started recording unconditionally, even same-book).
-      const best = bestSource(entry.book, entry);
-      if (ctx) { recordProgress(); if (String(ctx.book) !== String(entry.book)) writeProgress('paused'); }   // capture the outgoing chapter now that `best` is fixed
-      const resTrack = best.track || entry.track, resPos = best.pos || 0;
-      let idx = tracks.findIndex((t) => String(t.ratingKey) === String(resTrack));
+      const { track, posMs } = resolveTarget(tracks);
+      if (ctx) { recordProgress(); if (String(ctx.book) !== String(book)) writeProgress('paused'); }   // capture the outgoing chapter (AFTER the target is fixed)
+      let idx = tracks.findIndex((t) => String(t.ratingKey) === String(track));
       if (idx < 0) idx = 0;
-      ctx = { album: alb || { title: `Book #${entry.book}`, parentTitle: '' }, tracks, idx, book: entry.book, updatedAt: Plex.serverNow(), coverUrl: alb ? Plex.artUrl(alb.thumb) : null };
-      startTrack(idx, resPos / 1000);
+      ctx = { album: alb || { title: `Book #${book}`, parentTitle: '' }, tracks, idx, book, updatedAt: Plex.serverNow(), coverUrl: alb && alb.thumb ? Plex.artUrl(alb.thumb) : null };
+      startTrack(idx, (posMs || 0) / 1000);
       hideToast();   // playback has started — drop any "Loading…" immediately (it used to linger ~3s)
       updatePlayerUI();
       setMediaSession();
       // Announce to the ecosystem that this device now owns this book.
-      Presence.claimPlaying(entry.book, tracks[idx].ratingKey, resPos, tracks[idx].ratingKey);
+      Presence.claimPlaying(book, tracks[idx].ratingKey, posMs || 0, tracks[idx].ratingKey);
     } catch (e) { toast(e.message || 'Could not start playback'); }
   }
-
+  function playBook(entry, alb) {
+    return beginPlayback(entry.book, alb, () => {
+      // Freshest of: cold value, durable record, our own spot, a live peer
+      // extrapolated to now — captures rewinds too.
+      const best = bestSource(entry.book, entry);
+      return { track: best.track || entry.track, posMs: best.pos || 0 };
+    });
+  }
   // Play a book starting at a SPECIFIC track/offset (from the files view).
-  async function playBookAt(bookRk, meta, trackRk, startMs) {
-    try {
-      if (ctx) { recordProgress(); if (String(ctx.book) !== String(bookRk)) writeProgress('paused'); }   // capture the outgoing chapter's spot before we switch away
-      const tracks = await tracksForBook(bookRk);
-      if (!tracks.length) return toast('No playable files for this book.');
-      let idx = tracks.findIndex((t) => String(t.ratingKey) === String(trackRk));
-      if (idx < 0) idx = 0;
-      ctx = { album: meta || { title: `Book #${bookRk}`, parentTitle: '' }, tracks, idx, book: bookRk, updatedAt: Plex.serverNow(), coverUrl: meta && meta.thumb ? Plex.artUrl(meta.thumb) : null };
-      startTrack(idx, (startMs || 0) / 1000);
-      hideToast();
-      updatePlayerUI(); setMediaSession();
-      Presence.claimPlaying(bookRk, tracks[idx].ratingKey, startMs || 0, tracks[idx].ratingKey);
-    } catch (e) { toast(e.message || 'Could not start playback'); }
+  function playBookAt(bookRk, meta, trackRk, startMs) {
+    return beginPlayback(bookRk, meta, () => ({ track: trackRk, posMs: startMs || 0 }));
   }
 
   function startTrack(idx, seekSec = 0, autoplay = true) {
@@ -1397,20 +1397,26 @@
   function getChapterPct(book, trackRk, durationMs) { return Progress.trackPct(book, trackRk, durationMs); }
 
   // On reload: reopen the last book PAUSED at its saved spot. Truly-fresh load
-  // (nothing saved) OR a track that no longer exists → leave the bar hidden.
+  // (nothing saved) OR a track that DEFINITELY no longer exists → leave the bar
+  // hidden. A mere network failure keeps the bookmark: wiping it on a flaky
+  // relay/offline launch (of a never-cached book) permanently lost the resume bar.
   async function restoreLastPlayed() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LAST) || 'null'); } catch {}
     if (!saved || !saved.book) { updatePlayerUI(); return; }
+    let fetched = false;
     try {
       const [alb, tracks] = await Promise.all([Plex.getAlbum(saved.book), Plex.getAlbumTracks(saved.book)]);
+      fetched = true;   // the metadata reads themselves succeeded (live or cached)
       const idx = tracks.findIndex((t) => String(t.ratingKey) === String(saved.track));
       if (!alb || !tracks.length || idx < 0) throw new Error('track no longer exists');
       ctx = { album: alb, tracks, idx, book: saved.book, updatedAt: saved.ts || Plex.serverNow(), coverUrl: alb.thumb ? Plex.artUrl(alb.thumb) : null };
       startTrack(idx, (saved.pos || 0) / 1000, false);
       updatePlayerUI(); setMediaSession();
     } catch {
-      ctx = null; localStorage.removeItem(LAST); updatePlayerUI();
+      ctx = null;
+      if (fetched) localStorage.removeItem(LAST);   // confirmed gone — only then forget it
+      updatePlayerUI();
     }
   }
 
@@ -1459,6 +1465,7 @@
     // publishes it); re-anchor to the live pos when we have one, so a PLAYING
     // peer extrapolates at the new rate from here.
     Presence.setSpeed(rate, ctx ? audio.currentTime * 1000 : null);
+    updatePositionState();   // lock-screen scrubber must extrapolate at the new rate
     if (ctx) { ctx.updatedAt = Plex.serverNow(); if (npOpen) updateNowPlaying(); }
   }
 
@@ -1585,14 +1592,36 @@
     if (npOpen) updateNowPlaying();
   }
   function updatePlayIcon() { $('pPlay').textContent = audio.paused ? '▶' : '⏸'; if (npOpen) updateNpPlayIcon(); }
+  // Paint a seek slider (value 0–1000 + the CSS fill var) unless mid-drag — the
+  // ONE painter for the transport, Now-Playing, and the peer mirror (three copies
+  // of this line used to drift independently).
+  function paintSeek(slider, pct) {
+    if (!slider || slider.dragging) return;
+    slider.value = pct * 10;
+    slider.style.setProperty('--played', pct + '%');
+  }
+  // Lock-screen/watch scrubber: without this the OS extrapolates position at 1× —
+  // visibly wrong at 1.5×, and the scrubber shows no duration at all.
+  function updatePositionState() {
+    if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+    const dur = audio.duration;
+    if (!dur || !isFinite(dur)) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: dur,
+        position: Math.min(dur, audio.currentTime || 0),
+        playbackRate: audio.playbackRate || 1,
+      });
+    } catch {}
+  }
   function updateSeekUI() {
     const cur = audio.currentTime || 0, dur = audio.duration || 0;
     $('pCur').textContent = fmt(cur);
     $('pDur').textContent = fmt(dur);
-    const playedPct = dur ? (cur / dur) * 100 : 0;
-    const s = $('pSeek'); if (!s.dragging) { s.value = playedPct * 10; s.style.setProperty('--played', playedPct + '%'); }
+    paintSeek($('pSeek'), dur ? (cur / dur) * 100 : 0);
+    updatePositionState();
     if (scrubbing) return;   // mid-drag: skip the library-DOM writes below (their reflow is what stutters the drag)
-    if (ctx && !audio.paused) updateBookLines();   // tick the book time line for the playing book
+    if (ctx && !audio.paused) updateBookLines(ctx.book);   // tick the time line for the PLAYING book only (all tiles repaint on the 1s tick)
     updatePlayingFileRow();
     if (npOpen) updateNowPlaying();
   }
@@ -1756,8 +1785,7 @@
     const cur = audio.currentTime || 0;
     const dur = audio.duration || (t.durationMs || 0) / 1000;
     const speed = audio.playbackRate || 1;
-    const playedPct = dur ? (cur / dur) * 100 : 0;
-    const s = $('npSeek'); if (s && !s.dragging) { s.value = playedPct * 10; s.style.setProperty('--played', playedPct + '%'); }
+    paintSeek($('npSeek'), dur ? (cur / dur) * 100 : 0);
     $('npCur').textContent = fmt(cur);
     $('npTrkRem').textContent = '-' + fmt(Math.max(0, dur - cur) / speed);   // scaled for speed
     $('npBookRem').textContent = '-' + fmt(bookTimes().remain / speed);      // whole-book remaining (shared arithmetic)
@@ -1935,7 +1963,7 @@
     }
 
     // Android (real detection): Wi-Fi-only. On cellular, offer to queue until Wi-Fi.
-    const d = dl.request(book, meta);
+    const d = dl.request();
     if (d.start) return go();
     modal({
       title: 'Download over cellular?',
@@ -2022,10 +2050,7 @@
       row.innerHTML = `<div class="dlrow-meta"><div class="dlrow-title"></div><div class="dlrow-sub"></div></div><button class="dlrow-del" aria-label="Remove">${DLICO.trash}</button>`;
       row.querySelector('.dlrow-title').textContent = r.title || 'Book';
       row.querySelector('.dlrow-sub').textContent = `${r.author || ''}${r.author ? ' · ' : ''}${fmtGB(r.size || 0)}`;
-      row.querySelector('.dlrow-del').addEventListener('click', () => {
-        modal({ title: 'Remove download?', body: `<p>Delete the downloaded audio for “${(r.title || 'this book').replace(/</g, '&lt;')}”? You can re-download it later.</p>`,
-          buttons: [{ label: 'Remove', cls: 'danger', run: () => Downloads.remove(r.book) }, { label: 'Cancel' }] });
-      });
+      row.querySelector('.dlrow-del').addEventListener('click', () => confirmRemoveDownload(r.book, r.title));
       host.appendChild(row);
     }
   }
@@ -2052,11 +2077,20 @@
     else if (st === 'downloading' || st === 'queued') { btn.classList.add('ring'); if (st === 'queued') btn.classList.add('queued'); btn.style.setProperty('--p', Math.round(Downloads.progress(book) * 100) + '%'); btn.innerHTML = DLICO.down; btn.title = 'Cancel download'; }
     else { btn.style.removeProperty('--p'); btn.innerHTML = DLICO.down; btn.title = 'Download'; }
   }
+  // ONE remove-download confirm (it was pasted into dlBtnAction AND the
+  // Downloads-screen rows with drifting copy).
+  function confirmRemoveDownload(book, title) {
+    modal({
+      title: 'Remove download?',
+      body: `<p>Delete the downloaded audio for “${(title || 'this book').replace(/</g, '&lt;')}”? You can re-download it later.</p>`,
+      buttons: [{ label: 'Remove', cls: 'danger', run: () => Downloads.remove(book) }, { label: 'Cancel' }],
+    });
+  }
   // Tap action for a download button: contextual on the current state.
   function dlBtnAction(book, title) {
     if (!window.Downloads || !Downloads.available()) return;
     const st = Downloads.stateOf(book).status;
-    if (st === 'done') modal({ title: 'Remove download?', body: `<p>Delete the downloaded audio for “${(title || 'this book').replace(/</g, '&lt;')}”?</p>`, buttons: [{ label: 'Remove', cls: 'danger', run: () => Downloads.remove(book) }, { label: 'Cancel' }] });
+    if (st === 'done') confirmRemoveDownload(book, title);
     else if (st === 'downloading' || st === 'queued') Downloads.remove(book);   // cancel
     else startBookDownload(book, title);
   }
@@ -2080,15 +2114,24 @@
     const a = $('pSeek'), b = $('npSeek');
     if (a) a.classList.toggle('dl-src', dled);
     if (b) b.classList.toggle('dl-src', dled);
-    if (!$('home').classList.contains('hidden')) renderDownloadedCarousel();
+    // Home is hidden via the `parked` class (checking 'hidden' here used to be
+    // always-false → the carousel rebuilt on EVERY progress notify).
+    if (!$('home').classList.contains('parked')) renderDownloadedCarousel();
     try { updateFileRows(); } catch {}
   }
 
   // Home "Downloaded" carousel — the downloaded books, from the offline index.
+  // Idempotent by content key: download-progress notifies arrive ~4×/s and a
+  // rebuild resets the carousel's scroll + churns its <img>s, so only rebuild
+  // when the LIST actually changed.
+  let dlCarouselKey = null;
   async function renderDownloadedCarousel() {
     const section = $('dlSection'), row = $('dlRow');
     if (!section || !row || !window.Downloads || !Downloads.available()) { if (section) section.classList.add('hidden'); return; }
     const rows = await Downloads.listDownloaded();
+    const key = rows.map((r) => r.book).join(',');
+    if (key === dlCarouselKey) return;
+    dlCarouselKey = key;
     if (!rows.length) { section.classList.add('hidden'); row.innerHTML = ''; return; }
     section.classList.remove('hidden');
     row.innerHTML = '';
@@ -2188,7 +2231,6 @@
       onOpenAuthor: openAuthor, onOpenFiles: openFiles, onBack: goBack,
       getResumeEntry: (rk) => bookEntries[rk] || null,
       getChapterPct,
-      getPeers: () => peersNow,
       // Wire a book-row download button (browse.js renders the element).
       bindDlBtn: (btn, b) => { btn.addEventListener('click', (e) => { e.stopPropagation(); dlBtnAction(b.ratingKey, b.title); }); applyDlBtn(btn, b.ratingKey); },
       onRender: () => { renderPresence(); refreshDlUi(); },   // paint live numbers + download buttons after a render
@@ -2272,7 +2314,8 @@
       Plex.signOut(); audio.pause(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');
       $('navbar').classList.add('hidden'); Browse.reset(); setView('home'); setNavActive('home');
       localStorage.removeItem(LAST);
-      Presence.setActive(false); stopRenderTick();
+      Presence.setActive(false); Progress.setActive(false); stopRenderTick();
+      if (window.Downloads && Downloads.suspend) Downloads.suspend();   // the in-flight download's token is now invalid
       $('signinBtn').disabled = false; $('signinBtn').textContent = 'Sign in with Plex';
     });
     bindScrub($('pSeek'));
@@ -2285,10 +2328,9 @@
     window.addEventListener('online', () => { Progress.flush(); Progress.refresh(); });
   }
 
-  // Service worker: NETWORK-FIRST (see sw.js). It exists so a pushed build lands
-  // on a plain reopen/refresh — no private tab needed, so localStorage (and the
-  // Plex token) survives and you stay signed in. Escape hatch: load the app with
-  // #nosw (or ?nosw=1) to tear the SW + caches down if it ever misbehaves.
+  // Service worker registration + auto-update handling (the SW itself is
+  // CACHE-FIRST — see sw.js). Escape hatch: load the app with #nosw (or ?nosw=1)
+  // to tear the SW + caches down if it ever misbehaves.
   function initServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
     if (/[?#&]nosw/.test(location.href)) {
@@ -2469,8 +2511,20 @@
     });
     // Offline downloads: restore the downloaded-book index + subscribe so every
     // indicator (tile badge, NP button, files rows, Downloaded carousel) tracks
-    // the one shared download state.
-    if (window.Downloads) { Downloads.init(); Downloads.subscribe(refreshDlUi); injectDownloadsOptionRow(); }
+    // the one shared download state. The hooks give Downloads what only we know:
+    //   shouldYield  — the live audio element urgently needs the bandwidth
+    //                  (downloads pause between chunks instead of contending —
+    //                  the .35/.36 iOS truncated-stream lesson),
+    //   currentTrack — never evict the buffered bytes the element is playing
+    //                  through the SW right now.
+    if (window.Downloads) {
+      Downloads.init({
+        shouldYield: () => { try { return elementBusy(); } catch { return false; } },
+        currentTrack: () => (ctx && ctx.tracks[ctx.idx] ? ctx.tracks[ctx.idx].ratingKey : null),
+      });
+      Downloads.subscribe(refreshDlUi);
+      injectDownloadsOptionRow();
+    }
     if (Plex.isSignedIn()) return enterApp();
     show('signin');
   }

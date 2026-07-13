@@ -22,35 +22,8 @@ test('fmtBytes switches units at 1 GiB', () => {
   assert.equal(L.fmtBytes(2 * 1024 * 1024 * 1024), '2.00 GB');
 });
 
-// ---- pickNextBank (track banking scheduler) -----------------------------------
-const bankArgs = (over = {}) => ({
-  idx: 2, count: 10, banked: new Set(), skip: new Set(),
-  used: 0, budget: 0, maxAhead: 60, ...over,
-});
-test('bank: current track first', () => {
-  assert.equal(L.pickNextBank(bankArgs()), 2);
-});
-test('bank: immediate next is wanted even with zero budget', () => {
-  assert.equal(L.pickNextBank(bankArgs({ banked: new Set([2]) })), 3);
-});
-test('bank: beyond next requires budget headroom', () => {
-  assert.equal(L.pickNextBank(bankArgs({ banked: new Set([2, 3]) })), null);                       // budget 0
-  assert.equal(L.pickNextBank(bankArgs({ banked: new Set([2, 3]), budget: 100, used: 50 })), 4);   // room
-  assert.equal(L.pickNextBank(bankArgs({ banked: new Set([2, 3]), budget: 100, used: 100 })), null); // spent
-});
-test('bank: skip set (too-big tracks) is never re-picked', () => {
-  assert.equal(L.pickNextBank(bankArgs({ skip: new Set([2]) })), 3);
-  assert.equal(L.pickNextBank(bankArgs({ banked: new Set([2]), skip: new Set([3]), budget: 100 })), 4);
-});
-test('bank: stops at end of book and at maxAhead', () => {
-  assert.equal(L.pickNextBank(bankArgs({ idx: 9 })), 9);                       // last track: itself only
-  assert.equal(L.pickNextBank(bankArgs({ idx: 9, banked: new Set([9]) })), null);
-  assert.equal(L.pickNextBank(bankArgs({ banked: new Set([2, 3]), budget: 1e9, maxAhead: 2 })), null); // window exhausted
-});
-test('bank: a Map works as the banked collection (has-only contract)', () => {
-  const m = new Map([[2, {}], [3, {}]]);
-  assert.equal(L.pickNextBank(bankArgs({ banked: m, budget: 100 })), 4);
-});
+// (pickNextBank tests removed with the function: app.js's nextToBank had long
+// since replaced it, so these were asserting dead code — false coverage.)
 
 // ---- livePos (position extrapolation) -----------------------------------------
 test('livePos: paused device reports its anchored position', () => {

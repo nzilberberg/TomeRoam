@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.14';
+const BUILD = '2026-07-12.15';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -149,6 +149,13 @@ self.addEventListener('message', (e) => {
       } catch {}
     })();
     if (e.waitUntil) e.waitUntil(work);
+    return;
+  }
+  // A downloaded/buffered track was deleted (remove, buffer eviction, clear
+  // buffer): drop the 1-entry blob cache so we can't keep serving deleted audio
+  // (or a stale copy after a re-download) for as long as this worker lives.
+  if (d.type === 'EVICT_DL') {
+    if (!d.track || _dlCache.track === String(d.track)) _dlCache = { track: null, blob: null };
   }
 });
 
@@ -211,12 +218,18 @@ function swGetAudio(track) {
     req.onerror = () => resolve(null);
     req.onsuccess = () => {
       const db = req.result;
+      // ALWAYS close when done (and immediately if the page wants to upgrade the
+      // schema): a lingering SW connection with no versionchange handler blocks
+      // store.js's versioned open in every client — the whole app then boots
+      // without IndexedDB.
+      db.onversionchange = () => { try { db.close(); } catch {} };
+      const done = (v) => { try { db.close(); } catch {} resolve(v); };
       try {
-        if (!db.objectStoreNames.contains('audio')) { resolve(null); return; }
+        if (!db.objectStoreNames.contains('audio')) { done(null); return; }
         const g = db.transaction('audio', 'readonly').objectStore('audio').get(String(track));
-        g.onsuccess = () => resolve(g.result || null);
-        g.onerror = () => resolve(null);
-      } catch { resolve(null); }
+        g.onsuccess = () => done(g.result || null);
+        g.onerror = () => done(null);
+      } catch { done(null); }
     };
   });
 }
@@ -239,8 +252,16 @@ async function serveDownloadedAudio(req, track) {
   const range = req.headers.get('range');
   if (range) {
     const m = /bytes=(\d*)-(\d*)/.exec(range) || [];
-    let start = m[1] ? parseInt(m[1], 10) : 0;
-    let end = m[2] ? parseInt(m[2], 10) : size - 1;
+    let start, end;
+    if (!m[1] && m[2]) {
+      // Suffix range "bytes=-N" = the LAST N bytes (MP4/M4B tail-metadata reads
+      // use these). Serving the head instead corrupts decoding silently.
+      const n = parseInt(m[2], 10) || 0;
+      start = Math.max(0, size - n); end = size - 1;
+    } else {
+      start = m[1] ? parseInt(m[1], 10) : 0;
+      end = m[2] ? parseInt(m[2], 10) : size - 1;
+    }
     if (isNaN(start)) start = 0;
     if (isNaN(end) || end >= size) end = size - 1;
     if (start > end || start >= size) {

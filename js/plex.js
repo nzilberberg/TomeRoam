@@ -57,6 +57,8 @@ const Plex = (() => {
     localStorage.removeItem(LS.token);
     localStorage.removeItem(LS.server);
     localStorage.removeItem('pb_section');
+    localStorage.removeItem(LS.connKind);
+    localStorage.removeItem('pb_lastBase');
     base = null; serverName = null; sectionKey = null; booksCache = null;
   }
 
@@ -310,6 +312,34 @@ const Plex = (() => {
   // offline; when reachability is unknown/true we still try the network.
   const offlineKnown = () => !!(window.Net && Net.state && Net.state().plexReachable === false);
 
+  // THE offline-cache wrapper for library reads (it used to be pasted into each
+  // one): confirmed-offline → cache immediately; else live (write-through +
+  // noteFresh); live failed → cache (marked stale) or rethrow. `cached` resolves
+  // the cached value (null/[] = miss), `live` fetches, `store` persists.
+  async function withCache(kind, { cached, live, store }) {
+    const fromCache = async () => {
+      if (!window.Store) return undefined;
+      const c = await cached();
+      if (c && (!Array.isArray(c) || c.length)) { cacheHook.stale(kind); return c; }
+      return undefined;
+    };
+    if (offlineKnown()) {
+      const c = await fromCache();
+      if (c !== undefined) { dbg('CACHE', kind + ' offline-fast from cache'); return c; }
+    }
+    try {
+      const v = await live();
+      if (window.Store && store && v && (!Array.isArray(v) || v.length)) { try { store(v); } catch {} }
+      cacheHook.fresh(kind);
+      return v;
+    } catch (e) {
+      dbg('CACHE', kind + ' live failed (' + ((e && e.message) || 'err') + ') — trying cache');
+      const c = await fromCache();
+      if (c !== undefined) return c;
+      throw e;
+    }
+  }
+
   // Light reachability probe for js/net.js: does the current Plex base answer
   // /identity right now? Drops a dead base so the next call re-probes.
   async function ping() {
@@ -324,21 +354,12 @@ const Plex = (() => {
     } catch { return false; }
   }
 
-  async function getAlbum(rk) {
-    if (offlineKnown() && window.Store) {
-      const c = await Store.cachedAlbum(rk);
-      if (c) { cacheHook.stale('albums'); return c; }
-    }
-    try {
-      const mc = await api(`/library/metadata/${rk}`);
-      const a = (mc.Metadata || [])[0] || null;
-      if (a && window.Store) Store.cacheAlbum(a);
-      cacheHook.fresh('albums');
-      return a;
-    } catch (e) {
-      if (window.Store) { const c = await Store.cachedAlbum(rk); if (c) { cacheHook.stale('albums'); return c; } }
-      throw e;
-    }
+  function getAlbum(rk) {
+    return withCache('albums', {
+      cached: () => Store.cachedAlbum(rk),
+      live: async () => ((await api(`/library/metadata/${rk}`)).Metadata || [])[0] || null,
+      store: (a) => Store.cacheAlbum(a),
+    });
   }
 
   function mapTracks(mc) {
@@ -359,20 +380,12 @@ const Plex = (() => {
     return tracks;
   }
 
-  async function getAlbumTracks(rk) {
-    if (offlineKnown() && window.Store) {
-      const c = await Store.cachedTracks(rk);
-      if (c) { cacheHook.stale('tracks'); return c; }
-    }
-    try {
-      const tracks = mapTracks(await api(`/library/metadata/${rk}/children`));
-      if (window.Store) Store.cacheTracks(rk, tracks);
-      cacheHook.fresh('tracks');
-      return tracks;
-    } catch (e) {
-      if (window.Store) { const c = await Store.cachedTracks(rk); if (c) { cacheHook.stale('tracks'); return c; } }
-      throw e;
-    }
+  function getAlbumTracks(rk) {
+    return withCache('tracks', {
+      cached: () => Store.cachedTracks(rk),
+      live: async () => mapTracks(await api(`/library/metadata/${rk}/children`)),
+      store: (tracks) => Store.cacheTracks(rk, tracks),
+    });
   }
 
   // Media details for ONE track (for the track-info sheet): container, bitrate,
@@ -419,26 +432,20 @@ const Plex = (() => {
 
   // Authors (artists). Lightweight: title + thumb + album count only — NO
   // per-book progress/time work (this screen never shows times).
-  async function getAuthors() {
-    if (offlineKnown() && window.Store) {
-      const c = await Store.cachedAuthors();
-      if (c && c.length) { cacheHook.stale('authors'); return c; }
-    }
-    try {
-      const key = await getSectionKey();
-      const mc = await api(`/library/sections/${key}/all`, { params: { type: 8 }, headers: BIG });
-      const authors = (mc.Metadata || []).map((a) => ({
-        ratingKey: a.ratingKey, title: a.title || 'Unknown',
-        titleSort: a.titleSort || a.title || '', thumb: a.thumb || null,
-        childCount: a.childCount || 0,
-      }));
-      if (window.Store && authors.length) Store.cacheAuthors(authors);
-      cacheHook.fresh('authors');
-      return authors;
-    } catch (e) {
-      if (window.Store) { const c = await Store.cachedAuthors(); if (c && c.length) { cacheHook.stale('authors'); return c; } }
-      throw e;
-    }
+  function getAuthors() {
+    return withCache('authors', {
+      cached: () => Store.cachedAuthors(),
+      live: async () => {
+        const key = await getSectionKey();
+        const mc = await api(`/library/sections/${key}/all`, { params: { type: 8 }, headers: BIG });
+        return (mc.Metadata || []).map((a) => ({
+          ratingKey: a.ratingKey, title: a.title || 'Unknown',
+          titleSort: a.titleSort || a.title || '', thumb: a.thumb || null,
+          childCount: a.childCount || 0,
+        }));
+      },
+      store: (authors) => Store.cacheAuthors(authors),
+    });
   }
 
   const mapBook = (b) => ({
@@ -456,28 +463,20 @@ const Plex = (() => {
   function clearCaches() { booksCache = null; }   // pull-to-refresh: force a fresh whole-library fetch
   async function getBooks() {
     if (booksCache) return booksCache;
-    // Confirmed offline → serve cache immediately (no slow network wait). NB: we
-    // do NOT assign booksCache here, so a later reconnect re-fetches fresh instead
-    // of being stuck on the stale copy for the whole session (review bug 4).
-    if (offlineKnown() && window.Store) {
-      const c = await Store.cachedBooks();
-      if (c && c.length) { cacheHook.stale('books'); dbg('CACHE', 'getBooks offline-fast: ' + c.length); return c; }
-    }
-    try {
-      const key = await getSectionKey();
-      const mc = await api(`/library/sections/${key}/all`, { params: { type: 9 }, headers: BIG });
-      booksCache = (mc.Metadata || []).map(mapBook);
-      if (window.Store && booksCache.length) Store.cacheBooks(booksCache);
-      cacheHook.fresh('books');
-      dbg('CACHE', 'getBooks live: ' + booksCache.length + ' books');
-      return booksCache;
-    } catch (e) {
-      // Offline / Plex down: fall back to the last-known library from the cache.
-      // Return it WITHOUT caching as the session copy (so reconnect re-fetches).
-      dbg('CACHE', 'getBooks FAILED (' + ((e && e.message) || 'err') + ') — trying cache');
-      if (window.Store) { const c = await Store.cachedBooks(); if (c && c.length) { cacheHook.stale('books'); return c; } }
-      throw e;
-    }
+    // NB: only the LIVE read assigns the session copy (booksCache) — a cached
+    // fallback stays unassigned so a later reconnect re-fetches fresh instead of
+    // being stuck on the stale copy for the whole session (review bug 4).
+    return withCache('books', {
+      cached: () => Store.cachedBooks(),
+      live: async () => {
+        const key = await getSectionKey();
+        const mc = await api(`/library/sections/${key}/all`, { params: { type: 9 }, headers: BIG });
+        booksCache = (mc.Metadata || []).map(mapBook);
+        dbg('CACHE', 'getBooks live: ' + booksCache.length + ' books');
+        return booksCache;
+      },
+      store: (books) => Store.cacheBooks(books),
+    });
   }
 
   // Plex's own in-progress list: books partway through (some, not all, chapters
@@ -502,19 +501,30 @@ const Plex = (() => {
     return books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, limit);
   }
 
-  // Books for one author (drill-down from the Authors screen).
-  async function getAuthorBooks(authorRk) {
-    const mc = await api(`/library/metadata/${authorRk}/children`);
-    return (mc.Metadata || []).map(mapBook);
+  // Books for one author (drill-down from the Authors screen). Cached in the kv
+  // bag so the author page works offline like every other browse screen (it was
+  // the one screen with no fallback).
+  function getAuthorBooks(authorRk) {
+    return withCache('authorBooks', {
+      cached: () => Store.kvGet('authorBooks:' + authorRk, null),
+      live: async () => ((await api(`/library/metadata/${authorRk}/children`)).Metadata || []).map(mapBook),
+      store: (books) => Store.kvSet('authorBooks:' + authorRk, books),
+    });
   }
 
   // One author's own metadata — thumb, book count, and the scraped bio blurb
   // (the /all listing omits summary, so this needs the per-item fetch).
-  async function getAuthor(authorRk) {
-    const mc = await api(`/library/metadata/${authorRk}`);
-    const a = (mc.Metadata || [])[0];
-    if (!a) return null;
-    return { ratingKey: a.ratingKey, title: a.title || 'Unknown', thumb: a.thumb || null, childCount: a.childCount || 0, summary: a.summary || '' };
+  function getAuthor(authorRk) {
+    return withCache('author', {
+      cached: () => Store.kvGet('author:' + authorRk, null),
+      live: async () => {
+        const mc = await api(`/library/metadata/${authorRk}`);
+        const a = (mc.Metadata || [])[0];
+        if (!a) return null;
+        return { ratingKey: a.ratingKey, title: a.title || 'Unknown', thumb: a.thumb || null, childCount: a.childCount || 0, summary: a.summary || '' };
+      },
+      store: (a) => Store.kvSet('author:' + authorRk, a),
+    });
   }
 
   // --- media + art URLs -----------------------------------------------------
@@ -655,6 +665,44 @@ const Plex = (() => {
     try { const b = await connect(); await fetch(b + '/playlists/' + rk, { method: 'DELETE', headers: plexHeaders({ 'X-Plex-Token': token() }) }); } catch {}
   }
 
+  // Shared "hidden playlist board" primitive — presence.js, progress.js, and
+  // logpipe.js each used to hand-roll the same ensure/publish/read trio. A board
+  // is one hidden audio playlist (`<prefix><deviceId>`) whose SUMMARY carries a
+  // JSON blob; the playlist ratingKey persists in `lsKey`.
+  //   ensure(seed)        → ratingKey (creates once; `seed` = a track ratingKey or
+  //                         an async provider — playlists need a real seed item)
+  //   publish(text, seed) → HTTP status. A DEFINITE 404 clears the stored key so
+  //                         the NEXT publish recreates the board; any transient
+  //                         failure keeps it (recreate-on-transient is what once
+  //                         churned out dozens of ghost boards). Never throws.
+  //   readAll()           → [{ratingKey,title,summary}] for every `prefix` board
+  //   key()               → our own board's ratingKey (e.g. to skip it in prunes)
+  const boardId = () => (clientId() || 'dev').replace(/[^a-z0-9]/gi, '').slice(-8);
+  function makeBoard(prefix, lsKey) {
+    let key = null;
+    async function ensure(seed) {
+      if (key) return key;
+      const saved = localStorage.getItem(lsKey);
+      if (saved) { key = saved; return key; }
+      const s = typeof seed === 'function' ? await seed() : seed;
+      if (!s) return null;
+      try {
+        key = await createPlaylist(prefix + boardId(), s);
+        if (key) localStorage.setItem(lsKey, key);
+      } catch (e) { dbg('BOARD', prefix + ' create failed ' + (e && e.message)); }
+      return key;
+    }
+    async function publish(text, seed) {
+      let rk;
+      try { rk = await ensure(seed); } catch { rk = null; }
+      if (!rk) return 0;
+      const st = await setPlaylistSummary(rk, text);
+      if (st === 404) { key = null; try { localStorage.removeItem(lsKey); } catch {} }
+      return st;
+    }
+    return { ensure, publish, readAll: () => listBoards(prefix), key: () => key };
+  }
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const getServerName = () => serverName;
   const getBase = () => base;
@@ -675,7 +723,7 @@ const Plex = (() => {
     getAuthors, getBooks, getAuthorBooks, getAuthor, getContinueListening, getRecentlyAdded,
     getTrackInfo, clearCaches,
     streamUrl, artUrl, writeTimeline, getServerName, getBase, getConnKind,
-    getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist,
+    getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist, makeBoard,
     resetBookProgress,
     notificationWsUrl,
     // internals exposed for the unit tests only (no runtime behaviour change)

@@ -33,6 +33,17 @@ const Downloads = (() => {
   let current = null;               // bookKey downloading now
   let abortCur = null;              // AbortController for the in-flight fetch
 
+  // Hooks the host (app.js) wires in via init(): shouldYield = "the live audio
+  // element urgently needs the bandwidth" (downloads pause rather than contend —
+  // the .35/.36 banking lesson: a background fetch racing the element's own
+  // stream truncates it on iOS → bogus `ended` / code=4); currentTrack = the
+  // ratingKey the element is playing (never evict its bytes out from under it).
+  const hooks = { shouldYield: null, currentTrack: null };
+  const protectedTracks = () => { try { const c = hooks.currentTrack && hooks.currentTrack(); return c != null ? new Set([String(c)]) : new Set(); } catch { return new Set(); } };
+  // Tell the SW to forget its 1-entry blob cache for a deleted track, so it can't
+  // keep serving removed (or stale re-downloaded) audio for its whole lifetime.
+  const swEvict = (track) => { try { const c = navigator.serviceWorker && navigator.serviceWorker.controller; if (c) c.postMessage({ type: 'EVICT_DL', track: String(track) }); } catch {} };
+
   // ---- settings -------------------------------------------------------------
   const wifiOnly = () => { try { return localStorage.getItem(LS.wifi) !== '0'; } catch { return true; } };
   const setWifiOnly = (on) => { try { localStorage.setItem(LS.wifi, on ? '1' : '0'); } catch {} if (on === false) pump(); };
@@ -113,22 +124,30 @@ const Downloads = (() => {
     } catch (e) { dbg('DL', 'buffer persist failed ' + (e && e.message)); }
   }
 
-  // Pure: which tracks to evict (oldest-first) to get under `max`, never `keep`.
+  // Pure: which tracks to evict (oldest-first) to get under `max`. `keep` (a
+  // single key or a Set of keys) is never evicted.
   function evictionPlan(entries, bytes, max, keep) {
     const out = [];
     if (bytes <= max) return out;
+    const prot = keep instanceof Set ? keep : new Set(keep != null ? [String(keep)] : []);
     let b = bytes;
     const order = entries.slice().sort((a, c) => (a[1].ts || 0) - (c[1].ts || 0));   // oldest first
-    for (const [k, m] of order) { if (b <= max) break; if (String(k) === String(keep)) continue; out.push(k); b -= (m.size || 0); }
+    for (const [k, m] of order) { if (b <= max) break; if (prot.has(String(k))) continue; out.push(k); b -= (m.size || 0); }
     return out;
   }
-  // Drop oldest buffered tracks until under budget. `keep` is never evicted.
+  // Drop oldest buffered tracks until under budget. Never evicts `keep` (the
+  // just-written track) NOR the track the audio element is CURRENTLY playing —
+  // buffered tracks play through the SW from these very bytes, so evicting the
+  // playing one 404s its next range request mid-listen.
   async function evictBuffer(keep) {
-    const plan = evictionPlan([...bufMeta.entries()], bufBytes, bufMaxBytes(), keep);
+    const prot = protectedTracks();
+    if (keep != null) prot.add(String(keep));
+    const plan = evictionPlan([...bufMeta.entries()], bufBytes, bufMaxBytes(), prot);
     for (const k of plan) {
       const m = bufMeta.get(k); if (!m) continue;
       try { await Store.delAudio(k); await Store.delBuf(k); } catch {}
       bufTracks.delete(k); bufMeta.delete(k); bufBytes = Math.max(0, bufBytes - m.size);
+      swEvict(k);
       dbg('DL', `buffer evicted track=${k}`);
     }
   }
@@ -145,8 +164,14 @@ const Downloads = (() => {
 
   async function clearBuffer() {
     if (!available()) return;
-    for (const k of [...bufTracks]) { try { await Store.delAudio(k); await Store.delBuf(k); } catch {} }
-    bufTracks.clear(); bufMeta.clear(); bufBytes = 0;
+    const prot = protectedTracks();   // keep the currently-playing track's bytes (it's being served from them)
+    for (const k of [...bufTracks]) {
+      if (prot.has(k)) continue;
+      try { await Store.delAudio(k); await Store.delBuf(k); } catch {}
+      const m = bufMeta.get(k);
+      bufTracks.delete(k); bufMeta.delete(k); if (m) bufBytes = Math.max(0, bufBytes - m.size);
+      swEvict(k);
+    }
     dbg('DL', 'buffer cleared'); notify();
   }
   const bufferUsage = () => bufBytes;
@@ -180,8 +205,8 @@ const Downloads = (() => {
 
   // ---- public request/enqueue ----------------------------------------------
   // The book menu / NP button calls this. Returns the decision so the UI can show
-  // the Wi-Fi confirm modal when needed. `meta` = { title, author, thumb }.
-  function request(book, meta) {
+  // the Wi-Fi confirm modal when needed.
+  function request() {
     return decideStart(wifiOnly(), unmetered());   // UI acts on this, then calls start()/queueFor()
   }
   // start() = user chose to download NOW → force (bypass the Wi-Fi gate; an explicit
@@ -191,7 +216,14 @@ const Downloads = (() => {
 
   function enqueue(book, meta, force) {
     const k = String(book);
-    if (isDownloaded(k) || current === k || queue.some((e) => e.book === k)) return;
+    const existing = queue.find((e) => e.book === k);
+    if (existing) {
+      // "Download now" on an already-queued-for-Wi-Fi book upgrades it past the
+      // gate (it used to be silently ignored).
+      if (force && !existing.force) { existing.force = true; saveQueue(); pump(); }
+      return;
+    }
+    if (isDownloaded(k) || current === k) return;
     queue.push({ book: k, meta: meta || {}, force: !!force }); saveQueue();
     setState(k, { status: 'queued', meta: meta || {}, done: 0, total: (meta && meta.total) || 0 });
     dbg('DL', `queued book=${k} force=${!!force} ${meta && meta.title || ''}`);
@@ -215,19 +247,34 @@ const Downloads = (() => {
       setState(book, { total, size: need });
       if (!capFits(usedBytes, need, maxBytes())) throw new Error('Not enough download space — free some in Downloads.');
       if (!(await quotaFits(need))) throw new Error('Device storage is full.');
+      // Remember the track list on the state so a CANCEL can clean up partial
+      // blobs even though no `dl` index record exists yet (they used to leak:
+      // invisible, uncounted, undeletable).
+      setState(book, { trackRks: tracks.map((t) => String(t.ratingKey)) });
       let done = 0, bytes = 0;
       for (const t of tracks) {
         if (!current || abortCur.signal.aborted) throw new Error('cancelled');
         const k = String(t.ratingKey);
-        if (await Store.hasAudio(t.ratingKey)) {
-          // Already local (a prior download OR a persisted buffer copy). Pin it as
-          // a download (blue) and demote it out of the evictable buffer.
-          const m = bufMeta.get(k); if (m) bytes += m.size;
+        const local = await Store.getAudioRec(k);
+        if (local && local.blob) {
+          // Already local (a prior download attempt OR a persisted buffer copy).
+          // Pin it as a download (blue), demote it out of the evictable buffer,
+          // and COUNT its bytes (a resumed book's size used to omit them, so the
+          // usage meter and a later remove() subtracted the wrong amount).
+          bytes += local.size || 0;
           dlTracks.add(k); demoteBuffer(k);
-          done++; setState(book, { done }); continue;
+          done++; setState(book, { done, bytes }); continue;
         }
-        const blob = await fetchTrack(t, book, abortCur.signal);
-        await Store.putAudio(t.ratingKey, book, blob, 'download');
+        // Playback first: wait out any moment the live audio element urgently
+        // needs the bandwidth (never race it — see the hooks comment).
+        await yieldToPlayback(abortCur.signal);
+        const { blob } = await fetchAudioBlob(Plex.streamUrl(t.partKey), {
+          signal: abortCur.signal,
+          sizeHint: t.size,
+          onProgress: (recv, tot) => { if (tot) setTrackProgress(book, k, Math.min(1, recv / tot)); },
+          gate: () => yieldToPlayback(abortCur.signal),
+        });
+        await Store.putAudio(k, book, blob, 'download');
         dlTracks.add(k); demoteBuffer(k);
         curDl = { track: null, frac: 0 };            // this track is now 100% (via dlTracks)
         bytes += blob.size; done++; usedBytes += blob.size;
@@ -243,7 +290,11 @@ const Downloads = (() => {
       dbg('DL', `done book=${book} ${(bytes / 1048576).toFixed(0)}MB`);
     } catch (e) {
       const msg = (e && e.message) || 'download failed';
-      if (msg === 'cancelled') { setState(book, { status: 'none' }); dbg('DL', `cancelled book=${book}`); }
+      // A mid-track abort surfaces as an AbortError, not our 'cancelled' marker —
+      // both are the user cancelling, never an error state (the badge used to
+      // flash "!" before remove() caught up).
+      const cancelled = msg === 'cancelled' || (e && e.name === 'AbortError') || (abortCur && abortCur.signal.aborted);
+      if (cancelled) { setState(book, { status: 'none' }); dbg('DL', `cancelled book=${book}`); }
       else { setState(book, { status: 'error', error: msg }); dbg('DL', `FAIL book=${book} ${msg}`); }
     } finally {
       curDl = { track: null, frac: 0 };
@@ -253,41 +304,89 @@ const Downloads = (() => {
     }
   }
 
-  async function fetchTrack(t, book, signal) {
-    const url = Plex.streamUrl(t.partKey);
-    const r = await fetch(url, { signal });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const total = t.size || parseInt(r.headers.get('content-length') || '0', 10) || 0;
-    // Stream the body so the file row's blue line grows as bytes arrive. If
-    // streaming isn't available, fall back to a whole-blob fetch (no sub-progress).
-    if (!total || !r.body || !r.body.getReader) { setTrackProgress(book, t.ratingKey, 0); return await r.blob(); }
-    const type = (r.headers.get('content-type') || 'audio/mpeg').split(';')[0];
-    const reader = r.body.getReader();
-    const chunks = []; let recv = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value); recv += value.length;
-      setTrackProgress(book, t.ratingKey, Math.min(1, recv / total));
+  // Pause while the live audio element urgently needs the bandwidth. Bounded so a
+  // permanently-stalled element (dead network — where our fetch is doomed anyway)
+  // can't wedge the queue forever.
+  async function yieldToPlayback(signal) {
+    const y = hooks.shouldYield;
+    if (!y) return;
+    const t0 = Date.now();
+    while (Date.now() - t0 < 45000) {
+      if (signal && signal.aborted) throw new Error('cancelled');
+      let busy = false; try { busy = !!y(); } catch {}
+      if (!busy) return;
+      await new Promise((r) => setTimeout(r, 1000));
     }
-    return new Blob(chunks, { type });
   }
 
-  // ---- remove ---------------------------------------------------------------
+  // Shared streaming fetch → Blob. THE one byte-loop for both downloads and the
+  // banking prefetch (app.js bankOne) — they used to be divergent copies, and only
+  // banking had a size cap.
+  //   onProgress(received, total)  per chunk (total 0 when unknown)
+  //   gate()                       awaited between chunks (downloads yield to playback)
+  //   maxBytes                     throw {code:'OVERSIZE'} when the size (known or
+  //                                streamed) exceeds it — banking turns this into skipBank
+  //   sizeHint                     caller-known size (Plex part size) when the
+  //                                response lacks Content-Length
+  // Chunks coalesce into an intermediate Blob every ~32 MB so a big track never
+  // holds hundreds of MB of Uint8Arrays in RAM (Blobs can be paged to disk —
+  // the iOS jetsam guard for single-file M4B books).
+  const COALESCE_BYTES = 32 * 1024 * 1024;
+  const oversizeErr = () => { const e = new Error('file too large'); e.code = 'OVERSIZE'; return e; };
+  async function fetchAudioBlob(url, { signal, onProgress, gate, maxBytes: cap, sizeHint } = {}) {
+    const r = await fetch(url, { signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const type = (r.headers.get('content-type') || 'audio/mpeg').split(';')[0];
+    const total = parseInt(r.headers.get('content-length') || '0', 10) || sizeHint || 0;
+    if (cap && total > cap) { try { if (r.body) await r.body.cancel(); } catch {} throw oversizeErr(); }
+    if (!r.body || !r.body.getReader) {
+      const blob = await r.blob();
+      if (cap && blob.size > cap) throw oversizeErr();
+      return { blob, bytes: blob.size, total };
+    }
+    const reader = r.body.getReader();
+    let chunks = [], pending = 0, received = 0;
+    for (;;) {
+      if (gate) await gate();
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.length; pending += value.length;
+      if (cap && received > cap) { try { await reader.cancel(); } catch {} throw oversizeErr(); }
+      chunks.push(value);
+      if (pending >= COALESCE_BYTES) { chunks = [new Blob(chunks, { type })]; pending = 0; }
+      if (onProgress) onProgress(received, total);
+    }
+    return { blob: new Blob(chunks, { type }), bytes: received, total };
+  }
+
+  // ---- remove (also = cancel for a queued/in-flight download) ----------------
   async function remove(book) {
     const k = String(book);
     if (current === k && abortCur) { try { abortCur.abort(); } catch {} }
     queue = queue.filter((e) => e.book !== k); saveQueue();
     try {
       const rec = await Store.getDl(k);
-      const tracks = (rec && rec.tracks) || [];
-      for (const tr of tracks) { await Store.delAudio(tr); dlTracks.delete(String(tr)); }
+      // No dl record yet (cancelled/errored mid-download) → fall back to the
+      // track list pump stashed on the state, so partial blobs don't leak.
+      const tracks = (rec && rec.tracks) || stateOf(k).trackRks || [];
+      for (const tr of tracks) {
+        const t = String(tr);
+        if (bufTracks.has(t)) continue;               // buffer-owned bytes stay (evictable, still useful)
+        const r = await Store.getAudioRec(t);
+        if (!r) continue;
+        if (!rec) usedBytes = Math.max(0, usedBytes - (r.size || 0));   // partials were counted as they landed
+        await Store.delAudio(t); dlTracks.delete(t); swEvict(t);
+      }
       if (rec && rec.size) usedBytes = Math.max(0, usedBytes - rec.size);
       await Store.delDl(k);
     } catch (e) { dbg('DL', 'remove err ' + (e && e.message)); }
-    setState(k, { status: 'none', done: 0, total: 0, bytes: 0, size: 0 });
+    setState(k, { status: 'none', done: 0, total: 0, bytes: 0, size: 0, trackRks: null });
     dbg('DL', `removed book=${k}`);
   }
+
+  // Sign-out: stop the in-flight download quietly (its token is about to be
+  // invalid). Queued items stay queued for the next signed-in session.
+  function suspend() { if (abortCur) { try { abortCur.abort(); } catch {} } }
 
   // ---- listing / storage info ----------------------------------------------
   async function listDownloaded() {
@@ -300,7 +399,9 @@ const Downloads = (() => {
   }
 
   // ---- lifecycle ------------------------------------------------------------
-  async function init() {
+  async function init(opts) {
+    if (opts && opts.shouldYield) hooks.shouldYield = opts.shouldYield;
+    if (opts && opts.currentTrack) hooks.currentTrack = opts.currentTrack;
     if (!available()) { dbg('DL', 'unavailable (no IndexedDB)'); return; }
     try {
       const rows = await Store.allDl();
@@ -323,6 +424,18 @@ const Downloads = (() => {
       }
       await evictBuffer();
       dbg('DL', `restored ${bufTracks.size} buffered track(s), ${(bufBytes / 1048576).toFixed(0)}MB`);
+      // Orphan sweep: audio rows referenced by NEITHER index are leaks from a
+      // cancelled/failed download in a previous session — invisible to every UI,
+      // uncounted against any cap, and undeletable by the user. Reclaim them.
+      // (Costs an errored book its resume-without-refetch, which is the honest
+      // trade — those bytes were unaccountable.)
+      const keys = await Store.audioKeys();
+      let swept = 0;
+      for (const key of keys) {
+        if (dlTracks.has(key) || bufTracks.has(key)) continue;
+        await Store.delAudio(key); swEvict(key); swept++;
+      }
+      if (swept) dbg('DL', `swept ${swept} orphaned audio row(s)`);
     } catch (e) { dbg('DL', 'init err ' + (e && e.message)); }
     // Auto-resume queued downloads when connectivity/Wi-Fi returns.
     try { if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', () => pump()); } catch {}
@@ -332,10 +445,11 @@ const Downloads = (() => {
   }
 
   return {
-    init, available, subscribe,
+    init, available, subscribe, suspend,
     request, start, queueFor, remove,
     stateOf, isDownloaded, isBusy, trackDownloaded, trackProgress, progress, getBlob,
     trackBuffered, trackLocal, bufferTrack, clearBuffer, bufferUsage,
+    fetchAudioBlob,   // the one shared streaming byte-loop (banking uses it too)
     listDownloaded, storageInfo,
     wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, bufMaxBytes, setBufMaxBytes, DEFAULT_MAX, DEFAULT_BUF_MAX,
     _test: { decideStart, capFits, frac, unmetered, evictionPlan },

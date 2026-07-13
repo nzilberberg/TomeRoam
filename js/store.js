@@ -42,14 +42,34 @@ const Store = (() => {
     dbp = new Promise((resolve) => {
       let req;
       try { req = indexedDB.open(DB, VER); } catch { return resolve(null); }
+      let settled = false;
+      const settle = (db) => { if (!settled) { settled = true; resolve(db); } };
+      // An open can BLOCK forever if another connection (an old tab whose reload
+      // is deferred, or the SW) holds a lower-version DB open. Never let that
+      // hang the app: resolve null after a grace period (Store degrades to
+      // unavailable) and, if the open later succeeds anyway, adopt it for
+      // future calls.
+      const guard = setTimeout(() => {
+        dbg('IDB', 'open timed out (blocked?) — running without IndexedDB');
+        settle(null);
+      }, 4000);
       req.onupgradeneeded = () => {
         const db = req.result;
         for (const [name, opts] of Object.entries(STORES)) {
           if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, opts);
         }
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => { dbg('IDB', 'open failed ' + (req.error && req.error.message)); resolve(null); };
+      req.onsuccess = () => {
+        clearTimeout(guard);
+        const db = req.result;
+        // A NEWER build (another tab / updated SW client) wants to upgrade the
+        // schema: close so it isn't blocked. Our next open() re-opens at the
+        // new version (this stale build's Store just goes quiet until reload).
+        db.onversionchange = () => { try { db.close(); } catch {} dbp = null; };
+        if (settled) { dbp = Promise.resolve(db); }   // late success after the guard fired
+        else settle(db);
+      };
+      req.onerror = () => { clearTimeout(guard); dbg('IDB', 'open failed ' + (req.error && req.error.message)); settle(null); };
       req.onblocked = () => dbg('IDB', 'open blocked');
     });
     return dbp;
@@ -175,8 +195,12 @@ const Store = (() => {
   // unavailable these all no-op / return null, and Downloads reports unavailable.
   const putAudio = (track, book, blob, kind) => put('audio', { track: String(track), book: String(book), blob, size: (blob && blob.size) || 0, ts: Date.now(), kind: kind || 'download' });
   const getAudio = (track) => get('audio', String(track)).then((r) => (r && r.blob) || null);
+  const getAudioRec = (track) => get('audio', String(track));   // full record (size/kind) without touching the blob
   const hasAudio = (track) => get('audio', String(track)).then((r) => !!(r && r.blob));
   const delAudio = (track) => del('audio', String(track));
+  // Every stored track key WITHOUT materializing the blobs — for the orphan sweep
+  // (audio rows referenced by neither the dl index nor the buf index are leaks).
+  const audioKeys = () => tx('audio', 'readonly', (os) => os.getAllKeys()).then((r) => (Array.isArray(r) ? r.map(String) : []));
   // Per-book download index (metadata so the Downloaded carousel + Downloads
   // screen work with zero network).
   const putDl = (rec) => put('dl', rec);
@@ -197,7 +221,7 @@ const Store = (() => {
     cacheBooks, cachedBooks, cacheAuthors, cachedAuthors,
     cacheTracks, cachedTracks, cacheAlbum, cachedAlbum,
     persist, estimate,
-    putAudio, getAudio, hasAudio, delAudio, putDl, getDl, allDl, delDl, putBuf, allBuf, delBuf,
+    putAudio, getAudio, getAudioRec, hasAudio, delAudio, audioKeys, putDl, getDl, allDl, delDl, putBuf, allBuf, delBuf,
   };
 })();
 

@@ -69,6 +69,13 @@ test('evictionPlan: never evicts the kept (current) track', () => {
   assert.deepEqual(evictionPlan(entries, 200, 50, 'cur'), ['old']);
 });
 
+test('evictionPlan: a Set protects MULTIPLE tracks (just-written + currently-playing)', () => {
+  const entries = E([['old', 100, 10], ['playing', 100, 20], ['fresh', 100, 30]]);
+  // 300 used, budget 100, protect the playing track AND the fresh write →
+  // only 'old' is evictable (still over budget afterwards, but both survive).
+  assert.deepEqual(evictionPlan(entries, 300, 100, new Set(['playing', 'fresh'])), ['old']);
+});
+
 test('DEFAULT_BUF_MAX is 250 MB', () => {
   assert.equal(Downloads.DEFAULT_BUF_MAX, 250 * 1024 * 1024);
 });

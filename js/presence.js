@@ -19,7 +19,6 @@ const Presence = (() => {
 
   const LS = { name: 'pb_deviceName', board: 'pb_boardKey' };
 
-  let boardKey = null;
   let seed = null;
   let st = { book: null, track: null, pos: 0, at: 0, playState: 'idle', speed: 1, claim: 0, grab: false };
   let peers = [];
@@ -31,7 +30,10 @@ const Presence = (() => {
   let prunedSession = false;   // one-shot dead-board sweep per app launch
 
   const now = () => (Plex.serverNow ? Plex.serverNow() : Date.now());
-  const shortId = () => (Plex.getClientId() || 'dev').replace(/[^a-z0-9]/gi, '').slice(-8);
+  // Our own hidden-playlist board (the shared primitive in plex.js — it owns
+  // ensure/create, 404-vs-transient publish handling, and the LS-persisted key).
+  // Guarded for the Node unit tests, which load this module without plex.js.
+  const board = (typeof Plex !== 'undefined' && Plex.makeBoard) ? Plex.makeBoard(PREFIX, LS.board) : null;
 
   function name() {
     let n = localStorage.getItem(LS.name);
@@ -53,22 +55,9 @@ const Presence = (() => {
   // The math lives in PBLogic (js/logic.js) so the unit tests run the real thing.
   function livePos(dev) { return PBLogic.livePos(dev, now()); }
 
-  async function ensureBoard() {
-    if (boardKey) return boardKey;
-    const saved = localStorage.getItem(LS.board);
-    if (saved) { boardKey = saved; return boardKey; }
-    if (!seed) return null;
-    try {
-      boardKey = await Plex.createPlaylist(PREFIX + shortId(), seed);
-      if (boardKey) localStorage.setItem(LS.board, boardKey);
-    } catch (e) { console.warn('Presence: board create failed', e.message); }
-    return boardKey;
-  }
-
   // Write our current state as an event (stamps `at` = server-now).
   async function publish() {
-    const rk = await ensureBoard();
-    if (!rk) return;
+    if (!board) return;
     st.at = now();
     const blob = JSON.stringify({
       id: Plex.getClientId(), name: name(),
@@ -76,16 +65,16 @@ const Presence = (() => {
       at: st.at, state: st.playState, speed: st.speed, claim: st.claim,
       g: st.grab ? 1 : 0,   // "grabbed": owns the book (via a scrub takeover) even while paused → a playing peer still yields
     });
-    try {
-      const st = await Plex.setPlaylistSummary(rk, blob);
-      if (st === 404) { boardKey = null; localStorage.removeItem(LS.board); dbg('PRES', 'board gone (404) — will recreate'); }
-      else if (!(st >= 200 && st < 300)) dbg('PRES', 'publish transient ' + st + ' — keeping board');   // don't churn a new board on a relay hiccup
-    } catch (e) { console.warn('Presence: publish failed', e.message); dbg('PRES', 'publish FAILED ' + (e && e.message)); }
+    // (Careful naming here: `st` above is the presence STATE — an earlier version
+    // shadowed it with the HTTP status inside this block.)
+    const status = await board.publish(blob, () => seed);
+    if (status === 404) dbg('PRES', 'board gone (404) — will recreate');
+    else if (!(status >= 200 && status < 300)) dbg('PRES', 'publish transient ' + status + ' — keeping board');   // don't churn a new board on a relay hiccup
   }
 
   async function poll() {
     try {
-      const boards = await Plex.listBoards(PREFIX);
+      const boards = await board.readAll();
       const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
       // Drop ourselves, idle boards, and "playing" ghosts (crashed mid-play).
       // The filter + supersede rules live in PBLogic so the unit tests run them.
@@ -113,7 +102,7 @@ const Presence = (() => {
     for (let i = 0; i < boards.length; i++) {
       const b = boards[i], p = parsed[i];
       if (!b || b.ratingKey == null) continue;
-      if (String(b.ratingKey) === String(boardKey)) continue;      // our own board (by key)
+      if (String(b.ratingKey) === String(board.key())) continue;   // our own board (by key)
       if (p && p.id && p.id === meId) continue;                    // our own board (by id)
       const age = now() - (p.at || 0);
       const dead = !p || p.state === 'idle'
@@ -218,7 +207,7 @@ const Presence = (() => {
 
   return {
     init, setActive, claimPlaying, setPlaying, grab, setPaused, setTrack, setIdle, flush, setSpeed,
-    livePos, getPeers: () => peers, getClaim: () => st.claim, name, setName,
+    livePos, getClaim: () => st.claim, name, setName,
   };
 })();
 

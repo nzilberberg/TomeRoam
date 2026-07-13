@@ -14,20 +14,6 @@ const PBLogic = (() => {
 
   const fmtBytes = (n) => n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : (n / 1048576).toFixed(1) + ' MB';
 
-  // Which track index to download next for the bank (null = nothing to do).
-  // Rules (see the banking comment block in app.js): current + immediate next
-  // are always wanted; beyond that only while `used` bytes stay under `budget`;
-  // never look further than maxAhead; skip already-banked and too-big tracks.
-  // `banked` and `skip` only need a .has(idx) method (Map/Set both work).
-  function pickNextBank({ idx, count, banked, skip, used, budget, maxAhead }) {
-    for (let i = idx; i < count && (i - idx) < maxAhead; i++) {
-      if (banked.has(i) || skip.has(i)) continue;
-      if (i <= idx + 1) return i;
-      return used < budget ? i : null;
-    }
-    return null;
-  }
-
   // Extrapolated CURRENT position (ms) of a device state at time `now` (server
   // clock): a playing device advances from its {pos, at} anchor at `speed`.
   function livePos(dev, now) {
@@ -99,7 +85,10 @@ const PBLogic = (() => {
     return chunks.length ? chunks : [''];
   }
 
-  return { fmt, fmtBytes, pickNextBank, livePos, recency, filterPeers, findSuperseder, pickResume, fitLines, chunkText };
+  // NOTE: the banking scheduler (pickNextBank) used to live here too, but app.js
+  // reimplemented selection as nextToBank and the copy here tested dead code —
+  // removed rather than left as false test coverage.
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, fitLines, chunkText };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;
