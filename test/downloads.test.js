@@ -48,6 +48,39 @@ test('default max is 4 GB', () => {
   assert.equal(Downloads.DEFAULT_MAX, 4 * 1024 * 1024 * 1024);
 });
 
+// Regression: byte limits must survive a set→get round-trip UNCHANGED for every
+// capacity the settings UI offers. A prior implementation stored `n | 0`, which
+// coerces to signed-32-bit and corrupted everything above ~2 GB (2 GB → negative,
+// 4/8/16 GB → 0). See the parseByteLimit header in js/downloads.js.
+const { parseByteLimit } = Downloads._test;
+test('parseByteLimit: every capacity the UI offers round-trips exactly', () => {
+  const GB = 1024 * 1024 * 1024;
+  for (const g of [1, 2, 4, 8, 16]) {
+    const bytes = g * GB;
+    assert.equal(parseByteLimit(bytes, -1), bytes, `${g} GB must not be corrupted`);
+    assert.equal(parseByteLimit(String(bytes), -1), bytes, `${g} GB as a stored string`);
+  }
+});
+test('parseByteLimit: values around the 32-bit boundary and MAX_SAFE_INTEGER', () => {
+  assert.equal(parseByteLimit(2147483648, -1), 2147483648);   // 2^31 — exactly where |0 went negative
+  assert.equal(parseByteLimit(4294967296, -1), 4294967296);   // 2^32 — where |0 went to 0
+  assert.equal(parseByteLimit(Number.MAX_SAFE_INTEGER, -1), Number.MAX_SAFE_INTEGER);
+});
+test('parseByteLimit: invalid / previously-corrupted values fall back to the default', () => {
+  assert.equal(parseByteLimit(0, 777), 777);                  // old `|0`-of-4GB residue
+  assert.equal(parseByteLimit(-2147483648, 777), 777);        // old `|0`-of-2GB residue (negative)
+  assert.equal(parseByteLimit('garbage', 777), 777);
+  assert.equal(parseByteLimit(null, 777), 777);
+  assert.equal(parseByteLimit(Number.MAX_SAFE_INTEGER + 1, 777), 777);   // beyond safe-integer precision
+});
+test('setMaxBytes/maxBytes: the full setter→getter path preserves large caps', () => {
+  const GB = 1024 * 1024 * 1024;
+  Downloads.setMaxBytes(16 * GB);
+  assert.equal(Downloads.maxBytes(), 16 * GB);
+  Downloads.setMaxBytes(2 * GB);
+  assert.equal(Downloads.maxBytes(), 2 * GB);
+});
+
 // Persistent-buffer eviction: oldest-first until under budget, never the `keep`.
 const { evictionPlan } = Downloads._test;
 const E = (arr) => arr.map(([k, size, ts]) => [k, { size, ts }]);

@@ -55,12 +55,28 @@ const Downloads = (() => {
   const swEvict = (track) => { try { const c = navigator.serviceWorker && navigator.serviceWorker.controller; if (c) c.postMessage({ type: 'EVICT_DL', track: String(track) }); } catch {} };
 
   // ---- settings -------------------------------------------------------------
+  // BYTE LIMITS ARE NOT 32-BIT SAFE. A download/buffer cap is a byte count, and the
+  // capacities this app offers reach 4 GB (2^32) and 16 GB (2^34) — far past the
+  // signed-32-bit range. Bitwise operators (`| 0`, `>>>`, `~`, `<<`) coerce their
+  // operand to a signed 32-bit int, which silently CORRUPTS these values: 2 GB
+  // wraps to a negative number (then every capacity check `need <= max` fails, so
+  // NO download can start), and 4/8/16 GB truncate to 0 (which then reads back as
+  // the default via `0 || DEFAULT`, so the user's larger choice is silently ignored).
+  // => never route a byte quantity through a bitwise op; parse and validate as a
+  // plain non-negative safe integer. `parseByteLimit` also HEALS values already
+  // written by an earlier bitwise setter: a stored negative or 0 is treated as
+  // invalid and falls back to the default, so a device that previously "chose 2 GB"
+  // and bricked its downloads self-repairs on the next read.
+  const parseByteLimit = (raw, dflt) => {
+    const v = Math.trunc(Number(raw));
+    return (Number.isSafeInteger(v) && v > 0) ? v : dflt;
+  };
   const wifiOnly = () => { try { return localStorage.getItem(LS.wifi) !== '0'; } catch { return true; } };
   const setWifiOnly = (on) => { try { localStorage.setItem(LS.wifi, on ? '1' : '0'); } catch {} if (on === false) pump(); };
-  const maxBytes = () => { try { return parseInt(localStorage.getItem(LS.max), 10) || DEFAULT_MAX; } catch { return DEFAULT_MAX; } };
-  const setMaxBytes = (n) => { try { localStorage.setItem(LS.max, String(n | 0)); } catch {} notify(); };
-  const bufMaxBytes = () => { try { return parseInt(localStorage.getItem(LS.bufMax), 10) || DEFAULT_BUF_MAX; } catch { return DEFAULT_BUF_MAX; } };
-  const setBufMaxBytes = (n) => { try { localStorage.setItem(LS.bufMax, String(n | 0)); } catch {} evictBuffer(); notify(); };
+  const maxBytes = () => { try { return parseByteLimit(localStorage.getItem(LS.max), DEFAULT_MAX); } catch { return DEFAULT_MAX; } };
+  const setMaxBytes = (n) => { const v = parseByteLimit(n, null); if (v != null) { try { localStorage.setItem(LS.max, String(v)); } catch {} } notify(); };
+  const bufMaxBytes = () => { try { return parseByteLimit(localStorage.getItem(LS.bufMax), DEFAULT_BUF_MAX); } catch { return DEFAULT_BUF_MAX; } };
+  const setBufMaxBytes = (n) => { const v = parseByteLimit(n, null); if (v != null) { try { localStorage.setItem(LS.bufMax, String(v)); } catch {} } evictBuffer(); notify(); };
 
   // ---- connection detection (see header) ------------------------------------
   function connType() { try { const c = navigator.connection; return (c && c.type) || null; } catch { return null; } }
@@ -492,7 +508,7 @@ const Downloads = (() => {
     fetchAudioBlob,   // the one shared streaming byte-loop (banking uses it too)
     listDownloaded, storageInfo,
     wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, bufMaxBytes, setBufMaxBytes, DEFAULT_MAX, DEFAULT_BUF_MAX,
-    _test: { decideStart, capFits, frac, unmetered, evictionPlan },
+    _test: { decideStart, capFits, frac, unmetered, evictionPlan, parseByteLimit },
   };
 })();
 

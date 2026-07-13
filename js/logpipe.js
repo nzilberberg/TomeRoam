@@ -102,6 +102,29 @@ const LogPipe = (() => {
     localStorage.setItem(LS.cmdSeq, String(cmd.seq));
     dbg('CMD', `#${cmd.seq} ${cmd.cmd} ${String(cmd.arg || '').slice(0, 120)}`);
     let out;
+    // SECURITY / TRUST MODEL of the `eval` and `js` commands (arbitrary code
+    // execution). This is a remote REPL and is intentionally powerful — it is the
+    // ONLY way to inspect and drive a real device in the field, because the app
+    // runs over the Plex relay and cannot be reached on the LAN, and because the
+    // hardest bugs are platform-specific (iOS audio, WebView, suspend/resume) and
+    // don't reproduce on a desktop. It is NOT dead debug scaffolding; treat it as
+    // load-bearing before removing it.
+    //
+    // Why it's an acceptable (not careless) risk as written:
+    //   * It runs ONLY while the user has manually enabled Options → Live debug
+    //     (isOn(); default OFF). A shipped/default install never polls this board.
+    //   * The command board lives in the user's OWN Plex account. Writing a command
+    //     already requires Plex-account/server write access — i.e. the attacker is
+    //     already inside the same trust boundary that holds the Plex token.
+    //   * seq must strictly increase (replay guard).
+    // The real residual escalation to keep in mind: from "can write this user's
+    // Plex playlists" to "can run JS in the app", which reaches the native WebView
+    // bridge — and that bridge can install an APK. So the meaningful hardening, IF
+    // this is ever exposed beyond the developer's own devices, is NOT to sprinkle
+    // more guards here but to (a) keep eval/js behind an explicit dev build/flag,
+    // (b) sign commands (key baked in the app) with expiry + nonce, and (c) keep
+    // the native bridge minimal. Deliberately left as-is for a single-user tool;
+    // documented so this is a decision, not an oversight.
     try {
       if (cmd.cmd === 'ping') out = 'pong';
       else if (cmd.cmd === 'state') out = PBDebug.snapshot();

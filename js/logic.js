@@ -48,13 +48,27 @@ const PBLogic = (() => {
 
   // Handoff/resume arbitration — the app's core promise: "a device picks up
   // exactly where the last one left off." From an ORDERED list of candidate
-  // resume points (each {track, pos, ts}), pick the NEWEST by timestamp. Strict
-  // '>' means the FIRST-listed candidate wins a tie, so callers must order by
-  // trust: least-authoritative first (cold cache / durable record), most-live
-  // last (an actively-playing peer, then our own live playback). Each candidate's
-  // pos is pre-resolved by the caller (a live peer's pos is its EXTRAPOLATED
-  // position at `now`, not its stale published anchor). Null entries are skipped;
-  // an empty list yields a null anchor at position 0.
+  // resume points (each {track, pos, ts}), pick the NEWEST by timestamp. Each
+  // candidate's pos is pre-resolved by the caller (a live peer's pos is its
+  // EXTRAPOLATED position at `now`, not its stale published anchor). Null entries
+  // are skipped; an empty list yields a null anchor at position 0.
+  //
+  // TIE POLICY — deliberate, do not "fix" to `>=`. Strict '>' means the
+  // FIRST-listed candidate keeps a timestamp tie, and callers list candidates
+  // least-authoritative FIRST (cold cache, then durable record, then this
+  // device's own record, then a live peer). So on an exact-ms tie the earlier,
+  // LESS live source is retained. This looks backwards but is correct here:
+  //   * Exact-ms ties across these heterogeneous sources are near-impossible
+  //     (cold ts is second-resolution ×1000; the rest are independent ms clocks),
+  //     and when they do coincide the candidates describe the same event at the
+  //     same position — so the winner's POSITION is identical either way.
+  //   * The ONE tie that actually changes the outcome — "we are already playing
+  //     this book, so the live playhead must win" — is NOT resolved here. A `>=`
+  //     was tried for it and still lost (the live event shares the last recorded
+  //     ts from the same session); it is handled in the caller by unconditionally
+  //     overriding with the live playhead stamped NOW (see bestSource in app.js).
+  // Reversing the order or switching to `>=` therefore fixes nothing real and
+  // would let a stale cold entry outrank a fresher durable record on a tie.
   function pickResume(cands) {
     let best = { track: null, pos: 0, ts: -Infinity };
     for (const c of cands) {

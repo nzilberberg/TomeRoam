@@ -2028,6 +2028,20 @@
 
   // Reset ALL saved progress for a book: unplay every track on Plex + drop it from
   // the resume store, then clear our local echoes and repaint the affected screens.
+  // KNOWN CROSS-DEVICE LIMITATION (documented so callers/reviewers don't assume
+  // reset is globally authoritative). This clears the book everywhere WE can reach
+  // synchronously — Plex server progress, this device's own record, the durable
+  // per-chapter/book records on our board, the cold tile hint. But progress here
+  // is a most-recent-wins merge across per-device boards, and a DELETE carries no
+  // timestamp, so it cannot win that merge: a peer still holding an older record
+  // for this book will re-surface it on the next merge/republish. Fully fixing
+  // this needs a timestamped, peer-honored book-level TOMBSTONE (a record that
+  // says "deleted at T", which merge treats as suppressing any record at/before T)
+  // rather than a bare local delete — and that tombstone must ride the SAME clock
+  // basis the boards already use for most-recent-wins, NOT a fresh server-clock
+  // read (the relay's Date header is too coarse/stale to compare across devices —
+  // it's why handoff went clock-free). Until then, reset is reliable on a single
+  // active device and best-effort across a live mesh.
   async function doResetProgress(book, title) {
     toast('Resetting…');
     let tracks = [];
