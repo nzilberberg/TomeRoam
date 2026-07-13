@@ -1495,63 +1495,31 @@
     }
   }
 
-  // ---- same-room handoff sync (see the sync-accuracy plan) -----------------
-  // When we ADOPT a live peer (tap its book / press play while it owns), the seek
-  // target is frozen at tap time and the peer keeps playing until our claim
-  // propagates — so first sound lands a speed-multiplied offset behind. Two
-  // corrections, both anchored on the peer's own {pos,at,speed} (PBLogic.handoffTarget):
-  //   #2 RE-ANCHOR AT FIRST SOUND — on our `playing` event, re-extrapolate the
-  //      peer's live anchor to that instant and micro-seek → zeroes startup latency.
-  //   #1 CLOCK-FREE FINAL CORRECTION — when the superseded peer's PAUSE lands (its
-  //      absolute final pos), snap to it → mops up residual clock skew. One seek, done.
-  const HANDOFF_TOL_SEC = 0.3;      // dead-band: skip a sub-300ms micro-seek
-  const HANDOFF_WINDOW_MS = 20000;  // stop expecting the peer's pause-flush after this
-  let handoff = null;   // { book, track, anchor:{pos,at,speed}, reanchored, until }
-
-  // Arm a pending sync against a LIVE peer we're adopting. `peer` is its presence
-  // event (playing); we snapshot its anchor so the correction is independent of
-  // later supersede state. Cleared by a user seek / grab / a fresh arm.
-  function armHandoff(book, peer) {
-    if (!peer) { handoff = null; return; }
-    handoff = {
-      book: String(book), track: peer.track,
-      anchor: { pos: peer.pos || 0, at: peer.at || 0, speed: peer.speed || 1 },
-      reanchored: false, until: Plex.serverNow() + HANDOFF_WINDOW_MS,
-    };
-  }
-  function clearHandoff() { handoff = null; }
-
-  // #2: fires from the `playing` event (first audible sound). Re-extrapolate the
-  // peer's LIVE anchor to now and seek there once — the peer is still playing at
-  // this instant (supersede hasn't landed yet), so this is its true live position.
-  function maybeReanchorHandoff() {
-    if (!handoff || handoff.reanchored) return;
-    const t = ctx && ctx.tracks[ctx.idx];
-    if (!ctx || String(ctx.book) !== handoff.book || !t || String(t.ratingKey) !== String(handoff.track)) { handoff = null; return; }
-    handoff.reanchored = true;
-    const target = PBLogic.handoffTarget(handoff.anchor, Plex.serverNow(), audio.currentTime || 0, HANDOFF_TOL_SEC, audio.duration || 0);
-    if (target == null) return;
-    if (window.PBDebug) PBDebug.log('SYNC', `re-anchor at first sound: ${(audio.currentTime || 0).toFixed(2)}s → ${target.toFixed(2)}s`);
-    audio.currentTime = target;
-  }
-
-  // #1: fires from onPeers when fresh boards arrive. Once the superseded peer has
-  // PAUSED (state !== playing) on our exact chapter, treat its absolute final pos
-  // as a still-advancing anchor and snap to where a continuous listen would be now.
-  function maybeCorrectFromPeerPause() {
-    if (!handoff || !ctx || String(ctx.book) !== handoff.book) return;
-    if (Plex.serverNow() > handoff.until) { handoff = null; return; }
-    if (audio.paused) return;   // WE got superseded / paused — nothing to correct
-    const t = ctx.tracks[ctx.idx]; if (!t) return;
-    const p = peerFor(handoff.book);
-    if (!p || p.state === 'playing' || String(p.track) !== String(t.ratingKey)) return;   // wait for the pause; same chapter only
-    const speed = audio.playbackRate || handoff.anchor.speed || 1;
-    const target = PBLogic.handoffTarget({ pos: p.pos || 0, at: p.at || 0, speed }, Plex.serverNow(), audio.currentTime || 0, HANDOFF_TOL_SEC, audio.duration || 0);
-    handoff = null;   // one corrective micro-seek, then stand down
-    if (target == null) return;
-    if (window.PBDebug) PBDebug.log('SYNC', `final-position correction: ${(audio.currentTime || 0).toFixed(2)}s → ${target.toFixed(2)}s (peer paused @ ${((p.pos || 0) / 1000).toFixed(2)}s)`);
-    audio.currentTime = target;
-  }
+  // ---- same-room handoff sync (see js/handoff.js + the sync-accuracy plan) --
+  // The state machine lives in HandoffController (js/handoff.js) so it's unit-
+  // testable; here we wire it to live audio/ctx/peer access. The four delegators
+  // below stay `function` declarations because playBook (armHandoff) and
+  // grabFromPeer (clearHandoff) call them from EARLIER in this file and rely on
+  // hoisting — a const arrow would land them in the temporal dead zone.
+  HandoffController.init({
+    now: () => Plex.serverNow(),
+    context: () => {
+      if (!ctx) return null;
+      const t = ctx.tracks[ctx.idx];
+      return {
+        book: ctx.book, trackRk: t ? t.ratingKey : null,
+        curSec: audio.currentTime || 0, durSec: audio.duration || 0,
+        paused: audio.paused, speed: audio.playbackRate || 1,
+      };
+    },
+    seek: (sec) => { audio.currentTime = sec; },
+    peerFor,
+    debug: (tag, m) => { if (window.PBDebug) PBDebug.log(tag, m); },
+  });
+  function armHandoff(book, peer) { HandoffController.arm(book, peer); }
+  function clearHandoff() { HandoffController.clear(); }
+  function maybeReanchorHandoff() { HandoffController.reanchorAtFirstSound(); }
+  function maybeCorrectFromPeerPause() { HandoffController.correctFromPeerPause(); }
 
   // A peer that OWNS + is playing our currently-loaded book — the live session to
   // mirror/adopt. Gated on claim: it must own the session (newer claim than ours), so
