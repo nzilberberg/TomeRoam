@@ -16,15 +16,18 @@
 // CAN'T (iOS), we let the user choose ("Download now" vs "Queue"). Queued books
 // auto-start when connectivity returns.
 const Downloads = (() => {
-  const LS = { wifi: 'pb_dl_wifionly', max: 'pb_dl_max', queue: 'pb_dl_queue' };
-  const DEFAULT_MAX = 4 * 1024 * 1024 * 1024;   // 4 GB (see storage research)
+  const LS = { wifi: 'pb_dl_wifionly', max: 'pb_dl_max', queue: 'pb_dl_queue', bufMax: 'pb_buf_max' };
+  const DEFAULT_MAX = 4 * 1024 * 1024 * 1024;        // 4 GB downloads cap
+  const DEFAULT_BUF_MAX = 250 * 1024 * 1024;         // 250 MB persistent-buffer budget
 
   const dbg = (t, m) => { if (window.PBDebug) PBDebug.log(t, m); };
   const available = () => !!(window.Store && Store.available && typeof fetch !== 'undefined');
 
   const books = {};                 // bookKey -> state
-  const dlTracks = new Set();       // ratingKeys of downloaded tracks (blue-line lookup)
+  const dlTracks = new Set();       // ratingKeys of DOWNLOADED tracks (blue line, pinned)
+  const bufTracks = new Set();      // ratingKeys of persistently-BUFFERED tracks (gray line, evictable)
   let usedBytes = 0;                // total bytes of completed downloads
+  let bufBytes = 0;                 // total bytes of persisted buffer
   let subs = [];
   let queue = loadQueue();          // [{ book, meta }]
   let current = null;               // bookKey downloading now
@@ -35,6 +38,8 @@ const Downloads = (() => {
   const setWifiOnly = (on) => { try { localStorage.setItem(LS.wifi, on ? '1' : '0'); } catch {} if (on === false) pump(); };
   const maxBytes = () => { try { return parseInt(localStorage.getItem(LS.max), 10) || DEFAULT_MAX; } catch { return DEFAULT_MAX; } };
   const setMaxBytes = (n) => { try { localStorage.setItem(LS.max, String(n | 0)); } catch {} notify(); };
+  const bufMaxBytes = () => { try { return parseInt(localStorage.getItem(LS.bufMax), 10) || DEFAULT_BUF_MAX; } catch { return DEFAULT_BUF_MAX; } };
+  const setBufMaxBytes = (n) => { try { localStorage.setItem(LS.bufMax, String(n | 0)); } catch {} evictBuffer(); notify(); };
 
   // ---- connection detection (see header) ------------------------------------
   function connType() { try { const c = navigator.connection; return (c && c.type) || null; } catch { return null; } }
@@ -82,6 +87,69 @@ const Downloads = (() => {
   function progress(book) { const s = stateOf(book); return frac(s.done, s.total); }
 
   const getBlob = (track) => (available() ? Store.getAudio(track) : Promise.resolve(null));
+
+  // ---- persistent buffer (durable write-through of the RAM look-ahead) -------
+  // Whatever the banking system decides to buffer is ALSO written here so it
+  // survives a restart and plays offline (served, like downloads, via the SW
+  // range path). Downloaded tracks are pinned (never here). Evicted oldest-first
+  // to stay under bufMaxBytes. The BANKING SELECTION is unchanged — this only
+  // persists what it already chose.
+  const bufMeta = new Map();        // track -> { size, ts } (no blobs; for eviction sort)
+  const trackBuffered = (track) => bufTracks.has(String(track)) && !dlTracks.has(String(track));
+  const trackLocal = (track) => dlTracks.has(String(track)) || bufTracks.has(String(track));  // playable offline
+
+  async function bufferTrack(book, track, blob) {
+    if (!available() || !blob) return;
+    const k = String(track);
+    if (dlTracks.has(k)) return;                      // pinned download wins — don't duplicate
+    if (bufTracks.has(k)) { const m = bufMeta.get(k); if (m) { m.ts = Date.now(); Store.putBuf({ track: k, book: String(book), size: m.size, ts: m.ts }); } return; }
+    try {
+      await Store.putAudio(k, book, blob, 'buffer');
+      const rec = { track: k, book: String(book), size: blob.size, ts: Date.now() };
+      await Store.putBuf(rec);
+      bufTracks.add(k); bufMeta.set(k, { size: rec.size, ts: rec.ts }); bufBytes += rec.size;
+      await evictBuffer(k);
+      notify(book);
+    } catch (e) { dbg('DL', 'buffer persist failed ' + (e && e.message)); }
+  }
+
+  // Pure: which tracks to evict (oldest-first) to get under `max`, never `keep`.
+  function evictionPlan(entries, bytes, max, keep) {
+    const out = [];
+    if (bytes <= max) return out;
+    let b = bytes;
+    const order = entries.slice().sort((a, c) => (a[1].ts || 0) - (c[1].ts || 0));   // oldest first
+    for (const [k, m] of order) { if (b <= max) break; if (String(k) === String(keep)) continue; out.push(k); b -= (m.size || 0); }
+    return out;
+  }
+  // Drop oldest buffered tracks until under budget. `keep` is never evicted.
+  async function evictBuffer(keep) {
+    const plan = evictionPlan([...bufMeta.entries()], bufBytes, bufMaxBytes(), keep);
+    for (const k of plan) {
+      const m = bufMeta.get(k); if (!m) continue;
+      try { await Store.delAudio(k); await Store.delBuf(k); } catch {}
+      bufTracks.delete(k); bufMeta.delete(k); bufBytes = Math.max(0, bufBytes - m.size);
+      dbg('DL', `buffer evicted track=${k}`);
+    }
+  }
+
+  // A track becoming a pinned download: drop it from the buffer index/accounting.
+  // The audio blob stays (now owned by the download), so don't delAudio.
+  function demoteBuffer(k) {
+    k = String(k);
+    if (!bufTracks.has(k)) return;
+    const m = bufMeta.get(k);
+    bufTracks.delete(k); bufMeta.delete(k); if (m) bufBytes = Math.max(0, bufBytes - m.size);
+    Store.delBuf(k);
+  }
+
+  async function clearBuffer() {
+    if (!available()) return;
+    for (const k of [...bufTracks]) { try { await Store.delAudio(k); await Store.delBuf(k); } catch {} }
+    bufTracks.clear(); bufMeta.clear(); bufBytes = 0;
+    dbg('DL', 'buffer cleared'); notify();
+  }
+  const bufferUsage = () => bufBytes;
 
   // ---- cap / quota ----------------------------------------------------------
   const capFits = (used, need, max) => used + need <= max;
@@ -150,10 +218,17 @@ const Downloads = (() => {
       let done = 0, bytes = 0;
       for (const t of tracks) {
         if (!current || abortCur.signal.aborted) throw new Error('cancelled');
-        if (await Store.hasAudio(t.ratingKey)) { done++; setState(book, { done }); continue; }
+        const k = String(t.ratingKey);
+        if (await Store.hasAudio(t.ratingKey)) {
+          // Already local (a prior download OR a persisted buffer copy). Pin it as
+          // a download (blue) and demote it out of the evictable buffer.
+          const m = bufMeta.get(k); if (m) bytes += m.size;
+          dlTracks.add(k); demoteBuffer(k);
+          done++; setState(book, { done }); continue;
+        }
         const blob = await fetchTrack(t, book, abortCur.signal);
-        await Store.putAudio(t.ratingKey, book, blob);
-        dlTracks.add(String(t.ratingKey));
+        await Store.putAudio(t.ratingKey, book, blob, 'download');
+        dlTracks.add(k); demoteBuffer(k);
         curDl = { track: null, frac: 0 };            // this track is now 100% (via dlTracks)
         bytes += blob.size; done++; usedBytes += blob.size;
         setState(book, { done, bytes });
@@ -236,6 +311,18 @@ const Downloads = (() => {
         usedBytes += r.size || 0;
       }
       dbg('DL', `restored ${rows.length} downloaded book(s), ${(usedBytes / 1048576).toFixed(0)}MB`);
+      // Persisted buffer index (metadata only). Skip any track that's part of a
+      // downloaded book (dl wins), then run one eviction pass in case the budget
+      // shrank since last session.
+      const bufRows = await Store.allBuf();
+      bufBytes = 0;
+      for (const r of bufRows) {
+        const k = String(r.track);
+        if (dlTracks.has(k)) { Store.delBuf(k); continue; }
+        bufTracks.add(k); bufMeta.set(k, { size: r.size || 0, ts: r.ts || 0 }); bufBytes += r.size || 0;
+      }
+      await evictBuffer();
+      dbg('DL', `restored ${bufTracks.size} buffered track(s), ${(bufBytes / 1048576).toFixed(0)}MB`);
     } catch (e) { dbg('DL', 'init err ' + (e && e.message)); }
     // Auto-resume queued downloads when connectivity/Wi-Fi returns.
     try { if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', () => pump()); } catch {}
@@ -248,9 +335,10 @@ const Downloads = (() => {
     init, available, subscribe,
     request, start, queueFor, remove,
     stateOf, isDownloaded, isBusy, trackDownloaded, trackProgress, progress, getBlob,
+    trackBuffered, trackLocal, bufferTrack, clearBuffer, bufferUsage,
     listDownloaded, storageInfo,
-    wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, DEFAULT_MAX,
-    _test: { decideStart, capFits, frac, unmetered },
+    wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, bufMaxBytes, setBufMaxBytes, DEFAULT_MAX, DEFAULT_BUF_MAX,
+    _test: { decideStart, capFits, frac, unmetered, evictionPlan },
   };
 })();
 

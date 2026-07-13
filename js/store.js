@@ -16,7 +16,7 @@
 // offline cache). NEVER throws into callers.
 const Store = (() => {
   const DB = 'tomeroam';
-  const VER = 2;   // v2 added the `audio` + `dl` stores (offline downloads)
+  const VER = 3;   // v2: audio+dl (downloads). v3: buf (persistent buffer index)
   // Object stores. `kv` is a generic key→value bag (settings, timestamps, route,
   // env, misc). The rest are keyed collections.
   const STORES = {
@@ -27,8 +27,9 @@ const Store = (() => {
     albums:  { keyPath: 'ratingKey' },    // per-book detail (getAlbum result)
     sync:    { keyPath: 'id' },           // pending-sync queue items
     diag:    { keyPath: 'k' },            // diagnostics metadata bag
-    audio:   { keyPath: 'track' },        // downloaded audio Blobs: { track, book, blob, size, ts }
+    audio:   { keyPath: 'track' },        // audio Blobs (download OR buffer): { track, book, blob, size, ts, kind }
     dl:      { keyPath: 'book' },          // downloaded-book index: { book, title, author, thumb, tracks:[rk], size, ts }
+    buf:     { keyPath: 'track' },          // persistent-buffer index (metadata only, no blob): { track, book, size, ts }
   };
 
   const dbg = (t, m) => { if (window.PBDebug) PBDebug.log(t, m); };
@@ -172,7 +173,7 @@ const Store = (() => {
   // ---- downloaded audio (offline downloads) ---------------------------------
   // Big binary Blobs live ONLY in IndexedDB (never localStorage). If IDB is
   // unavailable these all no-op / return null, and Downloads reports unavailable.
-  const putAudio = (track, book, blob) => put('audio', { track: String(track), book: String(book), blob, size: (blob && blob.size) || 0, ts: Date.now() });
+  const putAudio = (track, book, blob, kind) => put('audio', { track: String(track), book: String(book), blob, size: (blob && blob.size) || 0, ts: Date.now(), kind: kind || 'download' });
   const getAudio = (track) => get('audio', String(track)).then((r) => (r && r.blob) || null);
   const hasAudio = (track) => get('audio', String(track)).then((r) => !!(r && r.blob));
   const delAudio = (track) => del('audio', String(track));
@@ -182,6 +183,11 @@ const Store = (() => {
   const getDl = (book) => get('dl', String(book));
   const allDl = () => getAll('dl');
   const delDl = (book) => del('dl', String(book));
+  // Persistent-buffer index: small metadata rows (no blobs), so eviction can sort
+  // by age without ever loading gigabytes of audio.
+  const putBuf = (rec) => put('buf', rec);
+  const allBuf = () => getAll('buf');
+  const delBuf = (track) => del('buf', String(track));
 
   return {
     available, open,
@@ -191,7 +197,7 @@ const Store = (() => {
     cacheBooks, cachedBooks, cacheAuthors, cachedAuthors,
     cacheTracks, cachedTracks, cacheAlbum, cachedAlbum,
     persist, estimate,
-    putAudio, getAudio, hasAudio, delAudio, putDl, getDl, allDl, delDl,
+    putAudio, getAudio, hasAudio, delAudio, putDl, getDl, allDl, delDl, putBuf, allBuf, delBuf,
   };
 })();
 

@@ -311,6 +311,10 @@
       }
       const blob = new Blob(chunks, { type: res.headers.get('Content-Type') || 'audio/mpeg' });
       banks.set(idx, { url: URL.createObjectURL(blob), bytes: received });
+      // Durable write-through: whatever banking chose to buffer also persists so it
+      // survives a restart + plays offline (gray line). Banking SELECTION is
+      // unchanged; this just saves the bytes it already fetched. Fire-and-forget.
+      if (window.Downloads && Downloads.bufferTrack) Downloads.bufferTrack(bankBook, t.ratingKey, blob);
       if (ctx && ctx.idx === idx) paintMeter();   // banks.has(idx) now true → meterPct() = 100
       updateFileRows();                            // this chapter's blue line → full (downloaded)
       if (window.PBDebug) PBDebug.log('BANK_DONE', `idx=${idx} bytes=${received} used=${usedBytes()}`);
@@ -1138,9 +1142,12 @@
       // downloading right now, else 0.
       const dlProg = window.Downloads ? Downloads.trackProgress(track) : 0;
       let buf = 0, isDl = false;
-      if (dlProg > 0) { buf = dlProg * 100; isDl = true; }
+      if (dlProg > 0) { buf = dlProg * 100; isDl = true; }   // downloaded (or downloading) → BLUE
+      else if (window.Downloads && Downloads.trackBuffered && Downloads.trackBuffered(track)) {
+        buf = 100;                                           // persisted buffer → GRAY, survives restart
+      }
       else if (idx >= 0) {
-        if (banks.has(idx)) buf = 100;                       // whole chapter buffered in memory
+        if (banks.has(idx)) buf = 100;                       // whole chapter buffered in memory (this session)
         else if (ctx.idx === idx) buf = nativeBufferedPct(); // playing → native stream buffer
         else if (bankingIdx === idx) buf = bankPct;          // buffering now
       }
@@ -1320,7 +1327,7 @@
       pumpBank();   // no-ops for a fully-downloaded book (see pumpBank guard)
     };
     if (banked) useSrc(banked, 'banked');
-    else if (window.Downloads && Downloads.trackDownloaded(t.ratingKey)) {
+    else if (window.Downloads && Downloads.trackLocal && Downloads.trackLocal(t.ratingKey)) {
       // Serve the downloaded blob through the SERVICE WORKER (`./__dl/<track>`),
       // which supports HTTP range requests. iOS <audio> REJECTS a blob: object URL
       // for media (needs range support) → AUDIO_ERR code=4; a SW-served range URL
@@ -1956,6 +1963,7 @@
            <div class="opt-row"><span class="opt-label" id="dlWifiLabel">Wi‑Fi only</span><span class="opt-ctl"><button id="dlWifi" class="toggle" role="switch"></button></span></div>
            <div class="opt-row"><span class="opt-label">Max download space</span><span class="opt-ctl"><select id="dlMax"></select></span></div>
            <div id="dlUsage" class="dlusage"></div>
+           <div class="opt-row"><span class="opt-label">Buffered audio<div id="dlBufTxt" class="opt-sub"></div></span><span class="opt-ctl"><button id="dlClearBuf" class="textbtn">Clear buffer</button></span></div>
            <div class="section-title">Downloaded books</div>
            <div id="dlList" class="dllist"></div>
          </div>`;
@@ -1964,6 +1972,10 @@
       const sel = dlScreenEl.querySelector('#dlMax');
       [1, 2, 4, 8, 16].forEach((g) => { const o = document.createElement('option'); o.value = String(g * GB); o.textContent = g + ' GB'; sel.appendChild(o); });
       sel.addEventListener('change', (e) => { dl.setMaxBytes(parseInt(e.target.value, 10)); renderDlUsage(); });
+      dlScreenEl.querySelector('#dlClearBuf').addEventListener('click', () => {
+        modal({ title: 'Clear buffered audio?', body: '<p>This removes auto-buffered chapters (the gray lines). Your downloaded books (blue) are kept.</p>',
+          buttons: [{ label: 'Clear buffer', cls: 'danger', run: () => { dl.clearBuffer(); renderDlUsage(); } }, { label: 'Cancel' }] });
+      });
       const wifi = dlScreenEl.querySelector('#dlWifi');
       wifi.addEventListener('click', () => { const on = dl.wifiOnly(); dl.setWifiOnly(!on); wifi.setAttribute('aria-checked', on ? 'false' : 'true'); });
     }
@@ -1996,6 +2008,8 @@
     const pct = info.max ? Math.min(100, Math.round((info.used / info.max) * 100)) : 0;
     const q = info.quotaSupported ? ` · device free ≈ ${fmtGB(Math.max(0, info.quota - info.quotaUsage))}` : '';
     box.innerHTML = `<div class="dlbar"><i style="width:${pct}%"></i></div><div class="dlusage-txt">${fmtGB(info.used)} of ${fmtGB(info.max)}${q}</div>`;
+    const bt = dlScreenEl.querySelector('#dlBufTxt');
+    if (bt && Downloads.bufferUsage) bt.textContent = `${fmtGB(Downloads.bufferUsage())} of ${fmtGB(Downloads.bufMaxBytes())} · auto, evicts oldest`;
   }
   async function renderDlList() {
     const host = dlScreenEl && dlScreenEl.querySelector('#dlList'); if (!host) return;

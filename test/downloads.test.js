@@ -47,3 +47,28 @@ test('progress fraction is clamped and safe for zero-length books', () => {
 test('default max is 4 GB', () => {
   assert.equal(Downloads.DEFAULT_MAX, 4 * 1024 * 1024 * 1024);
 });
+
+// Persistent-buffer eviction: oldest-first until under budget, never the `keep`.
+const { evictionPlan } = Downloads._test;
+const E = (arr) => arr.map(([k, size, ts]) => [k, { size, ts }]);
+
+test('evictionPlan: nothing to evict when under budget', () => {
+  const entries = E([['a', 50, 1], ['b', 50, 2]]);
+  assert.deepEqual(evictionPlan(entries, 100, 250, null), []);
+});
+
+test('evictionPlan: drops OLDEST first until under budget', () => {
+  const entries = E([['new', 100, 30], ['old', 100, 10], ['mid', 100, 20]]);
+  // 300 used, budget 150 → must drop 'old' then 'mid' (oldest ts first) → 100 left
+  assert.deepEqual(evictionPlan(entries, 300, 150, null), ['old', 'mid']);
+});
+
+test('evictionPlan: never evicts the kept (current) track', () => {
+  const entries = E([['old', 100, 10], ['cur', 100, 20]]);
+  // 200 used, budget 50, keep 'cur' → evict 'old', then 'cur' is protected (still over, but kept)
+  assert.deepEqual(evictionPlan(entries, 200, 50, 'cur'), ['old']);
+});
+
+test('DEFAULT_BUF_MAX is 250 MB', () => {
+  assert.equal(Downloads.DEFAULT_BUF_MAX, 250 * 1024 * 1024);
+});
