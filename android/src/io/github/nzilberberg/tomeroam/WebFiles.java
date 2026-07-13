@@ -50,7 +50,7 @@ final class WebFiles {
     // Resolve (and, if needed, seed/promote) the active web root the WebView should
     // serve from. Returns null only if seeding fails entirely, in which case the
     // caller falls back to serving straight from read-only assets.
-    static synchronized File resolveActiveRoot(Context ctx) {
+    static synchronized File resolveActiveRoot(Context ctx, boolean autoPromote) {
         File current = currentDir(ctx);
         String bundled = bundledBuild(ctx);
 
@@ -73,10 +73,22 @@ final class WebFiles {
             }
         }
 
-        // 2) Apply a previously-staged OTA build if it is newer + complete.
-        promoteStagedIfReady(ctx);
+        // 2) Apply a previously-staged OTA build (newer + complete) ONLY if the user
+        //    enabled "Auto update on launch". Otherwise leave it staged; the web app
+        //    surfaces it as the Options "App update" button (applied on a tap). This
+        //    is what keeps the app from EVER updating on its own by default.
+        if (autoPromote) promoteStagedIfReady(ctx);
 
         return new File(current, "index.html").exists() ? current : null;
+    }
+
+    // The build id of a complete, newer staged OTA build (so the web layer can light
+    // the Options "App update" button when auto-update is off), or null if none.
+    static synchronized String stagedBuildIfReady(Context ctx) {
+        File staged = stagedDir(ctx), current = currentDir(ctx);
+        if (!new File(staged, "index.html").exists()) return null;
+        String sB = readBuild(staged), cB = readBuild(current);
+        return compareBuild(sB, cB) > 0 ? sB : null;
     }
 
     // Promote web/staged -> web/current when staged is a complete, newer build.

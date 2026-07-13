@@ -42,6 +42,8 @@ public class MainActivity extends Activity {
 
     private static final String HOST = "tomeroam.local";
     private static final String APP_URL = "https://" + HOST + "/index.html?nosw=1";
+    private static final String PREFS = "tomeroam";
+    private static final String PREF_AUTO_UPDATE = "auto_update";   // mirror of the web Options toggle
 
     // Bump ONLY when the NATIVE shell changes (this file, PlexDirectTrust, the
     // updater, manifest) — NOT for web-only builds. When build.json publishes a
@@ -62,7 +64,10 @@ public class MainActivity extends Activity {
         // writable copy (instead of read-only assets) is what lets web builds update
         // over the air with no reinstall. The origin (tomeroam.local) is unchanged,
         // so localStorage/IndexedDB survive across updates.
-        webRoot = WebFiles.resolveActiveRoot(this);
+        // Apply a staged OTA build at boot ONLY if the user opted into auto-update
+        // (default false) — otherwise it waits for the Options "App update" tap.
+        boolean autoUpdate = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(PREF_AUTO_UPDATE, false);
+        webRoot = WebFiles.resolveActiveRoot(this, autoUpdate);
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF14171C);
@@ -245,6 +250,22 @@ public class MainActivity extends Activity {
     private final class AppBridge {
         @JavascriptInterface
         public int nativeVersion() { return NATIVE_VERSION; }
+
+        // The build id of an OTA web build staged but not yet applied (auto-update
+        // off), or "" if none — lets the web app light the Options "App update"
+        // button on launch for a build staged on a previous run.
+        @JavascriptInterface
+        public String stagedBuild() {
+            String s = WebFiles.stagedBuildIfReady(MainActivity.this);
+            return s == null ? "" : s;
+        }
+
+        // Mirror the web "Auto update on launch" toggle into a native pref, read at
+        // boot (before the web app loads) to decide whether to promote a staged build.
+        @JavascriptInterface
+        public void setAutoUpdate(boolean v) {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(PREF_AUTO_UPDATE, v).apply();
+        }
 
         // Apply a web build WebUpdater has already staged: promote it to the active
         // root and reload. Invoked only when the user taps Options → App update — we

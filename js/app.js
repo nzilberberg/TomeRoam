@@ -22,6 +22,8 @@
   // the bars/resume. It persists its own localStorage cache, so it survives offline.
   const FRESH = 'pb_freshStart';            // Options: fresh-start-on-auto-advance (default ON)
   const GRACE_KEY = 'pb_resetGrace';        // Options: seconds before a rolled-into chapter's old progress is discarded
+  const AUTOUPD = 'pb_autoUpdate';          // Options (APK only): apply a staged update on the next cold launch (default OFF)
+  const autoUpdateOn = () => localStorage.getItem(AUTOUPD) === '1';
   const freshStartOn = () => localStorage.getItem(FRESH) !== '0';
   const resetGraceSec = () => { const v = parseInt(localStorage.getItem(GRACE_KEY) || '', 10); return isNaN(v) ? 10 : v; };
   let rollGuard = null;                     // { track, until } — suppress recording a rolled-into chapter during its grace window
@@ -1858,6 +1860,7 @@
     // play via the SW, so this is no longer RAM-bound — deeper options are safe.
     fill($('optBuffer'), getBufferMB(), [0, 32, 64, 128, 200], (v) => (v === 0 ? 'Off' : v));
     $('optFreshStart').setAttribute('aria-checked', freshStartOn() ? 'true' : 'false');
+    $('optAutoUpdate').setAttribute('aria-checked', autoUpdateOn() ? 'true' : 'false');
     fill($('optResetGrace'), resetGraceSec(), [0, 5, 10, 20, 30], (v) => (v === 0 ? 'Now' : v));
   }
 
@@ -2438,6 +2441,13 @@
     // Options: roll-over behaviour (see rollToTrack / recordProgress grace guard).
     $('optFreshStart').addEventListener('click', () => { const on = freshStartOn(); localStorage.setItem(FRESH, on ? '0' : '1'); $('optFreshStart').setAttribute('aria-checked', on ? 'false' : 'true'); });
     $('optResetGrace').addEventListener('change', (e) => localStorage.setItem(GRACE_KEY, e.target.value));
+    // Auto update on launch (APK): also push the new value into the native boot pref.
+    $('optAutoUpdate').addEventListener('click', () => {
+      const on = autoUpdateOn();
+      localStorage.setItem(AUTOUPD, on ? '0' : '1');
+      $('optAutoUpdate').setAttribute('aria-checked', on ? 'false' : 'true');
+      try { if (window.TomeRoamNative && TomeRoamNative.setAutoUpdate) TomeRoamNative.setAutoUpdate(!on); } catch {}
+    });
     $('signout').addEventListener('click', () => {
       if (!confirm('Sign out of Plex?')) return;
       Plex.signOut(); audio.pause(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');
@@ -2493,6 +2503,25 @@
     // staged (the global covers the race where staging finished before this ran).
     window.addEventListener('tomeroam-update-ready', (e) => markUpdateAvailable(e && e.detail));
     if (window.__tomeroamUpdateReady) markUpdateAvailable(window.__tomeroamUpdateReady);
+    // "Auto update on launch" is an APK-only concept (the native shell promotes a
+    // staged build at boot). Only show the row when the native bridge is present.
+    const autoRow = $('optAutoUpdateRow');
+    if (autoRow) autoRow.classList.toggle('hidden', !window.TomeRoamNative);
+    try {
+      if (window.TomeRoamNative) {
+        // Mirror the current preference into the native boot decision (source of
+        // truth = localStorage; the native SharedPreference is a write-through copy
+        // read before the web app loads).
+        if (TomeRoamNative.setAutoUpdate) TomeRoamNative.setAutoUpdate(autoUpdateOn());
+        // With auto-update OFF (default), native did NOT promote a build staged on a
+        // prior launch — surface it so the user can apply it on demand. (With it ON,
+        // native already promoted at boot, so nothing is left staged.)
+        if (!autoUpdateOn() && TomeRoamNative.stagedBuild) {
+          const staged = TomeRoamNative.stagedBuild();
+          if (staged) markUpdateAvailable(staged);
+        }
+      }
+    } catch {}
   }
 
   function initServiceWorker() {
