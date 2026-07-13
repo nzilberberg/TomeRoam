@@ -38,8 +38,18 @@ const Downloads = (() => {
   // the .35/.36 banking lesson: a background fetch racing the element's own
   // stream truncates it on iOS → bogus `ended` / code=4); currentTrack = the
   // ratingKey the element is playing (never evict its bytes out from under it).
-  const hooks = { shouldYield: null, currentTrack: null };
-  const protectedTracks = () => { try { const c = hooks.currentTrack && hooks.currentTrack(); return c != null ? new Set([String(c)]) : new Set(); } catch { return new Set(); } };
+  const hooks = { shouldYield: null, currentTrack: null, protectTracks: null };
+  const playingTrack = () => { try { const c = hooks.currentTrack && hooks.currentTrack(); return c != null ? String(c) : null; } catch { return null; } };
+  // Broad protection for BUDGET eviction: the playing track plus everything the
+  // host says is about to play (the look-ahead window). Oldest-first eviction
+  // would otherwise eat the nearest-ahead files first — within one book they're
+  // the OLDEST writes — so deep prefetch would evict its own runway.
+  const protectedTracks = () => {
+    const s = new Set();
+    const cur = playingTrack(); if (cur) s.add(cur);
+    try { const arr = hooks.protectTracks && hooks.protectTracks(); if (arr) for (const k of arr) s.add(String(k)); } catch {}
+    return s;
+  };
   // Tell the SW to forget its 1-entry blob cache for a deleted track, so it can't
   // keep serving removed (or stale re-downloaded) audio for its whole lifetime.
   const swEvict = (track) => { try { const c = navigator.serviceWorker && navigator.serviceWorker.controller; if (c) c.postMessage({ type: 'EVICT_DL', track: String(track) }); } catch {} };
@@ -109,11 +119,14 @@ const Downloads = (() => {
   const trackBuffered = (track) => bufTracks.has(String(track)) && !dlTracks.has(String(track));
   const trackLocal = (track) => dlTracks.has(String(track)) || bufTracks.has(String(track));  // playable offline
 
+  // Returns true when the track's bytes are durably local afterwards (persisted
+  // now, already buffered, or pinned as a download) — the banking scheduler uses
+  // this to decide whether it still needs to hold a RAM copy.
   async function bufferTrack(book, track, blob) {
-    if (!available() || !blob) return;
+    if (!available() || !blob) return false;
     const k = String(track);
-    if (dlTracks.has(k)) return;                      // pinned download wins — don't duplicate
-    if (bufTracks.has(k)) { const m = bufMeta.get(k); if (m) { m.ts = Date.now(); Store.putBuf({ track: k, book: String(book), size: m.size, ts: m.ts }); } return; }
+    if (dlTracks.has(k)) return true;                 // pinned download wins — don't duplicate
+    if (bufTracks.has(k)) { const m = bufMeta.get(k); if (m) { m.ts = Date.now(); Store.putBuf({ track: k, book: String(book), size: m.size, ts: m.ts }); } return true; }
     try {
       await Store.putAudio(k, book, blob, 'buffer');
       const rec = { track: k, book: String(book), size: blob.size, ts: Date.now() };
@@ -121,7 +134,29 @@ const Downloads = (() => {
       bufTracks.add(k); bufMeta.set(k, { size: rec.size, ts: rec.ts }); bufBytes += rec.size;
       await evictBuffer(k);
       notify(book);
-    } catch (e) { dbg('DL', 'buffer persist failed ' + (e && e.message)); }
+      return true;
+    } catch (e) { dbg('DL', 'buffer persist failed ' + (e && e.message)); return false; }
+  }
+
+  // Persisted size of one buffered track (0 if not in the buffer) — the banking
+  // look-ahead budget counts disk bytes now, not just RAM.
+  const bufferedSize = (track) => { const m = bufMeta.get(String(track)); return m ? (m.size || 0) : 0; };
+
+  // Targeted single-track eviction for the banking scheduler's proximity-priority
+  // path (a skip-back leaves far-ahead files squatting the look-ahead budget so
+  // the nearer gap can't buffer). Deliberately uses the NARROW protection —
+  // pinned downloads and the playing track — not the look-ahead window, since
+  // the caller is evicting window files on purpose. Accounting updates
+  // synchronously so budgets re-check immediately; IDB deletes are best-effort.
+  function dropBuffered(track) {
+    const k = String(track);
+    if (!bufTracks.has(k) || dlTracks.has(k) || k === playingTrack()) return false;
+    const m = bufMeta.get(k);
+    bufTracks.delete(k); bufMeta.delete(k); if (m) bufBytes = Math.max(0, bufBytes - m.size);
+    try { Store.delAudio(k); Store.delBuf(k); } catch {}
+    swEvict(k);
+    dbg('DL', `buffer dropped (proximity) track=${k}`);
+    return true;
   }
 
   // Pure: which tracks to evict (oldest-first) to get under `max`. `keep` (a
@@ -164,7 +199,11 @@ const Downloads = (() => {
 
   async function clearBuffer() {
     if (!available()) return;
-    const prot = protectedTracks();   // keep the currently-playing track's bytes (it's being served from them)
+    // Explicit user action — only the currently-playing track's bytes survive
+    // (it's being served from them); the look-ahead window does NOT (narrow, not
+    // protectedTracks(), or "Clear buffer" would silently keep the next hour).
+    const cur = playingTrack();
+    const prot = cur ? new Set([cur]) : new Set();
     for (const k of [...bufTracks]) {
       if (prot.has(k)) continue;
       try { await Store.delAudio(k); await Store.delBuf(k); } catch {}
@@ -402,6 +441,7 @@ const Downloads = (() => {
   async function init(opts) {
     if (opts && opts.shouldYield) hooks.shouldYield = opts.shouldYield;
     if (opts && opts.currentTrack) hooks.currentTrack = opts.currentTrack;
+    if (opts && opts.protectTracks) hooks.protectTracks = opts.protectTracks;
     if (!available()) { dbg('DL', 'unavailable (no IndexedDB)'); return; }
     try {
       const rows = await Store.allDl();
@@ -448,7 +488,7 @@ const Downloads = (() => {
     init, available, subscribe, suspend,
     request, start, queueFor, remove,
     stateOf, isDownloaded, isBusy, trackDownloaded, trackProgress, progress, getBlob,
-    trackBuffered, trackLocal, bufferTrack, clearBuffer, bufferUsage,
+    trackBuffered, trackLocal, bufferTrack, bufferedSize, dropBuffered, clearBuffer, bufferUsage,
     fetchAudioBlob,   // the one shared streaming byte-loop (banking uses it too)
     listDownloaded, storageInfo,
     wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, bufMaxBytes, setBufMaxBytes, DEFAULT_MAX, DEFAULT_BUF_MAX,

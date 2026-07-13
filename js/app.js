@@ -65,7 +65,10 @@
   // 'suspend'/'progress' hooks). Escape hatch: localStorage pb_banking='off'.
   const BANKING_ENABLED = (localStorage.getItem('pb_banking') || 'on') !== 'off';
   const BANK_KEY = 'pb_bankBudget';         // Options: look-ahead budget in MB
-  const DEFAULT_BUDGET_MB = 64;             // ≈ one audiobook chapter of prefetch
+  // The look-ahead bytes live on DISK now (banked blobs persist to IndexedDB and
+  // play via the SW range path; RAM copies are dropped once persisted — see
+  // bankOne), so the budget is no longer OOM-bound. 128 MB ≈ 2h+ of prefetch.
+  const DEFAULT_BUDGET_MB = 128;
   const MAX_BUDGET_MB = 256;                // hard clamp on the look-ahead budget
   const MAX_AHEAD = 60;
   const BANK_MIN_AHEAD = 60;                // only prefetch when the live element has ≥ this many seconds buffered ahead (it's not urgently pulling)
@@ -124,7 +127,7 @@
   // progress, or 100 for a banked copy — whichever is furthest along.
   function meterPct() {
     if (!ctx) return 0;
-    return Math.max(bankPct, nativeBufferedPct(), banks.has(ctx.idx) ? 100 : 0);
+    return Math.max(bankPct, nativeBufferedPct(), (banks.has(ctx.idx) || locallyStored(ctx.idx)) ? 100 : 0);
   }
   function paintMeter() { setBuffered(meterPct()); }
   // Track change: reset the banking driver and force a repaint for the new track
@@ -143,7 +146,21 @@
   // current one is a sunk cost (it's playing, held for the offline tail), so counting
   // it against the "Buffer ahead" budget meant a single big current chapter (a 48-min
   // 40 MB one) ate the whole budget → nothing prefetched. The budget is prefetch-ahead.
-  function lookAheadUsed() { let n = 0; for (const [idx, b] of banks) if (!ctx || idx !== ctx.idx) n += b.bytes; return n; }
+  // Bytes held LOCALLY for the upcoming window (excludes the current chapter —
+  // it's a sunk cost). Counts RAM banks AND the persisted buffer: since banked
+  // blobs go to disk and RAM copies are dropped, disk is where the look-ahead
+  // actually lives, and files persisted last session count toward depth too.
+  function lookAheadUsed() {
+    if (!ctx) return 0;
+    let n = 0;
+    for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
+      const b = banks.get(i);
+      if (b) { n += b.bytes; continue; }
+      const t = ctx.tracks[i];
+      if (t && window.Downloads && Downloads.bufferedSize) n += Downloads.bufferedSize(t.ratingKey);
+    }
+    return n;
+  }
   const MAX_TOTAL_BANK_BYTES = 128 * 1024 * 1024;   // hard OOM guard: total held (current + look-ahead) never exceeds this (the .27-era crash was ~180 MB)
   const fitsTotal = (est) => usedBytes() + est <= MAX_TOTAL_BANK_BYTES;
   // Standard offline-audio model (Audible/Spotify/Audiobookshelf): download whole
@@ -164,7 +181,12 @@
     for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {   // 2) forward window
       if (banks.has(i) || skipBank.has(i) || locallyStored(i)) continue;
       const est = estBytes(ctx.tracks[i]);
-      return (lookAheadUsed() + est <= budget && fitsTotal(est)) ? i : null;   // nearest unbanked upcoming file, if it fits
+      // A file that can NEVER fit — bigger than the whole budget or the per-track
+      // cap — will simply stream when reached: skip past it rather than damming
+      // the queue (it used to return null here and block every smaller file
+      // behind it from ever prefetching).
+      if (est > budget || est > MAX_TRACK_BANK_BYTES) continue;
+      return (lookAheadUsed() + est <= budget && fitsTotal(est)) ? i : null;   // nearest fetchable upcoming file, if it fits NOW
     }
     return null;
   }
@@ -177,10 +199,13 @@
   // still span the window so a big streamed file doesn't sever the run behind it.
   function bankWindowMax() {
     if (!ctx) return -1;
-    const sizeOf = (i) => banks.has(i) ? banks.get(i).bytes : estBytes(ctx.tracks[i]);
-    let keepMax = ctx.idx, total = skipBank.has(ctx.idx) ? 0 : sizeOf(ctx.idx);
+    // RAM cost per file: actual bytes if RAM-banked; zero for streamed (skipBank)
+    // and locally-stored files (they play from disk via the SW, never RAM) — both
+    // span the window without occupying memory; else the estimate.
+    const sizeOf = (i) => banks.has(i) ? banks.get(i).bytes
+      : (skipBank.has(i) || locallyStored(i)) ? 0 : estBytes(ctx.tracks[i]);
+    let keepMax = ctx.idx, total = sizeOf(ctx.idx);
     for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
-      if (skipBank.has(i)) { keepMax = i; continue; }
       const sz = sizeOf(i);
       if (total + sz <= MAX_TOTAL_BANK_BYTES) { total += sz; keepMax = i; }
       else break;
@@ -193,17 +218,28 @@
   // target, so it never disturbs the nearer window during ordinary forward playback.
   function freeBudgetForNearest() {
     if (!ctx) return;
+    const budget = bankBudgetBytes();
     let target = -1, est = 0;
     for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
-      if (banks.has(i) || skipBank.has(i)) continue;
-      target = i; est = estBytes(ctx.tracks[i]); break;                   // nearest unbanked upcoming
+      if (banks.has(i) || skipBank.has(i) || locallyStored(i)) continue;  // already local — nothing to fund
+      const e = estBytes(ctx.tracks[i]);
+      if (e > budget || e > MAX_TRACK_BANK_BYTES) continue;               // never fetchable — not worth evicting for
+      target = i; est = e; break;                                         // nearest fetchable upcoming
     }
     if (target < 0 || !fitsTotal(est)) return;                           // nothing to prefetch, or won't fit the OOM cap regardless
-    const budget = bankBudgetBytes();
     if (lookAheadUsed() + est <= budget) return;                         // already fits → don't evict
-    const farther = [...banks.keys()].filter((j) => j > target).sort((a, b) => b - a);   // farthest first
+    // Farthest-first over everything the look-ahead budget counts beyond the
+    // target: RAM banks AND persisted-buffer files (the budget lives on disk now).
+    const farther = [];
+    for (let i = target + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
+      const t = ctx.tracks[i];
+      if (banks.has(i) || (t && window.Downloads && Downloads.trackBuffered && Downloads.trackBuffered(t.ratingKey))) farther.push(i);
+    }
+    farther.sort((a, b) => b - a);
     for (const j of farther) {
       revokeBank(j);
+      const t = ctx.tracks[j];
+      if (t && window.Downloads && Downloads.dropBuffered) Downloads.dropBuffered(t.ratingKey);
       if (lookAheadUsed() + est <= budget) break;
     }
   }
@@ -274,8 +310,10 @@
     return forwardBufferedSec() < need;
   }
   function stuckOnStream() {
-    return ctx && !audio.paused && banks.has(ctx.idx)
-      && !(audio.src && audio.src.startsWith('blob:')) && forwardBufferedSec() <= 3;
+    if (!ctx || audio.paused) return false;
+    const src = audio.src || '';
+    if (src.startsWith('blob:') || src.includes('/__dl/')) return false;   // already playing the local copy
+    return (banks.has(ctx.idx) || locallyStored(ctx.idx)) && forwardBufferedSec() <= 3;
   }
   function maybeRecoverFromBank() {
     if (stallTimer || !stuckOnStream()) return;
@@ -303,14 +341,19 @@
           if (total && ctx && ctx.idx === idx) { bankPct = (received / total) * 100; paintMeter(); }   // meter tracks the CURRENT track only
         },
       });
-      banks.set(idx, { url: URL.createObjectURL(blob), bytes });
-      // Durable write-through: whatever banking chose to buffer also persists so it
-      // survives a restart + plays offline (gray line). Banking SELECTION is
-      // unchanged; this just saves the bytes it already fetched. Fire-and-forget.
-      if (window.Downloads && Downloads.bufferTrack) Downloads.bufferTrack(bankBook, t.ratingKey, blob);
-      if (ctx && ctx.idx === idx) paintMeter();   // banks.has(idx) now true → meterPct() = 100
-      updateFileRows();                            // this chapter's blue line → full (downloaded)
-      if (window.PBDebug) PBDebug.log('BANK_DONE', `idx=${idx} bytes=${bytes} used=${usedBytes()}`);
+      // Persist FIRST: the durable disk copy (survives restart, plays offline via
+      // the SW range path) is the real bank now. Hold a RAM copy ONLY when the SW
+      // can't serve the bytes back — persist failed, or no controller (desktop
+      // #nosw; also iOS pre-first-SW-install, where a blob: URL is the only local
+      // source that works). RAM blobs were the old jetsam hazard; the disk copy
+      // makes them redundant, which is what lets the look-ahead budget be deep.
+      const persisted = window.Downloads && Downloads.bufferTrack
+        ? await Downloads.bufferTrack(bankBook, t.ratingKey, blob) : false;
+      const swServes = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+      if (!(persisted && swServes)) banks.set(idx, { url: URL.createObjectURL(blob), bytes });
+      if (ctx && ctx.idx === idx) paintMeter();   // locallyStored/banks now true → meterPct() = 100
+      updateFileRows();                            // this chapter's line → full (gray buffered / blue downloaded)
+      if (window.PBDebug) PBDebug.log('BANK_DONE', `idx=${idx} bytes=${bytes} ${persisted ? 'disk' : 'RAM'} ramUsed=${usedBytes()}`);
     } catch (e) {
       if (e && e.code === 'OVERSIZE') {
         skipBank.add(idx);
@@ -1167,6 +1210,7 @@
   let lastProgRefresh = 0;
   function onPeers(list) {
     peersNow = list; renderPresence();
+    maybeCorrectFromPeerPause();   // #1: the superseded peer's pause-flush may have just landed
     // A presence change usually means a handoff — pull the durable progress boards too
     // (throttled) so the new author's book/chapter record catches up fast, not only on
     // the slow 20s poll. The instant display already rides presence via peerBookCum.
@@ -1215,6 +1259,7 @@
   function grabFromPeer() {
     if (!ctx) return;
     const t = ctx.tracks[ctx.idx]; if (!t) return;
+    clearHandoff();   // user picked an explicit spot — don't let a pending sync overwrite it
     ctx.updatedAt = Plex.serverNow();
     Presence.grab(ctx.book, t.ratingKey, (audio.currentTime || 0) * 1000);
     setMirrorClass(false);
@@ -1281,6 +1326,11 @@
     } catch (e) { toast(e.message || 'Could not start playback'); }
   }
   function playBook(entry, alb) {
+    // If a peer is LIVE on this book it wins bestSource (a playing peer's recency
+    // is server-now) — so this tap is a same-room handoff. Arm the sync against it
+    // so first sound + its pause land us in true sync, not a latency behind.
+    const lp = peerFor(entry.book);
+    armHandoff(entry.book, lp && lp.state === 'playing' ? lp : null);
     return beginPlayback(entry.book, alb, () => {
       // Freshest of: cold value, durable record, our own spot, a live peer
       // extrapolated to now — captures rewinds too.
@@ -1290,6 +1340,7 @@
   }
   // Play a book starting at a SPECIFIC track/offset (from the files view).
   function playBookAt(bookRk, meta, trackRk, startMs) {
+    clearHandoff();   // explicit target — no peer to sync to
     return beginPlayback(bookRk, meta, () => ({ track: trackRk, posMs: startMs || 0 }));
   }
 
@@ -1420,6 +1471,64 @@
     }
   }
 
+  // ---- same-room handoff sync (see the sync-accuracy plan) -----------------
+  // When we ADOPT a live peer (tap its book / press play while it owns), the seek
+  // target is frozen at tap time and the peer keeps playing until our claim
+  // propagates — so first sound lands a speed-multiplied offset behind. Two
+  // corrections, both anchored on the peer's own {pos,at,speed} (PBLogic.handoffTarget):
+  //   #2 RE-ANCHOR AT FIRST SOUND — on our `playing` event, re-extrapolate the
+  //      peer's live anchor to that instant and micro-seek → zeroes startup latency.
+  //   #1 CLOCK-FREE FINAL CORRECTION — when the superseded peer's PAUSE lands (its
+  //      absolute final pos), snap to it → mops up residual clock skew. One seek, done.
+  const HANDOFF_TOL_SEC = 0.3;      // dead-band: skip a sub-300ms micro-seek
+  const HANDOFF_WINDOW_MS = 20000;  // stop expecting the peer's pause-flush after this
+  let handoff = null;   // { book, track, anchor:{pos,at,speed}, reanchored, until }
+
+  // Arm a pending sync against a LIVE peer we're adopting. `peer` is its presence
+  // event (playing); we snapshot its anchor so the correction is independent of
+  // later supersede state. Cleared by a user seek / grab / a fresh arm.
+  function armHandoff(book, peer) {
+    if (!peer) { handoff = null; return; }
+    handoff = {
+      book: String(book), track: peer.track,
+      anchor: { pos: peer.pos || 0, at: peer.at || 0, speed: peer.speed || 1 },
+      reanchored: false, until: Plex.serverNow() + HANDOFF_WINDOW_MS,
+    };
+  }
+  function clearHandoff() { handoff = null; }
+
+  // #2: fires from the `playing` event (first audible sound). Re-extrapolate the
+  // peer's LIVE anchor to now and seek there once — the peer is still playing at
+  // this instant (supersede hasn't landed yet), so this is its true live position.
+  function maybeReanchorHandoff() {
+    if (!handoff || handoff.reanchored) return;
+    const t = ctx && ctx.tracks[ctx.idx];
+    if (!ctx || String(ctx.book) !== handoff.book || !t || String(t.ratingKey) !== String(handoff.track)) { handoff = null; return; }
+    handoff.reanchored = true;
+    const target = PBLogic.handoffTarget(handoff.anchor, Plex.serverNow(), audio.currentTime || 0, HANDOFF_TOL_SEC, audio.duration || 0);
+    if (target == null) return;
+    if (window.PBDebug) PBDebug.log('SYNC', `re-anchor at first sound: ${(audio.currentTime || 0).toFixed(2)}s → ${target.toFixed(2)}s`);
+    audio.currentTime = target;
+  }
+
+  // #1: fires from onPeers when fresh boards arrive. Once the superseded peer has
+  // PAUSED (state !== playing) on our exact chapter, treat its absolute final pos
+  // as a still-advancing anchor and snap to where a continuous listen would be now.
+  function maybeCorrectFromPeerPause() {
+    if (!handoff || !ctx || String(ctx.book) !== handoff.book) return;
+    if (Plex.serverNow() > handoff.until) { handoff = null; return; }
+    if (audio.paused) return;   // WE got superseded / paused — nothing to correct
+    const t = ctx.tracks[ctx.idx]; if (!t) return;
+    const p = peerFor(handoff.book);
+    if (!p || p.state === 'playing' || String(p.track) !== String(t.ratingKey)) return;   // wait for the pause; same chapter only
+    const speed = audio.playbackRate || handoff.anchor.speed || 1;
+    const target = PBLogic.handoffTarget({ pos: p.pos || 0, at: p.at || 0, speed }, Plex.serverNow(), audio.currentTime || 0, HANDOFF_TOL_SEC, audio.duration || 0);
+    handoff = null;   // one corrective micro-seek, then stand down
+    if (target == null) return;
+    if (window.PBDebug) PBDebug.log('SYNC', `final-position correction: ${(audio.currentTime || 0).toFixed(2)}s → ${target.toFixed(2)}s (peer paused @ ${((p.pos || 0) / 1000).toFixed(2)}s)`);
+    audio.currentTime = target;
+  }
+
   // A peer that OWNS + is playing our currently-loaded book — the live session to
   // mirror/adopt. Gated on claim: it must own the session (newer claim than ours), so
   // once WE grab (scrub) or play, our fresher claim stops us mirroring/adopting it.
@@ -1445,6 +1554,7 @@
       if (idx >= 0) {
         if (window.PBDebug) PBDebug.log('PLAY', `resume ADOPT ${p.name || 'peer'} idx=${idx} pos=${((best.pos || 0) / 1000).toFixed(1)}s`);
         ctx.updatedAt = Plex.serverNow();
+        armHandoff(ctx.book, p);   // sync to the live peer's true position at first sound + on its pause
         if (idx === ctx.idx) { audio.currentTime = (best.pos || 0) / 1000; audio.play(); }
         else { startTrack(idx, (best.pos || 0) / 1000); Presence.setTrack(best.track, best.pos || 0); }   // peer moved to another chapter → load it + fix our board's track
         return;
@@ -1473,6 +1583,7 @@
   // publish immediately so peers pick up the new spot (incl. rewinds) fast.
   function onManualSeek() {
     if (!ctx) return;
+    clearHandoff();   // an explicit scrub is the user's chosen spot — cancel any pending handoff correction
     ctx.updatedAt = Plex.serverNow();
     Presence.flush(audio.currentTime * 1000);
     saveLastPlayed();
@@ -1517,7 +1628,7 @@
   audio.addEventListener('stalled', () => { pumpBank(); maybeRecoverFromBank(); });
   audio.addEventListener('canplaythrough', pumpBank);
   audio.addEventListener('waiting', maybeRecoverFromBank);
-  audio.addEventListener('playing', () => { clearTimeout(stallTimer); stallTimer = null; });
+  audio.addEventListener('playing', () => { clearTimeout(stallTimer); stallTimer = null; maybeReanchorHandoff(); });
   // Network drops on a slow relay surface as MEDIA_ERR_NETWORK — don't give up,
   // reload the same track at the position we'd reached, with exponential backoff.
   // MEDIA_ERR_ABORTED just means we swapped src on purpose, so ignore it.
@@ -1525,9 +1636,12 @@
     const err = audio.error;
     if (!err || err.code === err.MEDIA_ERR_ABORTED) return;
     if (window.PBDebug) PBDebug.log('AUDIO_ERR', `code=${err.code} t=${(audio.currentTime||0).toFixed(1)} ${(err.message||'')}`);
-    // If this exact track is already fully banked, recover from the local copy
-    // immediately — startTrack prefers the blob, so no network + no backoff.
-    const haveBank = !!(curLoad && banks.has(curLoad.idx));
+    // If this exact track is already fully local (RAM bank or the persisted
+    // buffer/download), recover from the local copy immediately — startTrack
+    // prefers it, so no network + no backoff. Only when the failing src was the
+    // STREAM, though: an error on the local path itself must not zero-delay-loop.
+    const srcWasLocal = !!(audio.src && (audio.src.startsWith('blob:') || audio.src.includes('/__dl/')));
+    const haveBank = !!(curLoad && !srcWasLocal && (banks.has(curLoad.idx) || locallyStored(curLoad.idx)));
     if (curLoad && err.code === err.MEDIA_ERR_NETWORK && (haveBank || loadRetry < MAX_LOAD_RETRY)) {
       const at = Math.max(audio.currentTime || 0, curLoad.seekSec || 0);   // resume where we were
       const wasPlaying = !audio.paused || curLoad.autoplay;
@@ -1725,9 +1839,9 @@
     const SKIPS = [5, 10, 15, 20, 30, 45, 60];
     fill($('optSkipBack'), getSkipBack(), SKIPS);
     fill($('optSkipFwd'), getSkipFwd(), SKIPS);
-    // Look-ahead only — the current + next chapter always bank (capped per-track)
-    // for a seamless boundary. Kept small so iOS doesn't OOM.
-    fill($('optBuffer'), getBufferMB(), [0, 32, 64], (v) => (v === 0 ? 'Off' : v));
+    // Look-ahead prefetch budget. Banked bytes persist to disk (IndexedDB) and
+    // play via the SW, so this is no longer RAM-bound — deeper options are safe.
+    fill($('optBuffer'), getBufferMB(), [0, 32, 64, 128, 200], (v) => (v === 0 ? 'Off' : v));
     $('optFreshStart').setAttribute('aria-checked', freshStartOn() ? 'true' : 'false');
     fill($('optResetGrace'), resetGraceSec(), [0, 5, 10, 20, 30], (v) => (v === 0 ? 'Now' : v));
   }
@@ -2517,10 +2631,20 @@
     //                  the .35/.36 iOS truncated-stream lesson),
     //   currentTrack — never evict the buffered bytes the element is playing
     //                  through the SW right now.
+    //   protectTracks — the upcoming look-ahead window: budget eviction is
+    //                  oldest-first, and within one book the nearest-ahead files
+    //                  are the OLDEST writes — without this, prefetching deep
+    //                  would evict its own runway to fund farther files.
     if (window.Downloads) {
       Downloads.init({
         shouldYield: () => { try { return elementBusy(); } catch { return false; } },
         currentTrack: () => (ctx && ctx.tracks[ctx.idx] ? ctx.tracks[ctx.idx].ratingKey : null),
+        protectTracks: () => {
+          if (!ctx) return [];
+          const out = [];
+          for (let i = ctx.idx; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) out.push(ctx.tracks[i].ratingKey);
+          return out;
+        },
       });
       Downloads.subscribe(refreshDlUi);
       injectDownloadsOptionRow();

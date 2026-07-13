@@ -65,6 +65,29 @@ const PBLogic = (() => {
     return best;
   }
 
+  // Same-room handoff sync (see the sync-accuracy plan). Given a peer ANCHOR
+  // {pos, at, speed} and the current local playhead, return the corrective seek
+  // target in SECONDS, or null if no correction is warranted. Two callers, one
+  // formula:
+  //   * re-anchor at FIRST SOUND: anchor = the peer's live (playing) event — we
+  //     froze the seek target at tap time; extrapolating the SAME anchor to the
+  //     instant our audio actually starts zeroes the grab-to-sound latency.
+  //   * clock-free FINAL correction: anchor = the superseded peer's PAUSE event
+  //     (its absolute final pos + when it paused). Treating that paused anchor as
+  //     if it kept playing gives where a continuous listen would be NOW, without
+  //     extrapolating a position across the whole handoff window — only the short
+  //     since-pause gap carries any clock skew, so the residual is negligible.
+  // `now` is the server clock; `tolSec` is the dead-band (skip a sub-threshold
+  // micro-seek); `durSec` (optional) clamps out a target past the track end.
+  function handoffTarget(anchor, now, curSec, tolSec, durSec) {
+    if (!anchor) return null;
+    const target = livePos({ pos: anchor.pos, at: anchor.at, state: 'playing', speed: anchor.speed }, now) / 1000;
+    if (!(target > 0)) return null;
+    if (durSec && target >= durSec) return null;
+    if (Math.abs(target - (curSec || 0)) <= (tolSec || 0)) return null;
+    return target;
+  }
+
   // The most recent lines whose joined length (with \n) fits maxChars — always
   // a contiguous tail, newest kept. Returns how many older lines were dropped.
   function fitLines(lines, maxChars) {
@@ -88,7 +111,7 @@ const PBLogic = (() => {
   // NOTE: the banking scheduler (pickNextBank) used to live here too, but app.js
   // reimplemented selection as nextToBank and the copy here tested dead code —
   // removed rather than left as false test coverage.
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, fitLines, chunkText };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

@@ -90,3 +90,47 @@ test('deterministic tie: durable and our own record share a timestamp → the sa
   assert.equal(a.track, 'chD', 'durable is listed before mine → wins the tie');
   assert.deepEqual(a, b, 'stable across evaluations');
 });
+
+// --- Same-room handoff SYNC: PBLogic.handoffTarget (sync-accuracy plan #1/#2) ---
+// The adopting device must land on the peer's TRUE position, not a latency behind.
+// handoffTarget(anchor{pos,at,speed}, now, curSec, tolSec, durSec) → seek target
+// (sec) or null. Anchor pos is in ms; now/at on the server clock (ms).
+
+test('#2 re-anchor at first sound: the frozen tap-time estimate is pushed forward by the grab-to-sound latency', () => {
+  // Peer anchored at 1000s, playing 1.5×. We froze the tap-time estimate and it
+  // took 800ms of load before our audio actually started; the peer advanced
+  // 800ms*1.5 = 1.2s in that window. curSec is where the frozen seek left us.
+  const anchor = { pos: 1000_000, at: NOW, speed: 1.5 };
+  const firstSound = NOW + 800;                 // 800ms later
+  const frozen = 1000;                          // we seeked to the tap-time pos (sec)
+  const target = L.handoffTarget(anchor, firstSound, frozen, 0.3, 5000);
+  assert.ok(Math.abs(target - 1001.2) < 0.01, `re-anchored to ${target}, expected ~1001.2`);
+});
+
+test('#2 no micro-seek when already within the dead-band', () => {
+  const anchor = { pos: 1000_000, at: NOW, speed: 1 };
+  // 200ms of latency at 1× = 0.2s drift, under the 0.3s tolerance → leave it alone.
+  assert.equal(L.handoffTarget(anchor, NOW + 200, 1000, 0.3, 5000), null);
+});
+
+test('#1 clock-free final correction: snap to the paused peer, advanced only by the short since-pause gap', () => {
+  // Superseded peer paused at exactly 1005s; its pause-flush lands 400ms later.
+  // Treated as still-playing at 1×, the continuous position now is 1005.4s.
+  const pausedAnchor = { pos: 1005_000, at: NOW, speed: 1 };
+  const landed = NOW + 400;
+  const weAreAt = 1004.0;                        // we drifted ~1.4s behind
+  const target = L.handoffTarget(pausedAnchor, landed, weAreAt, 0.3, 5000);
+  assert.ok(Math.abs(target - 1005.4) < 0.01, `corrected to ${target}, expected ~1005.4`);
+});
+
+test('#1 correction respects speed: the since-pause gap is scaled by the local rate', () => {
+  const pausedAnchor = { pos: 2000_000, at: NOW, speed: 2 };
+  const target = L.handoffTarget(pausedAnchor, NOW + 500, 1999, 0.3, 5000);   // 0.5s * 2 = 1.0s
+  assert.ok(Math.abs(target - 2001.0) < 0.01, `got ${target}, expected ~2001.0`);
+});
+
+test('handoffTarget guards: null anchor, non-positive target, and past-end target all yield null', () => {
+  assert.equal(L.handoffTarget(null, NOW, 10, 0.3, 100), null);
+  assert.equal(L.handoffTarget({ pos: 0, at: NOW, speed: 1 }, NOW, 0, 0.3, 100), null);      // target 0 → not > 0
+  assert.equal(L.handoffTarget({ pos: 200_000, at: NOW, speed: 1 }, NOW, 10, 0.3, 150), null); // 200s ≥ 150s dur
+});
