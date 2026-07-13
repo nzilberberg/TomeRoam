@@ -98,6 +98,14 @@ window.Browse = (() => {
   // shouldn't re-render (and re-decode every cover) to reflect one book's
   // progress. Each row carries data-key + a `_sig` JSON signature.
   //
+  // Content signatures = what a row actually DISPLAYS (cover/title/author/progress),
+  // NOT the raw record. Invisible bookkeeping (lastViewedAt/addedAt) churns on the
+  // active book every open; keying off it re-rendered rows for changes you can't
+  // see. patchRows compares row._sig against sigFn(item) with the SAME projection —
+  // they MUST match, or every row looks "changed" and the whole list rebuilds.
+  const bookSig = (b) => JSON.stringify([b.thumb, b.title, b.parentTitle, b.leafCount, b.viewedLeafCount]);
+  const authorSig = (a) => JSON.stringify([a.thumb, a.title, a.childCount]);
+
   // Move the already-decoded cover <img> from the old row into the rebuilt row
   // when the art is unchanged, so a rebuilt row never re-decodes/flashes a cover
   // that didn't change.
@@ -113,7 +121,7 @@ window.Browse = (() => {
   // other row and every unchanged cover as-is. (A re-sort of the SAME set isn't
   // reflected until the next full render — negligible vs. re-rendering everything;
   // sort keys almost never change mid-session.)
-  function patchRows(container, items, rowFn) {
+  function patchRows(container, items, rowFn, sigFn) {
     const rows = container.querySelectorAll('[data-key]');
     if (rows.length !== items.length) return false;
     const byKey = new Map();
@@ -121,7 +129,7 @@ window.Browse = (() => {
     for (const it of items) if (!byKey.has(String(it.ratingKey))) return false;   // new/removed key → structural
     for (const it of items) {
       const row = byKey.get(String(it.ratingKey));
-      if (row._sig === JSON.stringify(it)) continue;   // unchanged → untouched (no flash)
+      if (row._sig === sigFn(it)) continue;   // same VISIBLE content → untouched (no flash)
       const fresh = rowFn(it);
       keepCover(row, fresh);
       row.replaceWith(fresh);
@@ -130,11 +138,11 @@ window.Browse = (() => {
   }
   // Try an in-place patch for this screen; false → the caller does a full rebuild.
   function patchInPlace(desc, page, data) {
-    if (desc.v === 'authors') return patchRows(page, data, authorRow);
-    if (desc.v === 'books') return patchRows(page, data, bookRow);
+    if (desc.v === 'authors') return patchRows(page, data, authorRow, authorSig);
+    if (desc.v === 'books') return patchRows(page, data, bookRow, bookSig);
     if (desc.v === 'authorBooks') {
       if (JSON.stringify(data.author) !== page._authorSig) return false;   // header (avatar/bio/count) changed → full rebuild
-      return patchRows(page, data.books, bookRow);
+      return patchRows(page, data.books, bookRow, bookSig);
     }
     return false;   // files: no covers → full rebuild is cheap + flash-free
   }
@@ -289,7 +297,7 @@ window.Browse = (() => {
     const el = document.createElement('div');
     el.className = 'book authrow';
     el.dataset.key = String(a.ratingKey);   // for in-place reconcile (patchRows)
-    el._sig = JSON.stringify([a.thumb, a.title, a.childCount]);   // visible projection only
+    el._sig = authorSig(a);                  // visible-projection sig (MUST match patchRows' sigFn)
     const cover = a.thumb ? Plex.artUrl(a.thumb) : null;
     el.innerHTML = `
       <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">
@@ -307,10 +315,7 @@ window.Browse = (() => {
     el.className = 'book';
     el.dataset.book = b.ratingKey;
     el.dataset.key = String(b.ratingKey);   // stable key for in-place reconcile (patchRows)
-    // Sig over the VISIBLE projection only (cover/title/author/progress) — not the
-    // raw record. lastViewedAt/addedAt churn on the active book but aren't shown, so
-    // keying off them re-rendered + flashed that row on every revalidation.
-    el._sig = JSON.stringify([b.thumb, b.title, b.parentTitle, b.leafCount, b.viewedLeafCount]);
+    el._sig = bookSig(b);                    // visible-projection sig (MUST match patchRows' sigFn)
     const cover = b.thumb ? Plex.artUrl(b.thumb) : null;
     const total = b.leafCount || 0, done = b.viewedLeafCount || 0;
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
@@ -416,5 +421,5 @@ window.Browse = (() => {
     return idx;
   }
 
-  return { init, reset, render, clearCache, patchRows };
+  return { init, reset, render, clearCache, patchRows, bookSig };
 })();
