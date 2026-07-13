@@ -294,9 +294,9 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
    .art-done), then fade in. A cover that fails after retries gets .art-failed:
    the app logo on a flat card, never the browser's broken-image "?" glyph. */
 .cover, .authoravatar, .np-art { position: relative; }
-.cover:not(.art-done):not(.art-failed),
-.authoravatar:not(.art-done):not(.art-failed),
-.np-art:not(.art-done):not(.art-failed) {
+.cover:not(.art-done):not(.art-instant):not(.art-failed),
+.authoravatar:not(.art-done):not(.art-instant):not(.art-failed),
+.np-art:not(.art-done):not(.art-instant):not(.art-failed) {
   background-color: var(--card2);
   background-image: linear-gradient(100deg, rgba(255,255,255,0) 20%, rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 76%);
   background-repeat: no-repeat;
@@ -306,6 +306,9 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
 @keyframes artShimmer { from { background-position: 165% 0; } to { background-position: -65% 0; } }
 .cover.art-done, .authoravatar.art-done, .np-art.art-done { animation: artFadeIn .3s ease both; }
 @keyframes artFadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* Cached cover (loaded < 120ms): shown immediately, NO fade — replaying the fade
+   on an already-cached image is the "flash" on reopen. */
+.cover.art-instant, .authoravatar.art-instant, .np-art.art-instant { opacity: 1; }
 .cover.art-failed, .authoravatar.art-failed, .np-art.art-failed {
   background: var(--card) url("../icon.svg") no-repeat center / 44%;
   opacity: .85;

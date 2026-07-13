@@ -47,6 +47,7 @@
       const url = tries ? art + (art.includes('?') ? '&' : '?') + 'pbr=' + tries : art;  // cache-bust retries
       inflight++;
       img.dataset.artState = 'loading';
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       let released = false;                                   // guard: load+error can both fire once
       const done = () => {
         if (released) return;
@@ -59,7 +60,12 @@
       const onL = () => {
         img.dataset.artState = 'done';
         img.classList.remove('art-failed');
-        img.classList.add('art-done');                       // CSS: stop shimmer, fade the cover in
+        // Fade IN a cover that took real time to fetch (network), but paint an
+        // already-cached one INSTANTLY — replaying the 0.3s fade on a cover that's
+        // sitting in the SW/browser cache is exactly the "flash" on reopen (worse
+        // with the 3-at-a-time queue: later tiles fade in after the first few).
+        const dt = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+        img.classList.add(dt < 120 ? 'art-instant' : 'art-done');   // CSS: art-instant = shown, no fade
         if (tries && window.PBDebug) PBDebug.log('IMG_OK', `recovered after ${tries} ${shortUrl(art)}`);
         done();
       };
