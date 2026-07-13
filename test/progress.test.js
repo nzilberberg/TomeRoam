@@ -147,11 +147,11 @@ test('cachePeerBoards persists the current peer boards', () => {
   assert.equal(raw[0].id, 'peer-1');
 });
 
-test('restorePeerBoards: cached peer records are merged on init (visible before the first poll)', () => {
+test('hydrate: cached peer records are merged for the first paint (before any poll)', () => {
   reset();
   const peer = peerBoard('peer-1', 'Kitchen', { bk: { bk: { t: 't', o: 4000, cum: 4000, tot: 5000, ts: NOW } } });
   global.localStorage.setItem('pb_progPeers', JSON.stringify([peer]));
-  T.restorePeerBoards();                                   // what init() does before rebuild
+  T.hydrate();                                             // what enterApp calls pre-render (restore + rebuild)
   const bk = Progress.bookRecord('bk');
   assert.ok(bk, 'a merged record exists straight from the cache');
   assert.equal(bk.by, 'peer-1');

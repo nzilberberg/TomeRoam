@@ -47,9 +47,12 @@ const Progress = (() => {
   // stale cached record loses to a fresher live one). Display-only — the live poll is
   // still the source of truth for supersede/claim decisions.
   function cachePeerBoards() { try { localStorage.setItem(LS.peers, JSON.stringify(peerBoards || [])); } catch {} }
-  function restorePeerBoards() {
-    try { const p = JSON.parse(localStorage.getItem(LS.peers) || 'null'); if (Array.isArray(p) && p.length) { peerBoards = p; rebuild(); } } catch {}
-  }
+  function restorePeerBoards() { try { const p = JSON.parse(localStorage.getItem(LS.peers) || 'null'); if (Array.isArray(p) && p.length) peerBoards = p; } catch {} }
+  // Populate the merged view (our own `mine` + last-known cached peers) for the FIRST
+  // paint, BEFORE init/polling — the app calls this pre-render so the tile resume/peer
+  // line isn't empty on frame 1 (init/rebuild otherwise runs post-connect). The live
+  // poll then reconciles any change in place (LWW).
+  function hydrate() { restorePeerBoards(); rebuild(); }
   function saveMine() { try { localStorage.setItem(LS.mine, JSON.stringify(mine)); } catch {} }
   function bookSlot(book) { return mine.books[book] || (mine.books[book] = { bk: null, tr: {}, _ts: 0 }); }
   function touch(book) { const b = mine.books[book]; if (b) b._ts = now(); trim(); }
@@ -229,7 +232,7 @@ const Progress = (() => {
   const isMine = (rec) => !!rec && rec.by === myId();
 
   // ---- lifecycle ------------------------------------------------------------
-  function init({ onMerged } = {}) { if (onMerged) cbMerged = onMerged; restorePeerBoards(); rebuild(); }
+  function init({ onMerged } = {}) { if (onMerged) cbMerged = onMerged; hydrate(); }
   function setSeed(rk) { seed = rk || seed; }
   function setActive(v) {
     active = !!v;
@@ -242,7 +245,7 @@ const Progress = (() => {
   function refresh() { return active ? poll() : Promise.resolve(); }
 
   return {
-    init, setSeed, setActive, flush, refresh,
+    init, hydrate, setSeed, setActive, flush, refresh,
     recordTrack, recordBook, clearBook, resetBook,
     bookRecord, trackRecord, trackPct, isMine, myId,
     // Test-only hook (mirrors Plex._test): reach the pure merge/serialize/trim
@@ -253,7 +256,7 @@ const Progress = (() => {
       setPeers(p) { peerBoards = p || []; },
       mineBooks: () => mine.books,
       rebuild() { rebuild(); return merged; },
-      applyPeerResets, cachePeerBoards, restorePeerBoards,
+      applyPeerResets, cachePeerBoards, restorePeerBoards, hydrate,
       serialize, packAll,
       MAX_BOOKS, MAX_JSON,
     },

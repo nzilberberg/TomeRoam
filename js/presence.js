@@ -80,13 +80,17 @@ const Presence = (() => {
   // reconciles in place, so an unchanged mesh no longer flashes. Pure filter/age
   // logic is PBLogic.filterPeers (unit-tested); this is just the cache I/O + restore.
   function cachePeers(parsed) { try { localStorage.setItem(LS.peerCache, JSON.stringify((parsed || []).filter(Boolean))); } catch {} }
-  function restoreCachedPeers() {
+  // Last-known peers from cache, re-aged (a peer silent past GHOST_MS drops out).
+  // Read-only: the app pulls this BEFORE init to paint the FIRST frame peer-aware
+  // (init happens post-connect, too late for the first render). restoreCachedPeers
+  // below also fires the peers callback for the init path.
+  function cachedPeers() {
     let parsed;
-    try { parsed = JSON.parse(localStorage.getItem(LS.peerCache) || 'null'); } catch { return; }
-    if (!Array.isArray(parsed) || !parsed.length) return;
-    peers = PBLogic.filterPeers(parsed, Plex.getClientId(), now(), GHOST_MS);
-    if (peers.length) cbPeers(peers);
+    try { parsed = JSON.parse(localStorage.getItem(LS.peerCache) || 'null'); } catch { return []; }
+    if (!Array.isArray(parsed) || !parsed.length) return [];
+    return PBLogic.filterPeers(parsed, Plex.getClientId(), now(), GHOST_MS);
   }
+  function restoreCachedPeers() { const p = cachedPeers(); if (p.length) { peers = p; cbPeers(p); } }
 
   async function poll() {
     try {
@@ -236,8 +240,8 @@ const Presence = (() => {
 
   return {
     init, setActive, claimPlaying, setPlaying, grab, setPaused, setTrack, setIdle, flush, setSpeed,
-    resetClaim, livePos, getClaim: () => st.claim, name, setName,
-    _test: { cachePeers, restoreCachedPeers },
+    resetClaim, livePos, getClaim: () => st.claim, name, setName, cachedPeers,
+    _test: { cachePeers, restoreCachedPeers, cachedPeers },
   };
 })();
 

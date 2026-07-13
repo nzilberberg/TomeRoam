@@ -887,6 +887,12 @@
     // Offline-first: paint the last-known library from IndexedDB immediately, so
     // the app never shows a blank/spinner-forever screen while (or if) the network
     // comes up. loadHomeData() overwrites this with fresh data once Plex answers.
+    // Hydrate the cross-device layers from cache FIRST so the tile resume/peer line
+    // is present on frame 1 — Presence/Progress full init + live polling happen later
+    // in startCoordination (post-connect), too late for the first paint, which is why
+    // the play time + peer badge used to flash in a moment after launch.
+    if (window.Progress && Progress.hydrate) Progress.hydrate();
+    if (window.Presence && Presence.cachedPeers) peersNow = Presence.cachedPeers();
     const painted = await renderCachedHome();
     // No cached library yet (first-ever launch / cleared cache): paint SKELETON
     // carousels so the home screen shows its real structure immediately while

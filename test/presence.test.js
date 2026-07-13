@@ -46,6 +46,14 @@ test('restoreCachedPeers: paints last-known peers on init, dropping self + aged 
   assert.deepEqual(captured.map((p) => p.id), ['peerA'], 'kept the fresh peer; dropped the ghost and ourselves');
 });
 
+test('cachedPeers: read-only pre-paint hydrate returns last-known peers (aged, self-free)', () => {
+  NOW = 6_000_000;
+  const fresh = { id: 'peerC', name: 'Den', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW - 1000, speed: 1, claim: 1 };
+  const ghost = { id: 'peerD', name: 'Old', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW - 600000, speed: 1, claim: 1 };
+  storage.setItem('pb_peerCache', JSON.stringify([fresh, ghost]));
+  assert.deepEqual(Presence.cachedPeers().map((p) => p.id), ['peerC'], 'the app can pull cached peers before init, ghost dropped');
+});
+
 test('restoreCachedPeers: no cache = no-op (does not fire onPeers)', () => {
   storage.removeItem('pb_peerCache');
   let fired = false;
