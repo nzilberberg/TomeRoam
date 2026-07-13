@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.16';
+const BUILD = '2026-07-12.17';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -38,6 +38,9 @@ const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activa
 // coherent: a stale index.html asks for its OWN ?v= assets (all present together
 // in its build's cache) and can never pair with a different build's JS.
 const V = '?v=' + BUILD;
+// Pure routing/range logic lives in js/swkit.js so it can be unit-tested (sw.js
+// itself can't run under Node). Version-stamped so a new build re-imports it.
+importScripts('./js/swkit.js' + V);
 const ASSETS = [
   './',
   './index.html',
@@ -179,33 +182,19 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // build.json = the update/reachability probe → network only, no cache fallback
-  // (a cached copy would fake "app host reachable" while offline, and each
-  // ?ts= probe URL is unique so runtime-caching them grew the shell cache by one
-  // dead entry per poll). The precached copy exists only for shell completeness.
-  if (sameOrigin && /\/build\.json$/.test(url.pathname)) {
-    e.respondWith(probeOnly(req));
-    return;
-  }
-  // Downloaded audio → serve the IndexedDB blob as a RANGE-capable HTTP response.
-  // (`./__dl/<trackRatingKey>`.) iOS <audio> rejects blob: object URLs for media
-  // but plays a range-serving same-origin URL fine — this is what makes offline
-  // downloaded playback work on iOS.
-  if (sameOrigin && /\/__dl\//.test(url.pathname)) {
-    e.respondWith(serveDownloadedAudio(req, decodeURIComponent(url.pathname.split('/__dl/')[1] || '')));
-    return;
-  }
-  // Same-origin = the app shell/static assets → cache-first (instant, offline).
-  if (sameOrigin) {
-    e.respondWith(shellFirst(req));
-    return;
-  }
-  // Cross-origin cover art (Plex) → cache-first image with placeholder fallback.
-  // Everything else cross-origin (Plex API, media/audio parts, the banking fetch)
-  // falls through untouched: never intercepted, never cached.
-  if (isImageRequest(req, url)) {
-    e.respondWith(imageFirst(req, url));
-    return;
+  // The routing table (order load-bearing) lives in SWKit.routeFor so it's
+  // unit-tested. 'probe' = build.json (network only — a cached copy would fake
+  // reachability offline and each ?ts= URL is unique); 'download' = __dl audio
+  // range-served from IndexedDB (iOS rejects blob: URLs for media but plays a
+  // same-origin range URL); 'shell' = cache-first app asset; 'image' = cross-
+  // origin cover art cache-first; 'passthrough' = everything else cross-origin
+  // (Plex API, media parts, banking fetch) — never intercepted, never cached.
+  switch (SWKit.routeFor({ sameOrigin, pathname: url.pathname, destination: req.destination })) {
+    case 'probe': e.respondWith(probeOnly(req)); return;
+    case 'download': e.respondWith(serveDownloadedAudio(req, decodeURIComponent(url.pathname.split('/__dl/')[1] || ''))); return;
+    case 'shell': e.respondWith(shellFirst(req)); return;
+    case 'image': e.respondWith(imageFirst(req, url)); return;
+    // 'passthrough' → do not call respondWith; let the request hit the network.
   }
 });
 

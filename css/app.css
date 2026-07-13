@@ -38,7 +38,17 @@ body {
    a tiny runway does NOT seat the fixed navbar (that was the whole .30-saga dead
    end). The ACTUAL fix for the short-screen navbar displacement is real scroll
    height on the base view: `body.home-tall .app` below. */
-.app { min-height: calc(100% + 2px); padding: calc(var(--safe-top) + 12px) 16px calc(var(--nav-pad) + 84px); max-width: 640px; margin: 0 auto; }
+/* Every base view carries a real scroll runway (12vh past the viewport). iOS 26
+   only seats a `position:fixed; bottom:0` bar correctly when the document is
+   genuinely scrollable — a viewport-sized document displaces the fixed nav bar
+   ~5-10px UP (the black-band saga). Home already proved this fix works via
+   `body.home-tall`; generalizing it to `.app` covers the OTHER short in-flow
+   views too (a 1-book author, an empty/short list). Tall lists just get a little
+   empty scroll room below them — harmless. NOT a "scroll runway" token hack
+   (1-2px never seats it — that theory died in the .30 saga); 12vh is genuinely
+   scrollable. Does NOT touch the forbidden architectures (no overflow:hidden
+   body, no fixed-body, no per-view scroller). */
+.app { min-height: calc(100% + 12vh); padding: calc(var(--safe-top) + 12px) 16px calc(var(--nav-pad) + 84px); max-width: 640px; margin: 0 auto; }
 body.has-player .app { padding-bottom: calc(var(--nav-pad) + 190px); }
 /* HOME is short (2 horizontal carousels) → its document ends up ~viewport-sized,
    the state that displaces the fixed navbar ~5-10px UP on iOS 26 (a 1-2px runway

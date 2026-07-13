@@ -217,7 +217,6 @@ window.Browse = (() => {
     const cover = b.thumb ? Plex.artUrl(b.thumb) : null;
     const total = b.leafCount || 0, done = b.viewedLeafCount || 0;
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
-    const res = o.getResumeEntry ? o.getResumeEntry(b.ratingKey) : null;
     el.innerHTML = `
       <div class="covertap" title="Resume">
         <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">

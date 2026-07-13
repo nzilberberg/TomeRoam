@@ -498,13 +498,6 @@
     applyScreen(d);
     slideInView(viewElFor(d.v), 'left');
   }
-  function goForward() {
-    if (!fwdStack.length) return;
-    navStack.push(fwdStack.pop());
-    const d = currentDesc();
-    applyScreen(d);
-    slideInView(viewElFor(d.v), 'right');
-  }
   // Bottom-nav tabs are LATERAL switches, not forward drill-ins → no slide (a
   // directional slide would imply a back/forward relationship they don't have).
   function goHome() { navTo({ v: 'home' }, null); }
@@ -520,7 +513,6 @@
     return { v: 'files', book: { ratingKey: ctx.book, title: (ctx.album && ctx.album.title) || 'Book',
       parentTitle: (ctx.album && ctx.album.parentTitle) || '', thumb: ctx.album && ctx.album.thumb } };
   }
-  function openFilesForCurrent() { const d = filesDescForCurrent(); if (d) navTo(d, 'right'); }
 
   // EDGE-gated INTERACTIVE page carousel. Grab from the LEFT edge and drag right →
   // the current page follows your finger and reveals the previous one (Back). Grab
@@ -1018,7 +1010,6 @@
     const cover = b.thumb ? Plex.artUrl(b.thumb) : null;
     const total = b.leafCount || 0, done = b.viewedLeafCount || 0;
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
-    const res = bookEntries[b.ratingKey];
     const el = document.createElement('div');
     el.className = 'tile';
     el.dataset.book = b.ratingKey;

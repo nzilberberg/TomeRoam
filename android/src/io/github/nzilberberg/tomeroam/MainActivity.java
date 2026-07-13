@@ -14,9 +14,11 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.net.http.SslError;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
 import android.view.KeyEvent;
+import android.view.WindowInsets;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -46,6 +48,23 @@ public class MainActivity extends Activity {
         web = new WebView(this);
         setContentView(web);
         web.setBackgroundColor(0xFF14171C);
+
+        // Android 15 (targetSdk 35) FORCES edge-to-edge: the WebView draws behind
+        // the status + navigation bars, and WebView does NOT report those bars as
+        // env(safe-area-inset-*) to CSS (only display cutouts, unreliably). So the
+        // web app's fixed bottom nav bar rendered UNDER the system nav bar ("too
+        // low"). Fix natively — pad the WebView by the real system-bar insets so it
+        // sits ABOVE them — instead of a UA-sniff / platform branch in the web app;
+        // CSS stays fully responsive and env()-driven (iOS keeps its own inset). On
+        // pre-edge-to-edge devices systemBars insets are 0, so this is a no-op there.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {   // API 30+: typed insets
+            web.setOnApplyWindowInsetsListener((v, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                return insets;
+            });
+            web.requestApplyInsets();
+        }
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
