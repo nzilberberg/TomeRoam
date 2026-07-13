@@ -966,7 +966,11 @@
     if (!window.Store) { if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: no Store'); return false; }
     try {
       const books = await Store.cachedBooks();
-      if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books, dataTitle="' + (books && books[0] ? String(books[0].title || '(empty)').slice(0, 24) : '(none)') + '"');
+      // maxLVA = newest lastViewedAt across the CACHED books. Compared across reloads
+      // it distinguishes a stuck cache (fixed → recache not landing) from a cache
+      // that's converging but one step behind the self-bump on open (advances).
+      const maxLVA = (books || []).reduce((m, b) => Math.max(m, (b && b.lastViewedAt) || 0), 0);
+      if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books, dataTitle="' + (books && books[0] ? String(books[0].title || '(empty)').slice(0, 24) : '(none)') + '" maxLVA=' + maxLVA);
       if (!books || !books.length) return false;
       const { cont, recentlyAdded } = PBLogic.homeFeeds(books, bookEntries);
       renderCarousel($('clRow'), cont);
