@@ -18,7 +18,7 @@ const Progress = (() => {
   const PUB_DEBOUNCE = 4000;          // coalesce a burst of records into one playlist PUT
   const MAX_BOOKS = 16;              // cap books held on our own board (LRU by touch)
   const MAX_JSON = 7000;             // keep the published summary comfortably under Plex's limit
-  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine' };
+  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers' };
 
   let seed = null;
   let mine = load();                  // our OWN authored records (persisted, survives offline)
@@ -39,6 +39,16 @@ const Progress = (() => {
   function load() {
     try { const o = JSON.parse(localStorage.getItem(LS.mine) || 'null'); if (o && o.books) return o; } catch {}
     return { v: 1, books: {} };
+  }
+  // Peer boards aren't persisted like our own `mine`, so on a fresh launch the merged
+  // view is our-own-only until the first poll — the tile resume line then flashes to
+  // the peer-aware value. Persist the last poll's peer boards and restore them on init
+  // so the FIRST merge already includes peers; the next poll reconciles (LWW, so a
+  // stale cached record loses to a fresher live one). Display-only — the live poll is
+  // still the source of truth for supersede/claim decisions.
+  function cachePeerBoards() { try { localStorage.setItem(LS.peers, JSON.stringify(peerBoards || [])); } catch {} }
+  function restorePeerBoards() {
+    try { const p = JSON.parse(localStorage.getItem(LS.peers) || 'null'); if (Array.isArray(p) && p.length) { peerBoards = p; rebuild(); } } catch {}
   }
   function saveMine() { try { localStorage.setItem(LS.mine, JSON.stringify(mine)); } catch {} }
   function bookSlot(book) { return mine.books[book] || (mine.books[book] = { bk: null, tr: {}, _ts: 0 }); }
@@ -123,6 +133,7 @@ const Progress = (() => {
       const boards = await board.readAll();
       const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
       peerBoards = parsed.filter((p) => p && p.id && p.id !== myId());
+      cachePeerBoards();   // persist for next launch's first-frame paint (see restorePeerBoards)
       applyPeerResets();   // adopt any peer reset tombstones + drop our own superseded records
       rebuild(); cbMerged();
       // Once per launch, sweep boards from long-retired devices — presence prunes
@@ -218,7 +229,7 @@ const Progress = (() => {
   const isMine = (rec) => !!rec && rec.by === myId();
 
   // ---- lifecycle ------------------------------------------------------------
-  function init({ onMerged } = {}) { if (onMerged) cbMerged = onMerged; rebuild(); }
+  function init({ onMerged } = {}) { if (onMerged) cbMerged = onMerged; restorePeerBoards(); rebuild(); }
   function setSeed(rk) { seed = rk || seed; }
   function setActive(v) {
     active = !!v;
@@ -242,7 +253,7 @@ const Progress = (() => {
       setPeers(p) { peerBoards = p || []; },
       mineBooks: () => mine.books,
       rebuild() { rebuild(); return merged; },
-      applyPeerResets,
+      applyPeerResets, cachePeerBoards, restorePeerBoards,
       serialize, packAll,
       MAX_BOOKS, MAX_JSON,
     },

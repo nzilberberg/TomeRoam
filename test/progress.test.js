@@ -136,6 +136,33 @@ test('clearBook removes our own records but a peer can still carry the book', ()
   assert.equal(bk && bk.by, 'peer-1', 'the peer still holds its own copy after we clear ours');
 });
 
+// ---- cached peer boards (merge peers on the first paint, before the poll) ----
+test('cachePeerBoards persists the current peer boards', () => {
+  reset();
+  const peer = peerBoard('peer-1', 'Kitchen', { bk: { bk: { t: 't', o: 1, cum: 1, tot: 5, ts: NOW } } });
+  T.setPeers([peer]);
+  T.cachePeerBoards();
+  const raw = JSON.parse(global.localStorage.getItem('pb_progPeers'));
+  assert.equal(raw.length, 1);
+  assert.equal(raw[0].id, 'peer-1');
+});
+
+test('restorePeerBoards: cached peer records are merged on init (visible before the first poll)', () => {
+  reset();
+  const peer = peerBoard('peer-1', 'Kitchen', { bk: { bk: { t: 't', o: 4000, cum: 4000, tot: 5000, ts: NOW } } });
+  global.localStorage.setItem('pb_progPeers', JSON.stringify([peer]));
+  T.restorePeerBoards();                                   // what init() does before rebuild
+  const bk = Progress.bookRecord('bk');
+  assert.ok(bk, 'a merged record exists straight from the cache');
+  assert.equal(bk.by, 'peer-1');
+  assert.equal(bk.o, 4000);
+  // A fresher live board then reconciles in place (LWW) — no lasting stale flash.
+  const newer = peerBoard('peer-1', 'Kitchen', { bk: { bk: { t: 't', o: 9000, cum: 9000, tot: 5000, ts: NOW + 1000 } } });
+  T.setPeers([newer]); T.rebuild();
+  assert.equal(Progress.bookRecord('bk').o, 9000, 'live board wins over the restored cache');
+  global.localStorage.removeItem('pb_progPeers');
+});
+
 // ---- reset tombstone (cross-device Reset Progress) --------------------------
 test('resetBook suppresses our OWN prior records — book reads as unplayed', () => {
   reset();

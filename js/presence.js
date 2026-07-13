@@ -17,7 +17,7 @@ const Presence = (() => {
   const GHOST_MS = 90000;      // a "playing" peer silent longer than this is treated as dead
   const STALE_MS = 3 * 24 * 60 * 60 * 1000;   // a non-playing board untouched this long is dead → delete it
 
-  const LS = { name: 'pb_deviceName', board: 'pb_boardKey' };
+  const LS = { name: 'pb_deviceName', board: 'pb_boardKey', peerCache: 'pb_peerCache' };
 
   let seed = null;
   let st = { book: null, track: null, pos: 0, at: 0, playState: 'idle', speed: 1, claim: 0, grab: false };
@@ -72,6 +72,22 @@ const Presence = (() => {
     else if (!(status >= 200 && status < 300)) dbg('PRES', 'publish transient ' + status + ' — keeping board');   // don't churn a new board on a relay hiccup
   }
 
+  // Peer presence isn't durable like the library cache, so on a fresh launch the
+  // home tiles paint with NO peer badge / own-only resume time, then flash when the
+  // first poll lands. Persist the last poll's raw boards and re-apply filterPeers on
+  // init so the FIRST frame already shows the last-known peers — restored boards are
+  // re-AGED (a peer gone quiet past GHOST_MS drops out), and the next live poll
+  // reconciles in place, so an unchanged mesh no longer flashes. Pure filter/age
+  // logic is PBLogic.filterPeers (unit-tested); this is just the cache I/O + restore.
+  function cachePeers(parsed) { try { localStorage.setItem(LS.peerCache, JSON.stringify((parsed || []).filter(Boolean))); } catch {} }
+  function restoreCachedPeers() {
+    let parsed;
+    try { parsed = JSON.parse(localStorage.getItem(LS.peerCache) || 'null'); } catch { return; }
+    if (!Array.isArray(parsed) || !parsed.length) return;
+    peers = PBLogic.filterPeers(parsed, Plex.getClientId(), now(), GHOST_MS);
+    if (peers.length) cbPeers(peers);
+  }
+
   async function poll() {
     try {
       const boards = await board.readAll();
@@ -79,6 +95,7 @@ const Presence = (() => {
       // Drop ourselves, idle boards, and "playing" ghosts (crashed mid-play).
       // The filter + supersede rules live in PBLogic so the unit tests run them.
       peers = PBLogic.filterPeers(parsed, Plex.getClientId(), now(), GHOST_MS);
+      cachePeers(parsed);   // persist for next launch's first-frame paint (below)
       cbPeers(peers);
 
       // Once per launch, sweep clearly-dead boards so they stop piling up (a
@@ -177,6 +194,7 @@ const Presence = (() => {
     if (onPeers) cbPeers = onPeers;
     if (onSupersede) cbSupersede = onSupersede;
     visible = true;
+    restoreCachedPeers();   // paint last-known peers on the first frame (before the first poll)
     evalActive();
   }
   function setActive(v) { visible = !!v; evalActive(); }
@@ -219,6 +237,7 @@ const Presence = (() => {
   return {
     init, setActive, claimPlaying, setPlaying, grab, setPaused, setTrack, setIdle, flush, setSpeed,
     resetClaim, livePos, getClaim: () => st.claim, name, setName,
+    _test: { cachePeers, restoreCachedPeers },
   };
 })();
 
