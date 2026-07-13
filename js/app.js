@@ -903,13 +903,18 @@
     // deferral, so measure the actual unknowns — is there title text in the DOM at
     // paint, and does the cached data carry it. `domTitle` = the first tile's title
     // as painted; `dataTitle` (logged in renderCachedHome) = the cached book's title.
-    const _tPaint = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    requestAnimationFrame(() => {
-      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      const tt = document.querySelector('#clRow .ttitle, #raRow .ttitle');
-      const ntiles = document.querySelectorAll('#clRow .tile, #raRow .tile').length;
-      if (window.PBDebug) PBDebug.log('PAINT', `home first frame +${Math.round(now - _tPaint)}ms painted=${painted} tiles=${ntiles} domTitle="${tt ? (tt.textContent || '').slice(0, 24) : '(no .ttitle)'}"`);
-    });
+    // DIAGNOSTIC: capture the first tile's RESUME/PEER line (the thing that flashes)
+    // at frame 1 vs ~2.5s later, plus the hydrated peer count. If frame1 line1 is
+    // already the post-storm value, the hydrate worked and the flash is elsewhere;
+    // if frame1 is blank and post-storm is filled, hydrate isn't reaching the paint.
+    const _capLine = (tag) => {
+      const pl = document.querySelector('#clRow .pline, #raRow .pline');
+      const nm = pl && pl.querySelector('.pname'), tm = pl && pl.querySelector('.ptimes');
+      const txt = pl ? (((nm && nm.textContent) || '') + '|' + ((tm && tm.textContent) || '')) : '(no pline)';
+      if (window.PBDebug) PBDebug.log('PAINT', `${tag} peers=${peersNow.length} line1="${txt.slice(0, 40)}"`);
+    };
+    requestAnimationFrame(() => _capLine('frame1'));
+    setTimeout(() => _capLine('post-storm'), 2500);
     try {
       await Plex.connect();
       $('serverName').textContent = Plex.getServerName() || 'Plex';
