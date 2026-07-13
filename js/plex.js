@@ -312,30 +312,66 @@ const Plex = (() => {
   // offline; when reachability is unknown/true we still try the network.
   const offlineKnown = () => !!(window.Net && Net.state && Net.state().plexReachable === false);
 
-  // THE offline-cache wrapper for library reads (it used to be pasted into each
-  // one): confirmed-offline → cache immediately; else live (write-through +
-  // noteFresh); live failed → cache (marked stale) or rethrow. `cached` resolves
-  // the cached value (null/[] = miss), `live` fetches, `store` persists.
-  async function withCache(kind, { cached, live, store }) {
-    const fromCache = async () => {
-      if (!window.Store) return undefined;
-      const c = await cached();
-      if (c && (!Array.isArray(c) || c.length)) { cacheHook.stale(kind); return c; }
-      return undefined;
-    };
-    if (offlineKnown()) {
-      const c = await fromCache();
-      if (c !== undefined) { dbg('CACHE', kind + ' offline-fast from cache'); return c; }
-    }
-    try {
+  // THE offline-cache wrapper for library reads. CACHE-FIRST + background
+  // revalidate (stale-while-revalidate): if a cached value exists (and not
+  // `force`d), return it IMMEDIATELY and refresh from the network in the
+  // background — a CHANGED result fires `opts.onFresh(fresh)` so the caller can
+  // repaint. This is what makes a low-bandwidth open feel like airplane mode
+  // (instant cached render) instead of a multi-second spinner over the slow
+  // relay. Only when there is NO cache do we await the network (falling back to
+  // cache on failure). `key` scopes per-item kinds (tracks/author/authorBooks by
+  // ratingKey); `opts.force` (pull-to-refresh) skips the instant-cache return and
+  // re-fetches live; `opts.onFresh(v)` repaints when a bg revalidate differs.
+  //
+  // In-flight coalescing: concurrent callers for the same (kind,key) — a
+  // foreground open racing its own background revalidate, or the several home
+  // reads that all resolve `books` — share ONE live() promise instead of firing
+  // duplicate requests at the slow relay.
+  const inflight = new Map();
+  function runLive(cacheKey, { live, store, kind }) {
+    if (inflight.has(cacheKey)) return inflight.get(cacheKey);
+    const p = (async () => {
       const v = await live();
       if (window.Store && store && v && (!Array.isArray(v) || v.length)) { try { store(v); } catch {} }
       cacheHook.fresh(kind);
       return v;
+    })();
+    inflight.set(cacheKey, p);
+    return p.finally(() => { if (inflight.get(cacheKey) === p) inflight.delete(cacheKey); });
+  }
+  // Cheap "did the bg refresh actually differ" test — skips a needless repaint/
+  // flicker when the library is unchanged (the common case). Runs once, in the
+  // background, so the stringify cost on a few-hundred-item list is fine.
+  function changed(a, b) { try { return JSON.stringify(a) !== JSON.stringify(b); } catch { return true; } }
+
+  async function withCache(kind, { cached, live, store, key }, opts = {}) {
+    const cacheKey = kind + '|' + (key == null ? '' : key);
+    const fromCache = async () => {
+      if (!window.Store) return undefined;
+      const c = await cached();
+      if (c && (!Array.isArray(c) || c.length)) return c;
+      return undefined;
+    };
+    if (!opts.force) {
+      const c = await fromCache();
+      if (c !== undefined) {
+        cacheHook.stale(kind);                    // showing last-known until a revalidate lands
+        if (!offlineKnown()) {                    // don't hammer a relay we KNOW is down
+          runLive(cacheKey, { live, store, kind })
+            .then((v) => { if (v != null && opts.onFresh && changed(c, v)) { try { opts.onFresh(v); } catch {} } })
+            .catch((e) => dbg('CACHE', kind + ' bg revalidate failed (' + ((e && e.message) || 'err') + ')'));
+        }
+        dbg('CACHE', kind + ' cache-first' + (offlineKnown() ? ' (offline, no revalidate)' : ' (revalidating)'));
+        return c;
+      }
+    }
+    // No cache (or forced) → await the network; fall back to cache on failure.
+    try {
+      return await runLive(cacheKey, { live, store, kind });
     } catch (e) {
       dbg('CACHE', kind + ' live failed (' + ((e && e.message) || 'err') + ') — trying cache');
       const c = await fromCache();
-      if (c !== undefined) return c;
+      if (c !== undefined) { cacheHook.stale(kind); return c; }
       throw e;
     }
   }
@@ -354,12 +390,13 @@ const Plex = (() => {
     } catch { return false; }
   }
 
-  function getAlbum(rk) {
+  function getAlbum(rk, opts) {
     return withCache('albums', {
+      key: rk,
       cached: () => Store.cachedAlbum(rk),
       live: async () => ((await api(`/library/metadata/${rk}`)).Metadata || [])[0] || null,
       store: (a) => Store.cacheAlbum(a),
-    });
+    }, opts);
   }
 
   function mapTracks(mc) {
@@ -380,12 +417,13 @@ const Plex = (() => {
     return tracks;
   }
 
-  function getAlbumTracks(rk) {
+  function getAlbumTracks(rk, opts) {
     return withCache('tracks', {
+      key: rk,
       cached: () => Store.cachedTracks(rk),
       live: async () => mapTracks(await api(`/library/metadata/${rk}/children`)),
       store: (tracks) => Store.cacheTracks(rk, tracks),
-    });
+    }, opts);
   }
 
   // Media details for ONE track (for the track-info sheet): container, bitrate,
@@ -432,7 +470,7 @@ const Plex = (() => {
 
   // Authors (artists). Lightweight: title + thumb + album count only — NO
   // per-book progress/time work (this screen never shows times).
-  function getAuthors() {
+  function getAuthors(opts) {
     return withCache('authors', {
       cached: () => Store.cachedAuthors(),
       live: async () => {
@@ -445,7 +483,7 @@ const Plex = (() => {
         }));
       },
       store: (authors) => Store.cacheAuthors(authors),
-    });
+    }, opts);
   }
 
   const mapBook = (b) => ({
@@ -461,11 +499,13 @@ const Plex = (() => {
   // for the session: powers the Books browse AND the home feeds below.
   let booksCache = null;
   function clearCaches() { booksCache = null; }   // pull-to-refresh: force a fresh whole-library fetch
-  async function getBooks() {
-    if (booksCache) return booksCache;
+  async function getBooks(opts = {}) {
+    if (booksCache && !opts.force) return booksCache;
     // NB: only the LIVE read assigns the session copy (booksCache) — a cached
     // fallback stays unassigned so a later reconnect re-fetches fresh instead of
-    // being stuck on the stale copy for the whole session (review bug 4).
+    // being stuck on the stale copy for the whole session (review bug 4). Under
+    // cache-first this means getBooks returns the IDB copy instantly and the bg
+    // revalidate populates booksCache when it lands (+ fires opts.onFresh).
     return withCache('books', {
       cached: () => Store.cachedBooks(),
       live: async () => {
@@ -476,7 +516,7 @@ const Plex = (() => {
         return booksCache;
       },
       store: (books) => Store.cacheBooks(books),
-    });
+    }, opts);
   }
 
   // Plex's own in-progress list: books partway through (some, not all, chapters
@@ -504,18 +544,20 @@ const Plex = (() => {
   // Books for one author (drill-down from the Authors screen). Cached in the kv
   // bag so the author page works offline like every other browse screen (it was
   // the one screen with no fallback).
-  function getAuthorBooks(authorRk) {
+  function getAuthorBooks(authorRk, opts) {
     return withCache('authorBooks', {
+      key: authorRk,
       cached: () => Store.kvGet('authorBooks:' + authorRk, null),
       live: async () => ((await api(`/library/metadata/${authorRk}/children`)).Metadata || []).map(mapBook),
       store: (books) => Store.kvSet('authorBooks:' + authorRk, books),
-    });
+    }, opts);
   }
 
   // One author's own metadata — thumb, book count, and the scraped bio blurb
   // (the /all listing omits summary, so this needs the per-item fetch).
-  function getAuthor(authorRk) {
+  function getAuthor(authorRk, opts) {
     return withCache('author', {
+      key: authorRk,
       cached: () => Store.kvGet('author:' + authorRk, null),
       live: async () => {
         const mc = await api(`/library/metadata/${authorRk}`);
@@ -524,7 +566,7 @@ const Plex = (() => {
         return { ratingKey: a.ratingKey, title: a.title || 'Unknown', thumb: a.thumb || null, childCount: a.childCount || 0, summary: a.summary || '' };
       },
       store: (a) => Store.kvSet('author:' + authorRk, a),
-    });
+    }, opts);
   }
 
   // --- media + art URLs -----------------------------------------------------

@@ -961,35 +961,39 @@
   }
 
   // Fetch + render the two home carousels (shared by initial load + pull-to-refresh).
-  async function loadHomeData() {
+  async function loadHomeData(opts = {}) {
     // The whole-library fetch (cached) powers both carousels + browse. The LMS
     // plugin's resume playlist is OPTIONAL — a best-effort ADDITIVE layer: when
     // it's absent (app-only user) getResumeMap returns [], and a fetch error is
     // swallowed, so the home feed always renders from Plex alone. When present it
     // supplies exact resume offsets + surfaces books listened to on the LMS side.
-    const [resume, books] = await Promise.all([
-      Plex.getResumeMap().catch(() => []),
-      Plex.getBooks(),
-    ]);
-    for (const k in bookEntries) delete bookEntries[k];
-    for (const b of resume) bookEntries[b.book] = b;
-    const byRk = new Map(books.map((b) => [String(b.ratingKey), b]));
-
-    // Continue Listening = Plex recently-played (standalone source of truth),
-    // then any additional books the plugin knows about, most-recent first.
-    const cont = await Plex.getContinueListening();
-    const have = new Set(cont.map((b) => String(b.ratingKey)));
-    for (const rk of Object.keys(bookEntries)) {
-      if (!have.has(String(rk)) && byRk.has(String(rk))) { cont.push(byRk.get(String(rk))); have.add(String(rk)); }
-    }
-    const recencyOf = (b) => (bookEntries[b.ratingKey] ? bookEntries[b.ratingKey].ts || 0 : b.lastViewedAt || 0);
-    cont.sort((a, b) => recencyOf(b) - recencyOf(a));
-
-    renderCarousel($('clRow'), cont);
-    status(cont.length ? '' : 'No books in progress yet — pick one from Books or Authors.');
-    renderCarousel($('raRow'), await Plex.getRecentlyAdded(15));
-    renderDownloadedCarousel();
-    renderPresence();   // paint live numbers on the fresh tiles
+    const resume = await Plex.getResumeMap().catch(() => []);
+    // paint() derives BOTH carousels from a whole-library `books` array, so it can
+    // run twice: once on the instant cache-first read, then again if the background
+    // revalidate brings changed data (onFresh). Continue Listening + Recently Added
+    // are pure derivations of the library list, so we derive them here rather than
+    // re-fetch (which would also re-trigger revalidation).
+    const paint = (books) => {
+      for (const k in bookEntries) delete bookEntries[k];
+      for (const b of resume) bookEntries[b.book] = b;
+      const byRk = new Map(books.map((b) => [String(b.ratingKey), b]));
+      // Continue Listening = Plex recently-played (standalone source of truth),
+      // then any additional books the plugin knows about, most-recent first.
+      const cont = books.filter((b) => b.lastViewedAt > 0).sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
+      const have = new Set(cont.map((b) => String(b.ratingKey)));
+      for (const rk of Object.keys(bookEntries)) {
+        if (!have.has(String(rk)) && byRk.has(String(rk))) { cont.push(byRk.get(String(rk))); have.add(String(rk)); }
+      }
+      const recencyOf = (b) => (bookEntries[b.ratingKey] ? bookEntries[b.ratingKey].ts || 0 : b.lastViewedAt || 0);
+      cont.sort((a, b) => recencyOf(b) - recencyOf(a));
+      renderCarousel($('clRow'), cont);
+      status(cont.length ? '' : 'No books in progress yet — pick one from Books or Authors.');
+      renderCarousel($('raRow'), books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 15));
+      renderDownloadedCarousel();
+      renderPresence();   // paint live numbers on the tiles
+    };
+    const books = await Plex.getBooks({ force: opts.force, onFresh: (fresh) => { if (!document.hidden) paint(fresh); } });
+    paint(books);
   }
 
   // Pull-to-refresh: re-pull the home feeds with a fresh whole-library fetch.
@@ -1006,7 +1010,7 @@
     let released = false;
     const release = () => { if (released) return; released = true; refreshing = false; setPtr(0); $('ptr').classList.remove('spin'); };
     const watchdog = setTimeout(() => { if (!released) { release(); toast('Still refreshing — showing what we have'); } }, 12000);
-    try { Plex.clearCaches(); Browse.clearCache(); await loadHomeData(); }
+    try { Plex.clearCaches(); Browse.clearCache(); await loadHomeData({ force: true }); }
     catch (e) { if (!released) toast(e.message || 'Refresh failed'); }
     finally { clearTimeout(watchdog); release(); }
   }
@@ -2033,7 +2037,7 @@
     Progress.clearBook(book);                                           // durable per-chapter + book records (republishes our board)
     delete bookEntries[book];                                           // cold resume the tile shows
     try { const last = JSON.parse(localStorage.getItem(LAST) || 'null'); if (last && String(last.book) === String(book)) localStorage.removeItem(LAST); } catch {}
-    try { await loadHomeData(); } catch {}                              // fresh library → viewedLeafCount reset
+    try { await loadHomeData({ force: true }); } catch {}               // fresh library → viewedLeafCount reset
     Browse.clearCache();
     const d = currentDesc();
     if (d && d.v !== 'home' && d.v !== 'nowplaying' && d.v !== 'options') applyScreen(d, { render: true, resetScroll: false });
@@ -2675,10 +2679,11 @@
       onChange: (st) => { if (st && st.updateReady) markUpdateAvailable(null); },
       onReconnect: async () => {
         if ($('library').classList.contains('hidden')) return;
-        // Clear the in-memory caches first: getBooks()'s offline fallback poisons
-        // booksCache with the STALE cached library, and without this the "refresh"
-        // just re-renders that stale data with no network fetch at all.
-        try { Plex.clearCaches(); Browse.clearCache(); await loadHomeData(); } catch {}
+        // Reconnect just fired (plex went unreachable→reachable) — force a live
+        // fetch so we pull genuinely fresh data, not the cache-first copy. (Clear
+        // the in-memory caches too: getBooks()'s offline fallback may have left the
+        // STALE library in booksCache.)
+        try { Plex.clearCaches(); Browse.clearCache(); await loadHomeData({ force: true }); } catch {}
       },
     });
     // Offline downloads: restore the downloaded-book index + subscribe so every

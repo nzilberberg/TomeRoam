@@ -60,15 +60,30 @@ window.Browse = (() => {
   }
 
   // Fetch a screen's data (the ONLY async part); build is synchronous below so a
-  // concurrent nav can't interleave the shared paint target.
-  async function fetchFor(desc) {
-    if (desc.v === 'authors') { if (!authorsCache) authorsCache = await Plex.getAuthors(); return authorsCache; }
-    if (desc.v === 'books') return await Plex.getBooks();
-    if (desc.v === 'authorBooks') {
-      const [author, books] = await Promise.all([Plex.getAuthor(desc.author.ratingKey), Plex.getAuthorBooks(desc.author.ratingKey)]);
-      return { author: author || { ...desc.author, thumb: null, childCount: books.length, summary: '' }, books };
+  // concurrent nav can't interleave the shared paint target. Cache-first: the
+  // getters return the last-known data instantly and revalidate in the
+  // background — `onFresh(data)` fires (with the already-merged screen data) when
+  // a background refresh differs, so render() can repaint in place. authorBooks
+  // has two sources (author meta + book list); we keep a local merged copy and
+  // re-emit whichever half refreshes, so neither has to re-fetch the other.
+  async function fetchFor(desc, onFresh) {
+    if (desc.v === 'authors') {
+      if (!authorsCache) authorsCache = await Plex.getAuthors({ onFresh: (a) => { authorsCache = a; if (onFresh) onFresh(a); } });
+      return authorsCache;
     }
-    if (desc.v === 'files') return await Plex.getAlbumTracks(desc.book.ratingKey);
+    if (desc.v === 'books') return await Plex.getBooks({ onFresh });
+    if (desc.v === 'authorBooks') {
+      const cur = { author: null, books: null };
+      const emit = () => { if (cur.author && cur.books && onFresh) onFresh({ author: cur.author, books: cur.books }); };
+      const [author, books] = await Promise.all([
+        Plex.getAuthor(desc.author.ratingKey, { onFresh: (a) => { if (a) { cur.author = a; emit(); } } }),
+        Plex.getAuthorBooks(desc.author.ratingKey, { onFresh: (b) => { cur.books = b; emit(); } }),
+      ]);
+      cur.author = author || { ...desc.author, thumb: null, childCount: books.length, summary: '' };
+      cur.books = books;
+      return { author: cur.author, books: cur.books };
+    }
+    if (desc.v === 'files') return await Plex.getAlbumTracks(desc.book.ratingKey, { onFresh });
   }
   function buildFor(desc, data, el) {
     if (desc.v === 'authors') listView(el, 'Authors', data, authorRow, false);
@@ -96,8 +111,17 @@ window.Browse = (() => {
     pageCache.set(key, { el: page, order: ++orderSeq });
     showPage(key);                    // show this fresh page, hide the rest
     try {
-      const data = await fetchFor(desc);
-      // Still the current page? (a fast re-nav may have moved on — harmless either way)
+      // Cache-first: `data` is the last-known copy (instant, even on a slow relay);
+      // `onFresh` repaints this same page node in place if a background revalidate
+      // brings changed data — but only while this exact node is still the cached
+      // page (a later nav may have evicted/replaced it).
+      const repaint = (fresh) => {
+        const cur = pageCache.get(key);
+        if (!cur || cur.el !== page || !page.isConnected) return;
+        buildFor(desc, fresh, page);
+        o.onRender();
+      };
+      const data = await fetchFor(desc, repaint);
       page.innerHTML = '';
       buildFor(desc, data, page);
     } catch (e) { page.innerHTML = `<div class="empty">⚠️ ${e.message || 'Could not load.'}</div>`; }
