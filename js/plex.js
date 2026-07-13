@@ -347,10 +347,23 @@ const Plex = (() => {
   let fgActive = 0;
   function trackFg(p) { fgActive++; return p.finally(() => { fgActive--; }); }
   function foregroundBusy() { return fgActive > 0; }
-  // Cheap "did the bg refresh actually differ" test — skips a needless repaint/
-  // flicker when the library is unchanged (the common case). Runs once, in the
-  // background, so the stringify cost on a few-hundred-item list is fine.
-  function changed(a, b) { try { return JSON.stringify(a) !== JSON.stringify(b); } catch { return true; } }
+  // "Did the bg refresh ACTUALLY differ" — ORDER-INSENSITIVE for arrays. The IDB
+  // cache returns records in primary-key (ratingKey) order, while the live fetch
+  // is in Plex listing order, so a naive stringify reports "changed" on EVERY
+  // revalidation of the same library → the whole page (and every cover <img>) gets
+  // needlessly rebuilt and FLASHES. Compare as an order-independent multiset so we
+  // only repaint on a REAL content change. Runs once, in the background, so the
+  // sort cost on a few-hundred-item list is fine.
+  function changed(a, b) {
+    try {
+      if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return true;
+        const sig = (arr) => arr.map((x) => JSON.stringify(x)).sort().join(String.fromCharCode(1));
+        return sig(a) !== sig(b);
+      }
+      return JSON.stringify(a) !== JSON.stringify(b);
+    } catch { return true; }
+  }
 
   async function withCache(kind, { cached, live, store, key }, opts = {}) {
     const cacheKey = kind + '|' + (key == null ? '' : key);
@@ -786,7 +799,7 @@ const Plex = (() => {
     notificationWsUrl,
     // internals exposed for the unit tests only (no runtime behaviour change)
     _test: {
-      kindOf, orderByLastKind, mapBook, mapTracks, curBase,
+      kindOf, orderByLastKind, mapBook, mapTracks, curBase, changed,
       setBase: (b) => { base = b; },
       resetConn: () => { base = null; connecting = null; },
       isConnecting: () => !!connecting,

@@ -6,7 +6,28 @@ const { install } = require('./env.js');
 
 const storage = install();
 const Plex = require('../js/plex.js');
-const { kindOf, orderByLastKind, mapBook } = Plex._test;
+const { kindOf, orderByLastKind, mapBook, changed } = Plex._test;
+
+// The bg-revalidate "did it differ" test MUST be order-insensitive: the IDB cache
+// returns records in ratingKey order while the live fetch is in Plex order, so a
+// naive stringify reported "changed" every time → every cover flashed on reload.
+test('changed(): same items in a different order → NOT changed (no flash)', () => {
+  const a = [{ ratingKey: '1', title: 'A' }, { ratingKey: '2', title: 'B' }, { ratingKey: '3', title: 'C' }];
+  const b = [a[2], a[0], a[1]];                 // reordered, identical content
+  assert.equal(changed(a, b), false);
+});
+
+test('changed(): a real content difference → changed', () => {
+  const a = [{ ratingKey: '1', viewedLeafCount: 0 }, { ratingKey: '2', viewedLeafCount: 0 }];
+  const b = [{ ratingKey: '1', viewedLeafCount: 3 }, { ratingKey: '2', viewedLeafCount: 0 }];
+  assert.equal(changed(a, b), true);
+});
+
+test('changed(): different length → changed; non-arrays compared directly', () => {
+  assert.equal(changed([{ ratingKey: '1' }], [{ ratingKey: '1' }, { ratingKey: '2' }]), true);
+  assert.equal(changed({ x: 1 }, { x: 1 }), false);
+  assert.equal(changed({ x: 1 }, { x: 2 }), true);
+});
 
 test('kindOf classifies local / relay / remote', () => {
   assert.equal(kindOf({ local: true }), 'local');
