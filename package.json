@@ -5,7 +5,9 @@
   "description": "TomeRoam companion PWA — dev tooling and test suite only (the app itself is build-free static files served by GitHub Pages).",
   "scripts": {
     "test": "node --test \"test/*.test.js\"",
-    "lint": "eslint js sw.js"
+    "lint": "eslint js sw.js",
+    "stamp": "node tools/stamp-build.mjs",
+    "stamp:check": "node tools/stamp-build.mjs --check"
   },
   "devDependencies": {
     "eslint": "^10.7.0",

@@ -1,0 +1,27 @@
+# Dev-side checks only. This runs on GitHub's servers when code is pushed; the
+# app never contacts it and gains no runtime dependency on it. It exists to catch,
+# before a deploy goes live, the two mistakes that have actually bitten this repo:
+# a failing test/lint slipping in, and the build stamp drifting between files
+# (stale index.html + fresh JS). It needs no secrets and touches nothing outside
+# the repo checkout.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Build stamp is coherent (build.json is the source of truth)
+        run: node tools/stamp-build.mjs --check
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npm test
