@@ -328,12 +328,16 @@ const Plex = (() => {
   // reads that all resolve `books` — share ONE live() promise instead of firing
   // duplicate requests at the slow relay.
   const inflight = new Map();
-  function runLive(cacheKey, { live, store, kind }) {
+  function runLive(cacheKey, { live, store, kind, silent }) {
     if (inflight.has(cacheKey)) return inflight.get(cacheKey);
     const p = (async () => {
       const v = await live();
       if (window.Store && store && v && (!Array.isArray(v) || v.length)) { try { store(v); } catch {} }
-      cacheHook.fresh(kind);
+      // `silent` = a background WARM prefetch: it must NOT drive the reachability
+      // state machine. noteFresh flips plexReachable→true and fires a reconnect
+      // pass on a false→true edge; letting ~200 warm reads each do that storms
+      // reconnects. Foreground reads still call fresh() so real recovery is caught.
+      if (!silent) cacheHook.fresh(kind);
       return v;
     })();
     inflight.set(cacheKey, p);
@@ -379,16 +383,22 @@ const Plex = (() => {
     if (opts.warm) {
       const c = await fromCache();
       if (c !== undefined) return c;
-      return runLive(cacheKey, { live, store, kind });
+      return runLive(cacheKey, { live, store, kind, silent: true });   // background prefetch: don't drive reachability
     }
     if (!opts.force) {
       const c = await fromCache();
       if (c !== undefined) {
-        cacheHook.stale(kind);                    // showing last-known until a revalidate lands
-        if (!offlineKnown()) {                    // don't hammer a relay we KNOW is down
+        // Serving cache-first is NORMAL under stale-while-revalidate — it is NOT a
+        // network failure, so we must NOT mark the data stale here. Doing so flipped
+        // plexReachable false→true on EVERY read (markCachedRead→noteFresh), storming
+        // reconnect passes (RECONNECT climbed 6→17). Only mark stale when we're
+        // KNOWN-offline, or when the background revalidate genuinely FAILS.
+        if (offlineKnown()) {
+          cacheHook.stale(kind);                  // confirmed offline → this cache truly is stale
+        } else {
           trackFg(runLive(cacheKey, { live, store, kind }))
             .then((v) => { if (v != null && opts.onFresh && changed(c, v)) { try { opts.onFresh(v); } catch {} } })
-            .catch((e) => dbg('CACHE', kind + ' bg revalidate failed (' + ((e && e.message) || 'err') + ')'));
+            .catch((e) => { cacheHook.stale(kind); dbg('CACHE', kind + ' bg revalidate failed (' + ((e && e.message) || 'err') + ')'); });
         }
         dbg('CACHE', kind + ' cache-first' + (offlineKnown() ? ' (offline, no revalidate)' : ' (revalidating)'));
         return c;
@@ -799,7 +809,7 @@ const Plex = (() => {
     notificationWsUrl,
     // internals exposed for the unit tests only (no runtime behaviour change)
     _test: {
-      kindOf, orderByLastKind, mapBook, mapTracks, curBase, changed,
+      kindOf, orderByLastKind, mapBook, mapTracks, curBase, changed, withCache,
       setBase: (b) => { base = b; },
       resetConn: () => { base = null; connecting = null; },
       isConnecting: () => !!connecting,
