@@ -92,6 +92,53 @@ window.Browse = (() => {
     else if (desc.v === 'files') filesView(el, desc.book, data);
   }
 
+  // ---- in-place keyed reconcile (background-revalidate repaint) -------------
+  // When a stale-while-revalidate refresh brings CHANGED data, update ONLY the
+  // rows that differ instead of rebuilding the whole list — a huge library
+  // shouldn't re-render (and re-decode every cover) to reflect one book's
+  // progress. Each row carries data-key + a `_sig` JSON signature.
+  //
+  // Move the already-decoded cover <img> from the old row into the rebuilt row
+  // when the art is unchanged, so a rebuilt row never re-decodes/flashes a cover
+  // that didn't change.
+  function keepCover(oldRow, newRow) {
+    const a = oldRow.querySelector('img.cover');
+    const b = newRow.querySelector('img.cover');
+    if (a && b && a.getAttribute('data-art') === b.getAttribute('data-art') && a.dataset.artState === 'done') b.replaceWith(a);
+  }
+  // Patch container's rows to `items`, matched BY KEY (order-independent — browse
+  // lists are laid out sorted/letter-grouped, not in the fetch order). Returns
+  // false (→ caller full-rebuilds) if the key SET changed (a book added/removed);
+  // otherwise rebuilds ONLY the rows whose `_sig` differs, in place, reusing every
+  // other row and every unchanged cover as-is. (A re-sort of the SAME set isn't
+  // reflected until the next full render — negligible vs. re-rendering everything;
+  // sort keys almost never change mid-session.)
+  function patchRows(container, items, rowFn) {
+    const rows = container.querySelectorAll('[data-key]');
+    if (rows.length !== items.length) return false;
+    const byKey = new Map();
+    for (const r of rows) byKey.set(r.dataset.key, r);
+    for (const it of items) if (!byKey.has(String(it.ratingKey))) return false;   // new/removed key → structural
+    for (const it of items) {
+      const row = byKey.get(String(it.ratingKey));
+      if (row._sig === JSON.stringify(it)) continue;   // unchanged → untouched (no flash)
+      const fresh = rowFn(it);
+      keepCover(row, fresh);
+      row.replaceWith(fresh);
+    }
+    return true;
+  }
+  // Try an in-place patch for this screen; false → the caller does a full rebuild.
+  function patchInPlace(desc, page, data) {
+    if (desc.v === 'authors') return patchRows(page, data, authorRow);
+    if (desc.v === 'books') return patchRows(page, data, bookRow);
+    if (desc.v === 'authorBooks') {
+      if (JSON.stringify(data.author) !== page._authorSig) return false;   // header (avatar/bio/count) changed → full rebuild
+      return patchRows(page, data.books, bookRow);
+    }
+    return false;   // files: no covers → full rebuild is cheap + flash-free
+  }
+
   // Render a screen from its descriptor: {v:'authors'|'books'|'authorBooks'|'files', ...}
   async function render(desc) {
     const key = keyOf(desc);
@@ -118,7 +165,9 @@ window.Browse = (() => {
       const repaint = (fresh) => {
         const cur = pageCache.get(key);
         if (!cur || cur.el !== page || !page.isConnected) return;
-        buildFor(desc, fresh, page);
+        // Only touch rows that actually changed; full rebuild just for a
+        // structural change (add/remove/re-sort).
+        if (!patchInPlace(desc, page, fresh)) buildFor(desc, fresh, page);
         o.onRender();
       };
       const data = await fetchFor(desc, repaint);
@@ -194,6 +243,7 @@ window.Browse = (() => {
   // (avatar, bold name, "N books", blurb), then the letter-grouped book list.
   function authorView(m, author, books) {
     m.innerHTML = '';
+    m._authorSig = JSON.stringify(author);   // so a revalidate can tell if the header changed (patchInPlace)
     m.appendChild(header('', true));
     m.appendChild(authorHeader(author, books.length));
     // No A–Z index here → book rows span the full width.
@@ -238,6 +288,8 @@ window.Browse = (() => {
   function authorRow(a) {
     const el = document.createElement('div');
     el.className = 'book authrow';
+    el.dataset.key = String(a.ratingKey);   // for in-place reconcile (patchRows)
+    el._sig = JSON.stringify(a);
     const cover = a.thumb ? Plex.artUrl(a.thumb) : null;
     el.innerHTML = `
       <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">
@@ -254,6 +306,8 @@ window.Browse = (() => {
     const el = document.createElement('div');
     el.className = 'book';
     el.dataset.book = b.ratingKey;
+    el.dataset.key = String(b.ratingKey);   // stable key + content sig for in-place reconcile (patchRows)
+    el._sig = JSON.stringify(b);
     const cover = b.thumb ? Plex.artUrl(b.thumb) : null;
     const total = b.leafCount || 0, done = b.viewedLeafCount || 0;
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
@@ -359,5 +413,5 @@ window.Browse = (() => {
     return idx;
   }
 
-  return { init, reset, render, clearCache };
+  return { init, reset, render, clearCache, patchRows };
 })();

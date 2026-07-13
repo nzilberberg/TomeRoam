@@ -1022,6 +1022,10 @@
   }
 
   function renderCarousel(row, books) {
+    // On a background-revalidate repaint, patch only the tiles that changed (reuse
+    // unchanged covers) instead of rebuilding the whole carousel. Falls back to a
+    // full rebuild on first paint or any structural change (add/remove/re-sort).
+    if (books.length && row.querySelector('[data-key]') && Browse.patchRows(row, books, renderTile)) return;
     row.innerHTML = '';
     if (!books.length) { row.innerHTML = '<div class="empty carousel-empty">Nothing here yet.</div>'; return; }
     for (const b of books) row.appendChild(renderTile(b));
@@ -1049,6 +1053,8 @@
     const el = document.createElement('div');
     el.className = 'tile';
     el.dataset.book = b.ratingKey;
+    el.dataset.key = String(b.ratingKey);   // stable key + content sig for in-place reconcile (Browse.patchRows)
+    el._sig = JSON.stringify(b);
     el.innerHTML = `
       <div class="covertap" title="Resume">
         <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">
