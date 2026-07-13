@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-12.31';
+  const BUILD = '2026-07-12.32';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -35,6 +35,17 @@
     const p = (n, w = 2) => String(n).padStart(w, '0');
     return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
   };
+
+  // The persisted ring survives reloads AND updates, so a single bug report can
+  // mix the PREVIOUS build's events with this one's — which made bisecting a
+  // repaint bug painful (couldn't tell which build a log line came from). Drop a
+  // clear boundary line the first time a NEW build boots on this ring; a report is
+  // then self-delineating.
+  try {
+    const prevBuild = localStorage.getItem('pb_logbuild');
+    if (prevBuild && prevBuild !== BUILD) buf.push({ s: ++seq, t: now(), tag: 'BUILD', m: prevBuild + ' → ' + BUILD + ' (update — lines above are the old build)' });
+    localStorage.setItem('pb_logbuild', BUILD);
+  } catch {}
 
   // Strip the token + server base so the log is shareable and readable.
   function shorten(url) {

@@ -119,3 +119,45 @@ test('chunkText splits exactly and never returns zero chunks', () => {
   assert.deepEqual(L.chunkText('abcd', 4), ['abcd']);
   assert.deepEqual(L.chunkText('', 4), ['']);
 });
+
+// ---- homeFeeds (Continue Listening + Recently Added derivation) -------------
+const RA = (r) => r.recentlyAdded.map((b) => b.ratingKey);
+const CL = (r) => r.cont.map((b) => b.ratingKey);
+
+test('homeFeeds: Continue Listening = played books, most-recent lastViewedAt first', () => {
+  const books = [
+    { ratingKey: 'a', lastViewedAt: 10, addedAt: 1 },
+    { ratingKey: 'b', lastViewedAt: 0, addedAt: 2 },   // never played → not in CL
+    { ratingKey: 'c', lastViewedAt: 30, addedAt: 3 },
+    { ratingKey: 'd', lastViewedAt: 20, addedAt: 4 },
+  ];
+  assert.deepEqual(CL(L.homeFeeds(books, {})), ['c', 'd', 'a']);   // 30,20,10
+});
+
+test('homeFeeds: resume entries add un-played books and their ts outranks lastViewedAt', () => {
+  const books = [
+    { ratingKey: 'a', lastViewedAt: 10, addedAt: 1 },
+    { ratingKey: 'e', lastViewedAt: 0, addedAt: 2 },   // only known via the plugin resume map
+  ];
+  const entries = { e: { ts: 99 }, a: { ts: 5 } };     // e is newest by plugin ts
+  assert.deepEqual(CL(L.homeFeeds(books, entries)), ['e', 'a']);
+});
+
+test('homeFeeds: Recently Added = newest by addedAt, capped at limit', () => {
+  const books = [
+    { ratingKey: 'a', addedAt: 1 }, { ratingKey: 'b', addedAt: 4 },
+    { ratingKey: 'c', addedAt: 3 }, { ratingKey: 'd', addedAt: 2 },
+  ];
+  assert.deepEqual(RA(L.homeFeeds(books, {}, 2)), ['b', 'c']);     // top 2 by addedAt
+});
+
+test('homeFeeds: tolerates empty/null inputs', () => {
+  assert.deepEqual(L.homeFeeds(null, null), { cont: [], recentlyAdded: [] });
+  assert.deepEqual(L.homeFeeds([], {}), { cont: [], recentlyAdded: [] });
+});
+
+test('homeFeeds: a resume entry for an unknown book is ignored (filterPeers-style safety)', () => {
+  const books = [{ ratingKey: 'a', lastViewedAt: 5, addedAt: 1 }];
+  const r = L.homeFeeds(books, { zzz: { ts: 100 } });   // 'zzz' not in library
+  assert.deepEqual(CL(r), ['a']);
+});

@@ -64,9 +64,15 @@ if (flag('reports')) {
     if (!groups.has(m[1])) groups.set(m[1], []);
     groups.get(m[1]).push({ i: +m[2], n: +m[3], rk: p.ratingKey, summary: p.summary });
   }
-  for (const [ts, list] of groups) {
+  // Print oldest → NEWEST (the report playlists come back in arbitrary Plex order,
+  // so without this the "last" report in the output isn't the most recent — which
+  // is easy to misread). ts is epoch ms.
+  const tsOrder = [...groups.keys()].sort((a, b) => (Number(a) || 0) - (Number(b) || 0) || String(a).localeCompare(String(b)));
+  for (const ts of tsOrder) {
+    const list = groups.get(ts);
     list.sort((a, b) => a.i - b.i);
-    console.log(`\n===== REPORT ${ts} (${list.length}/${list[0].n} parts) =====`);
+    const when = Number(ts) ? new Date(Number(ts)).toISOString() : ts;
+    console.log(`\n===== REPORT ${ts} (${when}) (${list.length}/${list[0].n} parts) =====`);
     for (const part of list) {
       let s = part.summary;
       if (s == null) {

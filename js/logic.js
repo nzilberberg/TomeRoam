@@ -108,10 +108,30 @@ const PBLogic = (() => {
     return chunks.length ? chunks : [''];
   }
 
+  // Derive the two home carousels from the whole-library list + resume entries
+  // (book ratingKey -> {ts, ...}). Continue Listening = books played on Plex
+  // (lastViewedAt>0) plus any extra books the plugin's resume map surfaces, most-
+  // recent first (a plugin `ts` outweighs Plex lastViewedAt). Recently Added =
+  // newest `limit` by addedAt. Shared by renderCachedHome (offline, entries={})
+  // and loadHomeData (online, with resume) so both home paints agree.
+  function homeFeeds(books, entries, limit) {
+    books = books || []; entries = entries || {};
+    const byRk = new Map(books.map((b) => [String(b.ratingKey), b]));
+    const cont = books.filter((b) => b.lastViewedAt > 0);
+    const have = new Set(cont.map((b) => String(b.ratingKey)));
+    for (const rk of Object.keys(entries)) {
+      if (!have.has(String(rk)) && byRk.has(String(rk))) { cont.push(byRk.get(String(rk))); have.add(String(rk)); }
+    }
+    const recencyOf = (b) => (entries[b.ratingKey] ? entries[b.ratingKey].ts || 0 : b.lastViewedAt || 0);
+    cont.sort((a, b) => recencyOf(b) - recencyOf(a));
+    const recentlyAdded = books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, limit || 15);
+    return { cont, recentlyAdded };
+  }
+
   // NOTE: the banking scheduler (pickNextBank) used to live here too, but app.js
   // reimplemented selection as nextToBank and the copy here tested dead code —
   // removed rather than left as false test coverage.
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

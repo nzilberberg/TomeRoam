@@ -558,27 +558,14 @@ const Plex = (() => {
     }, opts);
   }
 
-  // Plex's own in-progress list: books partway through (some, not all, chapters
-  // viewed), most-recently-listened first.
-  // Continue Listening = Plex's recently-played books (the STANDALONE source of
-  // truth for WHICH books + recency), newest first. NOTE: the /all listing returns
-  // lastViewedAt but OMITS leafCount/viewedLeafCount (those need a per-album fetch),
-  // so we key off lastViewedAt — the old viewedLeafCount<leafCount filter matched
-  // nothing (both undefined). loadHomeData ADDITIVELY merges in the optional LMS
-  // plugin's resume books on top of this. Resume OFFSET is Plex-hidden for
-  // audiobooks and comes from our own Progress store (or the plugin, if present).
-  async function getContinueListening() {
-    const books = await getBooks();
-    return books
-      .filter((b) => b.lastViewedAt > 0)
-      .sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
-  }
-
-  // Newest books in the library, most-recent first.
-  async function getRecentlyAdded(limit = 15) {
-    const books = await getBooks();
-    return books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, limit);
-  }
+  // Continue Listening + Recently Added are pure derivations of getBooks() — see
+  // PBLogic.homeFeeds (js/logic.js), shared by the offline cache paint and
+  // loadHomeData. CL keys off lastViewedAt (recently-played), additively merged
+  // with the optional LMS plugin's resume books; resume OFFSET is Plex-hidden for
+  // audiobooks and comes from our Progress store (or the plugin). ⚠️ The /all
+  // type-9 listing returns lastViewedAt/addedAt but OMITS leafCount/viewedLeafCount
+  // (those need a per-album fetch), so mapBook defaults them to 0 → home tiles show
+  // no progress bar and their reconcile signature can't shift on those fields.
 
   // Books for one author (drill-down from the Authors screen). Cached in the kv
   // bag so the author page works offline like every other browse screen (it was
@@ -801,7 +788,7 @@ const Plex = (() => {
   return {
     isSignedIn, signOut, startPin, pollPin, connect, ping, getClientId: clientId, serverNow,
     getResumeMap, getAlbum, getAlbumTracks,
-    getAuthors, getBooks, getAuthorBooks, getAuthor, getContinueListening, getRecentlyAdded,
+    getAuthors, getBooks, getAuthorBooks, getAuthor,
     getTrackInfo, clearCaches, foregroundBusy,
     streamUrl, artUrl, writeTimeline, getServerName, getBase, getConnKind,
     getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist, makeBoard,

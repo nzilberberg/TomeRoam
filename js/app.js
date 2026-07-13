@@ -957,9 +957,9 @@
       const books = await Store.cachedBooks();
       if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books');
       if (!books || !books.length) return false;
-      const cont = books.filter((b) => b.lastViewedAt > 0).sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
+      const { cont, recentlyAdded } = PBLogic.homeFeeds(books, bookEntries);
       renderCarousel($('clRow'), cont);
-      renderCarousel($('raRow'), books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 15));
+      renderCarousel($('raRow'), recentlyAdded);
       renderDownloadedCarousel();
       renderPresence();
       return true;
@@ -982,19 +982,10 @@
     const paint = (books) => {
       for (const k in bookEntries) delete bookEntries[k];
       for (const b of resume) bookEntries[b.book] = b;
-      const byRk = new Map(books.map((b) => [String(b.ratingKey), b]));
-      // Continue Listening = Plex recently-played (standalone source of truth),
-      // then any additional books the plugin knows about, most-recent first.
-      const cont = books.filter((b) => b.lastViewedAt > 0).sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
-      const have = new Set(cont.map((b) => String(b.ratingKey)));
-      for (const rk of Object.keys(bookEntries)) {
-        if (!have.has(String(rk)) && byRk.has(String(rk))) { cont.push(byRk.get(String(rk))); have.add(String(rk)); }
-      }
-      const recencyOf = (b) => (bookEntries[b.ratingKey] ? bookEntries[b.ratingKey].ts || 0 : b.lastViewedAt || 0);
-      cont.sort((a, b) => recencyOf(b) - recencyOf(a));
+      const { cont, recentlyAdded } = PBLogic.homeFeeds(books, bookEntries);
       renderCarousel($('clRow'), cont);
       status(cont.length ? '' : 'No books in progress yet — pick one from Books or Authors.');
-      renderCarousel($('raRow'), books.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 15));
+      renderCarousel($('raRow'), recentlyAdded);
       renderDownloadedCarousel();
       renderPresence();   // paint live numbers on the tiles
     };
