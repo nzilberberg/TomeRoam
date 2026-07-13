@@ -1053,8 +1053,12 @@
     const el = document.createElement('div');
     el.className = 'tile';
     el.dataset.book = b.ratingKey;
-    el.dataset.key = String(b.ratingKey);   // stable key + content sig for in-place reconcile (Browse.patchRows)
-    el._sig = JSON.stringify(b);
+    el.dataset.key = String(b.ratingKey);   // stable key for in-place reconcile (Browse.patchRows)
+    // Signature over what the tile actually DISPLAYS — NOT the whole record. The
+    // active book's lastViewedAt (and addedAt) get bumped on every open, which is
+    // invisible on the tile; keying _sig off the raw record re-rendered (and
+    // flashed) that one tile on every revalidation. Cover/title/author/progress only.
+    el._sig = JSON.stringify([b.thumb, b.title, b.parentTitle, b.leafCount, b.viewedLeafCount]);
     el.innerHTML = `
       <div class="covertap" title="Resume">
         <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">

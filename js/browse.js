@@ -289,7 +289,7 @@ window.Browse = (() => {
     const el = document.createElement('div');
     el.className = 'book authrow';
     el.dataset.key = String(a.ratingKey);   // for in-place reconcile (patchRows)
-    el._sig = JSON.stringify(a);
+    el._sig = JSON.stringify([a.thumb, a.title, a.childCount]);   // visible projection only
     const cover = a.thumb ? Plex.artUrl(a.thumb) : null;
     el.innerHTML = `
       <img class="cover${cover ? '' : ' art-failed'}" ${cover ? `data-art="${cover}"` : ''} decoding="async" alt="">
@@ -306,8 +306,11 @@ window.Browse = (() => {
     const el = document.createElement('div');
     el.className = 'book';
     el.dataset.book = b.ratingKey;
-    el.dataset.key = String(b.ratingKey);   // stable key + content sig for in-place reconcile (patchRows)
-    el._sig = JSON.stringify(b);
+    el.dataset.key = String(b.ratingKey);   // stable key for in-place reconcile (patchRows)
+    // Sig over the VISIBLE projection only (cover/title/author/progress) — not the
+    // raw record. lastViewedAt/addedAt churn on the active book but aren't shown, so
+    // keying off them re-rendered + flashed that row on every revalidation.
+    el._sig = JSON.stringify([b.thumb, b.title, b.parentTitle, b.leafCount, b.viewedLeafCount]);
     const cover = b.thumb ? Plex.artUrl(b.thumb) : null;
     const total = b.leafCount || 0, done = b.viewedLeafCount || 0;
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
