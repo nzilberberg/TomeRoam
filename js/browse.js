@@ -112,7 +112,8 @@ window.Browse = (() => {
   function keepCover(oldRow, newRow) {
     const a = oldRow.querySelector('img.cover');
     const b = newRow.querySelector('img.cover');
-    if (a && b && a.getAttribute('data-art') === b.getAttribute('data-art') && a.dataset.artState === 'done') b.replaceWith(a);
+    if (a && b && a.getAttribute('data-art') === b.getAttribute('data-art') && a.dataset.artState === 'done') { b.replaceWith(a); return true; }
+    return a && b ? ('art=' + (a.getAttribute('data-art') === b.getAttribute('data-art')) + ',state=' + a.dataset.artState) : 'noimg';
   }
   // Patch container's rows to `items`, matched BY KEY (order-independent — browse
   // lists are laid out sorted/letter-grouped, not in the fetch order). Returns
@@ -122,18 +123,25 @@ window.Browse = (() => {
   // reflected until the next full render — negligible vs. re-rendering everything;
   // sort keys almost never change mid-session.)
   function patchRows(container, items, rowFn, sigFn) {
+    const D = (m) => { if (window.PBDebug) PBDebug.log('PATCH', (container.id || '?') + ' ' + m); };   // TEMP diag (.30)
     const rows = container.querySelectorAll('[data-key]');
-    if (rows.length !== items.length) return false;
+    if (rows.length !== items.length) { D('FULL-REBUILD len ' + rows.length + '!=' + items.length); return false; }
     const byKey = new Map();
     for (const r of rows) byKey.set(r.dataset.key, r);
-    for (const it of items) if (!byKey.has(String(it.ratingKey))) return false;   // new/removed key → structural
+    for (const it of items) if (!byKey.has(String(it.ratingKey))) { D('FULL-REBUILD missing key ' + it.ratingKey); return false; }
+    let n = 0;
     for (const it of items) {
       const row = byKey.get(String(it.ratingKey));
-      if (row._sig === sigFn(it)) continue;   // same VISIBLE content → untouched (no flash)
+      const ns = sigFn(it);
+      if (row._sig === ns) continue;   // same VISIBLE content → untouched (no flash)
+      n++;
+      D('row ' + it.ratingKey + ' sig changed old=' + row._sig + ' new=' + ns);   // TEMP diag: which field?
       const fresh = rowFn(it);
-      keepCover(row, fresh);
+      const kept = keepCover(row, fresh);
+      D('row ' + it.ratingKey + ' coverKept=' + kept);
       row.replaceWith(fresh);
     }
+    if (n) D('patched ' + n + '/' + items.length);
     return true;
   }
   // Try an in-place patch for this screen; false → the caller does a full rebuild.
