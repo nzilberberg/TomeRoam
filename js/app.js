@@ -904,6 +904,12 @@
       await restoreLastPlayed();
 
       await loadHomeData();
+
+      // Home is up + Plex reached — quietly warm the browse pages in the
+      // background so navigating to them is instant. Strictly subordinate: it
+      // yields the relay to the visible screen (Plex.foregroundBusy) and to live
+      // playback (elementBusy), and adapts its own concurrency to the link.
+      if (window.Warmer) Warmer.start({ shouldYield: () => { try { return elementBusy(); } catch { return false; } } });
     } catch (e) {
       // Offline / Plex unreachable. Bring up durable-progress + presence anyway
       // (they publish best-effort and recover on reconnect), restore the transport

@@ -339,6 +339,14 @@ const Plex = (() => {
     inflight.set(cacheKey, p);
     return p.finally(() => { if (inflight.get(cacheKey) === p) inflight.delete(cacheKey); });
   }
+  // Foreground-activity signal for the background warmer (js/warmer.js): a live
+  // read that a VISIBLE screen or home is waiting on (or revalidating) — anything
+  // NOT a warm prefetch. The warmer yields the relay while this is non-zero so
+  // the page you're looking at always gets the network first, to appear AND to go
+  // fresh, before any off-screen page.
+  let fgActive = 0;
+  function trackFg(p) { fgActive++; return p.finally(() => { fgActive--; }); }
+  function foregroundBusy() { return fgActive > 0; }
   // Cheap "did the bg refresh actually differ" test — skips a needless repaint/
   // flicker when the library is unchanged (the common case). Runs once, in the
   // background, so the stringify cost on a few-hundred-item list is fine.
@@ -352,12 +360,20 @@ const Plex = (() => {
       if (c && (!Array.isArray(c) || c.length)) return c;
       return undefined;
     };
+    // Warm prefetch (the background page warmer): populate ONLY if missing — never
+    // revalidate a hit (leave that to an actual visit) and never count as
+    // foreground. So a warm pass over an already-cached library is a cheap no-op.
+    if (opts.warm) {
+      const c = await fromCache();
+      if (c !== undefined) return c;
+      return runLive(cacheKey, { live, store, kind });
+    }
     if (!opts.force) {
       const c = await fromCache();
       if (c !== undefined) {
         cacheHook.stale(kind);                    // showing last-known until a revalidate lands
         if (!offlineKnown()) {                    // don't hammer a relay we KNOW is down
-          runLive(cacheKey, { live, store, kind })
+          trackFg(runLive(cacheKey, { live, store, kind }))
             .then((v) => { if (v != null && opts.onFresh && changed(c, v)) { try { opts.onFresh(v); } catch {} } })
             .catch((e) => dbg('CACHE', kind + ' bg revalidate failed (' + ((e && e.message) || 'err') + ')'));
         }
@@ -367,7 +383,7 @@ const Plex = (() => {
     }
     // No cache (or forced) → await the network; fall back to cache on failure.
     try {
-      return await runLive(cacheKey, { live, store, kind });
+      return await trackFg(runLive(cacheKey, { live, store, kind }));
     } catch (e) {
       dbg('CACHE', kind + ' live failed (' + ((e && e.message) || 'err') + ') — trying cache');
       const c = await fromCache();
@@ -763,7 +779,7 @@ const Plex = (() => {
     isSignedIn, signOut, startPin, pollPin, connect, ping, getClientId: clientId, serverNow,
     getResumeMap, getAlbum, getAlbumTracks,
     getAuthors, getBooks, getAuthorBooks, getAuthor, getContinueListening, getRecentlyAdded,
-    getTrackInfo, clearCaches,
+    getTrackInfo, clearCaches, foregroundBusy,
     streamUrl, artUrl, writeTimeline, getServerName, getBase, getConnKind,
     getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist, makeBoard,
     resetBookProgress,
