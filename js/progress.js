@@ -61,10 +61,27 @@ const Progress = (() => {
     bookSlot(book).bk = { t: rec.t, o: Math.round(rec.o) || 0, cum: Math.round(rec.cum) || 0, tot: Math.round(rec.tot) || 0, ts: now() };
     touch(book); saveMine(); rebuild(); schedulePublish();
   }
-  // Erase a book's records everywhere WE can (Reset Progress). Peers still hold
-  // their own; a supseding write from us can't outrank a genuinely newer peer edit.
+  // Erase a book's records on OUR OWN board (no cross-device guarantee). A bare
+  // delete has no timestamp, so it can't win the LWW merge — a peer's older record
+  // resurrects the book. Kept for internal use; Reset Progress uses resetBook.
   function clearBook(book) {
     if (mine.books[book]) { delete mine.books[book]; saveMine(); rebuild(); schedulePublish(); }
+  }
+
+  // Reset Progress: durably mark a book reset ACROSS THE MESH. The fix for the bare
+  // delete above — write a book-level TOMBSTONE (rst = now) and drop our own records.
+  // rebuild() then suppresses every bk/tr record (ours or a peer's) at/before rst, so
+  // the book has no surviving record and reads as UNPLAYED everywhere the tombstone is
+  // seen; later playback (ts > rst) naturally wins and resumes. Peers can't be cleared
+  // synchronously (single-writer boards), so they drop their own records via
+  // applyPeerResets when they next read our board, and merge-time suppression hides
+  // their stale data until then. rst is compact and rides in the book entry, so it
+  // outlives the per-chapter maps under the size cap. (Compaction of old tombstones is
+  // deferred — the existing LRU/size trim bounds them for now.) See the reset plan.
+  function resetBook(book) {
+    if (book == null) return;
+    mine.books[book] = { bk: null, tr: {}, rst: now(), _ts: now() };
+    saveMine(); rebuild(); schedulePublish();
   }
 
   // ---- publish (own board only, debounced) ----------------------------------
@@ -82,7 +99,8 @@ const Progress = (() => {
       const b = mine.books[k]; const e = {};
       if (b.bk) e.bk = b.bk;
       if (b.tr && Object.keys(b.tr).length) e.tr = b.tr;
-      if (e.bk || e.tr) o.books[k] = e;
+      if (b.rst) e.rst = b.rst;                       // reset tombstone (see resetBook)
+      if (e.bk || e.tr || e.rst) o.books[k] = e;      // publish a tombstone-only book too
     }
     return o;
   }
@@ -105,6 +123,7 @@ const Progress = (() => {
       const boards = await board.readAll();
       const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
       peerBoards = parsed.filter((p) => p && p.id && p.id !== myId());
+      applyPeerResets();   // adopt any peer reset tombstones + drop our own superseded records
       rebuild(); cbMerged();
       // Once per launch, sweep boards from long-retired devices — presence prunes
       // its pb_dev_ ghosts, but pb_prog_ boards used to live forever, inflating
@@ -121,9 +140,36 @@ const Progress = (() => {
     for (const bk in ((p && p.books) || {})) {
       const b = p.books[bk];
       if (b.bk && (b.bk.ts || 0) > ts) ts = b.bk.ts;
+      if ((b.rst || 0) > ts) ts = b.rst;   // a recent tombstone keeps a board alive
       for (const tr in (b.tr || {})) { const t = (b.tr[tr] || [])[2] || 0; if (t > ts) ts = t; }
     }
     return ts;
+  }
+
+  // Clear-on-contact GC: when a peer's board carries a reset tombstone NEWER than
+  // anything we hold for that book, adopt it — drop our own records at/before it and
+  // stamp the tombstone on OUR board too. This stops us re-publishing stale progress
+  // that would resurrect the book, and replicates the tombstone so it survives even
+  // if the original resetter's board is later pruned. (A peer we can't reach can't be
+  // cleaned — only filtered on read by rebuild's floor — so this runs whenever we do
+  // reach one.) Returns nothing; flags a republish when it changed our board.
+  function applyPeerResets() {
+    const peerRst = {};
+    for (const p of peerBoards) for (const bk in (p.books || {})) {
+      const r = p.books[bk].rst || 0; if (r > (peerRst[bk] || 0)) peerRst[bk] = r;
+    }
+    let changed = false;
+    for (const bk in peerRst) {
+      const floor = peerRst[bk];
+      const slot = mine.books[bk];
+      if (slot && (slot.rst || 0) >= floor) continue;   // already know this reset (or a newer one)
+      const keepBk = slot && slot.bk && (slot.bk.ts || 0) > floor ? slot.bk : null;
+      const keepTr = {};
+      if (slot && slot.tr) for (const tr in slot.tr) if ((slot.tr[tr][2] || 0) > floor) keepTr[tr] = slot.tr[tr];
+      mine.books[bk] = { bk: keepBk, tr: keepTr, rst: floor, _ts: now() };
+      changed = true;
+    }
+    if (changed) { saveMine(); schedulePublish(); }
   }
   async function pruneStaleBoards(boards, parsed) {
     for (let i = 0; i < boards.length; i++) {
@@ -140,15 +186,22 @@ const Progress = (() => {
   function rebuild() {
     const m = { books: {} };
     const sources = [packAll()].concat(peerBoards);   // ours first (authored by myId), then peers
+    // Reset floor per book = the newest tombstone across ALL sources. Any bk/tr record
+    // at/before its book's floor predates a reset and is suppressed (see resetBook).
+    const floor = {};
+    for (const src of sources) for (const bk in (src.books || {})) {
+      const r = src.books[bk].rst || 0; if (r > (floor[bk] || 0)) floor[bk] = r;
+    }
     for (const src of sources) {
       const by = src.id, name = src.name;
       for (const bk in (src.books || {})) {
-        const dst = m.books[bk] || (m.books[bk] = { bk: null, tr: {} });
+        const f = floor[bk] || 0;
+        const dst = m.books[bk] || (m.books[bk] = { bk: null, tr: {}, rst: f });
         const s = src.books[bk];
-        if (s.bk && (!dst.bk || (s.bk.ts || 0) > (dst.bk.ts || 0))) dst.bk = Object.assign({}, s.bk, { by, name });
+        if (s.bk && (s.bk.ts || 0) > f && (!dst.bk || (s.bk.ts || 0) > (dst.bk.ts || 0))) dst.bk = Object.assign({}, s.bk, { by, name });
         if (s.tr) for (const tr in s.tr) {
           const r = s.tr[tr], ts = r[2] || 0;
-          if (!dst.tr[tr] || ts > (dst.tr[tr].ts || 0)) dst.tr[tr] = { o: r[0] || 0, d: r[1] || 0, ts, by, name };
+          if (ts > f && (!dst.tr[tr] || ts > (dst.tr[tr].ts || 0))) dst.tr[tr] = { o: r[0] || 0, d: r[1] || 0, ts, by, name };
         }
       }
     }
@@ -179,7 +232,7 @@ const Progress = (() => {
 
   return {
     init, setSeed, setActive, flush, refresh,
-    recordTrack, recordBook, clearBook,
+    recordTrack, recordBook, clearBook, resetBook,
     bookRecord, trackRecord, trackPct, isMine, myId,
     // Test-only hook (mirrors Plex._test): reach the pure merge/serialize/trim
     // internals + closure state so test/progress.test.js can exercise the LWW
@@ -189,6 +242,7 @@ const Progress = (() => {
       setPeers(p) { peerBoards = p || []; },
       mineBooks: () => mine.books,
       rebuild() { rebuild(); return merged; },
+      applyPeerResets,
       serialize, packAll,
       MAX_BOOKS, MAX_JSON,
     },

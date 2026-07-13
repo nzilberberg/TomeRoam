@@ -1996,20 +1996,15 @@
 
   // Reset ALL saved progress for a book: unplay every track on Plex + drop it from
   // the resume store, then clear our local echoes and repaint the affected screens.
-  // KNOWN CROSS-DEVICE LIMITATION (documented so callers/reviewers don't assume
-  // reset is globally authoritative). This clears the book everywhere WE can reach
-  // synchronously — Plex server progress, this device's own record, the durable
-  // per-chapter/book records on our board, the cold tile hint. But progress here
-  // is a most-recent-wins merge across per-device boards, and a DELETE carries no
-  // timestamp, so it cannot win that merge: a peer still holding an older record
-  // for this book will re-surface it on the next merge/republish. Fully fixing
-  // this needs a timestamped, peer-honored book-level TOMBSTONE (a record that
-  // says "deleted at T", which merge treats as suppressing any record at/before T)
-  // rather than a bare local delete — and that tombstone must ride the SAME clock
-  // basis the boards already use for most-recent-wins, NOT a fresh server-clock
-  // read (the relay's Date header is too coarse/stale to compare across devices —
-  // it's why handoff went clock-free). Until then, reset is reliable on a single
-  // active device and best-effort across a live mesh.
+  // Reset Progress — cross-device, on both axes (see the reset-tombstone plan):
+  //   * DURABLE: Progress.resetBook writes a book-level tombstone (rst = now) that
+  //     wins the LWW merge and suppresses every bk/tr record at/before it, so the
+  //     book reads as unplayed across the mesh (a bare delete couldn't — no
+  //     timestamp). Peers drop their own copies via clear-on-contact.
+  //   * LIVE: if a peer is actively playing this book, Presence.resetClaim publishes
+  //     a superseding claim so it pauses (reset is the strongest deliberate action).
+  //     Guarded: only hijack our presence when we aren't mid-play of a DIFFERENT book.
+  // Plus the Plex-native reset (shared, we can clear it directly) and local hints.
   async function doResetProgress(book, title) {
     toast('Resetting…');
     let tracks = [];
@@ -2019,7 +2014,8 @@
     catch { return toast('Reset failed'); }
     delete myProgress[book];                                            // our own last spot on this device
     try { localStorage.setItem(MYPROG, JSON.stringify(myProgress)); } catch {}
-    Progress.clearBook(book);                                           // durable per-chapter + book records (republishes our board)
+    Progress.resetBook(book);                                           // durable tombstone → wins the merge, suppresses stale peer records
+    if (!ctx || String(ctx.book) === String(book)) Presence.resetClaim(book, rks[0] || null);   // live: pause a peer playing it (don't clobber a different active book)
     delete bookEntries[book];                                           // cold resume the tile shows
     try { const last = JSON.parse(localStorage.getItem(LAST) || 'null'); if (last && String(last.book) === String(book)) localStorage.removeItem(LAST); } catch {}
     try { await loadHomeData({ force: true }); } catch {}               // fresh library → viewedLeafCount reset

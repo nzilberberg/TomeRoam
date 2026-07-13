@@ -15,6 +15,17 @@ test('livePos extrapolates a playing peer on the stubbed server clock', () => {
   assert.equal(Presence.livePos({ state: 'paused', pos: 1000, at: 0 }), 1000);
 });
 
+test('resetClaim stamps a fresh (superseding) claim on the reset book', () => {
+  NOW = 2000000;
+  Presence.claimPlaying('someBook', 'someTrack', 0, 'someTrack');   // an earlier claim
+  const earlier = Presence.getClaim();
+  NOW = 2000500;
+  Presence.resetClaim('bookX', 'track1');
+  assert.equal(Presence.getClaim(), 2000500, 'reset publishes a claim stamped now');
+  assert.ok(Presence.getClaim() > earlier, 'newer than a prior claim → supersedes a playing peer');
+  Presence.setActive(false);   // tear down the poll interval claimPlaying/resetClaim started (or the runner hangs)
+});
+
 test('device name: defaults from the user agent, rename persists, blanks ignored', () => {
   storage.removeItem('pb_deviceName');
   assert.equal(Presence.name(), 'This device');       // node-test UA → generic

@@ -197,6 +197,17 @@ const Presence = (() => {
     publish(); evalActive();
   }
   function setPaused(pos) { if (pos != null) st.pos = pos; st.playState = 'paused'; publish(); evalActive(); }
+  // Reset Progress on `book`: publish a superseding claim so a peer actively playing
+  // that book pauses. Reset is the STRONGEST deliberate action (a rewind to 0), so it
+  // must win over passive playback the same way a scrub does — grab semantics (fresh
+  // claim + grab flag) targeting the reset book at position 0. The caller guards
+  // against hijacking our own live session (only calls when we aren't mid-play of a
+  // DIFFERENT book). Durable erasure is separate (Progress.resetBook); this is only
+  // the live "stop the peer now" half.
+  function resetClaim(book, track) {
+    st = { book, track: track || null, pos: 0, at: now(), playState: 'paused', speed: st.speed || 1, claim: now(), grab: true };
+    publish(); evalActive();
+  }
   function setTrack(track, pos) { st.track = track; st.pos = pos || 0; if (st.playState === 'playing') publish(); }
   function setIdle() { st.playState = 'idle'; st.book = null; publish(); evalActive(); }
   function flush(pos) { if (pos != null) st.pos = pos; publish(); }        // e.g. after a seek, or the slow liveness pulse
@@ -207,7 +218,7 @@ const Presence = (() => {
 
   return {
     init, setActive, claimPlaying, setPlaying, grab, setPaused, setTrack, setIdle, flush, setSpeed,
-    livePos, getClaim: () => st.claim, name, setName,
+    resetClaim, livePos, getClaim: () => st.claim, name, setName,
   };
 })();
 

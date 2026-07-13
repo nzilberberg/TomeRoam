@@ -136,6 +136,80 @@ test('clearBook removes our own records but a peer can still carry the book', ()
   assert.equal(bk && bk.by, 'peer-1', 'the peer still holds its own copy after we clear ours');
 });
 
+// ---- reset tombstone (cross-device Reset Progress) --------------------------
+test('resetBook suppresses our OWN prior records — book reads as unplayed', () => {
+  reset();
+  Progress.recordBook('bk', { t: 't', o: 5000, cum: 5000, tot: 60000 });
+  Progress.recordTrack('bk', 'c1', 5000, 60000);
+  NOW += 1000;
+  Progress.resetBook('bk');
+  assert.equal(Progress.bookRecord('bk'), null, 'book-level record suppressed');
+  assert.equal(Progress.trackRecord('bk', 'c1'), null, 'chapter record suppressed');
+});
+
+test('resetBook suppresses a PEER’s older record (a bare delete could not)', () => {
+  reset();
+  const peer = peerBoard('peer-1', 'Kitchen', {
+    bk: { bk: { t: 't', o: 9000, cum: 9000, tot: 60000, ts: NOW }, tr: { c1: [9000, 60000, NOW] } },
+  });
+  NOW += 1000;
+  Progress.resetBook('bk');            // tombstone is newer than the peer's records
+  T.setPeers([peer]); T.rebuild();
+  assert.equal(Progress.bookRecord('bk'), null, 'peer book record predates the reset → suppressed');
+  assert.equal(Progress.trackRecord('bk', 'c1'), null, 'peer chapter record suppressed too');
+});
+
+test('a peer record NEWER than the tombstone survives (reset only erases the past)', () => {
+  reset();
+  Progress.resetBook('bk');            // reset @ NOW
+  const peer = peerBoard('peer-1', 'Kitchen', {
+    bk: { bk: { t: 't', o: 4000, cum: 4000, tot: 60000, ts: NOW + 5000 } },   // played AFTER the reset
+  });
+  T.setPeers([peer]); T.rebuild();
+  const bk = Progress.bookRecord('bk');
+  assert.ok(bk && bk.by === 'peer-1', 'a post-reset peer record wins normally');
+  assert.equal(bk.o, 4000);
+});
+
+test('new local playback after a reset resumes normally (ts > tombstone wins)', () => {
+  reset();
+  Progress.recordBook('bk', { t: 't', o: 5000, cum: 5000, tot: 60000 });
+  NOW += 1000; Progress.resetBook('bk');
+  assert.equal(Progress.bookRecord('bk'), null);
+  NOW += 1000; Progress.recordBook('bk', { t: 't', o: 800, cum: 800, tot: 60000 });   // played again from ~start
+  const bk = Progress.bookRecord('bk');
+  assert.ok(bk && bk.o === 800 && Progress.isMine(bk), 'fresh record outranks the tombstone');
+});
+
+test('applyPeerResets adopts a peer tombstone: drops our stale records + replicates it', () => {
+  reset();
+  Progress.recordBook('bk', { t: 't', o: 5000, cum: 5000, tot: 60000 });   // our stale record @ NOW
+  Progress.recordTrack('bk', 'c1', 5000, 60000);
+  const resetAt = NOW + 1000;
+  const peer = peerBoard('peer-1', 'Kitchen', { bk: { rst: resetAt } });   // peer reset the book later
+  T.setPeers([peer]);
+  T.applyPeerResets();
+  const slot = T.mineBooks()['bk'];
+  assert.equal(slot.rst, resetAt, 'we adopted (replicated) the peer tombstone on our own board');
+  assert.equal(slot.bk, null, 'our stale book record was dropped');
+  assert.deepEqual(slot.tr, {}, 'our stale chapter records were dropped');
+  T.rebuild();
+  assert.equal(Progress.bookRecord('bk'), null, 'book now reads as unplayed');
+});
+
+test('applyPeerResets keeps our records that are NEWER than the peer tombstone', () => {
+  reset();
+  const resetAt = NOW;
+  NOW += 5000;
+  Progress.recordBook('bk', { t: 't', o: 700, cum: 700, tot: 60000 });     // played AFTER that reset
+  const peer = peerBoard('peer-1', 'Kitchen', { bk: { rst: resetAt } });
+  T.setPeers([peer]);
+  T.applyPeerResets();
+  const slot = T.mineBooks()['bk'];
+  assert.ok(slot.bk && slot.bk.o === 700, 'our post-reset record is retained');
+  assert.equal(slot.rst, resetAt, 'and the tombstone is recorded for further propagation');
+});
+
 // ---- LRU trim ---------------------------------------------------------------
 test('trim caps our own board at MAX_BOOKS, dropping the least-recently-touched', () => {
   reset();
