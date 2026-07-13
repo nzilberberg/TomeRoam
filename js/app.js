@@ -1953,7 +1953,7 @@
       if (st === 'done') items.push({ label: 'Remove download', ico: DLICO.trash, confirm: true, run: () => dl.remove(book) });
       else if (st === 'downloading' || st === 'queued') items.push({ label: st === 'queued' ? 'Cancel queued download' : 'Cancel download', ico: DLICO.x, run: () => dl.remove(book) });
       else items.push({ label: 'Download book', ico: DLICO.down, run: () => startBookDownload(book, title) });
-      items.push({ label: 'Manage downloads', ico: DLICO.gear, run: () => openDownloadsScreen() });
+      items.push({ label: 'Manage downloads', ico: DLICO.gear, run: () => DownloadsScreen.open() });
     }
     items.push({
       label: 'Reset Progress', danger: true, confirm: true,
@@ -2093,84 +2093,13 @@
     });
   }
 
-  // ---- the Downloads management screen (Options + "Manage downloads") -------
-  let dlScreenEl = null, dlScreenUnsub = null;
-  function openDownloadsScreen() {
-    const dl = window.Downloads;
-    if (!dl || !dl.available()) return toast('Downloads unavailable on this device');
-    if (!dlScreenEl) {
-      dlScreenEl = document.createElement('div');
-      dlScreenEl.id = 'dlscreen';
-      dlScreenEl.className = 'dlscreen';
-      dlScreenEl.innerHTML =
-        `<div class="dlscreen-bar"><button class="dlscreen-close" aria-label="Close">‹ Back</button><b>Downloads</b><span></span></div>
-         <div class="dlscreen-body">
-           <div class="opt-row"><span class="opt-label" id="dlWifiLabel">Wi‑Fi only</span><span class="opt-ctl"><button id="dlWifi" class="toggle" role="switch"></button></span></div>
-           <div class="opt-row"><span class="opt-label">Max download space</span><span class="opt-ctl"><select id="dlMax"></select></span></div>
-           <div id="dlUsage" class="dlusage"></div>
-           <div class="opt-row"><span class="opt-label">Buffered audio<div id="dlBufTxt" class="opt-sub"></div></span><span class="opt-ctl"><button id="dlClearBuf" class="textbtn">Clear buffer</button></span></div>
-           <div class="section-title">Downloaded books</div>
-           <div id="dlList" class="dllist"></div>
-         </div>`;
-      document.body.appendChild(dlScreenEl);
-      dlScreenEl.querySelector('.dlscreen-close').addEventListener('click', closeDownloadsScreen);
-      const sel = dlScreenEl.querySelector('#dlMax');
-      [1, 2, 4, 8, 16].forEach((g) => { const o = document.createElement('option'); o.value = String(g * GB); o.textContent = g + ' GB'; sel.appendChild(o); });
-      sel.addEventListener('change', (e) => { dl.setMaxBytes(parseInt(e.target.value, 10)); renderDlUsage(); });
-      dlScreenEl.querySelector('#dlClearBuf').addEventListener('click', () => {
-        modal({ title: 'Clear buffered audio?', body: '<p>This removes auto-buffered chapters (the gray lines). Your downloaded books (blue) are kept.</p>',
-          buttons: [{ label: 'Clear buffer', cls: 'danger', run: () => { dl.clearBuffer(); renderDlUsage(); } }, { label: 'Cancel' }] });
-      });
-      const wifi = dlScreenEl.querySelector('#dlWifi');
-      wifi.addEventListener('click', () => { const on = dl.wifiOnly(); dl.setWifiOnly(!on); wifi.setAttribute('aria-checked', on ? 'false' : 'true'); });
-    }
-    dlScreenEl.classList.add('open');
-    // iOS can't detect Wi-Fi vs cellular, so the same toggle is relabeled
-    // "Confirm downloads" there (ON = show a carrier-charges prompt before each).
-    dlScreenEl.querySelector('#dlWifiLabel').textContent = dl.wifiDetectable() ? 'Wi‑Fi only' : 'Confirm downloads';
-    const wifi = dlScreenEl.querySelector('#dlWifi');
-    wifi.setAttribute('aria-checked', dl.wifiOnly() ? 'true' : 'false');
-    dlScreenEl.querySelector('#dlMax').value = String(dl.maxBytes());
-    renderDlList(); renderDlUsage();
-    if (!dlScreenUnsub) dlScreenUnsub = dl.subscribe(() => { if (dlScreenEl && dlScreenEl.classList.contains('open')) { renderDlList(); renderDlUsage(); } });
-  }
-  function closeDownloadsScreen() { if (dlScreenEl) dlScreenEl.classList.remove('open'); }
-  // Add a "Downloads" row to the Options screen (guarded so it appears once).
-  function injectDownloadsOptionRow() {
-    const opt = $('options');
-    if (!opt || !window.Downloads || !Downloads.available() || document.getElementById('optDownloads')) return;
-    const row = document.createElement('div');
-    row.className = 'opt-row';
-    row.innerHTML = '<span class="opt-label">Downloads</span><span class="opt-ctl"><button id="optDownloads" class="textbtn">Manage</button></span>';
-    // Keep it near the top of Options (before the diagnostics/build stamp).
-    const firstBtn = opt.querySelector('.opt-row');
-    opt.insertBefore(row, firstBtn ? firstBtn.nextSibling : null);
-    row.querySelector('#optDownloads').addEventListener('click', openDownloadsScreen);
-  }
-  async function renderDlUsage() {
-    const box = dlScreenEl && dlScreenEl.querySelector('#dlUsage'); if (!box) return;
-    const info = await Downloads.storageInfo();
-    const pct = info.max ? Math.min(100, Math.round((info.used / info.max) * 100)) : 0;
-    const q = info.quotaSupported ? ` · device free ≈ ${fmtGB(Math.max(0, info.quota - info.quotaUsage))}` : '';
-    box.innerHTML = `<div class="dlbar"><i style="width:${pct}%"></i></div><div class="dlusage-txt">${fmtGB(info.used)} of ${fmtGB(info.max)}${q}</div>`;
-    const bt = dlScreenEl.querySelector('#dlBufTxt');
-    if (bt && Downloads.bufferUsage) bt.textContent = `${fmtGB(Downloads.bufferUsage())} of ${fmtGB(Downloads.bufMaxBytes())} · auto, evicts oldest`;
-  }
-  async function renderDlList() {
-    const host = dlScreenEl && dlScreenEl.querySelector('#dlList'); if (!host) return;
-    const rows = await Downloads.listDownloaded();
-    if (!rows.length) { host.innerHTML = '<div class="empty">No downloaded books yet.</div>'; return; }
-    host.innerHTML = '';
-    for (const r of rows) {
-      const row = document.createElement('div');
-      row.className = 'dlrow';
-      row.innerHTML = `<div class="dlrow-meta"><div class="dlrow-title"></div><div class="dlrow-sub"></div></div><button class="dlrow-del" aria-label="Remove">${DLICO.trash}</button>`;
-      row.querySelector('.dlrow-title').textContent = r.title || 'Book';
-      row.querySelector('.dlrow-sub').textContent = `${r.author || ''}${r.author ? ' · ' : ''}${fmtGB(r.size || 0)}`;
-      row.querySelector('.dlrow-del').addEventListener('click', () => confirmRemoveDownload(r.book, r.title));
-      host.appendChild(row);
-    }
-  }
+  // ---- the Downloads management screen ------------------------------------
+  // Extracted to js/downloads-screen.js (DownloadsScreen) — owns its own DOM,
+  // listeners, rendering, and refresh subscription. Wired via DownloadsScreen.init(...)
+  // in the startup section below; the book menu and Options row call
+  // DownloadsScreen.open() / DownloadsScreen.injectOptionRow(). The shared bits it
+  // leans on (toast/modal/fmtGB/GB/DLICO/confirmRemoveDownload) stay here and are
+  // injected, so there's one copy each.
 
   // ---- shared indicators (tile badge, NP button, files rows, carousel) -----
   function setDlBadge(el, book) {
@@ -2702,7 +2631,11 @@
         },
       });
       Downloads.subscribe(refreshDlUi);
-      injectDownloadsOptionRow();
+      DownloadsScreen.init({
+        Downloads: window.Downloads, toast, modal, fmtGB, GB, DLICO,
+        confirmRemove: confirmRemoveDownload, byId: $,
+      });
+      DownloadsScreen.injectOptionRow();
     }
     if (Plex.isSignedIn()) return enterApp();
     show('signin');
