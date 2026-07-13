@@ -25,8 +25,11 @@ if (Test-Path $build) { Remove-Item -Recurse -Force $build }
 New-Item -ItemType Directory -Force "$build\assets\www","$build\res\values","$build\res\mipmap-xxxhdpi","$build\classes","$build\dex" | Out-Null
 
 # ---- stage web app into assets/www ----
-Copy-Item "$repo\index.html","$repo\manifest.webmanifest","$repo\icon.svg","$repo\sw.js" "$build\assets\www\"
-Copy-Item -Recurse "$repo\css","$repo\js","$repo\icons" "$build\assets\www\"
+# build.json is bundled too: WebFiles reads it to learn the seeded build id (the
+# baseline the OTA updater compares github.io against). img/ carries the cover
+# placeholder. Both were previously omitted.
+Copy-Item "$repo\index.html","$repo\manifest.webmanifest","$repo\icon.svg","$repo\sw.js","$repo\build.json" "$build\assets\www\"
+Copy-Item -Recurse "$repo\css","$repo\js","$repo\icons","$repo\img" "$build\assets\www\"
 
 # ---- stage res + pinned root cert ----
 Copy-Item -Recurse -Force "$android\res\*" "$build\res\"

@@ -26,6 +26,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
@@ -33,13 +34,97 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+
 final class PlexDirectTrust {
 
     private static final int MAX_HOPS = 4;
     private static final Map<String, Boolean> cache = new HashMap<>();
     private static X509Certificate root; // pinned ISRG Root X1
+    private static SSLSocketFactory sslFactory;
 
     private PlexDirectTrust() {}
+
+    // ---- HttpURLConnection variant --------------------------------------------
+    // The WebView path (verify() below) only fixes WebView-initiated loads. Our own
+    // HttpURLConnection to *.plex.direct (the cover-image cache) needs the SAME
+    // chain repair, so expose an SSLSocketFactory + HostnameVerifier that apply it.
+    // Only ever attach these to *.plex.direct requests.
+
+    static synchronized SSLSocketFactory socketFactory(Context ctx) {
+        if (sslFactory != null) return sslFactory;
+        try {
+            loadRoot(ctx);
+            final CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            X509TrustManager tm = new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                    try { anchorToRoot(cf, chain); }
+                    catch (CertificateException e) { throw e; }
+                    catch (Exception e) { throw new CertificateException("plex.direct chain repair failed", e); }
+                }
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            };
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, new TrustManager[] { tm }, null);
+            sslFactory = sc.getSocketFactory();
+            return sslFactory;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    static HostnameVerifier hostnameVerifier() {
+        return (hostname, session) -> {
+            try {
+                if (hostname == null || !hostname.endsWith(".plex.direct")) return false;
+                java.security.cert.Certificate[] pc = session.getPeerCertificates();
+                if (pc == null || pc.length == 0 || !(pc[0] instanceof X509Certificate)) return false;
+                return hostMatches((X509Certificate) pc[0], hostname);
+            } catch (Exception e) { return false; }
+        };
+    }
+
+    // Walk leaf -> ... -> pinned root, verifying every signature and validity
+    // window; missing issuers are fetched via AIA (as browsers do). Throws on any
+    // failure. Shared by the TrustManager above.
+    private static void anchorToRoot(CertificateFactory cf, X509Certificate[] chain) throws Exception {
+        if (chain == null || chain.length == 0) throw new CertificateException("empty chain");
+        X509Certificate current = chain[0];
+        for (int hop = 0; hop <= MAX_HOPS; hop++) {
+            current.checkValidity();
+            if (current.getIssuerX500Principal().equals(root.getSubjectX500Principal())) {
+                current.verify(root.getPublicKey());
+                root.checkValidity();
+                return;
+            }
+            X509Certificate issuer = findIssuer(chain, current);
+            if (issuer == null) issuer = fetchIssuer(cf, current);
+            if (issuer == null) throw new CertificateException("issuer not found");
+            current.verify(issuer.getPublicKey());
+            current = issuer;
+        }
+        throw new CertificateException("chain too long");
+    }
+
+    private static X509Certificate findIssuer(X509Certificate[] chain, X509Certificate cert) {
+        for (X509Certificate c : chain) {
+            if (c != cert && c.getSubjectX500Principal().equals(cert.getIssuerX500Principal())) return c;
+        }
+        return null;
+    }
+
+    private static synchronized void loadRoot(Context ctx) throws Exception {
+        if (root != null) return;
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        try (InputStream in = ctx.getAssets().open("certs/isrg-root-x1.cer")) {
+            root = (X509Certificate) cf.generateCertificate(in);
+        }
+    }
 
     static synchronized boolean verify(Context ctx, SslCertificate sslCert, String host) {
         if (host == null || !host.endsWith(".plex.direct")) return false;
@@ -57,11 +142,7 @@ final class PlexDirectTrust {
 
     private static boolean doVerify(Context ctx, SslCertificate sslCert, String host) throws Exception {
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
-        if (root == null) {
-            try (InputStream in = ctx.getAssets().open("certs/isrg-root-x1.cer")) {
-                root = (X509Certificate) cf.generateCertificate(in);
-            }
-        }
+        loadRoot(ctx);
         X509Certificate leaf = fromSslCertificate(cf, sslCert);
         if (leaf == null || !hostMatches(leaf, host)) return false;
 

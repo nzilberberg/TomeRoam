@@ -12,6 +12,7 @@ package io.github.nzilberberg.tomeroam;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Insets;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Build;
@@ -19,6 +20,7 @@ import android.os.Bundle;
 import android.os.Message;
 import android.view.KeyEvent;
 import android.view.WindowInsets;
+import android.widget.FrameLayout;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -28,6 +30,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -38,32 +42,62 @@ public class MainActivity extends Activity {
     private static final String HOST = "tomeroam.local";
     private static final String APP_URL = "https://" + HOST + "/index.html?nosw=1";
 
+    // Bump ONLY when the NATIVE shell changes (this file, PlexDirectTrust, the
+    // updater, manifest) — NOT for web-only builds. When build.json publishes a
+    // higher nativeVersion, ApkUpdater offers a one-tap APK self-update; ordinary
+    // web pushes flow silently via WebUpdater and never touch this number.
+    private static final int NATIVE_VERSION = 1;
+
     private WebView web;
+    private File webRoot;   // writable web root (filesDir/web/current); null -> serve from assets
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Resolve the writable web root: seed it from bundled assets on first launch
+        // and promote any OTA build downloaded on a previous run. Serving from a
+        // writable copy (instead of read-only assets) is what lets web builds update
+        // over the air with no reinstall. The origin (tomeroam.local) is unchanged,
+        // so localStorage/IndexedDB survive across updates.
+        webRoot = WebFiles.resolveActiveRoot(this);
+
         web = new WebView(this);
-        setContentView(web);
         web.setBackgroundColor(0xFF14171C);
 
-        // Android 15 (targetSdk 35) FORCES edge-to-edge: the WebView draws behind
-        // the status + navigation bars, and WebView does NOT report those bars as
-        // env(safe-area-inset-*) to CSS (only display cutouts, unreliably). So the
-        // web app's fixed bottom nav bar rendered UNDER the system nav bar ("too
-        // low"). Fix natively — pad the WebView by the real system-bar insets so it
-        // sits ABOVE them — instead of a UA-sniff / platform branch in the web app;
-        // CSS stays fully responsive and env()-driven (iOS keeps its own inset). On
-        // pre-edge-to-edge devices systemBars insets are 0, so this is a no-op there.
+        // Android 15 (targetSdk 35) FORCES edge-to-edge: the WebView draws behind the
+        // status + navigation bars. The web app's fixed bottom nav bar therefore
+        // rendered UNDER the system nav bar ("too low").
+        //
+        // We keep the WebVIEW itself out of the system-bar regions rather than sniff
+        // the platform in CSS. CRITICAL LESSON (build .17 made it WORSE): padding the
+        // WebView DIRECTLY does not work — WebView anchors position:fixed to its full
+        // view box and ignores its own padding, so a fixed bottom bar stayed behind the
+        // nav bar while the added TOP padding shoved everything down, pushing the bar
+        // even lower. The fix is to PHYSICALLY SHRINK the WebView: host it in a
+        // container whose padding = the real system-bar insets (padding on a parent
+        // resizes a MATCH_PARENT child), so the WebView's layout viewport genuinely
+        // ends at the nav bar's top edge and bottom:0 sits flush above it. We also hand
+        // the child ZEROED system-bar insets so its env(safe-area-inset-*) is 0 (the
+        // container already accounts for them — no double count with the CSS inset).
+        // iOS CSS (its own real insets) is untouched. No-op on pre-edge-to-edge devices
+        // (systemBars insets are 0 there).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {   // API 30+: typed insets
-            web.setOnApplyWindowInsetsListener((v, insets) -> {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+            FrameLayout rootLayout = new FrameLayout(this);
+            rootLayout.addView(web, new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+            setContentView(rootLayout);
+            rootLayout.setOnApplyWindowInsetsListener((v, insets) -> {
+                Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
                 v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-                return insets;
+                return new WindowInsets.Builder(insets)
+                        .setInsets(WindowInsets.Type.systemBars(), Insets.NONE)
+                        .build();
             });
-            web.requestApplyInsets();
+            rootLayout.requestApplyInsets();
+        } else {
+            setContentView(web);
         }
 
         WebSettings s = web.getSettings();
@@ -78,6 +112,10 @@ public class MainActivity extends Activity {
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri u = request.getUrl();
                 if (HOST.equals(u.getHost())) return serveAsset(u.getPath());
+                // Persist Plex cover art so it renders offline (the SW-cached-covers
+                // role, which the APK can't use). A cache hit is served from disk; a
+                // miss returns null (WebView loads it) and populates in the background.
+                if (ImageCache.isCover(u)) return ImageCache.serve(getApplicationContext(), u);
                 return null; // Plex API / media / plex.tv go to the real network
             }
 
@@ -130,13 +168,24 @@ public class MainActivity extends Activity {
         });
 
         web.loadUrl(APP_URL);
+
+        // Check GitHub for a newer web build (silent OTA) and, rarely, a newer
+        // native APK — after the page starts loading so startup isn't delayed.
+        WebUpdater.checkAsync(this, web, NATIVE_VERSION);
     }
 
     private WebResourceResponse serveAsset(String path) {
         if (path == null || path.isEmpty() || "/".equals(path)) path = "/index.html";
         String rel = path.substring(1);
         try {
-            InputStream in = getAssets().open("www/" + rel);
+            // Prefer the writable (OTA-updatable) copy; fall back to the bundled
+            // read-only asset if a file is missing there (belt-and-suspenders).
+            InputStream in = null;
+            if (webRoot != null) {
+                File f = new File(webRoot, rel);
+                if (f.exists() && f.isFile()) in = new FileInputStream(f);
+            }
+            if (in == null) in = getAssets().open("www/" + rel);
             Map<String, String> headers = new HashMap<>();
             headers.put("Access-Control-Allow-Origin", "*");
             headers.put("Cache-Control", "no-store");

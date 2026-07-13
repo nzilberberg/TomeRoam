@@ -1,4 +1,5 @@
 {
   "build": "2026-07-12.17",
-  "note": "App-host reachability probe + update manifest. Bump `build` on every deploy in lockstep with sw.js and js/debug.js. GitHub Pages serves this file; the app fetches it (no-store) to check for updates and to test whether the app host is reachable. It is NOT a runtime dependency — the app runs fully from cache when this fetch fails."
+  "nativeVersion": 1,
+  "note": "App-host reachability probe + update manifest. Bump `build` on every deploy in lockstep with sw.js and js/debug.js. GitHub Pages serves this file; the app fetches it (no-store) to check for updates and to test whether the app host is reachable. It is NOT a runtime dependency — the app runs fully from cache when this fetch fails. `nativeVersion` is for the Android APK ONLY: bump it (and the APK's NATIVE_VERSION + versionCode) when the native shell changes so the app offers a one-tap APK self-update; leave it alone for web-only builds (those update silently over-the-air)."
 }
