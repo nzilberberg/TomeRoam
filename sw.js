@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.65';
+const BUILD = '2026-07-12.66';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -53,6 +53,7 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/maskable-512.png',
   './js/logic.js' + V,
+  './js/settings.js' + V,
   './js/debug.js' + V,
   './js/store.js' + V,
   './js/net.js' + V,

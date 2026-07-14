@@ -20,12 +20,11 @@
   // Per-chapter + book progress now lives in the durable, cross-device Progress
   // layer (js/progress.js) — recorded here, merged LWW across peers, read back for
   // the bars/resume. It persists its own localStorage cache, so it survives offline.
-  const FRESH = 'pb_freshStart';            // Options: fresh-start-on-auto-advance (default ON)
-  const GRACE_KEY = 'pb_resetGrace';        // Options: seconds before a rolled-into chapter's old progress is discarded
-  const AUTOUPD = 'pb_autoUpdate';          // Options (APK only): apply a staged update on the next cold launch (default OFF)
-  const autoUpdateOn = () => localStorage.getItem(AUTOUPD) === '1';
-  const freshStartOn = () => localStorage.getItem(FRESH) !== '0';
-  const resetGraceSec = () => { const v = parseInt(localStorage.getItem(GRACE_KEY) || '', 10); return isNaN(v) ? 10 : v; };
+  // Settings live in the settings repository (js/settings.js, review #13); these
+  // thin delegators keep the many call sites below unchanged.
+  const autoUpdateOn = () => Settings.autoUpdate;      // Options (APK only): apply a staged update on the next cold launch (default OFF)
+  const freshStartOn = () => Settings.freshStart;      // Options: fresh-start-on-auto-advance (default ON)
+  const resetGraceSec = () => Settings.resetGraceSec;  // Options: seconds before a rolled-into chapter's old progress is discarded
   let rollGuard = null;                     // { track, until } — suppress recording a rolled-into chapter during its grace window
 
   // ---- media-load resilience (slow/lossy relay) ----------------------------
@@ -65,17 +64,15 @@
   // is IDLE (it buffers far ahead then suspends — a long, safe window) and aborts
   // the instant the element resumes fetching (see pumpBank gate + the audio
   // 'suspend'/'progress' hooks). Escape hatch: localStorage pb_banking='off'.
-  const BANKING_ENABLED = (localStorage.getItem('pb_banking') || 'on') !== 'off';
-  const BANK_KEY = 'pb_bankBudget';         // Options: look-ahead budget in MB
+  const BANKING_ENABLED = Settings.banking;   // hidden escape hatch pb_banking='off' (Settings.KEY.banking)
   // The look-ahead bytes live on DISK now (banked blobs persist to IndexedDB and
   // play via the SW range path; RAM copies are dropped once persisted — see
-  // bankOne), so the budget is no longer OOM-bound. 128 MB ≈ 2h+ of prefetch.
-  const DEFAULT_BUDGET_MB = 128;
-  const MAX_BUDGET_MB = 256;                // hard clamp on the look-ahead budget
+  // bankOne), so the budget is no longer OOM-bound. 128 MB ≈ 2h+ of prefetch
+  // (default), clamped to 256 MB — both now defined in js/settings.js (bufferMb).
   const MAX_AHEAD = 60;
   const BANK_MIN_AHEAD = 60;                // only prefetch when the live element has ≥ this many seconds buffered ahead (it's not urgently pulling)
   const MAX_TRACK_BANK_BYTES = 90 * 1024 * 1024;   // one chapter (~58MB) fits; pathological huge files still stream
-  const bankBudgetBytes = () => Math.min(parseInt(localStorage.getItem(BANK_KEY) || '', 10) || DEFAULT_BUDGET_MB, MAX_BUDGET_MB) * 1024 * 1024;
+  const bankBudgetBytes = () => Settings.bufferBytes;
   const banks = new Map();                  // idx -> { url, bytes } of a fully-downloaded track
   const skipBank = new Set();               // idxs too big to bank — stream them, don't keep retrying
   let bankBook = null;                      // book `banks` belongs to (banks keyed by idx → wipe on book change)
@@ -1159,7 +1156,7 @@
   // remaining time flash 1x->Nx on every launch. The intended speed is stable.
   const spd = () => PBLogic.displaySpeed(
     (speedCtl && speedCtl.getRate) ? speedCtl.getRate() : null,
-    parseFloat(localStorage.getItem('pb_speed')),
+    Settings.speed,
   );
   const trackCache = {};   // book -> tracks[] so a peer's book-cum can be computed from its presence pos
   function cacheTracks(book, tracks) { if (book != null && tracks && tracks.length) trackCache[book] = tracks; }
@@ -1647,7 +1644,7 @@
   // playing device's live position at the new rate (livePos = pos + dt*speed).
   function onSpeedChange(rate) {
     audio.playbackRate = rate;
-    try { localStorage.setItem('pb_speed', String(rate)); } catch { /* best effort — survives a reload */ }
+    Settings.setSpeed(rate);   // best effort — survives a reload
     for (const c of speedCtls) c.setRate(rate, true);   // keep transport + now-playing labels in sync
     // Always keep presence's stored speed current (so the next play event
     // publishes it); re-anchor to the live pos when we have one, so a PLAYING
@@ -1868,9 +1865,8 @@
   }
 
   // ---- skip amounts (configurable on the Options screen; default 10s) -------
-  const SKIP = { back: 'pb_skipBack', fwd: 'pb_skipFwd' };
-  const getSkipBack = () => parseInt(localStorage.getItem(SKIP.back) || '10', 10) || 10;
-  const getSkipFwd = () => parseInt(localStorage.getItem(SKIP.fwd) || '10', 10) || 10;
+  const getSkipBack = () => Settings.skipBackSec;
+  const getSkipFwd = () => Settings.skipFwdSec;
   function skipBy(sec) {
     if (!ctx) return;
     audio.currentTime = Math.max(0, Math.min(audio.duration || Infinity, (audio.currentTime || 0) + sec));
@@ -1912,7 +1908,7 @@
   }
 
   // ---- Options screen ------------------------------------------------------
-  const getBufferMB = () => Math.min(parseInt(localStorage.getItem(BANK_KEY) || '', 10) || DEFAULT_BUDGET_MB, MAX_BUDGET_MB);
+  const getBufferMB = () => Settings.bufferMb;
   function renderOptions() {
     renderDeviceName();
     const fill = (sel, cur, opts, label) => {
@@ -2413,7 +2409,7 @@
     // and the on-new-src rate restore, and in speedCtls so its label stays synced —
     // it is simply never mounted into the DOM. Restore the last speed so a reload
     // doesn't silently drop back to 1× — startTrack's onMeta reapplies it.
-    const savedSpeed = (() => { const v = parseFloat(localStorage.getItem('pb_speed')); return v > 0 ? v : 1.0; })();
+    const savedSpeed = Settings.speed;
     audio.playbackRate = savedSpeed;
     // Tell Presence our real rate NOW. Restoring speed from localStorage never went
     // through onSpeedChange, so st.speed stayed at its default 1 → we published
@@ -2456,16 +2452,16 @@
       else toast('AirPlay needs Safari');
     });
     // Options: skip-second settings.
-    $('optSkipBack').addEventListener('change', (e) => { localStorage.setItem(SKIP.back, e.target.value); updateSkipLabels(); });
-    $('optSkipFwd').addEventListener('change', (e) => { localStorage.setItem(SKIP.fwd, e.target.value); updateSkipLabels(); });
-    $('optBuffer').addEventListener('change', (e) => { localStorage.setItem(BANK_KEY, e.target.value); pumpBank(); });   // grew → prefetch more now; shrank → slides down as we advance
+    $('optSkipBack').addEventListener('change', (e) => { Settings.setSkipBackSec(e.target.value); updateSkipLabels(); });
+    $('optSkipFwd').addEventListener('change', (e) => { Settings.setSkipFwdSec(e.target.value); updateSkipLabels(); });
+    $('optBuffer').addEventListener('change', (e) => { Settings.setBufferMb(e.target.value); pumpBank(); });   // grew → prefetch more now; shrank → slides down as we advance
     // Options: roll-over behaviour (see rollToTrack / recordProgress grace guard).
-    $('optFreshStart').addEventListener('click', () => { const on = freshStartOn(); localStorage.setItem(FRESH, on ? '0' : '1'); $('optFreshStart').setAttribute('aria-checked', on ? 'false' : 'true'); });
-    $('optResetGrace').addEventListener('change', (e) => localStorage.setItem(GRACE_KEY, e.target.value));
+    $('optFreshStart').addEventListener('click', () => { const on = freshStartOn(); Settings.setFreshStart(!on); $('optFreshStart').setAttribute('aria-checked', on ? 'false' : 'true'); });
+    $('optResetGrace').addEventListener('change', (e) => Settings.setResetGraceSec(e.target.value));
     // Auto update on launch (APK): also push the new value into the native boot pref.
     $('optAutoUpdate').addEventListener('click', () => {
       const on = autoUpdateOn();
-      localStorage.setItem(AUTOUPD, on ? '0' : '1');
+      Settings.setAutoUpdate(!on);
       $('optAutoUpdate').setAttribute('aria-checked', on ? 'false' : 'true');
       try { if (window.TomeRoamNative && TomeRoamNative.setAutoUpdate) TomeRoamNative.setAutoUpdate(!on); } catch {}
     });

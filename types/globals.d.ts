@@ -15,6 +15,7 @@ interface Window {
   PBLogic: any;
   SWKit: any;
   SpeedControl: any;
+  Settings: any;
   // Data + connectivity layer
   Plex: any;
   Store: any;
@@ -45,6 +46,7 @@ interface Window {
 declare var PBLogic: any;
 declare var SWKit: any;
 declare var SpeedControl: any;
+declare var Settings: any;
 declare var Plex: any;
 declare var Store: any;
 declare var Net: any;
