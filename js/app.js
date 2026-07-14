@@ -377,17 +377,29 @@
   // Set a hero cover (mini transport / now-playing) with the same skeleton →
   // fade-in / branded-fallback states the grid covers use, so a loading or
   // failed hero never shows the browser's broken-image glyph.
+  // The transport cover (#pCover) + Now-Playing art (#npArt) — the only two covers
+  // NOT loaded through artloader (they're single, always-visible images, so the
+  // loader's lazy IntersectionObserver + concurrency queue buy nothing). We DO follow
+  // artloader's instant-vs-fade RULE (shared CSS classes): a cover already in the
+  // SW/browser cache paints INSTANTLY (art-instant, no fade); only one that took real
+  // network time fades in (art-done). Replaying the 0.3s fade on a cached cover is the
+  // "flicker on reopen" — same class of bug artloader's dt<120 check already fixed.
   function setArt(el, url) {
     if (!el) return;
-    // Idempotent: if we're already showing this exact cover, do NOTHING. Re-setting
-    // src (even to the same URL) + stripping art-done restarts the shimmer/fade =
-    // a cover FLASH, and updatePlayerUI() runs on every nav/swipe (via setView).
+    // Idempotent: if we're already showing this exact cover, do NOTHING. Re-setting src
+    // (even to the same URL) + stripping the done class restarts the shimmer/fade = a
+    // cover FLASH, and updatePlayerUI() runs on every nav/swipe (via setView).
     if (url && el.dataset.artSrc === url) return;
     el.dataset.artSrc = url || '';
-    el.classList.remove('art-done', 'art-failed');
-    el.onload = () => el.classList.add('art-done');
+    el.classList.remove('art-done', 'art-instant', 'art-failed');
+    if (!url) { el.removeAttribute('src'); el.classList.add('art-failed'); return; }
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    el.onload = () => {
+      const dt = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+      el.classList.add(dt < 120 ? 'art-instant' : 'art-done');   // cache hit → no fade; network → fade
+    };
     el.onerror = () => { el.removeAttribute('src'); el.classList.add('art-failed'); };
-    if (url) el.src = url; else { el.removeAttribute('src'); el.classList.add('art-failed'); }
+    el.src = url;
   }
   const status = (msg) => { const s = $('clStatus'); if (s) s.textContent = msg || ''; };
 
