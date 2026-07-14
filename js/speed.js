@@ -1,3 +1,4 @@
+// @ts-check
 // speed.js — modular playback-speed control (button + pop-up option list).
 //
 // SELF-CONTAINED + PORTABLE. SpeedControl.create() returns { el, getRate,
@@ -13,6 +14,7 @@ window.SpeedControl = (() => {
   // Whole numbers show as "1×" / "2×"; the rest as one decimal ("1.3×").
   const label = (r) => (Number.isInteger(r) ? String(r) : r.toFixed(1)) + '×';
 
+  /** @param {{ onChange?: (rate: number) => void, initial?: number }} [opts] */
   function create({ onChange, initial = 1.0 } = {}) {
     let rate = initial;
 
@@ -41,7 +43,7 @@ window.SpeedControl = (() => {
     wrap.appendChild(btn);
 
     const renderLabel = () => { btn.textContent = label(rate); };
-    const markActive = () => pop.querySelectorAll('.speedopt').forEach(
+    const markActive = () => /** @type {NodeListOf<HTMLElement>} */ (pop.querySelectorAll('.speedopt')).forEach(
       (o) => o.classList.toggle('active', Number(o.dataset.rate) === rate));
     const isOpen = () => !pop.classList.contains('hidden');
     const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };

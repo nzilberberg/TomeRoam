@@ -23,5 +23,7 @@ jobs:
         run: node tools/stamp-build.mjs --check
       - name: Lint
         run: npm run lint
+      - name: Typecheck (no-build; // @ts-check files only)
+        run: npm run typecheck
       - name: Tests
         run: npm test

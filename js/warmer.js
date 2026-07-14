@@ -1,3 +1,4 @@
+// @ts-check
 // warmer.js — background page warmer. After home paints, quietly pre-load the
 // browse pages you HAVEN'T opened yet (each author's book list + bio, each book's
 // chapter list) so navigating to them is instant even over the slow relay. The
@@ -18,7 +19,11 @@
 const Warmer = (() => {
   const MAX_CONC = 6;                 // browser caps ~6 concurrent/host anyway
   let started = false, paused = false, shouldYield = () => false;
-  let conc = 2, active = 0, queue = [], qi = 0, tick = null;
+  let conc = 2, active = 0, qi = 0;
+  /** @type {{ t: string, rk: any }[]} */
+  let queue = [];
+  /** @type {any} */
+  let tick = null;   // setTimeout handle (number in the browser, Timeout in Node)
 
   const dbg = (m) => { if (window.PBDebug) PBDebug.log('WARM', m); };
 
@@ -64,6 +69,7 @@ const Warmer = (() => {
   // gate (playback / foreground burst) doesn't spin.
   function schedule() { if (tick) return; tick = setTimeout(() => { tick = null; pump(); }, gatesOpen() ? 0 : 500); }
 
+  /** @param {{ shouldYield?: () => boolean }} [opts] */
   async function start(opts = {}) {
     if (started) return; started = true;
     shouldYield = opts.shouldYield || (() => false);
@@ -78,7 +84,7 @@ const Warmer = (() => {
       queue = buildWork(authors, books);
       dbg('start — ' + queue.length + ' pages queued');
       pump();
-    } catch (e) { dbg('start failed: ' + ((e && e.message) || 'err')); }
+    } catch (e) { dbg('start failed: ' + ((/** @type {Error} */ (e))?.message || 'err')); }
   }
 
   function pause(p) { paused = !!p; if (!paused) schedule(); }

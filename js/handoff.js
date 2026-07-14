@@ -1,3 +1,4 @@
+// @ts-check
 // handoff.js — the same-room handoff SYNC state machine, extracted from app.js.
 //
 // Problem (see the sync-accuracy plan): when this device ADOPTS a live peer (tap
@@ -31,7 +32,14 @@ const HandoffController = (() => {
   //   seek(sec)        -> perform the corrective micro-seek (sets audio.currentTime)
   //   peerFor(book)    -> the presence event of a peer on that book, or null
   //   debug(tag, msg)  -> optional diagnostics sink
+  /**
+   * @typedef {{ book: any, trackRk: any, curSec: number, durSec: number, paused: boolean, speed: number }} HandoffCtx
+   * @typedef {{ now: () => number, context: () => (HandoffCtx | null), seek: (sec: number) => void, peerFor: (book: any) => any, debug: ((tag: string, msg: string) => void) | null }} HandoffDeps
+   * @typedef {{ book: string, track: any, anchor: { pos: number, at: number, speed: number }, reanchored: boolean, until: number }} HandoffState
+   */
+  /** @type {HandoffDeps} */
   let deps = { now: () => 0, context: () => null, seek: () => {}, peerFor: () => null, debug: null };
+  /** @type {HandoffState | null} */
   let state = null;   // { book, track, anchor:{pos,at,speed}, reanchored, until }
 
   function init(d) { deps = Object.assign({}, deps, d); }

@@ -1,0 +1,17 @@
+{
+  "//": "No-build type checking for the vanilla-JS app. `npm run typecheck` runs tsc --noEmit; the app itself never touches TypeScript and gains no runtime/build dependency (same posture as eslint). checkJs is OFF globally — a module opts IN by adding `// @ts-check` at its top, so we harden the well-tested pure kernels first and expand file-by-file without a flag day. strict is on (real null-safety + type-mismatch catching) but noImplicitAny is off so retrofitting doesn't require annotating every existing parameter.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "skipLibCheck": true,
+    "strict": true,
+    "noImplicitAny": false
+  },
+  "include": ["js/**/*.js", "types/**/*.d.ts"]
+}

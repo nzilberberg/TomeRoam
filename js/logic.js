@@ -1,3 +1,4 @@
+// @ts-check
 // logic.js — pure, dependency-free decision logic, extracted so the unit tests
 // (Node, test/) can exercise exactly the code the app runs. No DOM, no network,
 // no globals: every function takes its inputs and returns a value. The app

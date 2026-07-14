@@ -1,3 +1,4 @@
+// @ts-check
 // swkit.js — the service worker's PURE decision logic, extracted so it can be
 // unit-tested. sw.js is otherwise untestable in Node (it needs the SW globals),
 // and these two functions are where silent, hard-to-see bugs hid:
