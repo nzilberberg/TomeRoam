@@ -912,10 +912,10 @@
     // already the post-storm value, the hydrate worked and the flash is elsewhere;
     // if frame1 is blank and post-storm is filled, hydrate isn't reaching the paint.
     const _capLine = (tag) => {
-      const pl = document.querySelector('#clRow .pline, #raRow .pline');
-      const nm = pl && pl.querySelector('.pname'), tm = pl && pl.querySelector('.ptimes');
-      const txt = pl ? (((nm && nm.textContent) || '') + '|' + ((tm && tm.textContent) || '')) : '(no pline)';
-      if (window.PBDebug) PBDebug.log('PAINT', `${tag} peers=${peersNow.length} line1="${txt.slice(0, 40)}"`);
+      const t = document.querySelectorAll('#clRow .tile')[1];   // TILE 2 in Continue Listening (what the user sees flash)
+      if (!t) { if (window.PBDebug) PBDebug.log('PAINT', `${tag} clTile2=(none) spd=${audio.playbackRate}`); return; }
+      const pl = t.querySelector('.pline'), tm = t.querySelector('.ptimes'), nm = t.querySelector('.pname');
+      if (window.PBDebug) PBDebug.log('PAINT', `${tag} t2 book=${t.dataset.book} cls="${pl ? pl.className : ''}" times="${tm ? tm.textContent : ''}" name="${nm ? nm.textContent : ''}" spd=${audio.playbackRate} ctxBook=${ctx ? ctx.book : 'null'} peers=${peersNow.length}`);
     };
     requestAnimationFrame(() => _capLine('frame1'));
     setTimeout(() => _capLine('post-storm'), 2500);
