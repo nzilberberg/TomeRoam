@@ -1748,6 +1748,7 @@
     setArt($('pCover'), ctx.coverUrl);
     updatePlayIcon();
     if (window.Downloads) refreshDlUi(ctx.book);   // NP button + transport meter colour for this book
+    updateSeekUI();   // paint position/duration from the known spot NOW, not after the element loads
     if (npOpen) updateNowPlaying();
   }
   function updatePlayIcon() { $('pPlay').textContent = audio.paused ? '▶' : '⏸'; if (npOpen) updateNpPlayIcon(); }
@@ -1774,7 +1775,13 @@
     } catch {}
   }
   function updateSeekUI() {
-    const cur = audio.currentTime || 0, dur = audio.duration || 0;
+    // Before the <audio> element has loaded metadata + seeked (the launch/track-load
+    // window) currentTime/duration are 0 — paint the KNOWN spot (the pending seek
+    // target + the track's Plex duration) so the bar shows the real position from the
+    // first frame instead of sitting at 0:00/0% then snapping in after load.
+    const t = ctx && ctx.tracks[ctx.idx];
+    const cur = audio.currentTime || (curLoad && curLoad.seekSec) || 0;
+    const dur = audio.duration || (t && t.durationMs ? t.durationMs / 1000 : 0);
     $('pCur').textContent = fmt(cur);
     $('pDur').textContent = fmt(dur);
     paintSeek($('pSeek'), dur ? (cur / dur) * 100 : 0);
@@ -1942,9 +1949,12 @@
   function updateNowPlaying() {
     if (!ctx) return;
     const t = ctx.tracks[ctx.idx];
-    const cur = audio.currentTime || 0;
+    const cur = audio.currentTime || (curLoad && curLoad.seekSec) || 0;   // known spot during the load window (see updateSeekUI)
     const dur = audio.duration || (t.durationMs || 0) / 1000;
-    const speed = audio.playbackRate || 1;
+    // INTENDED speed, not audio.playbackRate — the element's rate resets to 1 on
+    // track-load until loadedmetadata restores it, which flashed the NP remaining
+    // 1x->Nx on launch (same bug spd() fixed for the tiles in build .51).
+    const speed = spd();
     paintSeek($('npSeek'), dur ? (cur / dur) * 100 : 0);
     $('npCur').textContent = fmt(cur);
     $('npTrkRem').textContent = '-' + fmt(Math.max(0, dur - cur) / speed);   // scaled for speed
