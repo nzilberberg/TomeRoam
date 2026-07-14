@@ -164,14 +164,16 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
 .player .meta { flex: 1; min-width: 0; }
 .player .title { font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player .sub { color: var(--muted); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.player .controls { display: flex; align-items: center; gap: 6px; }
+/* gap 11px = the old 3px effective spacing + 8px more separation from the play. */
+.player .controls { display: flex; align-items: center; gap: 11px; }
 .player .controls button { background: none; border: 0; color: var(--text); padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.player .controls #pBack, .player .controls #pFwd { width: 34px; height: 34px; }
+/* Skip buttons kept at the NP skip:play size ratio (73/66) against the 46px play. */
+.player .controls #pBack, .player .controls #pFwd { width: 51px; height: 51px; }
 .player .controls #pBack svg, .player .controls #pFwd svg { width: 100%; height: 100%; display: block; }
-/* Accent circle matching the NP play button. The negative margin lets the larger
-   circle grow into the gap so it doesn't push the skip buttons outward. */
-.player .controls button.play { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #201a05; margin: 0 -3px; }
-.player .controls button.play svg { width: 26px; height: 26px; }
+/* Accent circle matching the NP play button; pressed state = downloaded blue. */
+.player .controls button.play { width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: #201a05; }
+.player .controls button.play:active { background: var(--downloaded); }
+.player .controls button.play svg { width: 30px; height: 30px; }
 .player .seekrow { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 8px auto 0; font-variant-numeric: tabular-nums; font-size: .72rem; color: var(--muted); }
 /* Seek sliders: custom-styled (dropping native accent-color) so we can paint a
    light-blue "buffered/banked" underlay (--buffered, set from the background
@@ -213,12 +215,12 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
    Sizing uses !important so it renders the same wherever el is mounted. */
 .speedwrap { position: relative; display: inline-flex; }
 .speedbtn {
-  background: none !important; border: 1px solid #ffffff2b; border-radius: 999px;
+  background: none !important; border: 1.5px solid #ffffff66; border-radius: 999px;
   color: var(--text); font-size: .8rem !important; font-weight: 700;
   padding: 5px 10px !important; cursor: pointer; font-variant-numeric: tabular-nums;
   min-width: 42px; line-height: 1;
 }
-.speedbtn:active { background: var(--card2) !important; }
+.speedbtn:active { background: var(--downloaded) !important; color: #06121d !important; }
 .speedpop {
   position: absolute; bottom: calc(100% + 8px); right: 0;
   display: grid; grid-template-columns: 1fr; gap: 4px;   /* single vertical column */
@@ -394,7 +396,7 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
 .np-skip { width: 73px; height: 73px; background: none; border: 0; color: #fff; cursor: pointer; padding: 0; flex: none; }
 .np-skip svg { width: 100%; height: 100%; display: block; }
 .np-play { width: 66px; height: 66px; border-radius: 50%; background: var(--accent); border: 0; color: #201a05; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
-.np-play:active { background: var(--accent-dim); }
+.np-play:active { background: var(--downloaded); }
 .np-play svg { width: 32px; height: 32px; }
 /* pill around the bottom action icons; pinned to the bottom of the screen */
 /* The NP action pill lives INSIDE the navbar — the one slot proven to render
@@ -429,7 +431,7 @@ body.np-locked .navbar { background: transparent; border-top: 0; backdrop-filter
 .np-act { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px; }
 .np-act svg { width: 24px; height: 24px; fill: currentColor; }
 .np-speedmount { display: inline-flex; }
-.np-actions .speedbtn { border-color: #ffffff33; }
+.np-actions .speedbtn { border-color: #ffffff66; }
 
 /* pull-to-refresh spinner (Home) */
 .ptr {
