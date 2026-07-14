@@ -1090,6 +1090,7 @@
     el.querySelector('.covertap').addEventListener('click', (e) => { e.stopPropagation(); playFromBrowse(b.ratingKey, b); });
     el.addEventListener('click', () => openFiles(b));
     setDlBadge(el, b.ratingKey);   // download progress ring / check
+    paintTileLine(el);   // fill the resume·peer line NOW, so the tile never paints empty→value
     return el;
   }
 
@@ -1206,21 +1207,25 @@
   // Update the book progress line (+ time-based bar) on tiles/rows — every one,
   // or (from the ~4 Hz timeupdate path) just the one book's, so a long Books list
   // isn't recomputed four times a second while playing.
+  // Paint ONE tile/book row's resume·peer line + progress. Extracted so renderTile
+  // can call it AT BIRTH (below) — otherwise a tile is inserted with an empty .pline
+  // and a later renderPresence pass fills it, which paints empty→value on launch.
+  function paintTileLine(el) {
+    const line = bookLine(el.dataset.book);
+    const pl = el.querySelector('.pline');
+    if (pl) {
+      pl.className = 'pline' + (line.cls ? ' ' + line.cls : '');
+      const nm = pl.querySelector('.pname'), tm = pl.querySelector('.ptimes');
+      if (nm) nm.textContent = line.name || '';
+      if (tm) tm.textContent = line.times || '';
+    }
+    if (line.pct != null) { const gi = el.querySelector('.progress > i'); if (gi) gi.style.width = Math.round(line.pct) + '%'; }
+  }
   function updateBookLines(book) {
     const sel = book != null
       ? `.tile[data-book="${cssEsc(book)}"], .book[data-book="${cssEsc(book)}"]`
       : '.tile[data-book], .book[data-book]';
-    document.querySelectorAll(sel).forEach((el) => {
-      const line = bookLine(el.dataset.book);
-      const pl = el.querySelector('.pline');
-      if (pl) {
-        pl.className = 'pline' + (line.cls ? ' ' + line.cls : '');
-        const nm = pl.querySelector('.pname'), tm = pl.querySelector('.ptimes');
-        if (nm) nm.textContent = line.name || '';
-        if (tm) tm.textContent = line.times || '';
-      }
-      if (line.pct != null) { const gi = el.querySelector('.progress > i'); if (gi) gi.style.width = Math.round(line.pct) + '%'; }
-    });
+    document.querySelectorAll(sel).forEach(paintTileLine);
   }
   // Files view: the currently-playing chapter ticks live (called from timeupdate too).
   function updatePlayingFileRow() {
