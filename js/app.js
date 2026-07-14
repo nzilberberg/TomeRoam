@@ -897,6 +897,13 @@
     // footgun from the offline saga — the peer hydrate was a no-op until this fix.)
     if (typeof Progress !== 'undefined' && Progress.hydrate) Progress.hydrate();
     if (typeof Presence !== 'undefined' && Presence.cachedPeers) peersNow = Presence.cachedPeers();
+    // Hydrate the plugin cold-resume map from cache so the first paint already carries the
+    // grey resume times (getResumeMap is a live, uncached read — otherwise they pop in a
+    // beat later). loadHomeData refreshes bookEntries in place from the live read.
+    try {
+      const cachedResume = JSON.parse(localStorage.getItem('pb_resumeMap') || '[]');
+      if (Array.isArray(cachedResume)) for (const b of cachedResume) if (b && b.book != null) bookEntries[b.book] = b;
+    } catch { /* ignore malformed cache */ }
     const painted = await renderCachedHome();
     // No cached library yet (first-ever launch / cleared cache): paint SKELETON
     // carousels so the home screen shows its real structure immediately while
@@ -1004,6 +1011,11 @@
     // swallowed, so the home feed always renders from Plex alone. When present it
     // supplies exact resume offsets + surfaces books listened to on the LMS side.
     const resume = await Plex.getResumeMap().catch(() => []);
+    // Persist the resume map so bookEntries can be hydrated before the first cached paint
+    // next launch — getResumeMap is a live, UNCACHED /playlists read, so without this the
+    // cold (grey) resume time pops in a second+ after the tiles paint. Only cache a
+    // non-empty result: a transient failure returns [] and must not wipe the cache.
+    if (resume.length) { try { localStorage.setItem('pb_resumeMap', JSON.stringify(resume)); } catch { /* best effort */ } }
     // paint() derives BOTH carousels from a whole-library `books` array, so it can
     // run twice: once on the instant cache-first read, then again if the background
     // revalidate brings changed data (onFresh). Continue Listening + Recently Added
