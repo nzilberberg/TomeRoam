@@ -132,7 +132,7 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
 .signinlink { color: var(--accent); font-size: .85rem; text-decoration: underline; word-break: break-all; }
 
 /* section titles */
-.section-title { font-size: 1.15rem; font-weight: 700; letter-spacing: .01em; color: var(--text); margin: 22px 4px 10px; }
+.section-title { font-size: 1.15rem; font-weight: 700; letter-spacing: .01em; color: var(--text); margin: 22px 4px 5px; }
 
 /* continue-listening cards */
 .book {
@@ -164,12 +164,14 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
 .player .meta { flex: 1; min-width: 0; }
 .player .title { font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player .sub { color: var(--muted); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.player .controls { display: flex; align-items: center; gap: 8px; }
+.player .controls { display: flex; align-items: center; gap: 6px; }
 .player .controls button { background: none; border: 0; color: var(--text); padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.player #pBack, .player #pFwd { width: 34px; height: 34px; }
-.player #pBack svg, .player #pFwd svg { width: 100%; height: 100%; display: block; }
-.player .play { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #201a05; }
-.player .play svg { width: 26px; height: 26px; }
+.player .controls #pBack, .player .controls #pFwd { width: 34px; height: 34px; }
+.player .controls #pBack svg, .player .controls #pFwd svg { width: 100%; height: 100%; display: block; }
+/* Accent circle matching the NP play button. The negative margin lets the larger
+   circle grow into the gap so it doesn't push the skip buttons outward. */
+.player .controls button.play { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #201a05; margin: 0 -3px; }
+.player .controls button.play svg { width: 26px; height: 26px; }
 .player .seekrow { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 8px auto 0; font-variant-numeric: tabular-nums; font-size: .72rem; color: var(--muted); }
 /* Seek sliders: custom-styled (dropping native accent-color) so we can paint a
    light-blue "buffered/banked" underlay (--buffered, set from the background
