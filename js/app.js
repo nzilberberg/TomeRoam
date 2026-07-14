@@ -1481,6 +1481,10 @@
     try {
       localStorage.setItem(LAST, JSON.stringify({
         book: ctx.book, track: t.ratingKey, pos: audio.currentTime * 1000, ts: Plex.serverNow(),
+        // display snapshot → the transport bar paints synchronously at next launch,
+        // before getAlbum/getAlbumTracks resolve (reconciled by updatePlayerUI after).
+        title: (ctx.album && ctx.album.title) || '', author: (ctx.album && ctx.album.parentTitle) || '',
+        chapter: t.title || '', cover: ctx.coverUrl || '', dur: t.durationMs || 0,
       }));
     } catch { /* storage full/blocked — best effort */ }
     recordProgress();
@@ -1528,10 +1532,31 @@
   // (nothing saved) OR a track that DEFINITELY no longer exists → leave the bar
   // hidden. A mere network failure keeps the bookmark: wiping it on a flaky
   // relay/offline launch (of a never-cached book) permanently lost the resume bar.
+  // Paint the transport bar from the persisted last-played SNAPSHOT — synchronously,
+  // before restoreLastPlayed's getAlbum/getAlbumTracks await resolves — so the bar is
+  // there at its real position from the first frame instead of popping in after the
+  // (relay-slow) metadata load. Purely visual: it sets NO ctx, so the transport stays
+  // inert (buttons all guard on !ctx) until restore wires it up a beat later, when
+  // updatePlayerUI reconciles with authoritative data. Old snapshots lacking the
+  // display fields degrade gracefully (title 'Book', dur 0) and self-heal on next save.
+  function paintSnapshotBar(s) {
+    if (!s || !s.book) return;
+    document.body.classList.add('has-player');
+    $('player').classList.remove('hidden');
+    $('pTitle').textContent = s.title || 'Book';
+    $('pSub').textContent = `${s.author || ''} · ${s.chapter || ''}`;
+    if (s.cover) setArt($('pCover'), s.cover);
+    const cur = (s.pos || 0) / 1000, dur = (s.dur || 0) / 1000;
+    $('pCur').textContent = fmt(cur);
+    $('pDur').textContent = fmt(dur);
+    paintSeek($('pSeek'), dur ? (cur / dur) * 100 : 0);
+    updatePlayIcon();   // no src yet → audio.paused → ▶
+  }
   async function restoreLastPlayed() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LAST) || 'null'); } catch {}
     if (!saved || !saved.book) { updatePlayerUI(); return; }
+    paintSnapshotBar(saved);   // instant bar from the snapshot; reconciled once ctx lands
     let fetched = false;
     try {
       const [alb, tracks] = await Promise.all([Plex.getAlbum(saved.book), Plex.getAlbumTracks(saved.book)]);
@@ -1543,8 +1568,11 @@
       updatePlayerUI(); setMediaSession();
     } catch {
       ctx = null;
-      if (fetched) localStorage.removeItem(LAST);   // confirmed gone — only then forget it
-      updatePlayerUI();
+      // Confirmed gone (metadata loaded but the track's missing) → forget it and retract
+      // the optimistic bar. A transient/offline failure (fetched=false) keeps the snapshot
+      // bar up as correct last-known state; cache-first reads make this branch near-unreachable
+      // for the last-played book, and a later restore/reconnect wires ctx when it can.
+      if (fetched) { localStorage.removeItem(LAST); updatePlayerUI(); }
     }
   }
 
