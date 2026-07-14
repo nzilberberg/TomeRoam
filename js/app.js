@@ -1214,10 +1214,19 @@
     const line = bookLine(el.dataset.book);
     const pl = el.querySelector('.pline');
     if (pl) {
+      const beforeCls = pl.className;
       pl.className = 'pline' + (line.cls ? ' ' + line.cls : '');
       const nm = pl.querySelector('.pname'), tm = pl.querySelector('.ptimes');
       if (nm) nm.textContent = line.name || '';
-      if (tm) tm.textContent = line.times || '';
+      if (tm) {
+        const before = tm.textContent || '', after = line.times || '';
+        // DIAGNOSTIC: a NON-empty value/class actually CHANGING = the visible flash.
+        // (An empty->value first-fill isn't logged.) Captures the pre-value the eye
+        // can't catch, per book, so we see what tile 2 (8913) flashes FROM and when.
+        if (window.PBDebug && ((before && before !== after) || (beforeCls !== 'pline' && beforeCls !== pl.className)))
+          PBDebug.log('LINEDELTA', `book=${el.dataset.book} "${before}"->"${after}" cls "${beforeCls}"->"${pl.className}"`);
+        tm.textContent = after;
+      }
     }
     if (line.pct != null) { const gi = el.querySelector('.progress > i'); if (gi) gi.style.width = Math.round(line.pct) + '%'; }
   }
