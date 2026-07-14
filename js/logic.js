@@ -3,6 +3,12 @@
 // (Node, test/) can exercise exactly the code the app runs. No DOM, no network,
 // no globals: every function takes its inputs and returns a value. The app
 // files (app.js, presence.js, logpipe.js) delegate here; behaviour is identical.
+//
+// UNITS CONVENTION (repo-wide): a time-bearing name carries its unit as a suffix
+// — `Ms` for milliseconds (Plex viewOffset, serverNow, board pos/at/ts), `Sec`
+// for seconds (audio.currentTime/duration, seek targets). Bare `pos`/`at`/`ts`
+// on a board record are ms by definition. Keep the boundary explicit: the app
+// stores/transports ms and only divides to seconds at the audio element.
 const PBLogic = (() => {
 
   // h:mm:ss / m:ss for a duration in seconds (used everywhere times render).
@@ -15,26 +21,26 @@ const PBLogic = (() => {
 
   const fmtBytes = (n) => n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : (n / 1048576).toFixed(1) + ' MB';
 
-  // Extrapolated CURRENT position (ms) of a device state at time `now` (server
+  // Extrapolated CURRENT position (ms) of a device state at time `nowMs` (server
   // clock): a playing device advances from its {pos, at} anchor at `speed`.
-  function livePos(dev, now) {
+  function livePos(dev, nowMs) {
     if (!dev) return 0;
     const state = dev.state || dev.playState;
-    if (state === 'playing') return (dev.pos || 0) + Math.max(0, now - (dev.at || 0)) * (dev.speed || 1);
+    if (state === 'playing') return (dev.pos || 0) + Math.max(0, nowMs - (dev.at || 0)) * (dev.speed || 1);
     return dev.pos || 0;
   }
 
   // How "current" a device state is on the server clock: playing = live NOW,
   // paused/idle = as-of its last published event.
-  function recency(d, serverNow) {
-    return (d && (d.state || d.playState)) === 'playing' ? serverNow : (d ? d.at || 0 : 0);
+  function recency(d, serverNowMs) {
+    return (d && (d.state || d.playState)) === 'playing' ? serverNowMs : (d ? d.at || 0 : 0);
   }
 
   // Peer boards → the peers that matter: drop ourselves, idle boards, and
   // "playing" ghosts (a device that crashed mid-play and stopped publishing).
-  function filterPeers(parsed, meId, now, ghostMs) {
+  function filterPeers(parsed, meId, nowMs, ghostMs) {
     return parsed.filter((p) => p && p.id && p.id !== meId && p.state !== 'idle'
-      && !(p.state === 'playing' && (now - (p.at || 0)) > ghostMs));
+      && !(p.state === 'playing' && (nowMs - (p.at || 0)) > ghostMs));
   }
 
   // Claim-based supersede: while WE are playing a book, a peer playing the SAME
@@ -92,11 +98,11 @@ const PBLogic = (() => {
   //     if it kept playing gives where a continuous listen would be NOW, without
   //     extrapolating a position across the whole handoff window — only the short
   //     since-pause gap carries any clock skew, so the residual is negligible.
-  // `now` is the server clock; `tolSec` is the dead-band (skip a sub-threshold
-  // micro-seek); `durSec` (optional) clamps out a target past the track end.
-  function handoffTarget(anchor, now, curSec, tolSec, durSec) {
+  // `nowMs` is the server clock (ms); `tolSec` is the dead-band (skip a sub-
+  // threshold micro-seek); `durSec` (optional) clamps out a target past the end.
+  function handoffTarget(anchor, nowMs, curSec, tolSec, durSec) {
     if (!anchor) return null;
-    const target = livePos({ pos: anchor.pos, at: anchor.at, state: 'playing', speed: anchor.speed }, now) / 1000;
+    const target = livePos({ pos: anchor.pos, at: anchor.at, state: 'playing', speed: anchor.speed }, nowMs) / 1000;
     if (!(target > 0)) return null;
     if (durSec && target >= durSec) return null;
     if (Math.abs(target - (curSec || 0)) <= (tolSec || 0)) return null;
