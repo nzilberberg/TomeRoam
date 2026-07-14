@@ -1484,7 +1484,9 @@
         // display snapshot → the transport bar paints synchronously at next launch,
         // before getAlbum/getAlbumTracks resolve (reconciled by updatePlayerUI after).
         title: (ctx.album && ctx.album.title) || '', author: (ctx.album && ctx.album.parentTitle) || '',
-        chapter: t.title || '', cover: ctx.coverUrl || '', dur: t.durationMs || 0,
+        // store the THUMB (stable), not the full cover URL — artUrl() embeds curBase(),
+        // so a stored URL can differ session-to-session and defeat setArt's idempotency.
+        chapter: t.title || '', thumb: (ctx.album && ctx.album.thumb) || '', dur: t.durationMs || 0,
       }));
     } catch { /* storage full/blocked — best effort */ }
     recordProgress();
@@ -1545,7 +1547,12 @@
     $('player').classList.remove('hidden');
     $('pTitle').textContent = s.title || 'Book';
     $('pSub').textContent = `${s.author || ''} · ${s.chapter || ''}`;
-    if (s.cover) setArt($('pCover'), s.cover);
+    // Rebuild the cover URL from the stored thumb via artUrl so it's byte-identical to the
+    // ctx.coverUrl updatePlayerUI sets a beat later — setArt is idempotent on a matching
+    // src, so the cover loads ONCE instead of the snapshot URL loading then the fresh URL
+    // re-loading (the transport-image flicker on restart). s.cover = pre-.54 fallback.
+    const cover = s.thumb ? Plex.artUrl(s.thumb) : (s.cover || '');
+    if (cover) setArt($('pCover'), cover);
     const cur = (s.pos || 0) / 1000, dur = (s.dur || 0) / 1000;
     $('pCur').textContent = fmt(cur);
     $('pDur').textContent = fmt(dur);
