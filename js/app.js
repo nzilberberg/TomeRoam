@@ -3,12 +3,6 @@
   const $ = (id) => document.getElementById(id);
   const audio = new Audio();
   audio.preload = 'metadata';
-  // Restore the saved playback speed IMMEDIATELY. spd() feeds the tile "remaining"
-  // time (shown as remaining/spd), and a fresh Audio defaults playbackRate to 1 — so
-  // the first home paint rendered remaining at 1x, then it jumped to Nx a beat later
-  // when speed was restored downstream. That's the launch flash on EVERY tile's clock.
-  // Setting it here (before any render) makes spd() correct from frame 1.
-  try { const s = parseFloat(localStorage.getItem('pb_speed')); if (s > 0) audio.playbackRate = s; } catch {}
 
   let ctx = null;        // { album, tracks, idx, coverUrl }
   let writeTimer = null;
@@ -1150,7 +1144,16 @@
   // Now-Playing). Elapsed/position and total are content time (unscaled) — a stable
   // property of where you are / how long the thing is. A 1.8× rate is why an unscaled
   // 16:37:07 book remainder reads 9:13:57 in NP; now they agree.
-  const spd = () => audio.playbackRate || 1;
+  // DISPLAY speed for the tile/NP "remaining" times (remaining / spd). Use the
+  // INTENDED speed — the mounted speed control, else the saved pb_speed — NOT
+  // audio.playbackRate: loading a track resets the element's playbackRate to 1 for a
+  // window (until loadedmetadata restores it), and reading that live value made the
+  // remaining time flash 1x->Nx on every launch. The intended speed is stable.
+  const spd = () => {
+    if (speedCtl && speedCtl.getRate) return speedCtl.getRate() || 1;
+    const v = parseFloat(localStorage.getItem('pb_speed'));
+    return v > 0 ? v : 1;
+  };
   const trackCache = {};   // book -> tracks[] so a peer's book-cum can be computed from its presence pos
   function cacheTracks(book, tracks) { if (book != null && tracks && tracks.length) trackCache[book] = tracks; }
   function tracksFor(book) { return (ctx && String(ctx.book) === String(book)) ? ctx.tracks : (trackCache[book] || null); }
