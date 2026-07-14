@@ -3,6 +3,12 @@
   const $ = (id) => document.getElementById(id);
   const audio = new Audio();
   audio.preload = 'metadata';
+  // Restore the saved playback speed IMMEDIATELY. spd() feeds the tile "remaining"
+  // time (shown as remaining/spd), and a fresh Audio defaults playbackRate to 1 — so
+  // the first home paint rendered remaining at 1x, then it jumped to Nx a beat later
+  // when speed was restored downstream. That's the launch flash on EVERY tile's clock.
+  // Setting it here (before any render) makes spd() correct from frame 1.
+  try { const s = parseFloat(localStorage.getItem('pb_speed')); if (s > 0) audio.playbackRate = s; } catch {}
 
   let ctx = null;        // { album, tracks, idx, coverUrl }
   let writeTimer = null;
