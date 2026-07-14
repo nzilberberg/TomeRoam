@@ -13,11 +13,11 @@
   <!-- Single build stamp for this shell. MUST match js/debug.js BUILD, sw.js
        BUILD, build.json, and the ?v= on every asset below. A test guards it.
        app.js compares this to the loaded JS build to detect a stale/mixed shell. -->
-  <meta name="tomeroam-build" content="2026-07-12.58" />
+  <meta name="tomeroam-build" content="2026-07-12.59" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="icon" href="icon.svg" />
-  <link rel="stylesheet" href="css/app.css?v=2026-07-12.58" />
+  <link rel="stylesheet" href="css/app.css?v=2026-07-12.59" />
   <title>TomeRoam Player</title>
 </head>
 <body>
@@ -28,7 +28,7 @@
       <h1>TomeRoam</h1>
       <p>Your Plex audiobooks — that actually resume where you left off, on any device.</p>
       <button id="signinBtn" class="btn">Sign in with Plex</button>
-      <p id="signinInfo" class="statusline"></p>
+      <p id="signinInfo" class="statusline" aria-live="polite"></p>
       <a id="signinLink" class="hidden signinlink" target="_blank" rel="noopener"></a>
     </section>
 
@@ -47,10 +47,10 @@
       <!-- HOME: Continue Listening + Recently Added carousels -->
       <div id="home" class="view">
         <div class="section-title">Continue Listening</div>
-        <div id="clStatus" class="statusline"></div>
+        <div id="clStatus" class="statusline" aria-live="polite"></div>
         <div id="clRow" class="carousel"></div>
         <div class="section-title">Recently Added</div>
-        <div id="raStatus" class="statusline"></div>
+        <div id="raStatus" class="statusline" aria-live="polite"></div>
         <div id="raRow" class="carousel"></div>
         <div id="dlSection" class="hidden">
           <div class="section-title">Downloaded</div>
@@ -78,7 +78,7 @@
   </div>
 
   <!-- TRANSPORT (mini bar) -->
-  <div id="player" class="player hidden">
+  <div id="player" class="player hidden" role="region" aria-label="Player">
     <div class="row">
       <img id="pCover" class="cover" alt="" />
       <div class="meta">
@@ -86,14 +86,14 @@
         <div id="pSub" class="sub"></div>
       </div>
       <div class="controls">
-        <button id="pBack" title="Skip back">⏪</button>
-        <button id="pPlay" class="play" title="Play/Pause">▶</button>
-        <button id="pFwd" title="Skip forward">⏩</button>
+        <button id="pBack" title="Skip back" aria-label="Skip back">⏪</button>
+        <button id="pPlay" class="play" title="Play/Pause" aria-label="Play">▶</button>
+        <button id="pFwd" title="Skip forward" aria-label="Skip forward">⏩</button>
       </div>
     </div>
     <div class="seekrow">
       <span id="pCur">0:00</span>
-      <input id="pSeek" type="range" min="0" max="1000" value="0" />
+      <input id="pSeek" type="range" min="0" max="1000" value="0" aria-label="Seek" />
       <span id="pDur">0:00</span>
     </div>
   </div>
@@ -110,7 +110,7 @@
       <div id="npTitle" class="np-title"></div>
       <div id="npAuthor" class="np-author"></div>
       <div id="npTrack" class="np-track"></div>
-      <input id="npSeek" class="np-seek" type="range" min="0" max="1000" value="0" />
+      <input id="npSeek" class="np-seek" type="range" min="0" max="1000" value="0" aria-label="Seek" />
       <div class="np-times">
         <span id="npCur">0:00</span>
         <span id="npBookRem">-0:00</span>
@@ -172,26 +172,26 @@
     </div>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <!-- Build-stamped so a stale index.html can never pair with fresh JS (or vice
        versa): each ?v= must match the meta build above + sw.js precache. -->
-  <script src="js/logic.js?v=2026-07-12.58"></script>
-  <script src="js/debug.js?v=2026-07-12.58"></script>
-  <script src="js/store.js?v=2026-07-12.58"></script>
-  <script src="js/artloader.js?v=2026-07-12.58"></script>
-  <script src="js/plex.js?v=2026-07-12.58"></script>
-  <script src="js/presence.js?v=2026-07-12.58"></script>
-  <script src="js/progress.js?v=2026-07-12.58"></script>
-  <script src="js/syncqueue.js?v=2026-07-12.58"></script>
-  <script src="js/net.js?v=2026-07-12.58"></script>
-  <script src="js/downloads.js?v=2026-07-12.58"></script>
-  <script src="js/logpipe.js?v=2026-07-12.58"></script>
-  <script src="js/speed.js?v=2026-07-12.58"></script>
-  <script src="js/browse.js?v=2026-07-12.58"></script>
-  <script src="js/warmer.js?v=2026-07-12.58"></script>
-  <script src="js/handoff.js?v=2026-07-12.58"></script>
-  <script src="js/downloads-screen.js?v=2026-07-12.58"></script>
-  <script src="js/app.js?v=2026-07-12.58"></script>
+  <script src="js/logic.js?v=2026-07-12.59"></script>
+  <script src="js/debug.js?v=2026-07-12.59"></script>
+  <script src="js/store.js?v=2026-07-12.59"></script>
+  <script src="js/artloader.js?v=2026-07-12.59"></script>
+  <script src="js/plex.js?v=2026-07-12.59"></script>
+  <script src="js/presence.js?v=2026-07-12.59"></script>
+  <script src="js/progress.js?v=2026-07-12.59"></script>
+  <script src="js/syncqueue.js?v=2026-07-12.59"></script>
+  <script src="js/net.js?v=2026-07-12.59"></script>
+  <script src="js/downloads.js?v=2026-07-12.59"></script>
+  <script src="js/logpipe.js?v=2026-07-12.59"></script>
+  <script src="js/speed.js?v=2026-07-12.59"></script>
+  <script src="js/browse.js?v=2026-07-12.59"></script>
+  <script src="js/warmer.js?v=2026-07-12.59"></script>
+  <script src="js/handoff.js?v=2026-07-12.59"></script>
+  <script src="js/downloads-screen.js?v=2026-07-12.59"></script>
+  <script src="js/app.js?v=2026-07-12.59"></script>
 </body>
 </html>

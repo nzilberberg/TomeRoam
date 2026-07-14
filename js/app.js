@@ -429,7 +429,11 @@
     updatePlayerUI();
   }
   function setNavActive(which) {   // 'home' | 'authors' | 'books' | 'options' | null
-    document.querySelectorAll('#navbar [data-nav]').forEach((b) => b.classList.toggle('active', b.dataset.nav === which));
+    document.querySelectorAll('#navbar [data-nav]').forEach((b) => {
+      const on = b.dataset.nav === which;
+      b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
   }
   // Wipe ALL transient swipe styling back to a known-good baseline: remove any
   // leftover ghost/snapshot panes and clear the inline transform/transition/
@@ -1780,7 +1784,7 @@
     updateSeekUI();   // paint position/duration from the known spot NOW, not after the element loads
     if (npOpen) updateNowPlaying();
   }
-  function updatePlayIcon() { $('pPlay').textContent = audio.paused ? '▶' : '⏸'; if (npOpen) updateNpPlayIcon(); }
+  function updatePlayIcon() { const b = $('pPlay'); b.textContent = audio.paused ? '▶' : '⏸'; b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause'); if (npOpen) updateNpPlayIcon(); }
   // Paint a seek slider (value 0–1000 + the CSS fill var) unless mid-drag — the
   // ONE painter for the transport, Now-Playing, and the peer mirror (three copies
   // of this line used to drift independently).
@@ -1971,6 +1975,7 @@
   function updateNpPlayIcon() {
     const b = $('npPlay');
     if (!b) return;
+    b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
     b.innerHTML = audio.paused
       ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
