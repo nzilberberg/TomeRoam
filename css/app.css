@@ -164,9 +164,12 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
 .player .meta { flex: 1; min-width: 0; }
 .player .title { font-size: .9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player .sub { color: var(--muted); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.player .controls { display: flex; align-items: center; gap: 6px; }
-.player .controls button { background: none; border: 0; color: var(--text); font-size: 1.5rem; padding: 6px; cursor: pointer; }
-.player .play { font-size: 2rem !important; color: var(--accent) !important; }
+.player .controls { display: flex; align-items: center; gap: 8px; }
+.player .controls button { background: none; border: 0; color: var(--text); padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.player #pBack, .player #pFwd { width: 34px; height: 34px; }
+.player #pBack svg, .player #pFwd svg { width: 100%; height: 100%; display: block; }
+.player .play { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #201a05; }
+.player .play svg { width: 26px; height: 26px; }
 .player .seekrow { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 8px auto 0; font-variant-numeric: tabular-nums; font-size: .72rem; color: var(--muted); }
 /* Seek sliders: custom-styled (dropping native accent-color) so we can paint a
    light-blue "buffered/banked" underlay (--buffered, set from the background

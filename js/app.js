@@ -1784,7 +1784,7 @@
     updateSeekUI();   // paint position/duration from the known spot NOW, not after the element loads
     if (npOpen) updateNowPlaying();
   }
-  function updatePlayIcon() { const b = $('pPlay'); b.textContent = audio.paused ? '▶' : '⏸'; b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause'); if (npOpen) updateNpPlayIcon(); }
+  function updatePlayIcon() { const b = $('pPlay'); b.innerHTML = playPauseSvg(audio.paused); b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause'); if (npOpen) updateNpPlayIcon(); }
   // Paint a seek slider (value 0–1000 + the CSS fill var) unless mid-drag — the
   // ONE painter for the transport, Now-Playing, and the peer mirror (three copies
   // of this line used to drift independently).
@@ -1906,6 +1906,8 @@
   function updateSkipLabels() {
     $('pBack').title = 'Skip back ' + getSkipBack() + 's';
     $('pFwd').title = 'Skip forward ' + getSkipFwd() + 's';
+    $('pBack').innerHTML = skipSvg('back', getSkipBack());   // same circular-arrow glyph as the NP skip buttons
+    $('pFwd').innerHTML = skipSvg('fwd', getSkipFwd());
     if (npOpen) buildNpControls();
   }
 
@@ -1955,7 +1957,13 @@
   function skipSvg(dir, n) {
     const arc = dir === 'back' ? 'M12 6 A6 6 0 1 1 6 12' : 'M12 6 A6 6 0 1 0 18 12';
     const head = dir === 'back' ? 'M12 3 L12 6 L9 6 Z' : 'M12 3 L12 6 L15 6 Z';
-    return `<svg viewBox="0 0 24 24"><path d="${arc}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="${head}" fill="currentColor"/><text x="12" y="15" text-anchor="middle" font-size="7.5" font-weight="700" fill="currentColor" font-family="system-ui">${n}</text></svg>`;
+    return `<svg viewBox="0 0 24 24"><path d="${arc}" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="${head}" fill="currentColor"/><text x="12" y="15" text-anchor="middle" font-size="7.5" font-weight="700" fill="currentColor" font-family="system-ui">${n}</text></svg>`;
+  }
+  // Shared play/pause glyph — used by both the NP and mini-transport play buttons.
+  function playPauseSvg(paused) {
+    return paused
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
   }
   function buildNpControls() {
     const c = $('npControls');
@@ -1976,9 +1984,7 @@
     const b = $('npPlay');
     if (!b) return;
     b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
-    b.innerHTML = audio.paused
-      ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
-      : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
+    b.innerHTML = playPauseSvg(audio.paused);
   }
   function updateNowPlaying() {
     if (!ctx) return;
