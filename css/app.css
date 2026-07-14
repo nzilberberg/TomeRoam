@@ -31,7 +31,12 @@ body {
   background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
   color: var(--text);
   overscroll-behavior-y: contain;
+  /* App-like feel: text is not selectable anywhere except real input fields
+     (a tap-hold on a title shouldn't start a text selection). */
+  -webkit-user-select: none;
+  user-select: none;
 }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
 
 /* Base bottom clearance = nav bar only; grows when the transport is showing.
    The `+ 2px` is a harmless remnant of the abandoned "scroll runway" theory —

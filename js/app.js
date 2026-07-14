@@ -2407,9 +2407,12 @@
     bindSwipeBack();
     bindPullRefresh();
     bindBookMenu();
-    // Playback speed — transport mini-bar control (a second one is mounted in
-    // Now-Playing; both stay in sync via onSpeedChange). Restore the last speed so a
-    // reload doesn't silently drop back to 1× — startTrack's onMeta reapplies it.
+    // Playback speed — the speed control lives ONLY on the Now-Playing screen
+    // (removed from the transport bar to give the book title/author more room).
+    // We still keep a transport-side control object as the rate source for spd()
+    // and the on-new-src rate restore, and in speedCtls so its label stays synced —
+    // it is simply never mounted into the DOM. Restore the last speed so a reload
+    // doesn't silently drop back to 1× — startTrack's onMeta reapplies it.
     const savedSpeed = (() => { const v = parseFloat(localStorage.getItem('pb_speed')); return v > 0 ? v : 1.0; })();
     audio.playbackRate = savedSpeed;
     // Tell Presence our real rate NOW. Restoring speed from localStorage never went
@@ -2418,8 +2421,7 @@
     // slowly (they resumed further and further BEHIND us the longer we played).
     Presence.setSpeed(savedSpeed);
     speedCtl = SpeedControl.create({ initial: savedSpeed, onChange: onSpeedChange });
-    document.querySelector('.player .controls').appendChild(speedCtl.el);
-    speedCtls.push(speedCtl);
+    speedCtls.push(speedCtl);   // synced + queried, but intentionally NOT appended to the transport bar
     $('pPlay').addEventListener('click', () => (audio.paused ? resumePlay() : audio.pause()));
     $('pBack').addEventListener('click', () => skipBy(-getSkipBack()));
     $('pFwd').addEventListener('click', () => skipBy(getSkipFwd()));
