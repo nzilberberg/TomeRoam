@@ -1958,7 +1958,7 @@
     // back = CCW, fwd = CW. Arrowhead sits at the top with its BACK (the vertical
     // base) flush to the arc end, tip pointing along the rotation direction.
     const arc = dir === 'back' ? 'M12 6 A6 6 0 1 0 18 12' : 'M12 6 A6 6 0 1 1 6 12';
-    const head = dir === 'back' ? 'M12 4 L12 8 L8 6 Z' : 'M12 4 L12 8 L16 6 Z';
+    const head = dir === 'back' ? 'M12 4 L12 8 L16 6 Z' : 'M12 4 L12 8 L8 6 Z';
     return `<svg viewBox="0 0 24 24"><path d="${arc}" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="${head}" fill="currentColor"/><text x="12" y="15" text-anchor="middle" font-size="7.5" font-weight="700" fill="currentColor" font-family="system-ui">${n}</text></svg>`;
   }
   // Shared play/pause glyph — used by both the NP and mini-transport play buttons.
