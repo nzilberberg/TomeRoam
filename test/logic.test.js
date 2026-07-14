@@ -161,3 +161,31 @@ test('homeFeeds: a resume entry for an unknown book is ignored (filterPeers-styl
   const r = L.homeFeeds(books, { zzz: { ts: 100 } });   // 'zzz' not in library
   assert.deepEqual(CL(r), ['a']);
 });
+
+// ---- displaySpeed (the .38–.51 launch-flash guard) --------------------------
+// The tile / Now-Playing "remaining" time is remaining / displaySpeed(). The bug
+// was deriving it from audio.playbackRate, which the browser resets to 1 on every
+// track load → the remaining flashed 1x->Nx on launch. displaySpeed accepts ONLY
+// intended-speed sources; these pin that and guard against a regression.
+test('displaySpeed prefers the mounted control rate', () => {
+  assert.equal(L.displaySpeed(1.5, 2), 1.5);
+});
+test('displaySpeed falls back to saved speed when there is no control rate', () => {
+  assert.equal(L.displaySpeed(null, 1.5), 1.5);
+  assert.equal(L.displaySpeed(undefined, 2), 2);
+});
+test('displaySpeed defaults to 1 when neither source is valid', () => {
+  assert.equal(L.displaySpeed(null, NaN), 1);
+  assert.equal(L.displaySpeed(null, null), 1);
+});
+test('displaySpeed ignores a zero/negative control rate and falls through', () => {
+  assert.equal(L.displaySpeed(0, 1.5), 1.5);
+  assert.equal(L.displaySpeed(-1, 1.5), 1.5);
+  assert.equal(L.displaySpeed(0, NaN), 1);
+});
+// GUARD: the signature is (speedCtlRate, savedSpeed) — two INTENDED-speed sources,
+// no element rate. Reintroducing audio.playbackRate as a source would have to add a
+// parameter here, tripping this test and forcing a deliberate, visible change.
+test('displaySpeed takes exactly two args (no element-rate source)', () => {
+  assert.equal(L.displaySpeed.length, 2);
+});

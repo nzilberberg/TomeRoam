@@ -922,22 +922,6 @@
     // Plex connects, instead of a lone spinner. loadHomeData overwrites them.
     if (!painted) { renderSkeletonCarousel($('clRow'), 4); renderSkeletonCarousel($('raRow'), 6); }
     status(painted ? '' : 'Connecting to your Plex server…');
-    // DIAGNOSTIC (blank-title bug): the +16ms first-frame timing disproved a paint
-    // deferral, so measure the actual unknowns — is there title text in the DOM at
-    // paint, and does the cached data carry it. `domTitle` = the first tile's title
-    // as painted; `dataTitle` (logged in renderCachedHome) = the cached book's title.
-    // DIAGNOSTIC: capture the first tile's RESUME/PEER line (the thing that flashes)
-    // at frame 1 vs ~2.5s later, plus the hydrated peer count. If frame1 line1 is
-    // already the post-storm value, the hydrate worked and the flash is elsewhere;
-    // if frame1 is blank and post-storm is filled, hydrate isn't reaching the paint.
-    const _capLine = (tag) => {
-      const t = document.querySelectorAll('#clRow .tile')[1];   // TILE 2 in Continue Listening (what the user sees flash)
-      if (!t) { if (window.PBDebug) PBDebug.log('PAINT', `${tag} clTile2=(none) spd=${audio.playbackRate}`); return; }
-      const pl = t.querySelector('.pline'), tm = t.querySelector('.ptimes'), nm = t.querySelector('.pname');
-      if (window.PBDebug) PBDebug.log('PAINT', `${tag} t2 book=${t.dataset.book} cls="${pl ? pl.className : ''}" times="${tm ? tm.textContent : ''}" name="${nm ? nm.textContent : ''}" spd=${audio.playbackRate} ctxBook=${ctx ? ctx.book : 'null'} peers=${peersNow.length}`);
-    };
-    requestAnimationFrame(() => _capLine('frame1'));
-    setTimeout(() => _capLine('post-storm'), 2500);
     try {
       await Plex.connect();
       $('serverName').textContent = Plex.getServerName() || 'Plex';
@@ -1000,11 +984,7 @@
     if (!window.Store) { if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: no Store'); return false; }
     try {
       const books = await Store.cachedBooks();
-      // maxLVA = newest lastViewedAt across the CACHED books. Compared across reloads
-      // it distinguishes a stuck cache (fixed → recache not landing) from a cache
-      // that's converging but one step behind the self-bump on open (advances).
-      const maxLVA = (books || []).reduce((m, b) => Math.max(m, (b && b.lastViewedAt) || 0), 0);
-      if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books, dataTitle="' + (books && books[0] ? String(books[0].title || '(empty)').slice(0, 24) : '(none)') + '" maxLVA=' + maxLVA);
+      if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books');
       if (!books || !books.length) return false;
       const { cont, recentlyAdded } = PBLogic.homeFeeds(books, bookEntries);
       renderCarousel($('clRow'), cont);
@@ -1173,11 +1153,10 @@
   // audio.playbackRate: loading a track resets the element's playbackRate to 1 for a
   // window (until loadedmetadata restores it), and reading that live value made the
   // remaining time flash 1x->Nx on every launch. The intended speed is stable.
-  const spd = () => {
-    if (speedCtl && speedCtl.getRate) return speedCtl.getRate() || 1;
-    const v = parseFloat(localStorage.getItem('pb_speed'));
-    return v > 0 ? v : 1;
-  };
+  const spd = () => PBLogic.displaySpeed(
+    (speedCtl && speedCtl.getRate) ? speedCtl.getRate() : null,
+    parseFloat(localStorage.getItem('pb_speed')),
+  );
   const trackCache = {};   // book -> tracks[] so a peer's book-cum can be computed from its presence pos
   function cacheTracks(book, tracks) { if (book != null && tracks && tracks.length) trackCache[book] = tracks; }
   function tracksFor(book) { return (ctx && String(ctx.book) === String(book)) ? ctx.tracks : (trackCache[book] || null); }
@@ -1247,19 +1226,10 @@
     const line = bookLine(el.dataset.book);
     const pl = el.querySelector('.pline');
     if (pl) {
-      const beforeCls = pl.className;
       pl.className = 'pline' + (line.cls ? ' ' + line.cls : '');
       const nm = pl.querySelector('.pname'), tm = pl.querySelector('.ptimes');
       if (nm) nm.textContent = line.name || '';
-      if (tm) {
-        const before = tm.textContent || '', after = line.times || '';
-        // DIAGNOSTIC: a NON-empty value/class actually CHANGING = the visible flash.
-        // (An empty->value first-fill isn't logged.) Captures the pre-value the eye
-        // can't catch, per book, so we see what tile 2 (8913) flashes FROM and when.
-        if (window.PBDebug && ((before && before !== after) || (beforeCls !== 'pline' && beforeCls !== pl.className)))
-          PBDebug.log('LINEDELTA', `book=${el.dataset.book} "${before}"->"${after}" cls "${beforeCls}"->"${pl.className}"`);
-        tm.textContent = after;
-      }
+      if (tm) tm.textContent = line.times || '';
     }
     if (line.pct != null) { const gi = el.querySelector('.progress > i'); if (gi) gi.style.width = Math.round(line.pct) + '%'; }
   }

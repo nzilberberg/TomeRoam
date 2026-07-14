@@ -87,12 +87,8 @@ const Presence = (() => {
   function cachedPeers() {
     let parsed;
     try { parsed = JSON.parse(localStorage.getItem(LS.peerCache) || 'null'); } catch { return []; }
-    if (!Array.isArray(parsed) || !parsed.length) { dbg('PRES', 'cachedPeers raw=0 (cache empty)'); return []; }
-    const out = PBLogic.filterPeers(parsed, Plex.getClientId(), now(), GHOST_MS);
-    // DIAGNOSTIC: raw vs filtered tells us if the peer cache is empty at hydrate or if
-    // filterPeers is aging everything out (now-at>GHOST_MS). at0/state0 sample the drop.
-    dbg('PRES', `cachedPeers raw=${parsed.length} filtered=${out.length} now=${now()} at0=${parsed[0] && parsed[0].at} state0=${parsed[0] && parsed[0].state}`);
-    return out;
+    if (!Array.isArray(parsed) || !parsed.length) return [];
+    return PBLogic.filterPeers(parsed, Plex.getClientId(), now(), GHOST_MS);
   }
   function restoreCachedPeers() { const p = cachedPeers(); if (p.length) { peers = p; cbPeers(p); } }
 

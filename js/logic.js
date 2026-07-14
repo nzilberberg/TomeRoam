@@ -142,10 +142,23 @@ const PBLogic = (() => {
     return { cont, recentlyAdded };
   }
 
+  // DISPLAY speed for tile / Now-Playing "remaining" times (remaining / speed). The
+  // SOURCE is the INTENDED speed — the mounted control's rate, else the saved pb_speed,
+  // else 1 — and DELIBERATELY takes NO element-rate argument. The browser resets
+  // audio.playbackRate to 1 on every track load until loadedmetadata restores it, so a
+  // remaining time derived from the live element rate flashed 1x->Nx on launch (the
+  // .38–.51 saga). This pure fn is the guard: reintroducing an element-rate source
+  // would have to change the signature past the tests below. See the flash-bug memory.
+  function displaySpeed(speedCtlRate, savedSpeed) {
+    if (speedCtlRate > 0) return speedCtlRate;
+    if (savedSpeed > 0) return savedSpeed;
+    return 1;
+  }
+
   // NOTE: the banking scheduler (pickNextBank) used to live here too, but app.js
   // reimplemented selection as nextToBank and the copy here tested dead code —
   // removed rather than left as false test coverage.
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

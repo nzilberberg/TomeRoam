@@ -149,9 +149,9 @@ const Store = (() => {
 
   async function cacheBooks(list) {
     const ok = lsSet(LSK.books, list);                    // reliable mirror FIRST
-    // IDB best-effort (fire-and-forget), but LOG the result: reads prefer IDB, so a
-    // silently-failing IDB write would leave every reload reading a stale snapshot.
-    replaceAll('books', list).then((idbOk) => dbg('CACHE', 'books IDB write=' + idbOk));
+    // IDB best-effort (fire-and-forget); reads prefer IDB, so a silently-failing write
+    // would leave every reload reading a stale snapshot — log ONLY that failure.
+    replaceAll('books', list).then((idbOk) => { if (!idbOk) dbg('CACHE', 'books IDB write FAILED — reads may be stale'); });
     await stampSync('books');
     dbg('CACHE', 'wrote ' + (list ? list.length : 0) + ' books (ls=' + ok + ')');
   }
