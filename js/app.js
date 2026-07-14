@@ -891,8 +891,12 @@
     // is present on frame 1 — Presence/Progress full init + live polling happen later
     // in startCoordination (post-connect), too late for the first paint, which is why
     // the play time + peer badge used to flash in a moment after launch.
-    if (window.Progress && Progress.hydrate) Progress.hydrate();
-    if (window.Presence && Presence.cachedPeers) peersNow = Presence.cachedPeers();
+    // NB: use the BARE identifiers — presence.js/progress.js are lexical globals; only
+    // some set window.X (progress does, presence historically didn't), so a
+    // `window.Presence &&` guard silently skips the whole line. (This is the window.X
+    // footgun from the offline saga — the peer hydrate was a no-op until this fix.)
+    if (typeof Progress !== 'undefined' && Progress.hydrate) Progress.hydrate();
+    if (typeof Presence !== 'undefined' && Presence.cachedPeers) peersNow = Presence.cachedPeers();
     const painted = await renderCachedHome();
     // No cached library yet (first-ever launch / cleared cache): paint SKELETON
     // carousels so the home screen shows its real structure immediately while

@@ -249,4 +249,7 @@ const Presence = (() => {
   };
 })();
 
+// Expose on window for symmetry with progress.js (top-level `const` is a lexical
+// global, NOT window.Presence) — callers that feature-detect via window.Presence.
+if (typeof window !== 'undefined') window.Presence = Presence;
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = Presence;
