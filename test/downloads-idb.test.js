@@ -66,20 +66,20 @@ test('a full download builds a correct dl index, correct accounting, and no orph
   await assertNoOrphans();
 });
 
-test('remove() converts the download to evictable buffer (reuses blobs), drops the dl index + accounting', async () => {
+test('remove() of a book that is NOT playing frees all its blobs + index + accounting', async () => {
+  // No currentTrack hook is set here → nothing is in the buffer window → remove
+  // frees everything. (The convert-to-buffer path keeps ONLY the current track +
+  // the ahead-run that fits the budget; that's the playing-book case, driven by the
+  // currentTrack hook which this pure-IDB env doesn't wire up.)
   const before = (await Downloads.storageInfo()).used;
   await Downloads.remove('bkA');
   assert.equal(Downloads.stateOf('bkA').status, 'none');
   assert.equal(await Store.getDl('bkA'), undefined, 'dl index gone');
-  // The blob is REUSED as an evictable buffer copy (no delete, no re-fetch) —
-  // deleting it made banking immediately re-download the just-removed book.
-  assert.ok(await Store.get('audio', 'a1'), 'blob kept (reused as buffer)');
-  assert.equal(Downloads.trackDownloaded('a1'), false, 'no longer a pinned download (not blue)');
-  assert.equal(Downloads.trackBuffered('a1'), true, 'now an evictable buffer copy (gray)');
+  assert.equal(await Store.get('audio', 'a1'), undefined, 'blob freed (not in the play window)');
   const after = (await Downloads.storageInfo()).used;
-  assert.equal(after, before - 3000, 'download usedBytes dropped by exactly the removed size');
+  assert.equal(after, before - 3000, 'usedBytes dropped by exactly the removed size');
   assert.equal(after, await sumDlSizes());
-  await assertNoOrphans();   // blob is now buf-referenced → still no orphans
+  await assertNoOrphans();
 });
 
 test('an aborted download ends in status "none", never "error" (AbortError mislabel)', async () => {
