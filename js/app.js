@@ -930,6 +930,17 @@
     // Plex connects, instead of a lone spinner. loadHomeData overwrites them.
     if (!painted) { renderSkeletonCarousel($('clRow'), 4); renderSkeletonCarousel($('raRow'), 6); }
     status(painted ? '' : 'Connecting to your Plex server…');
+    // Paint the transport bar from the persisted snapshot NOW — BEFORE connect — so
+    // it's instant on ANY launch (airplane OR low-bandwidth), matching renderCachedHome
+    // above. It was instant ONLY offline before: restoreLastPlayed paints it, but that
+    // runs AFTER `await Plex.connect()` — on a SLOW (not failed) connect the paint was
+    // delayed by seconds, while airplane's fast-failing connect fell straight to the
+    // catch. Same cache-first rule as the .22 withCache fix: show last-known
+    // immediately, reconcile after connect. Purely visual (sets no ctx).
+    let lastSnap = null;
+    try { lastSnap = JSON.parse(localStorage.getItem(LAST) || 'null'); } catch { /* malformed */ }
+    paintSnapshotBar(lastSnap);
+    if (window.PBDebug) PBDebug.log('PLAY', 'TB snapshot pre-connect painted=' + !!(lastSnap && lastSnap.book));
     try {
       await Plex.connect();
       $('serverName').textContent = Plex.getServerName() || 'Plex';
