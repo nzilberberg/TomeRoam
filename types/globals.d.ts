@@ -30,6 +30,7 @@ interface Window {
   DownloadsScreen: any;
   OptionsScreen: any;
   SignInScreen: any;
+  HomeScreen: any;
   ArtLoader: any;
   HandoffController: any;
   LogPipe: any;
@@ -61,6 +62,7 @@ declare var Downloads: any;
 declare var DownloadsScreen: any;
 declare var OptionsScreen: any;
 declare var SignInScreen: any;
+declare var HomeScreen: any;
 declare var ArtLoader: any;
 declare var HandoffController: any;
 declare var LogPipe: any;

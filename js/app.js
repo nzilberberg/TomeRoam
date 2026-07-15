@@ -909,7 +909,7 @@
     // No cached library yet (first-ever launch / cleared cache): paint SKELETON
     // carousels so the home screen shows its real structure immediately while
     // Plex connects, instead of a lone spinner. loadHomeData overwrites them.
-    if (!painted) { renderSkeletonCarousel($('clRow'), 4); renderSkeletonCarousel($('raRow'), 6); }
+    if (!painted) HomeScreen.showSkeletons();
     status(painted ? '' : 'Connecting to your Plex server…');
     // Paint the transport bar from the persisted snapshot NOW — BEFORE connect — so
     // it's instant on ANY launch (airplane OR low-bandwidth), matching renderCachedHome
@@ -976,56 +976,14 @@
     startRenderTick();
   }
 
-  // Render the two home carousels from the last-known library in IndexedDB (no
-  // network). Mirrors loadHomeData's derivation (recently-played + recently-added)
-  // but purely from cache. Returns true if it painted anything. Covers come from
-  // the SW image cache via Plex.artUrl (resolved against the last-good host).
-  async function renderCachedHome() {
-    if (!window.Store) { if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: no Store'); return false; }
-    try {
-      const books = await Store.cachedBooks();
-      if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome: ' + (books ? books.length : 0) + ' cached books');
-      if (!books || !books.length) return false;
-      const { cont, recentlyAdded } = PBLogic.homeFeeds(books, bookEntries);
-      renderCarousel($('clRow'), cont);
-      renderCarousel($('raRow'), recentlyAdded);
-      renderDownloadedCarousel();
-      renderPresence();
-      return true;
-    } catch (e) { if (window.PBDebug) PBDebug.log('CACHE', 'renderCachedHome threw ' + (e && e.message)); return false; }
-  }
-
-  // Fetch + render the two home carousels (shared by initial load + pull-to-refresh).
-  async function loadHomeData(opts = {}) {
-    // The whole-library fetch (cached) powers both carousels + browse. The LMS
-    // plugin's resume playlist is OPTIONAL — a best-effort ADDITIVE layer: when
-    // it's absent (app-only user) getResumeMap returns [], and a fetch error is
-    // swallowed, so the home feed always renders from Plex alone. When present it
-    // supplies exact resume offsets + surfaces books listened to on the LMS side.
-    const resume = await Plex.getResumeMap().catch(() => []);
-    // Persist the resume map so bookEntries can be hydrated before the first cached paint
-    // next launch — getResumeMap is a live, UNCACHED /playlists read, so without this the
-    // cold (grey) resume time pops in a second+ after the tiles paint. Only cache a
-    // non-empty result: a transient failure returns [] and must not wipe the cache.
-    if (resume.length) { try { localStorage.setItem('pb_resumeMap', JSON.stringify(resume)); } catch { /* best effort */ } }
-    // paint() derives BOTH carousels from a whole-library `books` array, so it can
-    // run twice: once on the instant cache-first read, then again if the background
-    // revalidate brings changed data (onFresh). Continue Listening + Recently Added
-    // are pure derivations of the library list, so we derive them here rather than
-    // re-fetch (which would also re-trigger revalidation).
-    const paint = (books) => {
-      for (const k in bookEntries) delete bookEntries[k];
-      for (const b of resume) bookEntries[b.book] = b;
-      const { cont, recentlyAdded } = PBLogic.homeFeeds(books, bookEntries);
-      renderCarousel($('clRow'), cont);
-      status(cont.length ? '' : 'No books in progress yet — pick one from Books or Authors.');
-      renderCarousel($('raRow'), recentlyAdded);
-      renderDownloadedCarousel();
-      renderPresence();   // paint live numbers on the tiles
-    };
-    const books = await Plex.getBooks({ force: opts.force, onFresh: (fresh) => { if (!document.hidden) paint(fresh); } });
-    paint(books);
-  }
+  // ---- Home screen (js/home-screen.js — HomeScreen) ------------------------
+  // Orchestration (fetch library, derive feeds, paint carousels/skeletons/the
+  // Downloaded row) lives in HomeScreen. app.js keeps hoisted delegators (call
+  // sites here — enterApp — precede the module wiring) and injects the shared
+  // renderTile / renderPresence / status / bookEntries. See home-screen.js for
+  // why the tile engine stays here (welded to the live playback context).
+  function renderCachedHome() { return HomeScreen.renderCached(); }
+  function loadHomeData(opts) { return HomeScreen.load(opts); }
 
   // Pull-to-refresh: re-pull the home feeds with a fresh whole-library fetch.
   let refreshing = false;
@@ -1045,29 +1003,6 @@
     catch (e) { if (!released) toast(e.message || 'Refresh failed'); }
     finally { clearTimeout(watchdog); release(); }
   }
-
-  function renderCarousel(row, books) {
-    // On a background-revalidate repaint, patch only the tiles that changed (reuse
-    // unchanged covers) instead of rebuilding the whole carousel. Falls back to a
-    // full rebuild on first paint or any structural change (add/remove/re-sort).
-    if (books.length && row.querySelector('[data-key]') && Browse.patchRows(row, books, renderTile, Browse.bookSig)) return;
-    row.innerHTML = '';
-    if (!books.length) { row.innerHTML = '<div class="empty carousel-empty">Nothing here yet.</div>'; return; }
-    for (const b of books) row.appendChild(renderTile(b));
-  }
-
-  // Paint the SHAPE of a carousel (shimmering tile placeholders) before any data
-  // exists — a cold or offline first load then shows the home layout instead of a
-  // spinner. Purely bundled CSS/markup (no network); replaced on first real render.
-  function skeletonTiles(n) {
-    let h = '';
-    for (let i = 0; i < n; i++) {
-      h += '<div class="tile sktile" aria-hidden="true">'
-        + '<div class="skel skart"></div><div class="skel skline"></div><div class="skel skline short"></div></div>';
-    }
-    return h;
-  }
-  function renderSkeletonCarousel(row, n) { if (row) row.innerHTML = skeletonTiles(n || 5); }
 
   // 1/3-width tile, stacked vertically: art, title, author, resume·peer line,
   // progress bar. data-book keeps resume/peer numbers live via the presence tick.
@@ -2253,19 +2188,7 @@
   // Idempotent by content key: download-progress notifies arrive ~4×/s and a
   // rebuild resets the carousel's scroll + churns its <img>s, so only rebuild
   // when the LIST actually changed.
-  let dlCarouselKey = null;
-  async function renderDownloadedCarousel() {
-    const section = $('dlSection'), row = $('dlRow');
-    if (!section || !row || !window.Downloads || !Downloads.available()) { if (section) section.classList.add('hidden'); return; }
-    const rows = await Downloads.listDownloaded();
-    const key = rows.map((r) => r.book).join(',');
-    if (key === dlCarouselKey) return;
-    dlCarouselKey = key;
-    if (!rows.length) { section.classList.add('hidden'); row.innerHTML = ''; return; }
-    section.classList.remove('hidden');
-    row.innerHTML = '';
-    for (const r of rows) row.appendChild(renderTile({ ratingKey: r.book, title: r.title, parentTitle: r.author, thumb: r.thumb }));
-  }
+  function renderDownloadedCarousel() { return HomeScreen.renderDownloaded(); }
 
   // NP art button: tap acts contextually; long-press opens the shared book menu.
   function bindNpDownload() {
@@ -2714,6 +2637,7 @@
       DownloadsScreen.injectOptionRow();
     }
     // Screens are independent of Downloads — wire them unconditionally.
+    HomeScreen.init({ byId: $, renderTile, renderPresence, status, bookEntries });
     SignInScreen.init({ byId: $, Plex, enterApp, toast });
     OptionsScreen.init({ byId: $, Settings, Presence, updateSkipLabels, pumpBank, onSignOut: doSignOut });
     if (Plex.isSignedIn()) return enterApp();
