@@ -165,6 +165,27 @@ const Downloads = (() => {
   // look-ahead budget counts disk bytes now, not just RAM.
   const bufferedSize = (track) => { const m = bufMeta.get(String(track)); return m ? (m.size || 0) : 0; };
 
+  // ---- owned async persistence cleanup ---------------------------------------
+  // dropBuffered/demoteBuffer remove in-memory buffer state SYNCHRONOUSLY (banking
+  // needs the budget freed immediately), but the IndexedDB deletes are async. A
+  // sync try/catch can't catch a promise rejection → an unhandled rejection + an
+  // orphaned blob the app believes it removed (and a NEXT startup reconstructs from
+  // it). So every delete promise gets an owner: on failure the key is queued and
+  // re-attempted opportunistically; the init() orphan sweep is the cross-session
+  // backstop for anything still stuck.
+  const pendingCleanup = new Set();
+  function removePersisted(k, layers) {
+    k = String(k);
+    const jobs = [];
+    if (layers.indexOf('audio') >= 0) jobs.push(Store.delAudio(k).catch((e) => { pendingCleanup.add(k); dbg('DL', `cleanup failed key=${k} layer=audio err=${e && e.message}`); }));
+    if (layers.indexOf('buf') >= 0) jobs.push(Store.delBuf(k).catch((e) => { pendingCleanup.add(k); dbg('DL', `cleanup failed key=${k} layer=buf err=${e && e.message}`); }));
+    void Promise.allSettled(jobs);   // owned (each promise has a .catch) — never an unhandled rejection
+  }
+  function retryPendingCleanup() {
+    if (!pendingCleanup.size) return;
+    for (const k of [...pendingCleanup]) { pendingCleanup.delete(k); removePersisted(k, ['audio', 'buf']); }
+  }
+
   // Targeted single-track eviction for the banking scheduler's proximity-priority
   // path (a skip-back leaves far-ahead files squatting the look-ahead budget so
   // the nearer gap can't buffer). Deliberately uses the NARROW protection —
@@ -176,8 +197,9 @@ const Downloads = (() => {
     if (!bufTracks.has(k) || dlTracks.has(k) || k === playingTrack()) return false;
     const m = bufMeta.get(k);
     bufTracks.delete(k); bufMeta.delete(k); if (m) bufBytes = Math.max(0, bufBytes - m.size);
-    try { Store.delAudio(k); Store.delBuf(k); } catch {}
+    removePersisted(k, ['audio', 'buf']);   // owned async cleanup (was a sync try/catch that couldn't catch the rejection)
     swEvict(k);
+    retryPendingCleanup();                   // opportunistically re-attempt any earlier failed deletes
     dbg('DL', `buffer dropped (proximity) track=${k}`);
     return true;
   }
@@ -217,7 +239,7 @@ const Downloads = (() => {
     if (!bufTracks.has(k)) return;
     const m = bufMeta.get(k);
     bufTracks.delete(k); bufMeta.delete(k); if (m) bufBytes = Math.max(0, bufBytes - m.size);
-    Store.delBuf(k);
+    removePersisted(k, ['buf']);   // audio blob stays (owned by the download now) — only the buf index goes; owned so a rejection can't leak
   }
 
   async function clearBuffer() {
@@ -540,7 +562,7 @@ const Downloads = (() => {
     fetchAudioBlob,   // the one shared streaming byte-loop (banking uses it too)
     listDownloaded, storageInfo,
     wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, bufMaxBytes, setBufMaxBytes, DEFAULT_MAX, DEFAULT_BUF_MAX,
-    _test: { decideStart, capFits, frac, unmetered, evictionPlan, parseByteLimit },
+    _test: { decideStart, capFits, frac, unmetered, evictionPlan, parseByteLimit, pendingCleanup },
   };
 })();
 

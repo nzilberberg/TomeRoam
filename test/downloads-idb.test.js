@@ -117,3 +117,20 @@ test('init() sweeps an orphaned audio row (referenced by neither index)', async 
   assert.ok(!(await Store.audioKeys()).includes('orphan-x'), 'the orphan was reclaimed');
   await assertNoOrphans();
 });
+
+test('dropBuffered removes memory immediately; a failed IndexedDB delete is queued, not lost', async () => {
+  const track = 'bufDropX';
+  await Downloads.bufferTrack('bkBufDrop', track, new Blob([new Uint8Array(2000)]));
+  assert.equal(Downloads.trackBuffered(track), true, 'track starts buffered');
+
+  const realDel = Store.delAudio;
+  Store.delAudio = () => Promise.reject(new Error('idb boom'));   // force the persistence delete to reject
+  try {
+    const ok = Downloads.dropBuffered(track);
+    assert.equal(ok, true, 'drop proceeds');
+    assert.equal(Downloads.trackBuffered(track), false, 'in-memory buffer state removed synchronously');
+    await new Promise((r) => setTimeout(r, 0));   // let the owned .catch run (no unhandled rejection)
+    assert.ok(Downloads._test.pendingCleanup.has(String(track)), 'the failed delete is queued for retry, not silently dropped');
+  } finally { Store.delAudio = realDel; }
+  Downloads._test.pendingCleanup.clear();
+});
