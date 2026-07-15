@@ -29,6 +29,16 @@ module.exports = [
       'no-dupe-keys': 'error',
       'no-dupe-args': 'error',
       'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
+      // Added one demonstrated-defect class at a time (not a broad style preset):
+      // strict equality except the intentional `== null` idiom, and control-flow
+      // foot-guns. `checkLoops:false` keeps the intentional streaming `for(;;)`
+      // byte-loop (downloads.js fetchAudioBlob) legal. (no-undef still excluded —
+      // see above; unhandled-promise detection is a manual audit for now, pending
+      // a type-aware parser — see docs/adr if added.)
+      'eqeqeq': ['error', 'always', { null: 'ignore' }],
+      'no-fallthrough': 'error',
+      'no-unreachable': 'error',
+      'no-constant-condition': ['error', { checkLoops: false }],
     },
   },
 ];

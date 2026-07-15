@@ -529,7 +529,7 @@ const Downloads = (() => {
       bufBytes = 0;
       for (const r of bufRows) {
         const k = String(r.track);
-        if (dlTracks.has(k)) { Store.delBuf(k); continue; }
+        if (dlTracks.has(k)) { removePersisted(k, ['buf']); continue; }   // dl wins → drop the stale buf index (owned, can't leak a rejection)
         bufTracks.add(k); bufMeta.set(k, { size: r.size || 0, ts: r.ts || 0 }); bufBytes += r.size || 0;
       }
       await evictBuffer();
