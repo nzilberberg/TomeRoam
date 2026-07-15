@@ -145,6 +145,13 @@ const Downloads = (() => {
     if (bufTracks.has(k)) { const m = bufMeta.get(k); if (m) { m.ts = Date.now(); Store.putBuf({ track: k, book: String(book), size: m.size, ts: m.ts }); } return true; }
     try {
       await Store.putAudio(k, book, blob, 'buffer');
+      // Race guard: a concurrent force-download of this same book can pin this track
+      // (dlTracks.add) during the await above — banking and the download fetching the
+      // same tracks. If it won, this track is a download now; do NOT also add it to
+      // the buffer set/index. That dual membership is what left tracks stuck blue
+      // after "Remove download" (remove() then skipped them). Defer to the download —
+      // its copy plays the same bytes, and this avoids the wasteful double-fetch.
+      if (dlTracks.has(k)) return true;
       const rec = { track: k, book: String(book), size: blob.size, ts: Date.now() };
       await Store.putBuf(rec);
       bufTracks.add(k); bufMeta.set(k, { size: rec.size, ts: rec.ts }); bufBytes += rec.size;
@@ -426,11 +433,16 @@ const Downloads = (() => {
       const tracks = (rec && rec.tracks) || stateOf(k).trackRks || [];
       for (const tr of tracks) {
         const t = String(tr);
-        if (bufTracks.has(t)) continue;               // buffer-owned bytes stay (evictable, still useful)
+        // ALWAYS un-pin the download first, so a track can never stay "downloaded"
+        // (blue) after a Remove. A track can be in BOTH sets when banking bufferTrack'd
+        // it while this same book was force-downloading (they raced) — the old
+        // `continue` skipped the un-pin and left those tracks stuck blue.
+        dlTracks.delete(t);
+        if (bufTracks.has(t)) continue;               // buffer owns the bytes → keep the blob (now shows gray)
         const r = await Store.getAudioRec(t);
         if (!r) continue;
         if (!rec) usedBytes = Math.max(0, usedBytes - (r.size || 0));   // partials were counted as they landed
-        await Store.delAudio(t); dlTracks.delete(t); swEvict(t);
+        await Store.delAudio(t); swEvict(t);
       }
       if (rec && rec.size) usedBytes = Math.max(0, usedBytes - rec.size);
       await Store.delDl(k);
