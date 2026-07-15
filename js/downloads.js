@@ -143,22 +143,35 @@ const Downloads = (() => {
     const k = String(track);
     if (dlTracks.has(k)) return true;                 // pinned download wins — don't duplicate
     if (bufTracks.has(k)) { const m = bufMeta.get(k); if (m) { m.ts = Date.now(); Store.putBuf({ track: k, book: String(book), size: m.size, ts: m.ts }); } return true; }
-    try {
-      await Store.putAudio(k, book, blob, 'buffer');
-      // Race guard: a concurrent force-download of this same book can pin this track
-      // (dlTracks.add) during the await above — banking and the download fetching the
-      // same tracks. If it won, this track is a download now; do NOT also add it to
-      // the buffer set/index. That dual membership is what left tracks stuck blue
-      // after "Remove download" (remove() then skipped them). Defer to the download —
-      // its copy plays the same bytes, and this avoids the wasteful double-fetch.
-      if (dlTracks.has(k)) return true;
-      const rec = { track: k, book: String(book), size: blob.size, ts: Date.now() };
-      await Store.putBuf(rec);
-      bufTracks.add(k); bufMeta.set(k, { size: rec.size, ts: rec.ts }); bufBytes += rec.size;
-      await evictBuffer(k);
-      notify(book);
-      return true;
-    } catch (e) { dbg('DL', 'buffer persist failed ' + (e && e.message)); return false; }
+    // Buffering used to skip the quota check the download loop does, so it could
+    // push past the device quota and fail on commit — the most likely trigger for
+    // the silent-loss below. Gate it up front.
+    if (!(await quotaFits(blob.size))) { dbg('DL', `buffer skip — device storage full track=${k}`); return false; }
+    // Persist audio FIRST; report failure to the caller. Store.putAudio resolves
+    // FALSE (not a rejection) when the transaction aborts (quota) — so a bare
+    // try/catch could NOT see the failure and we'd mark the track buffered with
+    // nothing on disk. Banking then drops its RAM copy → the SW's ./__dl/ path
+    // later has no bytes → silent no-audio. Only proceed on a confirmed write.
+    if (!(await Store.putAudio(k, book, blob, 'buffer'))) { dbg('DL', `buffer persist failed (audio) track=${k}`); return false; }
+    // Race guard: a concurrent force-download of this same book can pin this track
+    // (dlTracks.add) during the await above — banking and the download fetching the
+    // same tracks. If it won, this track is a download now; do NOT also add it to
+    // the buffer set/index. That dual membership is what left tracks stuck blue
+    // after "Remove download" (remove() then skipped them). Defer to the download —
+    // its copy plays the same bytes, and this avoids the wasteful double-fetch.
+    if (dlTracks.has(k)) return true;
+    const rec = { track: k, book: String(book), size: blob.size, ts: Date.now() };
+    if (!(await Store.putBuf(rec))) {
+      // The index write failed after the blob landed → roll the blob back so it
+      // isn't a dangling (indexed-nowhere) orphan, and report not-buffered.
+      await Store.delAudio(k);
+      dbg('DL', `buffer persist failed (index) track=${k} — rolled back audio`);
+      return false;
+    }
+    bufTracks.add(k); bufMeta.set(k, { size: rec.size, ts: rec.ts }); bufBytes += rec.size;
+    await evictBuffer(k);
+    notify(book);
+    return true;
   }
 
   // Persisted size of one buffered track (0 if not in the buffer) — the banking
@@ -167,23 +180,47 @@ const Downloads = (() => {
 
   // ---- owned async persistence cleanup ---------------------------------------
   // dropBuffered/demoteBuffer remove in-memory buffer state SYNCHRONOUSLY (banking
-  // needs the budget freed immediately), but the IndexedDB deletes are async. A
-  // sync try/catch can't catch a promise rejection → an unhandled rejection + an
-  // orphaned blob the app believes it removed (and a NEXT startup reconstructs from
-  // it). So every delete promise gets an owner: on failure the key is queued and
-  // re-attempted opportunistically; the init() orphan sweep is the cross-session
-  // backstop for anything still stuck.
-  const pendingCleanup = new Set();
+  // needs the budget freed immediately), but the IndexedDB deletes are async and
+  // can FAIL (Store.del resolves FALSE on a failed transaction — not a rejection).
+  // A failed delete leaves an orphaned blob the app believes it removed. So every
+  // delete is owned: a layer that fails to delete is queued PER-LAYER and drained
+  // on a backoff timer + on reconnect + at next startup's orphan sweep.
+  //
+  // WHY per-layer (Map<key, Set<layer>>, not a bare key Set): demoteBuffer deletes
+  // ONLY the `buf` index — the audio blob is now owned by the pinned download and
+  // MUST stay. A key-only retry would re-delete BOTH layers and destroy the
+  // download's audio. The Set records exactly which layers still owe a delete.
+  const pendingCleanup = new Map();   // key -> Set<'audio'|'buf'>
+  function queueCleanup(k, layer) {
+    k = String(k);
+    let s = pendingCleanup.get(k);
+    if (!s) { s = new Set(); pendingCleanup.set(k, s); }
+    s.add(layer);
+  }
+  // THE single deletion path (dropBuffered/demoteBuffer/evictBuffer/clearBuffer/
+  // remove/init all route here). Owns each promise; a layer that resolves false is
+  // queued for retry. Returns the settle promise so callers that want to await do.
   function removePersisted(k, layers) {
     k = String(k);
     const jobs = [];
-    if (layers.indexOf('audio') >= 0) jobs.push(Store.delAudio(k).catch((e) => { pendingCleanup.add(k); dbg('DL', `cleanup failed key=${k} layer=audio err=${e && e.message}`); }));
-    if (layers.indexOf('buf') >= 0) jobs.push(Store.delBuf(k).catch((e) => { pendingCleanup.add(k); dbg('DL', `cleanup failed key=${k} layer=buf err=${e && e.message}`); }));
-    void Promise.allSettled(jobs);   // owned (each promise has a .catch) — never an unhandled rejection
+    if (layers.indexOf('audio') >= 0) jobs.push(Store.delAudio(k).then((ok) => { if (!ok) { queueCleanup(k, 'audio'); dbg('DL', `cleanup deferred key=${k} layer=audio`); } }));
+    if (layers.indexOf('buf') >= 0) jobs.push(Store.delBuf(k).then((ok) => { if (!ok) { queueCleanup(k, 'buf'); dbg('DL', `cleanup deferred key=${k} layer=buf`); } }));
+    return Promise.allSettled(jobs).then(() => { scheduleCleanupRetry(); });
   }
-  function retryPendingCleanup() {
+  // Backoff drain: earlier code retried SYNCHRONOUSLY right after firing a delete,
+  // before its async result was known, so it could never see the just-failed one.
+  // Instead schedule a real timer; re-arm while anything is still pending.
+  let cleanupTimer = null;
+  const CLEANUP_RETRY_MS = 15000;
+  function scheduleCleanupRetry() {
+    if (cleanupTimer || !pendingCleanup.size) return;
+    cleanupTimer = setTimeout(() => { cleanupTimer = null; void drainCleanup(); }, CLEANUP_RETRY_MS);
+  }
+  async function drainCleanup() {
     if (!pendingCleanup.size) return;
-    for (const k of [...pendingCleanup]) { pendingCleanup.delete(k); removePersisted(k, ['audio', 'buf']); }
+    const entries = [...pendingCleanup.entries()];
+    pendingCleanup.clear();
+    for (const [k, layers] of entries) await removePersisted(k, [...layers]);   // re-failures self-requeue + reschedule
   }
 
   // Targeted single-track eviction for the banking scheduler's proximity-priority
@@ -197,9 +234,8 @@ const Downloads = (() => {
     if (!bufTracks.has(k) || dlTracks.has(k) || k === playingTrack()) return false;
     const m = bufMeta.get(k);
     bufTracks.delete(k); bufMeta.delete(k); if (m) bufBytes = Math.max(0, bufBytes - m.size);
-    removePersisted(k, ['audio', 'buf']);   // owned async cleanup (was a sync try/catch that couldn't catch the rejection)
+    void removePersisted(k, ['audio', 'buf']);   // owned async cleanup; a failed layer self-queues + schedules a retry
     swEvict(k);
-    retryPendingCleanup();                   // opportunistically re-attempt any earlier failed deletes
     dbg('DL', `buffer dropped (proximity) track=${k}`);
     return true;
   }
@@ -225,8 +261,8 @@ const Downloads = (() => {
     const plan = evictionPlan([...bufMeta.entries()], bufBytes, bufMaxBytes(), prot);
     for (const k of plan) {
       const m = bufMeta.get(k); if (!m) continue;
-      try { await Store.delAudio(k); await Store.delBuf(k); } catch {}
       bufTracks.delete(k); bufMeta.delete(k); bufBytes = Math.max(0, bufBytes - m.size);
+      void removePersisted(k, ['audio', 'buf']);   // shared owned deletion path
       swEvict(k);
       dbg('DL', `buffer evicted track=${k}`);
     }
@@ -251,9 +287,9 @@ const Downloads = (() => {
     const prot = cur ? new Set([cur]) : new Set();
     for (const k of [...bufTracks]) {
       if (prot.has(k)) continue;
-      try { await Store.delAudio(k); await Store.delBuf(k); } catch {}
       const m = bufMeta.get(k);
       bufTracks.delete(k); bufMeta.delete(k); if (m) bufBytes = Math.max(0, bufBytes - m.size);
+      void removePersisted(k, ['audio', 'buf']);   // shared owned deletion path
       swEvict(k);
     }
     dbg('DL', 'buffer cleared'); notify();
@@ -358,18 +394,25 @@ const Downloads = (() => {
           onProgress: (recv, tot) => { if (tot) setTrackProgress(book, k, Math.min(1, recv / tot)); },
           gate: () => yieldToPlayback(abortCur.signal),
         });
-        await Store.putAudio(k, book, blob, 'download');
+        // Only count/mark this track downloaded on a CONFIRMED write. A silent
+        // failure (Store.putAudio → false, e.g. quota abort) used to still advance
+        // done/dlTracks/usedBytes and could label the whole book downloaded with
+        // nothing on disk. Fail the download instead so the user sees it.
+        if (!(await Store.putAudio(k, book, blob, 'download'))) throw new Error('Could not save to device storage — it may be full.');
         dlTracks.add(k); demoteBuffer(k);
         curDl = { track: null, frac: 0 };            // this track is now 100% (via dlTracks)
         bytes += blob.size; done++; usedBytes += blob.size;
         setState(book, { done, bytes });
       }
       curDl = { track: null, frac: 0 };
-      await Store.putDl({
+      // The index write is what makes the book "downloaded" and survives restart.
+      // If it fails, don't claim done — the blobs are on disk but unindexed, so the
+      // next launch's orphan sweep reclaims them (honest: the download didn't stick).
+      if (!(await Store.putDl({
         book: String(book), title: (meta && meta.title) || '', author: (meta && meta.author) || '',
         thumb: (meta && meta.thumb) || null, tracks: tracks.map((t) => String(t.ratingKey)),
         size: bytes, ts: Date.now(),
-      });
+      }))) throw new Error('Could not save the download index — device storage may be full.');
       setState(book, { status: 'done', done: total, total, size: bytes });
       dbg('DL', `done book=${book} ${(bytes / 1048576).toFixed(0)}MB`);
     } catch (e) {
@@ -478,11 +521,16 @@ const Downloads = (() => {
         const keepAsBuffer = i === curIdx || (curIdx >= 0 && i > curIdx && bufBytes + size <= budget);
         if (!rec) usedBytes = Math.max(0, usedBytes - size);   // partials were counted as they landed
         if (keepAsBuffer) {
-          // Reuse the on-disk blob (no re-fetch, no rewrite) — move it into the buffer tier.
-          bufTracks.add(t); bufMeta.set(t, { size, ts: Date.now() }); bufBytes += size;
-          try { await Store.putBuf({ track: t, book: k, size, ts: Date.now() }); } catch {}
+          // Reuse the on-disk blob (no re-fetch, no rewrite) — move it into the buffer
+          // tier. Index FIRST: only claim it buffered if the index write succeeds,
+          // else free the blob rather than leave it a dangling (unindexed) orphan.
+          if (await Store.putBuf({ track: t, book: k, size, ts: Date.now() })) {
+            bufTracks.add(t); bufMeta.set(t, { size, ts: Date.now() }); bufBytes += size;
+          } else {
+            void removePersisted(t, ['audio']); swEvict(t);
+          }
         } else {
-          await Store.delAudio(t); swEvict(t);         // outside the window → free it
+          void removePersisted(t, ['audio']); swEvict(t);   // outside the window → free it
         }
       }
       if (rec && rec.size) usedBytes = Math.max(0, usedBytes - rec.size);
@@ -514,42 +562,60 @@ const Downloads = (() => {
     if (opts && opts.protectTracks) hooks.protectTracks = opts.protectTracks;
     if (!available()) { dbg('DL', 'unavailable (no IndexedDB)'); return; }
     try {
+      // Startup reconciliation is BIDIRECTIONAL — an index and its blob can be
+      // out of sync in EITHER direction, and both directions lie to the UI:
+      //   * audio blob with no index  → a leak (invisible, uncounted, undeletable);
+      //   * index with no audio blob  → trackLocal() says "offline" but the SW
+      //     ./__dl/ path finds nothing → silent no-audio (the finding-#1 surface).
+      // One getAllKeys read powers all three checks (no per-track reads).
+      const keys = await Store.audioKeys();
+      const audioSet = new Set(keys);
+
       const rows = await Store.allDl();
       usedBytes = 0;
       for (const r of rows) {
-        books[String(r.book)] = { status: 'done', done: (r.tracks || []).length, total: (r.tracks || []).length, bytes: r.size || 0, size: r.size || 0, meta: { title: r.title, author: r.author, thumb: r.thumb } };
-        for (const tr of (r.tracks || [])) dlTracks.add(String(tr));
+        const trackList = (r.tracks || []).map(String);
+        const missing = trackList.filter((tr) => !audioSet.has(tr));
+        if (missing.length) {
+          // A downloaded book whose blobs aren't all present is broken (legacy
+          // false-complete from before writes reported failure, or storage reclaim).
+          // Invalidate the record so nothing claims those tracks are offline; the
+          // present partials fall through to the orphan sweep below and are freed.
+          dbg('DL', `download book=${r.book} missing ${missing.length}/${trackList.length} blob(s) — invalidating record`);
+          await Store.delDl(String(r.book));
+          continue;
+        }
+        books[String(r.book)] = { status: 'done', done: trackList.length, total: trackList.length, bytes: r.size || 0, size: r.size || 0, meta: { title: r.title, author: r.author, thumb: r.thumb } };
+        for (const tr of trackList) dlTracks.add(tr);
         usedBytes += r.size || 0;
       }
-      dbg('DL', `restored ${rows.length} downloaded book(s), ${(usedBytes / 1048576).toFixed(0)}MB`);
+      dbg('DL', `restored ${dlTracks.size} downloaded track(s), ${(usedBytes / 1048576).toFixed(0)}MB`);
       // Persisted buffer index (metadata only). Skip any track that's part of a
-      // downloaded book (dl wins), then run one eviction pass in case the budget
-      // shrank since last session.
+      // downloaded book (dl wins) OR whose audio blob is missing (dangling index),
+      // then run one eviction pass in case the budget shrank since last session.
       const bufRows = await Store.allBuf();
       bufBytes = 0;
       for (const r of bufRows) {
         const k = String(r.track);
-        if (dlTracks.has(k)) { removePersisted(k, ['buf']); continue; }   // dl wins → drop the stale buf index (owned, can't leak a rejection)
+        if (dlTracks.has(k)) { void removePersisted(k, ['buf']); continue; }   // dl wins → drop the stale buf index
+        if (!audioSet.has(k)) { void removePersisted(k, ['buf']); dbg('DL', `buf index track=${k} has no blob — dropping dangling index`); continue; }
         bufTracks.add(k); bufMeta.set(k, { size: r.size || 0, ts: r.ts || 0 }); bufBytes += r.size || 0;
       }
       await evictBuffer();
       dbg('DL', `restored ${bufTracks.size} buffered track(s), ${(bufBytes / 1048576).toFixed(0)}MB`);
-      // Orphan sweep: audio rows referenced by NEITHER index are leaks from a
-      // cancelled/failed download in a previous session — invisible to every UI,
-      // uncounted against any cap, and undeletable by the user. Reclaim them.
-      // (Costs an errored book its resume-without-refetch, which is the honest
-      // trade — those bytes were unaccountable.)
-      const keys = await Store.audioKeys();
+      // Orphan sweep: audio rows referenced by NEITHER index (leaked partials, or
+      // the just-invalidated books above) are reclaimed via the shared owned path.
       let swept = 0;
       for (const key of keys) {
         if (dlTracks.has(key) || bufTracks.has(key)) continue;
-        await Store.delAudio(key); swEvict(key); swept++;
+        void removePersisted(key, ['audio']); swEvict(key); swept++;
       }
       if (swept) dbg('DL', `swept ${swept} orphaned audio row(s)`);
     } catch (e) { dbg('DL', 'init err ' + (e && e.message)); }
-    // Auto-resume queued downloads when connectivity/Wi-Fi returns.
+    // Auto-resume queued downloads + drain any deferred cleanup when connectivity
+    // returns.
     try { if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', () => pump()); } catch {}
-    window.addEventListener('online', () => pump());
+    window.addEventListener('online', () => { pump(); void drainCleanup(); });
     notify();
     pump();   // resume anything queued from a prior session (if Wi-Fi allows)
   }
@@ -562,7 +628,7 @@ const Downloads = (() => {
     fetchAudioBlob,   // the one shared streaming byte-loop (banking uses it too)
     listDownloaded, storageInfo,
     wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, bufMaxBytes, setBufMaxBytes, DEFAULT_MAX, DEFAULT_BUF_MAX,
-    _test: { decideStart, capFits, frac, unmetered, evictionPlan, parseByteLimit, pendingCleanup },
+    _test: { decideStart, capFits, frac, unmetered, evictionPlan, parseByteLimit, pendingCleanup, drainCleanup, removePersisted },
   };
 })();
 

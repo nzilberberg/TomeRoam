@@ -118,19 +118,99 @@ test('init() sweeps an orphaned audio row (referenced by neither index)', async 
   await assertNoOrphans();
 });
 
-test('dropBuffered removes memory immediately; a failed IndexedDB delete is queued, not lost', async () => {
+test('dropBuffered removes memory immediately; a failed IndexedDB delete is queued PER-LAYER, not lost', async () => {
   const track = 'bufDropX';
   await Downloads.bufferTrack('bkBufDrop', track, new Blob([new Uint8Array(2000)]));
   assert.equal(Downloads.trackBuffered(track), true, 'track starts buffered');
 
   const realDel = Store.delAudio;
-  Store.delAudio = () => Promise.reject(new Error('idb boom'));   // force the persistence delete to reject
+  // The REAL Store contract: a failed delete RESOLVES false (a failed IDB
+  // transaction aborts — it does not reject). The earlier test stubbed a
+  // rejection the production Store can never produce, so it proved nothing.
+  Store.delAudio = () => Promise.resolve(false);
   try {
     const ok = Downloads.dropBuffered(track);
     assert.equal(ok, true, 'drop proceeds');
     assert.equal(Downloads.trackBuffered(track), false, 'in-memory buffer state removed synchronously');
-    await new Promise((r) => setTimeout(r, 0));   // let the owned .catch run (no unhandled rejection)
-    assert.ok(Downloads._test.pendingCleanup.has(String(track)), 'the failed delete is queued for retry, not silently dropped');
+    await new Promise((r) => setTimeout(r, 0));   // let the owned .then run
+    const layers = Downloads._test.pendingCleanup.get(String(track));
+    assert.ok(layers && layers.has('audio'), 'the failed AUDIO delete is queued for retry');
+    assert.ok(!layers.has('buf'), 'the buf delete succeeded, so only audio is owed (per-layer, not both)');
   } finally { Store.delAudio = realDel; }
   Downloads._test.pendingCleanup.clear();
+  await Store.delAudio(track);   // the forced-failed delete orphaned this blob — clean it so later assertNoOrphans holds
+});
+
+test('per-layer retry never deletes the audio blob owed only a buf-index delete (demote safety)', async () => {
+  // demoteBuffer deletes ONLY the buf index — the audio is now owned by the pinned
+  // download. A key-only retry would re-delete BOTH layers and destroy that audio.
+  const track = 'demoteX';
+  await Store.putAudio(track, 'bkDemote', new Blob([new Uint8Array(1500)]), 'download');
+  const realDelBuf = Store.delBuf;
+  Store.delBuf = () => Promise.resolve(false);   // the buf-index delete fails once
+  try {
+    await Downloads._test.removePersisted(track, ['buf']);
+    const layers = Downloads._test.pendingCleanup.get(String(track));
+    assert.ok(layers && layers.has('buf') && !layers.has('audio'), 'only the buf layer is owed — audio must survive');
+  } finally { Store.delBuf = realDelBuf; }
+  assert.ok((await Store.audioKeys()).includes(track), 'audio blob present before retry');
+  await Downloads._test.drainCleanup();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.ok((await Store.audioKeys()).includes(track), 'retry deleted only the buf index, never the audio');
+  Downloads._test.pendingCleanup.clear();
+  await Store.delAudio(track);   // leave the Store clean for later orphan checks
+});
+
+test('bufferTrack returns false and leaves NO trace when the audio write fails', async () => {
+  const realPut = Store.putAudio;
+  Store.putAudio = () => Promise.resolve(false);   // real contract: a failed write resolves false
+  try {
+    const ok = await Downloads.bufferTrack('bkFailA', 'failA', new Blob([new Uint8Array(3000)]));
+    assert.equal(ok, false, 'a failed persist must report false, not true');
+    assert.equal(Downloads.trackLocal('failA'), false, 'a failed persist must NOT mark the track local');
+  } finally { Store.putAudio = realPut; }
+  assert.ok(!(await Store.audioKeys()).includes('failA'), 'nothing was stored');
+  await assertNoOrphans();
+});
+
+test('bufferTrack rolls back the blob when the buf-index write fails (no dangling blob)', async () => {
+  const realPutBuf = Store.putBuf;
+  Store.putBuf = () => Promise.resolve(false);   // audio lands, index fails
+  try {
+    const ok = await Downloads.bufferTrack('bkFailB', 'failB', new Blob([new Uint8Array(3000)]));
+    assert.equal(ok, false, 'index-write failure reports false');
+    assert.equal(Downloads.trackBuffered('failB'), false, 'not marked buffered');
+  } finally { Store.putBuf = realPutBuf; }
+  // the rollback delAudio is awaited inside bufferTrack, so the blob is already gone
+  assert.ok(!(await Store.audioKeys()).includes('failB'), 'the unindexed blob was rolled back');
+  await assertNoOrphans();
+});
+
+test('a download that cannot persist ends in "error", never a false "done"', async () => {
+  const realPut = Store.putAudio;
+  Store.putAudio = () => Promise.resolve(false);   // every blob write fails
+  try {
+    Downloads.start('bkFailDL', book('FDL', [trk('fdl1', 1000)]));
+    await until(async () => Downloads.stateOf('bkFailDL').status === 'error');
+    assert.equal(Downloads.stateOf('bkFailDL').status, 'error', 'a book that could not be saved is an error, not done');
+    assert.equal(Downloads.trackDownloaded('fdl1'), false, 'the track is not marked downloaded');
+  } finally { Store.putAudio = realPut; }
+  await assertNoOrphans();
+});
+
+test('init invalidates a dl record whose audio blob is missing (index → no blob)', async () => {
+  await Store.putDl({ book: 'bkGhost', tracks: ['ghost1', 'ghost2'], size: 5000, ts: 1 });   // index references blobs that were never written
+  await Downloads.init({});
+  await until(async () => (await Store.getDl('bkGhost')) === undefined);
+  assert.equal(Downloads.isDownloaded('bkGhost'), false, 'a book with missing blobs is not "downloaded"');
+  assert.equal(Downloads.trackDownloaded('ghost1'), false, 'its tracks are not claimed offline');
+  await assertNoOrphans();
+});
+
+test('init drops a buf index whose audio blob is missing (dangling buffer index)', async () => {
+  await Store.putBuf({ track: 'danglB', book: 'bkDangl', size: 900, ts: 1 });   // buf index, no blob
+  await Downloads.init({});
+  await until(async () => (await Store.allBuf()).every((r) => String(r.track) !== 'danglB'));
+  assert.equal(Downloads.trackBuffered('danglB'), false, 'a dangling buffer index is not claimed local');
+  await assertNoOrphans();
 });

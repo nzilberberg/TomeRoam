@@ -51,6 +51,17 @@ test('replaceAll clears then repopulates a collection in one shot', async () => 
   assert.equal(await Store.count('authors'), 2, 'old rows were cleared, new ones written');
 });
 
+test('mutations report explicit success — put/del/clear resolve TRUE when they complete', async () => {
+  // The finding-#1 contract: a completed write resolves true (not the record key,
+  // not undefined), so persist callers can branch on it. Reads stay best-effort.
+  assert.equal(await Store.put('kv', { k: 'x', v: 1 }), true, 'a completed put resolves true');
+  assert.equal(await Store.del('kv', 'x'), true, 'a completed delete resolves true (even though the key is gone)');
+  assert.equal(await Store.del('kv', 'not-there'), true, 'deleting a missing key still completes → true');
+  assert.equal(await Store.putAudio('ct1', 'bk', new Blob([new Uint8Array(8)]), 'buffer'), true, 'putAudio reports success');
+  assert.equal(await Store.delAudio('ct1'), true, 'delAudio reports success');
+  assert.equal(await Store.clear('audio'), true, 'clear reports success');
+});
+
 test('audioKeys reflects stored blobs and powers orphan detection', async () => {
   const blob = new Blob([new Uint8Array(16)], { type: 'audio/mpeg' });
   await Store.putAudio('t1', 'bookA', blob, 'download');

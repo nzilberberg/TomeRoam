@@ -12,8 +12,17 @@
 // storage isn't evicted (see Store.persist()).
 //
 // Everything is best-effort: if IndexedDB is unavailable/blocked, every call
-// resolves to a harmless empty value so the app still runs (just without an
-// offline cache). NEVER throws into callers.
+// resolves to a harmless value so the app still runs (just without an offline
+// cache). NEVER throws into callers.
+//
+// READS resolve to an empty value on any failure (a miss is indistinguishable
+// from an error — fine for a cache). MUTATIONS (put/del/clear via `mutate`)
+// resolve an explicit boolean: `true` ONLY when the transaction actually
+// COMPLETED, `false` on unavailable-DB / transaction-create throw / error /
+// abort. This distinction is load-bearing for Downloads: a quota-exceeded write
+// ABORTS (resolving false) rather than rejecting, so callers that treat "didn't
+// throw" as success would mark audio durably-stored when nothing was written —
+// then discard the only copy. Persist callers MUST branch on the boolean.
 const Store = (() => {
   const DB = 'tomeroam';
   const VER = 3;   // v2: audio+dl (downloads). v3: buf (persistent buffer index)
@@ -94,12 +103,29 @@ const Store = (() => {
     }));
   }
 
+  // A MUTATION that reports whether it actually persisted. Resolves `true` only
+  // on transaction `oncomplete`; `false` on unavailable-DB, a transaction-create
+  // or operation throw (e.g. DataCloneError), `onerror`, or `onabort` (the
+  // quota-exceeded case). Unlike `tx`, the caller can trust `false` = nothing was
+  // written. Never rejects.
+  function mutate(store, fn) {
+    return open().then((db) => new Promise((resolve) => {
+      if (!db) return resolve(false);
+      let t;
+      try { t = db.transaction(store, 'readwrite'); } catch { return resolve(false); }
+      try { fn(t.objectStore(store)); } catch (e) { dbg('IDB', 'mutate fn threw ' + (e && e.message)); return resolve(false); }
+      t.oncomplete = () => resolve(true);
+      t.onerror = t.onabort = () => resolve(false);
+    }));
+  }
+
   // ---- generic accessors ----------------------------------------------------
+  // Reads use tx (best-effort, empty on failure). Writes use mutate (boolean).
   const get    = (store, key) => tx(store, 'readonly', (os) => os.get(key));
   const getAll = (store)      => tx(store, 'readonly', (os) => os.getAll()).then((r) => (Array.isArray(r) ? r : []));
-  const put    = (store, val) => tx(store, 'readwrite', (os) => os.put(val));
-  const del    = (store, key) => tx(store, 'readwrite', (os) => os.delete(key));
-  const clear  = (store)      => tx(store, 'readwrite', (os) => os.clear());
+  const put    = (store, val) => mutate(store, (os) => os.put(val));
+  const del    = (store, key) => mutate(store, (os) => os.delete(key));
+  const clear  = (store)      => mutate(store, (os) => os.clear());
   const count  = (store)      => tx(store, 'readonly', (os) => os.count()).then((r) => (typeof r === 'number' ? r : 0));
 
   // Bulk replace a keyed collection in one transaction (clear + put many).
