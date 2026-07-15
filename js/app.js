@@ -871,32 +871,9 @@
     playBookAt(book.ratingKey, book, track.ratingKey, ms);
   }
 
-  // ---- sign-in (separate-tab + poll; no redirect-back dependency) ----------
-  async function doSignIn() {
-    const btn = $('signinBtn');
-    const info = $('signinInfo');
-    const link = $('signinLink');
-    btn.disabled = true; btn.textContent = 'Contacting Plex…';
-    try {
-      info.textContent = 'Creating sign-in request…';
-      const { id, code, authUrl } = await Plex.startPin();
-      const w = window.open(authUrl, '_blank');
-      link.href = authUrl;
-      link.textContent = (w ? 'Approve in the Plex tab' : 'Tap to open Plex') + ` — code ${code}`;
-      link.classList.remove('hidden');
-      btn.textContent = 'Waiting for approval…';
-      await Plex.pollPin(id, {
-        tries: 90, intervalMs: 2000,           // ~3 min, room for 2FA
-        onTick: (n) => { info.textContent = `Approve in the Plex tab, then come back here. Waiting… (${n})`; },
-      });
-      link.classList.add('hidden'); info.textContent = 'Signed in! Loading…';
-      return enterApp();
-    } catch (e) {
-      btn.disabled = false; btn.textContent = 'Sign in with Plex';
-      info.textContent = ''; link.classList.add('hidden');
-      toast(e.message || 'Sign-in failed');
-    }
-  }
+  // ---- sign-in (js/signin-screen.js — SignInScreen) ------------------------
+  // The PIN flow + button/link/info lifecycle live in SignInScreen; app.js keeps
+  // show()/the view-switch and injects enterApp + toast at init (see bind()).
 
   // ---- home (Continue Listening + Recently Added carousels) ----------------
   async function enterApp() {
@@ -1932,7 +1909,7 @@
     localStorage.removeItem(LAST);
     Presence.setActive(false); Progress.setActive(false); stopRenderTick();
     if (window.Downloads && Downloads.suspend) Downloads.suspend();   // the in-flight download's token is now invalid
-    $('signinBtn').disabled = false; $('signinBtn').textContent = 'Sign in with Plex';
+    SignInScreen.reset();
   }
 
   // ---- Now-Playing screen --------------------------------------------------
@@ -2375,7 +2352,7 @@
 
   // ---- wire up -------------------------------------------------------------
   function bind() {
-    $('signinBtn').addEventListener('click', doSignIn);
+    // The sign-in button is wired by SignInScreen.init (see below).
     // Full-library browse: bottom nav + the Browse module (js/browse.js).
     Browse.init({
       mount: $('browse'), fmt,
@@ -2725,7 +2702,8 @@
       });
       DownloadsScreen.injectOptionRow();
     }
-    // Options controls are independent of Downloads — wire them unconditionally.
+    // Screens are independent of Downloads — wire them unconditionally.
+    SignInScreen.init({ byId: $, Plex, enterApp, toast });
     OptionsScreen.init({ byId: $, Settings, Presence, updateSkipLabels, pumpBank, onSignOut: doSignOut });
     if (Plex.isSignedIn()) return enterApp();
     show('signin');
