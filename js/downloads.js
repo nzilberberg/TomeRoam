@@ -433,19 +433,28 @@ const Downloads = (() => {
       const tracks = (rec && rec.tracks) || stateOf(k).trackRks || [];
       for (const tr of tracks) {
         const t = String(tr);
-        // ALWAYS un-pin the download first, so a track can never stay "downloaded"
-        // (blue) after a Remove. A track can be in BOTH sets when banking bufferTrack'd
-        // it while this same book was force-downloading (they raced) — the old
-        // `continue` skipped the un-pin and left those tracks stuck blue.
-        dlTracks.delete(t);
-        if (bufTracks.has(t)) continue;               // buffer owns the bytes → keep the blob (now shows gray)
+        dlTracks.delete(t);                            // un-pin: no longer "downloaded" (blue)
+        if (bufTracks.has(t)) continue;                // already an evictable buffer copy → leave it gray
         const r = await Store.getAudioRec(t);
-        if (!r) continue;
+        if (!r || !r.blob) continue;                   // nothing stored for this track (partial) → nothing to convert
+        // CONVERT the pinned download to an evictable BUFFER copy — REUSE the on-disk
+        // blob (no re-fetch, no rewrite): just move the bookkeeping into the buffer
+        // tier so it shows gray. Deleting the blob here made banking immediately
+        // re-download the very book you just removed (the bars re-filling); reusing
+        // it flips blue→gray instantly and banking finds it already local.
+        bufTracks.add(t); bufMeta.set(t, { size: r.size || 0, ts: Date.now() });
+        bufBytes += r.size || 0;
+        try { await Store.putBuf({ track: t, book: k, size: r.size || 0, ts: Date.now() }); } catch {}
         if (!rec) usedBytes = Math.max(0, usedBytes - (r.size || 0));   // partials were counted as they landed
-        await Store.delAudio(t); swEvict(t);
       }
       if (rec && rec.size) usedBytes = Math.max(0, usedBytes - rec.size);
       await Store.delDl(k);
+      // The just-converted book may exceed the buffer budget — trim it oldest-first
+      // (keeping the playing track + look-ahead window), which frees the overflow.
+      // With banking off, the protected window is minimal so this frees almost all
+      // of it (≈ the old delete); with banking on it keeps the active buffer window.
+      await evictBuffer();
+      notify(k);
     } catch (e) { dbg('DL', 'remove err ' + (e && e.message)); }
     setState(k, { status: 'none', done: 0, total: 0, bytes: 0, size: 0, trackRks: null });
     dbg('DL', `removed book=${k}`);

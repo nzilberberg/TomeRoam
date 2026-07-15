@@ -66,16 +66,20 @@ test('a full download builds a correct dl index, correct accounting, and no orph
   await assertNoOrphans();
 });
 
-test('remove() deletes the blobs + index and restores the accounting', async () => {
+test('remove() converts the download to evictable buffer (reuses blobs), drops the dl index + accounting', async () => {
   const before = (await Downloads.storageInfo()).used;
   await Downloads.remove('bkA');
   assert.equal(Downloads.stateOf('bkA').status, 'none');
-  assert.equal(await Store.getDl('bkA'), undefined, 'index gone');
-  assert.equal(await Store.get('audio', 'a1'), undefined, 'blob gone');
+  assert.equal(await Store.getDl('bkA'), undefined, 'dl index gone');
+  // The blob is REUSED as an evictable buffer copy (no delete, no re-fetch) —
+  // deleting it made banking immediately re-download the just-removed book.
+  assert.ok(await Store.get('audio', 'a1'), 'blob kept (reused as buffer)');
+  assert.equal(Downloads.trackDownloaded('a1'), false, 'no longer a pinned download (not blue)');
+  assert.equal(Downloads.trackBuffered('a1'), true, 'now an evictable buffer copy (gray)');
   const after = (await Downloads.storageInfo()).used;
-  assert.equal(after, before - 3000, 'usedBytes dropped by exactly the removed size');
+  assert.equal(after, before - 3000, 'download usedBytes dropped by exactly the removed size');
   assert.equal(after, await sumDlSizes());
-  await assertNoOrphans();
+  await assertNoOrphans();   // blob is now buf-referenced → still no orphans
 });
 
 test('an aborted download ends in status "none", never "error" (AbortError mislabel)', async () => {
