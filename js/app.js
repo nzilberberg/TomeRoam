@@ -9,15 +9,13 @@
   let speedCtl = null;   // transport playback-speed control (see js/speed.js)
   const speedCtls = [];  // all mounted speed controls (transport + now-playing), kept in sync
   const LAST = 'pb_lastPlayed';   // locally-remembered last track (survives reloads)
-  // OUR OWN per-book progress {book: {track, pos(ms), ts}}. Plex hides audiobook
-  // viewOffset over HTTP, so we can't read our just-played position back from the
-  // server — without this, a Continue tile reverts to the janitor's last-synced
-  // "server time" the moment we switch away. bestSource() consults this so a tile
-  // shows where WE actually got to, immediately and across book switches.
-  const MYPROG = 'pb_myProgress';
-  let myProgress = {};
-  try { myProgress = JSON.parse(localStorage.getItem(MYPROG) || '{}') || {}; } catch { myProgress = {}; }
-  // Per-chapter + book progress now lives in the durable, cross-device Progress
+  // OUR OWN last-played spot per book is now owned by Progress (mine.books[book].bk,
+  // read via Progress.myBookRecord). Plex hides audiobook viewOffset over HTTP, so we
+  // can't read our just-played position back from the server; bestSource() consults
+  // Progress.myBookRecord so a Continue tile shows where WE actually got to. (This
+  // used to be a parallel `myProgress` map here — a second local progress store —
+  // removed so there is ONE local repository; see progress.js myBookRecord.)
+  // Per-chapter + book progress lives in the durable, cross-device Progress
   // layer (js/progress.js) — recorded here, merged LWW across peers, read back for
   // the bars/resume. It persists its own localStorage cache, so it survives offline.
   // Settings live in the settings repository (js/settings.js, review #13); these
@@ -741,7 +739,7 @@
     ];
     const pr = Progress.bookRecord(book);   // merged cross-device book-level record (LWW winner)
     if (pr) cands.push({ track: pr.t, pos: pr.o || 0, ts: pr.ts || 0 });
-    const mine = myProgress[book];   // our own last spot on THIS device (Plex won't echo it back)
+    const mine = Progress.myBookRecord(book);   // our own last spot on THIS device (Plex won't echo it back)
     if (mine) cands.push({ track: mine.track, pos: mine.pos || 0, ts: mine.ts || 0 });
     const p = peerFor(book);         // a live peer's pos is EXTRAPOLATED to now
     if (p) cands.push({ track: p.track, pos: Presence.livePos(p), ts: recency(p) });
@@ -1098,10 +1096,10 @@
     recordProgress();
   }
 
-  // Bank OUR current spot for THIS book into the local per-book map so a tile / a
-  // later resume reflects where we actually are (see MYPROG note). Called on the
-  // same triggers as saveLastPlayed AND right before we switch books, so switching
-  // away never loses the outgoing book's progress.
+  // Record OUR current spot for THIS book into the durable Progress repository so a
+  // tile / a later resume reflects where we actually are (bestSource reads it via
+  // Progress.myBookRecord). Called on the same triggers as saveLastPlayed AND right
+  // before we switch books, so switching away never loses the outgoing book's progress.
   // Whole-book time for the current ctx, in SECONDS: total duration, cumulative
   // position at the playhead, and remaining. One source of truth for the arithmetic,
   // shared by Now-Playing (npBookRem) and the book-level progress record.
@@ -1123,8 +1121,6 @@
       rollGuard = null;                                  // grace passed → record normally (supersedes)
     }
     const posMs = audio.currentTime * 1000;
-    myProgress[ctx.book] = { track: t.ratingKey, pos: posMs, ts: Plex.serverNow() };
-    try { localStorage.setItem(MYPROG, JSON.stringify(myProgress)); } catch { /* best effort */ }
     const durMs = ((audio.duration && isFinite(audio.duration)) ? audio.duration * 1000 : 0) || t.durationMs || 0;
     // Durable + cross-device: the per-chapter record (track bars + chapter resume)
     // and an INDEPENDENT book-level record (tile bar + book resume) via bookTimes.
@@ -1671,9 +1667,7 @@
     const rks = tracks.map((t) => t.ratingKey).filter(Boolean);
     try { await Plex.resetBookProgress(book, rks); }
     catch { return toast('Reset failed'); }
-    delete myProgress[book];                                            // our own last spot on this device
-    try { localStorage.setItem(MYPROG, JSON.stringify(myProgress)); } catch {}
-    Progress.resetBook(book);                                           // durable tombstone → wins the merge, suppresses stale peer records
+    Progress.resetBook(book);                                           // durable tombstone → wins the merge, suppresses stale peer records (also clears our own last spot / myBookRecord)
     if (!ctx || String(ctx.book) === String(book)) Presence.resetClaim(book, rks[0] || null);   // live: pause a peer playing it (don't clobber a different active book)
     delete bookEntries[book];                                           // cold resume the tile shows
     try { const last = JSON.parse(localStorage.getItem(LAST) || 'null'); if (last && String(last.book) === String(book)) localStorage.removeItem(LAST); } catch {}

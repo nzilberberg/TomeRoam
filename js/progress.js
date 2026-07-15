@@ -223,7 +223,15 @@ const Progress = (() => {
   }
 
   // ---- read accessors (app.js display) --------------------------------------
-  function bookRecord(book) { const b = merged.books[book]; return b && b.bk ? b.bk : null; }     // {t,o,cum,tot,ts,by,name}
+  function bookRecord(book) { const b = merged.books[book]; return b && b.bk ? b.bk : null; }     // {t,o,cum,tot,ts,by,name} (merged LWW)
+  // This device's OWN last spot for a book — the resume candidate that used to be a
+  // parallel `myProgress` map in app.js (a second local progress store). It's just a
+  // view over `mine` (already synchronous, persisted via pb_progMine, same
+  // server-clock ts as the old map), so Progress is now the single local repository.
+  function myBookRecord(book) {
+    const b = mine.books[book];
+    return (b && b.bk) ? { track: b.bk.t, pos: b.bk.o || 0, ts: b.bk.ts || 0 } : null;
+  }
   function trackRecord(book, track) { const b = merged.books[book]; return b && b.tr[track] ? b.tr[track] : null; }  // {o,d,ts,by,name}
   function trackPct(book, track, durMs) {
     const r = trackRecord(book, track); if (!r) return null;
@@ -247,7 +255,7 @@ const Progress = (() => {
   return {
     init, hydrate, setSeed, setActive, flush, refresh,
     recordTrack, recordBook, clearBook, resetBook,
-    bookRecord, trackRecord, trackPct, isMine, myId,
+    bookRecord, myBookRecord, trackRecord, trackPct, isMine, myId,
     // Test-only hook (mirrors Plex._test): reach the pure merge/serialize/trim
     // internals + closure state so test/progress.test.js can exercise the LWW
     // logic without a network or the poll() timer. Not used by the app.

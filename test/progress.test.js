@@ -272,3 +272,19 @@ test('serialize keeps the summary under MAX_JSON, dropping oldest chapter maps b
   const oldest = parsed.books['book0'];
   assert.ok(!oldest || !oldest.tr, 'oldest book lost its chapter map first');
 });
+
+// ---- myBookRecord: this device's OWN last spot (the app.js `myProgress` migration)
+test('myBookRecord returns our own recorded book spot {track,pos,ts}, then null after reset', () => {
+  reset(1_700_000_500_000);
+  assert.equal(Progress.myBookRecord('bkOwn'), null, 'no record yet');
+  Progress.recordBook('bkOwn', { t: 'trZ', o: 42000, cum: 42000, tot: 600000 });
+  const mine = Progress.myBookRecord('bkOwn');
+  assert.deepEqual(mine, { track: 'trZ', pos: 42000, ts: NOW }, 'own spot on the server clock (== old myProgress shape)');
+  // It is OUR OWN record, independent of the merged LWW view (a fresher peer does not
+  // change what myBookRecord returns for this device).
+  Progress._test.setPeers([{ v: 1, id: 'peer-1', name: 'Phone', books: { bkOwn: { bk: { t: 'trPeer', o: 99000, ts: NOW + 10000 } } } }]);
+  Progress._test.rebuild();
+  assert.deepEqual(Progress.myBookRecord('bkOwn'), { track: 'trZ', pos: 42000, ts: NOW }, 'still OUR spot, not the peer merge');
+  Progress.resetBook('bkOwn');
+  assert.equal(Progress.myBookRecord('bkOwn'), null, 'reset clears our own last spot');
+});
