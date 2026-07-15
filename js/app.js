@@ -642,6 +642,7 @@
     // when it's a NEW screen (forward). On BACK the destination is the very screen the
     // overlay/parent was opened over, so it's already there — no re-render (no flash).
     function showAppView(desc, render) {
+      $('options').classList.add('hidden');   // options is an overlay — never leave it lurking over a base view (it would show THROUGH an NP→chapter-list swipe when NP was opened from Options)
       if (desc.v === 'home') { $('home').classList.remove('parked'); $('browse').classList.add('hidden'); }
       else { $('browse').classList.remove('hidden'); $('home').classList.add('parked'); if (render) Browse.render(desc); }
     }

@@ -57,7 +57,9 @@ const DownloadsScreen = (() => {
     el.querySelector('#dlMax').value = String(dl.maxBytes());
     const bufSel = el.querySelector('#dlBufMax');
     bufSel.value = String(dl.bufMaxBytes());
-    bufSel.disabled = !(window.Settings && (Settings.bufferCurrent || Settings.bufferAhead));   // no banking enabled → buffer size is moot
+    const bufMoot = !(window.Settings && (Settings.bufferCurrent || Settings.bufferAhead));   // no banking enabled → buffer size is moot
+    bufSel.disabled = bufMoot;
+    bufSel.closest('.opt-row').classList.toggle('opt-disabled', bufMoot);   // dim the whole row so "disabled" is visible
     renderList(); renderUsage();
     if (!unsub) unsub = dl.subscribe(() => { if (el && el.classList.contains('open')) { renderList(); renderUsage(); } });
   }

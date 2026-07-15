@@ -366,6 +366,8 @@ body.has-player #options { padding-bottom: 130px; }   /* clear the transport */
 
 /* Options screen */
 .opt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 4px; border-bottom: 1px solid #ffffff12; }
+.opt-row.opt-disabled { opacity: .45; }   /* whole row dims when its control is disabled (e.g. Max buffer space when both banking toggles are off) */
+.opt-ctl select:disabled { cursor: not-allowed; }
 .opt-label { font-size: .95rem; }
 .opt-ctl { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .85rem; }
 .opt-ctl select { background: var(--card2); color: var(--text); border: 1px solid #ffffff22; border-radius: 8px; padding: 6px 8px; font-size: .9rem; }
