@@ -30,6 +30,7 @@ const SyncQueue = (() => {
     nearZeroProgressThresholdMs: 5 * 1000, // <=5s counts as "near zero" — never auto-written
     completionThresholdMs:    30 * 1000,   // within 30s of the end = effectively complete
     conflictTtlMs: 7 * 24 * 3600 * 1000,   // unresolved conflict rows expire after a week
+    maxWriteAttempts: 6,                    // a write that fails this many times is poison (e.g. Plex 400s a bad ratingKey/param) — give up so it can't pin the pending counter forever
   };
 
   const hasWin = typeof window !== 'undefined';
@@ -170,6 +171,17 @@ const SyncQueue = (() => {
         if (it.conflictStatus === 'conflict' && it.conflictAt && now() - it.conflictAt > T.conflictTtlMs) {
           await Store.del(STORE, it.id); res.dropped++;
           dbg('SYNCQ', `conflict expired book=${it.bookKey}`);
+          continue;
+        }
+        // A write that keeps FAILING (Plex 400s a bad ratingKey/param, say) has no
+        // other exit: decide() keeps returning 'write', the write keeps throwing,
+        // and the row — plus the "Syncing N changes…" banner — would live forever,
+        // surviving restarts (an explicit near-zero reset that Plex rejects hit this).
+        // Give up after a bounded number of attempts; the durable Progress layer is
+        // the real source of truth, so a lost best-effort Plex timeline write is fine.
+        if ((it.attemptCount || 0) >= T.maxWriteAttempts) {
+          await Store.del(STORE, it.id); res.dropped++;
+          dbg('SYNCQ', `gave up book=${it.bookKey} rk=${it.ratingKey} after ${it.attemptCount} attempts (${it.lastError || 'write failed'})`);
           continue;
         }
         const verdict = decide(it);

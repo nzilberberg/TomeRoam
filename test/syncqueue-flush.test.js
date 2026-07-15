@@ -91,3 +91,20 @@ test('a retry after a failure succeeds and clears the item (backoff path)', asyn
   assert.equal(res.written, 1);
   assert.equal(await SyncQueue.count(), 0);
 });
+
+test('a write that keeps failing is GIVEN UP after maxWriteAttempts — no immortal "syncing" item', async () => {
+  // A poison write (e.g. Plex 400s a bad ratingKey — an explicit near-zero reset
+  // hit this) used to retry forever, pinning the pending counter across restarts.
+  writeResult = false;
+  const cap = SyncQueue.cfg().maxWriteAttempts;
+  await SyncQueue.enqueue(progressItem());
+  const [it] = await SyncQueue.all();            // seed it already at the attempt cap
+  it.attemptCount = cap; it.lastError = 'HTTP 400';
+  await store.put('sync', it);
+  assert.equal(await SyncQueue.count(), 1);
+
+  const res = await SyncQueue.flush();
+  assert.equal(res.dropped, 1, 'the poison item was dropped');
+  assert.equal(res.written, 0, 'and never written');
+  assert.equal(await SyncQueue.count(), 0, 'the pending counter is no longer pinned');
+});
