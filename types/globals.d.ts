@@ -28,6 +28,7 @@ interface Window {
   Browse: any;
   Downloads: any;
   DownloadsScreen: any;
+  OptionsScreen: any;
   ArtLoader: any;
   HandoffController: any;
   LogPipe: any;
@@ -57,6 +58,7 @@ declare var Warmer: any;
 declare var Browse: any;
 declare var Downloads: any;
 declare var DownloadsScreen: any;
+declare var OptionsScreen: any;
 declare var ArtLoader: any;
 declare var HandoffController: any;
 declare var LogPipe: any;

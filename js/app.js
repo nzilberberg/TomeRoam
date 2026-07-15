@@ -474,7 +474,7 @@
     if (!desc || desc.v === 'home') { setView('home'); setNavActive('home'); if (resetScroll) window.scrollTo(0, 1); return; }
     // Options is an additive overlay (like NP): no document scroll changes —
     // the page underneath stays exactly as it was. Only its own panel resets.
-    if (desc.v === 'options') { setView('options'); setNavActive('options'); if (render) renderOptions(); if (resetScroll) $('options').scrollTop = 0; return; }
+    if (desc.v === 'options') { setView('options'); setNavActive('options'); if (render) OptionsScreen.render(); if (resetScroll) $('options').scrollTop = 0; return; }
     // NP: no scroll reset — the page underneath must stay exactly as it was.
     if (desc.v === 'nowplaying') { setView('nowplaying'); if (render) renderNowPlaying(); return; }
     setView('browse');
@@ -696,7 +696,7 @@
       if (toOv) {
         const el = overlayEl(toV);
         if (toV === 'nowplaying') { renderNowPlaying(); document.body.classList.remove('np-locked'); }
-        else renderOptions();
+        else OptionsScreen.render();
         el.classList.remove('hidden');
         incoming = { el, base: off };
         if (toV === 'nowplaying') pill = { el: npPillClone(), base: off };
@@ -995,7 +995,7 @@
       Progress.init({ onMerged: () => { if (!document.hidden) renderPresence(); } });
     }
     Progress.setActive(true);
-    renderDeviceName();
+    OptionsScreen.renderDeviceName();
     startRenderTick();
   }
 
@@ -1372,15 +1372,8 @@
     }
   }
 
-  function renderDeviceName() {
-    const el = $('deviceName');
-    if (!el) return;
-    el.textContent = 'This device: ' + Presence.name() + '  (rename)';
-    el.onclick = () => {
-      const n = prompt('Name this device (shows on your other devices):', Presence.name());
-      if (n) { Presence.setName(n); renderDeviceName(); }
-    };
-  }
+  // renderDeviceName + the Options render/bindings moved to js/options-screen.js
+  // (OptionsScreen, review #20). app.js calls OptionsScreen.renderDeviceName().
 
   // ---- playback ------------------------------------------------------------
   // Track list for a book WITHOUT a network round-trip when we already have it —
@@ -1929,27 +1922,17 @@
     if (npOpen) buildNpControls();
   }
 
-  // ---- Options screen ------------------------------------------------------
-  function renderOptions() {
-    renderDeviceName();
-    const fill = (sel, cur, opts, label) => {
-      sel.innerHTML = '';
-      opts.forEach((v) => {
-        const o = document.createElement('option');
-        o.value = v; o.textContent = label ? label(v) : v; if (v === cur) o.selected = true;
-        sel.appendChild(o);
-      });
-    };
-    const SKIPS = [5, 10, 15, 20, 30, 45, 60];
-    fill($('optSkipBack'), getSkipBack(), SKIPS);
-    fill($('optSkipFwd'), getSkipFwd(), SKIPS);
-    // Banking toggles (Model B): whole-bank the current chapter and/or prefetch
-    // ahead. The shared buffer-space budget they draw from is on the Downloads screen.
-    $('optBufCurrent').setAttribute('aria-checked', Settings.bufferCurrent ? 'true' : 'false');
-    $('optBufAhead').setAttribute('aria-checked', Settings.bufferAhead ? 'true' : 'false');
-    $('optFreshStart').setAttribute('aria-checked', freshStartOn() ? 'true' : 'false');
-    $('optAutoUpdate').setAttribute('aria-checked', autoUpdateOn() ? 'true' : 'false');
-    fill($('optResetGrace'), resetGraceSec(), [0, 5, 10, 20, 30], (v) => (v === 0 ? 'Now' : v));
+  // ---- Options screen (js/options-screen.js — OptionsScreen) ----------------
+  // renderOptions/renderDeviceName + the control bindings live in OptionsScreen;
+  // app.js keeps the shared bits it injects: updateSkipLabels (transport bar),
+  // pumpBank (banking), and doSignOut (the app-lifecycle teardown below).
+  function doSignOut() {
+    Plex.signOut(); audio.pause(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');
+    $('navbar').classList.add('hidden'); Browse.reset(); setView('home'); setNavActive('home');
+    localStorage.removeItem(LAST);
+    Presence.setActive(false); Progress.setActive(false); stopRenderTick();
+    if (window.Downloads && Downloads.suspend) Downloads.suspend();   // the in-flight download's token is now invalid
+    $('signinBtn').disabled = false; $('signinBtn').textContent = 'Sign in with Plex';
   }
 
   // ---- Now-Playing screen --------------------------------------------------
@@ -2474,29 +2457,8 @@
       else toast('AirPlay needs Safari');
     });
     // Options: skip-second settings.
-    $('optSkipBack').addEventListener('change', (e) => { Settings.setSkipBackSec(e.target.value); updateSkipLabels(); });
-    $('optSkipFwd').addEventListener('change', (e) => { Settings.setSkipFwdSec(e.target.value); updateSkipLabels(); });
-    $('optBufCurrent').addEventListener('click', () => { const on = Settings.bufferCurrent; Settings.setBufferCurrent(!on); $('optBufCurrent').setAttribute('aria-checked', on ? 'false' : 'true'); pumpBank(); });
-    $('optBufAhead').addEventListener('click', () => { const on = Settings.bufferAhead; Settings.setBufferAhead(!on); $('optBufAhead').setAttribute('aria-checked', on ? 'false' : 'true'); pumpBank(); });
-    // Options: roll-over behaviour (see rollToTrack / recordProgress grace guard).
-    $('optFreshStart').addEventListener('click', () => { const on = freshStartOn(); Settings.setFreshStart(!on); $('optFreshStart').setAttribute('aria-checked', on ? 'false' : 'true'); });
-    $('optResetGrace').addEventListener('change', (e) => Settings.setResetGraceSec(e.target.value));
-    // Auto update on launch (APK): also push the new value into the native boot pref.
-    $('optAutoUpdate').addEventListener('click', () => {
-      const on = autoUpdateOn();
-      Settings.setAutoUpdate(!on);
-      $('optAutoUpdate').setAttribute('aria-checked', on ? 'false' : 'true');
-      try { if (window.TomeRoamNative && TomeRoamNative.setAutoUpdate) TomeRoamNative.setAutoUpdate(!on); } catch {}
-    });
-    $('signout').addEventListener('click', () => {
-      if (!confirm('Sign out of Plex?')) return;
-      Plex.signOut(); audio.pause(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');
-      $('navbar').classList.add('hidden'); Browse.reset(); setView('home'); setNavActive('home');
-      localStorage.removeItem(LAST);
-      Presence.setActive(false); Progress.setActive(false); stopRenderTick();
-      if (window.Downloads && Downloads.suspend) Downloads.suspend();   // the in-flight download's token is now invalid
-      $('signinBtn').disabled = false; $('signinBtn').textContent = 'Sign in with Plex';
-    });
+    // Options-screen controls (skip / buffer toggles / fresh-start / reset-grace /
+    // auto-update / sign-out) are wired by OptionsScreen.init → bindControls().
     bindScrub($('pSeek'));
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { writeProgress(audio.paused ? 'paused' : 'playing'); Presence.setActive(false); Progress.flush(); Progress.setActive(false); stopRenderTick(); }
@@ -2763,6 +2725,8 @@
       });
       DownloadsScreen.injectOptionRow();
     }
+    // Options controls are independent of Downloads — wire them unconditionally.
+    OptionsScreen.init({ byId: $, Settings, Presence, updateSkipLabels, pumpBank, onSignOut: doSignOut });
     if (Plex.isSignedIn()) return enterApp();
     show('signin');
   }
