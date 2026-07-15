@@ -1848,24 +1848,17 @@
   }
 
   // ---- Now-Playing screen --------------------------------------------------
-  let npSpeedCtl = null;
-  function renderNowPlaying() {
-    if (!ctx) { goBack(); return; }
-    const t = ctx.tracks[ctx.idx];
-    setArt($('npArt'), ctx.coverUrl);
-    $('npTitle').textContent = ctx.album.title || 'Book';
-    $('npAuthor').textContent = ctx.album.parentTitle || '';
-    $('npTrack').textContent = t.title || ('Chapter ' + (ctx.idx + 1));
-    updateNpDl();
-    buildNpControls();
-    if (!npSpeedCtl) {
-      npSpeedCtl = SpeedControl.create({ initial: audio.playbackRate || 1, onChange: onSpeedChange });
-      $('npSpeedMount').appendChild(npSpeedCtl.el);
-      speedCtls.push(npSpeedCtl);
-    }
-    npSpeedCtl.setRate(audio.playbackRate || 1, true);
-    updateNowPlaying();
-  }
+  // ---- Now-Playing screen (js/nowplaying-screen.js — NowPlayingScreen) ------
+  // The full-screen player owns its render + live seek/times tick + control row +
+  // speed control + download button. app.js keeps hoisted delegators (call sites —
+  // applyScreen, the swipe, the timeupdate tick — precede the module wiring) and
+  // injects the "transport API" it shares with the mini bar. skipSvg/playPauseSvg
+  // (below) stay here: the mini transport uses them too.
+  function renderNowPlaying() { return NowPlayingScreen.render(); }
+  function updateNowPlaying() { return NowPlayingScreen.update(); }
+  function updateNpPlayIcon() { return NowPlayingScreen.updatePlayIcon(); }
+  function buildNpControls() { return NowPlayingScreen.buildControls(); }
+  function updateNpDl() { return NowPlayingScreen.updateDl(); }
   // Skip icon = circular arrow (S1) with the second-count inside; currentColor.
   function skipSvg(dir, n) {
     // back = CCW, fwd = CW. Arrowhead sits at the top with its BACK (the vertical
@@ -1879,42 +1872,6 @@
     return paused
       ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
-  }
-  function buildNpControls() {
-    const c = $('npControls');
-    c.innerHTML = `
-      <button id="npPrev" class="np-rnd" aria-label="Previous track"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
-      <button id="npBack" class="np-skip" aria-label="Skip back">${skipSvg('back', getSkipBack())}</button>
-      <button id="npPlay" class="np-play" aria-label="Play/Pause"></button>
-      <button id="npFwd" class="np-skip" aria-label="Skip forward">${skipSvg('fwd', getSkipFwd())}</button>
-      <button id="npNext" class="np-rnd" aria-label="Next track"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>`;
-    $('npPrev').onclick = prevTrack;
-    $('npBack').onclick = () => skipBy(-getSkipBack());
-    $('npPlay').onclick = () => (audio.paused ? resumePlay() : audio.pause());
-    $('npFwd').onclick = () => skipBy(getSkipFwd());
-    $('npNext').onclick = nextTrack;
-    updateNpPlayIcon();
-  }
-  function updateNpPlayIcon() {
-    const b = $('npPlay');
-    if (!b) return;
-    b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
-    b.innerHTML = playPauseSvg(audio.paused);
-  }
-  function updateNowPlaying() {
-    if (!ctx) return;
-    const t = ctx.tracks[ctx.idx];
-    const cur = audio.currentTime || (curLoad && curLoad.seekSec) || 0;   // known spot during the load window (see updateSeekUI)
-    const dur = audio.duration || (t.durationMs || 0) / 1000;
-    // INTENDED speed, not audio.playbackRate — the element's rate resets to 1 on
-    // track-load until loadedmetadata restores it, which flashed the NP remaining
-    // 1x->Nx on launch (same bug spd() fixed for the tiles in build .51).
-    const speed = spd();
-    paintSeek($('npSeek'), dur ? (cur / dur) * 100 : 0);
-    $('npCur').textContent = fmt(cur);
-    $('npTrkRem').textContent = '-' + fmt(Math.max(0, dur - cur) / speed);   // scaled for speed
-    $('npBookRem').textContent = '-' + fmt(bookTimes().remain / speed);      // whole-book remaining (shared arithmetic)
-    updateNpPlayIcon();
   }
 
   // ---- track-info bottom sheet ---------------------------------------------
@@ -2158,13 +2115,6 @@
     else if (st === 'downloading' || st === 'queued') Downloads.remove(book);   // cancel
     else startBookDownload(book, title);
   }
-  function updateNpDl() {
-    const btn = $('npDl'); if (!btn) return;
-    if (!ctx || !window.Downloads || !Downloads.available()) { btn.classList.add('hidden'); return; }
-    btn.classList.remove('hidden');
-    applyDlBtn(btn, ctx.book);
-  }
-
   // Update every on-screen indicator for a book (or all, if book is null).
   function refreshDlUi(book) {
     const sel = book ? `.tile[data-book="${book}"], .book[data-book="${book}"]` : '.tile[data-book], .book[data-book]';
@@ -2189,21 +2139,6 @@
   // rebuild resets the carousel's scroll + churns its <img>s, so only rebuild
   // when the LIST actually changed.
   function renderDownloadedCarousel() { return HomeScreen.renderDownloaded(); }
-
-  // NP art button: tap acts contextually; long-press opens the shared book menu.
-  function bindNpDownload() {
-    const btn = $('npDl'); if (!btn) return;
-    let lpTimer = null, lp = false;
-    const startLp = () => { lp = false; clearTimeout(lpTimer); lpTimer = setTimeout(() => { lp = true; if (ctx) openBookMenu(ctx.book, ctx.album.title); }, 500); };
-    const cancelLp = () => clearTimeout(lpTimer);
-    btn.addEventListener('pointerdown', startLp);
-    btn.addEventListener('pointerup', cancelLp);
-    btn.addEventListener('pointerleave', cancelLp);
-    btn.addEventListener('click', () => {
-      if (lp) { lp = false; return; }
-      if (ctx) dlBtnAction(ctx.book, ctx.album.title);
-    });
-  }
 
   function openBookForEl(el) {
     if (!el) return;
@@ -2338,7 +2273,7 @@
       if (npEl.scrollHeight <= npEl.clientHeight + 1 && !e.target.closest('input')) e.preventDefault();
     }, { passive: false });
     bindScrub($('npSeek'));
-    bindNpDownload();
+    // #npDl is bound by NowPlayingScreen.init (self-binds, like the other screens).
     $('npInfo').addEventListener('click', openInfoSheet);
     $('npSleep').addEventListener('click', () => toast('Sleep timer — coming soon'));
     $('npMarks').addEventListener('click', () => toast('Bookmarks — coming soon'));
@@ -2638,6 +2573,12 @@
     }
     // Screens are independent of Downloads — wire them unconditionally.
     HomeScreen.init({ byId: $, renderTile, renderPresence, status, bookEntries });
+    NowPlayingScreen.init({
+      byId: $, getCtx: () => ctx, getCurLoad: () => curLoad, audio,
+      onSpeedChange, speedCtls, spd, bookTimes, fmt, setArt, paintSeek, playPauseSvg, skipSvg,
+      getSkipBack, getSkipFwd, prevTrack, nextTrack, skipBy, resumePlay, goBack,
+      applyDlBtn, dlBtnAction, openBookMenu,
+    });
     SignInScreen.init({ byId: $, Plex, enterApp, toast });
     OptionsScreen.init({ byId: $, Settings, Presence, updateSkipLabels, pumpBank, onSignOut: doSignOut });
     if (Plex.isSignedIn()) return enterApp();
