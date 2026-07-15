@@ -34,341 +34,25 @@
   let loadRetryTimer = null;
   const MAX_LOAD_RETRY = 4;
 
-  // ---- track banking + buffered meter --------------------------------------
-  // While playing we download whole chapters in the background so a chapter
-  // boundary — or a mid-chapter connection drop — plays from a local copy instead
-  // of re-buffering from zero. Two independent toggles gate it (Model B, see
-  // Settings.bufferCurrent / bufferAhead below): whole-bank the CURRENT chapter
-  // (its byte-progress paints the light-blue seek meter; recovers instantly on a
-  // drop — startTrack prefers it), and/or prefetch as many UPCOMING chapters as
-  // fit the shared buffer-space budget (Downloads.bufMaxBytes). Downloads run ONE
-  // AT A TIME (current first). Best-effort: playback never depends on it; a
-  // CORS/network failure just leaves the meter unfilled.
-  //   NOTE: this runs alongside the audio element's own stream, so it briefly
-  //   double-downloads over a slow/metered link. Fine on the home LAN; gating by
-  //   connection type belongs with the (separate) bandwidth work.
-  // MEMORY SAFETY (iOS): the OLD banking held whole files as RAM object URLs,
-  // which OOM-crashed iOS Safari ("a problem repeatedly occurred") — a jetsam
-  // kill + reload loop. Now banked blobs PERSIST to IndexedDB and the RAM copy is
-  // dropped once the SW can serve them (bankOne), so live RAM stays ~32 MB
-  // (fetchAudioBlob coalesces) regardless of file size — the budget is DISK, not
-  // RAM. A RAM copy is retained only on the no-SW fallback path, capped by
-  // MAX_TOTAL_BANK_BYTES. So there is no per-file size cap anymore: a chapter only
-  // streams instead of banking if it's bigger than the WHOLE buffer budget.
-  // Banking v2 (.38): the .36 diagnostic PROVED banking's concurrent fetch was
-  // starving the live <audio> element on iOS (truncated stream → bogus `ended`).
-  // Rebuilt to YIELD to the live element: it only downloads while the audio element
-  // is IDLE (it buffers far ahead then suspends — a long, safe window) and aborts
-  // the instant the element resumes fetching (see pumpBank gate + the audio
-  // 'suspend'/'progress' hooks). Two independent toggles gate banking (Model B):
-  // Settings.bufferCurrent (whole-bank the current chapter for drop-resilience)
-  // and Settings.bufferAhead (prefetch upcoming chapters). Both off = no banking.
-  // The banked bytes live on DISK (blobs persist to IndexedDB and play via the SW
-  // range path; RAM copies are dropped once persisted — see bankOne), so the
-  // budget is no longer a RAM/OOM constraint: it's the shared evictable buffer-
-  // space budget (Downloads.bufMaxBytes), enforced oldest-first by eviction.
-  const MAX_AHEAD = 60;
-  const BANK_MIN_AHEAD = 60;                // only prefetch when the live element has ≥ this many seconds buffered ahead (it's not urgently pulling)
-  const bankBudgetBytes = () => (window.Downloads && Downloads.bufMaxBytes) ? Downloads.bufMaxBytes() : 512 * 1024 * 1024;   // shared buffer-space budget (disk); a chapter bigger than the WHOLE budget streams instead
-  const banks = new Map();                  // idx -> { url, bytes } of a fully-downloaded track
-  const skipBank = new Set();               // idxs too big to bank — stream them, don't keep retrying
-  let bankBook = null;                      // book `banks` belongs to (banks keyed by idx → wipe on book change)
-  let bankCtl = null;                       // AbortController for the one in-flight download
-  let bankingIdx = -1;                      // idx currently downloading
-  let bufferedPct = 0;
-  function revokeBank(idx) {
-    const b = banks.get(idx);
-    if (b) { try { URL.revokeObjectURL(b.url); } catch {} banks.delete(idx); }
-  }
-  function clearBanks() {
-    if (bankCtl) { try { bankCtl.abort(); } catch {} bankCtl = null; }
-    bankingIdx = -1;
-    for (const idx of [...banks.keys()]) revokeBank(idx);
-    skipBank.clear();
-  }
-  function bankedUrl(idx) { const b = banks.get(idx); return b ? b.url : null; }
-  function usedBytes() { let n = 0; for (const b of banks.values()) n += b.bytes; return n; }
-
-  let bufferedShown = -1;   // last whole-percent painted, to skip redundant repaints
+  // ---- banking / buffering (js/banking.js — Banking) ------------------------
+  // The whole prefetch/whole-bank subsystem + the blue buffered meter live in the
+  // Banking module now. app.js keeps hoisted delegators so its many call sites
+  // (audio events, startTrack source-selection, the file-row meter) are unchanged,
+  // and injects the live playback state + the few things Banking calls back into
+  // (updateFileRows, startTrack — see Banking.init). `scrubbing` (seek-drag UI) and
+  // `locallyStored` (a playback-source predicate startTrack/bestSource also use)
+  // stay here; locallyStored is injected into Banking.
   let scrubbing = false;    // true while a seek slider is being dragged — skip heavy library reflows
-  let bankPct = 0;          // banking fetch's byte-progress for the CURRENT track (0 = not driving)
-  function setBuffered(pct) {
-    bufferedPct = Math.max(0, Math.min(100, pct || 0));
-    const r = Math.round(bufferedPct);
-    if (r === bufferedShown) return;   // fires often; only repaint when the % visibly ticks
-    bufferedShown = r;
-    const v = r + '%';
-    const a = $('pSeek'), b = $('npSeek');
-    if (a) a.style.setProperty('--buffered', v);
-    if (b) b.style.setProperty('--buffered', v);
-  }
-  // How much of the CURRENT track the audio element has actually loaded: the end of
-  // the buffered range at the playhead as a % of duration. A fully-loaded track —
-  // fiber, or an in-memory banked blob — reads ~100 immediately (no fake animation);
-  // a slow link fills progressively as the native buffer grows. This is the real
-  // signal, so the meter never sits at 0 on a track that's already loaded.
-  function nativeBufferedPct() {
-    const d = audio.duration, b = audio.buffered;
-    if (!d || !isFinite(d) || !b || !b.length) return 0;
-    const ct = audio.currentTime;
-    let end = 0;
-    for (let i = 0; i < b.length; i++) {
-      const s = b.start(i), e = b.end(i);
-      if (ct >= s - 1 && ct <= e + 1) { end = e; break; }   // the range covering the playhead
-      if (e > end) end = e;                                 // else the furthest we've buffered
-    }
-    return Math.min(100, (end / d) * 100);
-  }
-  // Blue meter = REAL current-track load: native playback buffer, banking-fetch
-  // progress, or 100 for a banked copy — whichever is furthest along.
-  function meterPct() {
-    if (!ctx) return 0;
-    return Math.max(bankPct, nativeBufferedPct(), (banks.has(ctx.idx) || locallyStored(ctx.idx)) ? 100 : 0);
-  }
-  function paintMeter() { setBuffered(meterPct()); }
-  // Track change: reset the banking driver and force a repaint for the new track
-  // (its native buffer starts empty and grows as it loads).
-  function refreshMeter() { bankPct = 0; bufferedShown = -1; paintMeter(); }
-  // The next track to download, going forward from where we are. The CURRENT chapter
-  // is banked FIRST and always: iOS's native buffer only reaches its own lookahead
-  // cap (~34 min), so the tail of a long chapter is offline-orphaned unless we hold
-  // the whole file — this closes that gap (and maybeRecoverFromBank() below plays
-  // the local copy if the stream dies past the native buffer). Beyond the current
-  // chapter, look-ahead is budget-gated by ESTIMATED bytes (duration × 128 kbps CBR)
-  // so we stop before overshooting. (v1 skipped the current track to dodge fetch
-  // contention; v2's networkState gate handles contention, so we can hold it safely.)
-  const estBytes = (t) => Math.round((((t && t.durationMs) || 0) / 1000) * 16000);   // 128 kbps CBR ≈ 16 KB/s
-  // Bytes banked for LOOK-AHEAD only — i.e. everything except the current chapter. The
-  // current one is a sunk cost (it's playing, held for the offline tail), so counting
-  // it against the "Buffer ahead" budget meant a single big current chapter (a 48-min
-  // 40 MB one) ate the whole budget → nothing prefetched. The budget is prefetch-ahead.
-  // Bytes held LOCALLY for the upcoming window (excludes the current chapter —
-  // it's a sunk cost). Counts RAM banks AND the persisted buffer: since banked
-  // blobs go to disk and RAM copies are dropped, disk is where the look-ahead
-  // actually lives, and files persisted last session count toward depth too.
-  function lookAheadUsed() {
-    if (!ctx) return 0;
-    let n = 0;
-    for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
-      const b = banks.get(i);
-      if (b) { n += b.bytes; continue; }
-      const t = ctx.tracks[i];
-      if (t && window.Downloads && Downloads.bufferedSize) n += Downloads.bufferedSize(t.ratingKey);
-    }
-    return n;
-  }
-  const MAX_TOTAL_BANK_BYTES = 128 * 1024 * 1024;   // RAM-COPY ceiling: in-memory object URLs (the no-SW fallback path) never exceed this — the .27-era jetsam guard. Disk-backed banks don't count (freed once the SW can serve them).
-  // Disk-bound: a chapter is bankable if it fits the buffer-space budget; the
-  // oldest-first buffer eviction (Downloads.evictBuffer) enforces the running
-  // total. RAM retention is separately capped by MAX_TOTAL_BANK_BYTES in bankOne.
-  const fitsTotal = (est) => est <= bankBudgetBytes();
-  // Standard offline-audio model (Audible/Spotify/Audiobookshelf): download whole
-  // files, keep a forward window, drop played ones. iOS's native buffer only reaches
-  // ~34 min and leaves the tail of a long track unplayable if the link drops — so:
-  //   1) fully download the CURRENT file first (closes that tail hole), then
-  //   2) prefetch the nearest upcoming file(s) within the budget (which excludes the
-  //      current file) + the total OOM cap. Played files are evicted in pumpBank().
-  // A track whose bytes are ALREADY on disk (a pinned download or the persisted
-  // buffer) never needs banking: startTrack plays it via the SW range path with
-  // zero network, so fetching it again from Plex just burns bandwidth (post-
-  // restart this used to re-download the very chapter sitting in IndexedDB).
   const locallyStored = (i) => !!(window.Downloads && Downloads.trackLocal && ctx.tracks[i] && Downloads.trackLocal(ctx.tracks[i].ratingKey));
-  function nextToBank() {
-    if (!ctx) return null;
-    const budget = bankBudgetBytes();
-    // 1) the current chapter, whole (drop-resilience) — only when that toggle is on.
-    if (Settings.bufferCurrent && !banks.has(ctx.idx) && !skipBank.has(ctx.idx) && !locallyStored(ctx.idx) && fitsTotal(estBytes(ctx.tracks[ctx.idx]))) return ctx.idx;
-    // 2) the forward look-ahead window — only when that toggle is on.
-    if (Settings.bufferAhead) {
-      for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
-        if (banks.has(i) || skipBank.has(i) || locallyStored(i)) continue;
-        const est = estBytes(ctx.tracks[i]);
-        // A file bigger than the WHOLE buffer budget can never fit → it streams
-        // when reached: skip past it rather than damming the queue (it used to
-        // block every smaller file behind it from ever prefetching).
-        if (est > budget) continue;
-        return (lookAheadUsed() + est <= budget) ? i : null;   // nearest fetchable upcoming file, if it fits NOW
-      }
-    }
-    return null;
-  }
-  // The last file index worth HOLDING: current + the contiguous forward run that fits
-  // the TOTAL memory cap (NOT the smaller prefetch budget — a banked file just past the
-  // budget window re-enters it as you advance, so dumping it = re-fetch). Already-banked
-  // files inside count (actual bytes) and are kept; only files OUTSIDE [ctx.idx, keepMax]
-  // (played behind, or a skip's far-ahead island) get evicted. The budget only limits
-  // NEW downloads (nextToBank). Streamed/too-big files (skipBank) hold no memory but
-  // still span the window so a big streamed file doesn't sever the run behind it.
-  function bankWindowMax() {
-    if (!ctx) return -1;
-    // RAM cost per file: actual bytes if RAM-banked; zero for streamed (skipBank)
-    // and locally-stored files (they play from disk via the SW, never RAM) — both
-    // span the window without occupying memory; else the estimate.
-    const sizeOf = (i) => banks.has(i) ? banks.get(i).bytes
-      : (skipBank.has(i) || locallyStored(i)) ? 0 : estBytes(ctx.tracks[i]);
-    let keepMax = ctx.idx, total = sizeOf(ctx.idx);
-    for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
-      const sz = sizeOf(i);
-      if (total + sz <= MAX_TOTAL_BANK_BYTES) { total += sz; keepMax = i; }
-      else break;
-    }
-    return keepMax;
-  }
-  // Free look-ahead budget for the NEAREST unbanked upcoming file by evicting farther
-  // banked look-ahead islands (see the pumpBank call-site note). Farthest-first, stops
-  // as soon as the nearest file fits the budget. Only evicts files FARTHER than the
-  // target, so it never disturbs the nearer window during ordinary forward playback.
-  function freeBudgetForNearest() {
-    if (!ctx) return;
-    const budget = bankBudgetBytes();
-    let target = -1, est = 0;
-    for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
-      if (banks.has(i) || skipBank.has(i) || locallyStored(i)) continue;  // already local — nothing to fund
-      const e = estBytes(ctx.tracks[i]);
-      if (e > budget) continue;                                          // bigger than the whole buffer — streams, not worth evicting for
-      target = i; est = e; break;                                         // nearest fetchable upcoming
-    }
-    if (target < 0 || !fitsTotal(est)) return;                           // nothing to prefetch, or won't fit the OOM cap regardless
-    if (lookAheadUsed() + est <= budget) return;                         // already fits → don't evict
-    // Farthest-first over everything the look-ahead budget counts beyond the
-    // target: RAM banks AND persisted-buffer files (the budget lives on disk now).
-    const farther = [];
-    for (let i = target + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
-      const t = ctx.tracks[i];
-      if (banks.has(i) || (t && window.Downloads && Downloads.trackBuffered && Downloads.trackBuffered(t.ratingKey))) farther.push(i);
-    }
-    farther.sort((a, b) => b - a);
-    for (const j of farther) {
-      revokeBank(j);
-      const t = ctx.tracks[j];
-      if (t && window.Downloads && Downloads.dropBuffered) Downloads.dropBuffered(t.ratingKey);
-      if (lookAheadUsed() + est <= budget) break;
-    }
-  }
-  // Sequential scheduler. Evict finished chapters, then — ONLY while the live audio
-  // element is idle — start the next download. iOS buffers far ahead then suspends
-  // (networkState IDLE); banking uses that window and never competes with the
-  // element's own fetching, which is what broke resume before. 'suspend' re-invokes
-  // this; 'progress' aborts an in-flight bank the moment the element resumes.
-  function pumpBank() {
-    if ((!Settings.bufferCurrent && !Settings.bufferAhead) || !ctx) return;   // both toggles off = no banking
-    // A fully-downloaded book is already local — no look-ahead buffering needed
-    // (the user asked us not to re-buffer downloaded content over the network).
-    if (window.Downloads && Downloads.isDownloaded(ctx.book)) return;
-    // Evict INTELLIGENTLY: figure out the window we intend to hold (current + the
-    // forward run that fits budget/cap — see bankWindowMax, which counts already-banked
-    // files toward the budget so they're kept, not re-fetched), then drop only what's
-    // OUTSIDE it — played files behind, and far-ahead islands a skip left stranded.
-    const keepMax = Settings.bufferAhead ? bankWindowMax() : ctx.idx;   // ahead off → hold only the current chapter, evict any stale look-ahead
-    for (const idx of [...banks.keys()]) if (idx < ctx.idx || idx > keepMax) revokeBank(idx);
-    // PROXIMITY PRIORITY: if the NEAREST unbanked upcoming file can't be prefetched only
-    // because FARTHER-ahead files are already banked and fill the look-ahead budget — the
-    // classic "skip BACK leaves a stale far-ahead island" case: playing idx2 banks 2-4,
-    // then you jump to idx0, and idx3+idx4 squat on the budget so the idx2 you'll hit
-    // NEXT never buffers — evict the farthest banked look-ahead files to free budget for
-    // the nearer one. Never evicts a file nearer than the one it makes room for, so normal
-    // forward advance (no nearer gap) never triggers it → no dump+refetch thrash.
-    if (Settings.bufferAhead) freeBudgetForNearest();
-    // Prefetch only when the live element ISN'T urgently pulling data — i.e. it has a
-    // comfortable forward buffer, or is paused. iOS keeps networkState=LOADING and
-    // fires 'stalled' (never 'suspend') even when idle on a big buffer, so we key off
-    // the ACTUAL forward buffer, not networkState (that made v2 never bank at all).
-    // At initial load the buffer is ~0, so this also keeps banking off the wire until
-    // the element's own seek/first-fill is done — no contention.
-    if (elementBusy()) return;                                            // element needs bandwidth → yield
-    if (bankCtl) return;                                                  // one download at a time
-    const next = nextToBank();
-    if (next != null) bankOne(next);
-  }
-  // Offline safety net. If the live stream stalls with the forward buffer nearly
-  // gone (connection dropped past iOS's native buffer) but the WHOLE current chapter
-  // is already banked, switch to the local copy at the reached spot — instant, no
-  // waiting for the network. A spurious 'stalled' fired with a full buffer ahead
-  // (iOS does this when a download completes) is ignored via the forward-buffer check.
-  let stallTimer = null;
-  function forwardBufferedSec() {
-    const b = audio.buffered, ct = audio.currentTime || 0;
-    for (let i = 0; i < b.length; i++) if (ct >= b.start(i) - 1 && ct <= b.end(i) + 1) return b.end(i) - ct;
-    return 0;
-  }
-  // Is the live <audio> element still urgently downloading (so banking should yield)?
-  // Idle = paused, OR it has a comfortable forward buffer. "Comfortable" = 60s ahead
-  // OR the rest of the current track, whichever is SMALLER — so a SHORT chapter counts
-  // as idle once it's buffered to its end (it can never reach 60s ahead). Without this,
-  // look-ahead never ran on books of short files (they never buffer 60s ahead).
-  function elementBusy() {
-    // Still loading the current source (no playable-forward data yet) → the element is
-    // actively fetching THIS track. Banking now — above all banking the current track
-    // from the SAME Plex URL — contends with that fetch and can fail the element's load
-    // (code=4, the .35/.36 contention bug). Yield until it has data, EVEN while paused:
-    // a just-switched track is paused-but-loading (startTrack calls pumpBank() before
-    // play()), and the old `paused → idle` shortcut let banking hit the current track
-    // mid-initial-load — the code=4 seen under rapid track switching.
-    if (audio.readyState < 3) return true;                     // < HAVE_FUTURE_DATA — covers initial load + rebuffer
-    if (audio.paused) return false;
-    const d = audio.duration;
-    if (!d || !isFinite(d)) return true;                       // metadata still loading → busy
-    const need = Math.min(BANK_MIN_AHEAD, Math.max(0, d - (audio.currentTime || 0) - 1));
-    return forwardBufferedSec() < need;
-  }
-  function stuckOnStream() {
-    if (!ctx || audio.paused) return false;
-    const src = audio.src || '';
-    if (src.startsWith('blob:') || src.includes('/__dl/')) return false;   // already playing the local copy
-    return (banks.has(ctx.idx) || locallyStored(ctx.idx)) && forwardBufferedSec() <= 3;
-  }
-  function maybeRecoverFromBank() {
-    if (stallTimer || !stuckOnStream()) return;
-    stallTimer = setTimeout(() => {
-      stallTimer = null;
-      if (!stuckOnStream()) return;   // recovered on its own
-      if (window.PBDebug) PBDebug.log('PLAY', `stream stalled at ${(audio.currentTime || 0).toFixed(1)}s — switching to downloaded copy`);
-      toast('Playing from downloaded copy');
-      startTrack(ctx.idx, audio.currentTime || (curLoad && curLoad.seekSec) || 0, true);   // startTrack prefers the banked blob
-    }, 2500);
-  }
-
-  async function bankOne(idx) {
-    const t = ctx && ctx.tracks[idx];
-    if (!t || !t.partKey) return;
-    const ctl = new AbortController(); bankCtl = ctl; bankingIdx = idx;
-    try {
-      // The one shared streaming byte-loop (downloads use it too). OVERSIZE —
-      // whether from Content-Length up front or discovered mid-stream — means
-      // "too big to hold in memory": stream it live instead, don't keep retrying.
-      const { blob, bytes } = await Downloads.fetchAudioBlob(Plex.streamUrl(t.partKey), {
-        signal: ctl.signal,
-        maxBytes: bankBudgetBytes(),   // a chapter bigger than the whole buffer budget streams (OVERSIZE → skipBank)
-        onProgress: (received, total) => {
-          if (total && ctx && ctx.idx === idx) { bankPct = (received / total) * 100; paintMeter(); }   // meter tracks the CURRENT track only
-        },
-      });
-      // Persist FIRST: the durable disk copy (survives restart, plays offline via
-      // the SW range path) is the real bank now. Hold a RAM copy ONLY when the SW
-      // can't serve the bytes back — persist failed, or no controller (desktop
-      // #nosw; also iOS pre-first-SW-install, where a blob: URL is the only local
-      // source that works). RAM blobs were the old jetsam hazard; the disk copy
-      // makes them redundant, which is what lets the look-ahead budget be deep.
-      const persisted = window.Downloads && Downloads.bufferTrack
-        ? await Downloads.bufferTrack(bankBook, t.ratingKey, blob) : false;
-      const swServes = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
-      // Hold a RAM object URL only when the SW can't serve the bytes back (persist
-      // failed, or no controller — desktop #nosw / pre-first-SW) AND it stays under
-      // the RAM ceiling; a giant file on that fallback path streams instead of OOMing.
-      if (!(persisted && swServes) && usedBytes() + bytes <= MAX_TOTAL_BANK_BYTES) banks.set(idx, { url: URL.createObjectURL(blob), bytes });
-      if (ctx && ctx.idx === idx) paintMeter();   // locallyStored/banks now true → meterPct() = 100
-      updateFileRows();                            // this chapter's line → full (gray buffered / blue downloaded)
-      if (window.PBDebug) PBDebug.log('BANK_DONE', `idx=${idx} bytes=${bytes} ${persisted ? 'disk' : 'RAM'} ramUsed=${usedBytes()}`);
-    } catch (e) {
-      if (e && e.code === 'OVERSIZE') {
-        skipBank.add(idx);
-        if (ctx && ctx.idx === idx) { bankPct = 0; paintMeter(); }   // won't bank → native buffer drives the meter
-      }
-      /* else: aborted, CORS, or network — skip this one */
-    }
-    finally { if (bankCtl === ctl) { bankCtl = null; bankingIdx = -1; if (!ctl.signal.aborted) pumpBank(); } }   // chain the next wanted track
-  }
-
+  function pumpBank() { return Banking.pump(); }
+  function clearBanks() { return Banking.clear(); }
+  function elementBusy() { return Banking.elementBusy(); }
+  function paintMeter() { return Banking.paintMeter(); }
+  function refreshMeter() { return Banking.refreshMeter(); }
+  function setBuffered(pct) { return Banking.setBuffered(pct); }
+  function nativeBufferedPct() { return Banking.nativeBufferedPct(); }
+  function maybeRecoverFromBank() { return Banking.maybeRecover(); }
+  function bankedUrl(idx) { return Banking.bankedUrl(idx); }
   // ---- helpers -------------------------------------------------------------
   const fmt = PBLogic.fmt;   // h:mm:ss (js/logic.js — shared with the unit tests)
   const toast = (msg) => {
@@ -1200,9 +884,9 @@
         buf = 100;                                           // persisted buffer → GRAY, survives restart
       }
       else if (idx >= 0) {
-        if (banks.has(idx)) buf = 100;                       // whole chapter buffered in memory (this session)
+        if (Banking.has(idx)) buf = 100;                     // whole chapter buffered in memory (this session)
         else if (ctx.idx === idx) buf = nativeBufferedPct(); // playing → native stream buffer
-        else if (bankingIdx === idx) buf = bankPct;          // buffering now
+        else if (Banking.bankingIdx() === idx) buf = Banking.bankPct();   // buffering now
       }
       const bufbar = row.querySelector('.bufbar');
       if (bufbar) { bufbar.style.setProperty('--buffered', Math.round(buf) + '%'); bufbar.classList.toggle('downloaded', isDl); }
@@ -1346,7 +1030,7 @@
   function startTrack(idx, seekSec = 0, autoplay = true) {
     const t = ctx.tracks[idx];
     ctx.idx = idx;
-    if (bankBook !== ctx.book) { clearBanks(); bankBook = ctx.book; }   // banks are per-book (keyed by idx)
+    Banking.ensureBook(ctx.book);   // banks are per-book (keyed by idx) — wipe on book change
     curLoad = { idx, seekSec, autoplay };       // remembered so a network error can retry this exact load
     clearTimeout(loadRetryTimer);
     const gen = ++loadGen;                       // invalidate any in-flight loadedmetadata from a prior src
@@ -1621,7 +1305,7 @@
     // The element is actively pulling with a LOW forward buffer → it needs the
     // bandwidth; abort any in-flight bank so banking never contends (the iOS bug).
     // A healthy buffer means the progress is incidental — let banking continue.
-    if (bankCtl && elementBusy()) { try { bankCtl.abort(); } catch {} }
+    Banking.abortIfBusy();
   });
   audio.addEventListener('timeupdate', paintMeter);
   // iOS keeps networkState=LOADING and fires 'stalled' (not 'suspend') when it goes
@@ -1643,7 +1327,7 @@
     // prefers it, so no network + no backoff. Only when the failing src was the
     // STREAM, though: an error on the local path itself must not zero-delay-loop.
     const srcWasLocal = !!(audio.src && (audio.src.startsWith('blob:') || audio.src.includes('/__dl/')));
-    const haveBank = !!(curLoad && !srcWasLocal && (banks.has(curLoad.idx) || locallyStored(curLoad.idx)));
+    const haveBank = !!(curLoad && !srcWasLocal && (Banking.has(curLoad.idx) || locallyStored(curLoad.idx)));
     if (curLoad && err.code === err.MEDIA_ERR_NETWORK && (haveBank || loadRetry < MAX_LOAD_RETRY)) {
       const at = Math.max(audio.currentTime || 0, curLoad.seekSec || 0);   // resume where we were
       const wasPlaying = !audio.paused || curLoad.autoplay;
@@ -2465,6 +2149,14 @@
   window.PBHardReset = hardReset;   // reachable from diagnostics too
 
   async function init() {
+    // Banking (js/banking.js) — wire it BEFORE bind() registers the audio listeners
+    // that drive it (pump/paintMeter/maybeRecover). It reads live playback state via
+    // getters and calls back into updateFileRows/startTrack; locallyStored + Plex are
+    // injected (Plex so the module needn't reach a bare global).
+    Banking.init({
+      getCtx: () => ctx, getCurLoad: () => curLoad, audio, Settings, byId: $,
+      updateFileRows, startTrack, toast, locallyStored, Plex,
+    });
     // Diagnostics: instrument the audio element (media events + stall watchdog)
     // and provide the state snapshot the log pipe / remote `state` command use.
     PBDebug.watchAudio(audio);
@@ -2491,7 +2183,7 @@
         err: audio.error ? audio.error.code : null,
       },
       book: ctx ? { rk: ctx.book, idx: ctx.idx, tracks: ctx.tracks.length, title: (ctx.album.title || '').slice(0, 40) } : null,
-      banks: { n: banks.size, mb: +(usedBytes() / 1048576).toFixed(1), banking: bankingIdx, bufCur: Settings.bufferCurrent, bufAhead: Settings.bufferAhead, bufSpaceMb: (window.Downloads && Downloads.bufMaxBytes) ? +(Downloads.bufMaxBytes() / 1048576).toFixed(0) : 0 },
+      banks: { n: Banking.count(), mb: +(Banking.usedBytes() / 1048576).toFixed(1), banking: Banking.bankingIdx(), bufCur: Settings.bufferCurrent, bufAhead: Settings.bufferAhead, bufSpaceMb: (window.Downloads && Downloads.bufMaxBytes) ? +(Downloads.bufMaxBytes() / 1048576).toFixed(0) : 0 },
       peers: peersNow.length,
       view: (currentDesc() && currentDesc().v) || 'home',
     }));
@@ -2560,7 +2252,7 @@
         protectTracks: () => {
           if (!ctx) return [];
           const out = [];
-          for (let i = ctx.idx; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) out.push(ctx.tracks[i].ratingKey);
+          for (let i = ctx.idx; i < ctx.tracks.length && (i - ctx.idx) <= Banking.MAX_AHEAD; i++) out.push(ctx.tracks[i].ratingKey);
           return out;
         },
       });

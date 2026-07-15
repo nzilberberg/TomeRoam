@@ -32,6 +32,7 @@ interface Window {
   SignInScreen: any;
   HomeScreen: any;
   NowPlayingScreen: any;
+  Banking: any;
   ArtLoader: any;
   HandoffController: any;
   LogPipe: any;
@@ -65,6 +66,7 @@ declare var OptionsScreen: any;
 declare var SignInScreen: any;
 declare var HomeScreen: any;
 declare var NowPlayingScreen: any;
+declare var Banking: any;
 declare var ArtLoader: any;
 declare var HandoffController: any;
 declare var LogPipe: any;
