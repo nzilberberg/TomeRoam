@@ -1314,7 +1314,7 @@
   audio.addEventListener('stalled', () => { pumpBank(); maybeRecoverFromBank(); });
   audio.addEventListener('canplaythrough', pumpBank);
   audio.addEventListener('waiting', maybeRecoverFromBank);
-  audio.addEventListener('playing', () => { clearTimeout(stallTimer); stallTimer = null; maybeReanchorHandoff(); });
+  audio.addEventListener('playing', () => { Banking.cancelStallRecovery(); maybeReanchorHandoff(); });
   // Network drops on a slow relay surface as MEDIA_ERR_NETWORK — don't give up,
   // reload the same track at the position we'd reached, with exponential backoff.
   // MEDIA_ERR_ABORTED just means we swapped src on purpose, so ignore it.
@@ -2214,6 +2214,7 @@
     if (window.Net) Net.init({
       onChange: (st) => { if (st && st.updateReady) markUpdateAvailable(null); },
       onReconnect: async () => {
+        Banking.onReconnect();   // connectivity back → drop banking's failure backoff so prefetch resumes
         if ($('library').classList.contains('hidden')) return;
         // Reconnect just fired (plex went unreachable→reachable) — force a live
         // fetch so we pull genuinely fresh data, not the cache-first copy. (Clear

@@ -31,6 +31,9 @@ const Banking = (() => {
   let bufferedShown = -1;                   // last whole-percent painted, to skip redundant repaints
   let bankPct = 0;                          // banking fetch's byte-progress for the CURRENT track (0 = not driving)
   let stallTimer = null;
+  const retry = new Map();                  // idx -> { attempts, nextAtMs }: backoff after a failed bank (per-book, wiped with banks)
+  let repumpTimer = null;                   // single delayed re-pump scheduled at the soonest retry deadline
+  const retryReady = (i) => PBLogic.bankRetryReady(retry.get(i), Date.now());
 
   const estBytes = (t) => Math.round((((t && t.durationMs) || 0) / 1000) * 16000);   // 128 kbps CBR ≈ 16 KB/s
   const fitsTotal = (est) => est <= bankBudgetBytes();
@@ -44,6 +47,8 @@ const Banking = (() => {
     bankingIdx = -1;
     for (const idx of [...banks.keys()]) revokeBank(idx);
     skipBank.clear();
+    retry.clear();                                  // book changed → the idx-keyed backoff is irrelevant
+    clearTimeout(repumpTimer); repumpTimer = null;
   }
   function bankedUrl(idx) { const b = banks.get(idx); return b ? b.url : null; }
   function usedBytes() { let n = 0; for (const b of banks.values()) n += b.bytes; return n; }
@@ -108,10 +113,10 @@ const Banking = (() => {
     const ctx = d.getCtx(), S = d.Settings;
     if (!ctx) return null;
     const budget = bankBudgetBytes();
-    if (S.bufferCurrent && !banks.has(ctx.idx) && !skipBank.has(ctx.idx) && !d.locallyStored(ctx.idx) && fitsTotal(estBytes(ctx.tracks[ctx.idx]))) return ctx.idx;
+    if (S.bufferCurrent && !banks.has(ctx.idx) && !skipBank.has(ctx.idx) && !d.locallyStored(ctx.idx) && retryReady(ctx.idx) && fitsTotal(estBytes(ctx.tracks[ctx.idx]))) return ctx.idx;
     if (S.bufferAhead) {
       for (let i = ctx.idx + 1; i < ctx.tracks.length && (i - ctx.idx) <= MAX_AHEAD; i++) {
-        if (banks.has(i) || skipBank.has(i) || d.locallyStored(i)) continue;
+        if (banks.has(i) || skipBank.has(i) || d.locallyStored(i) || !retryReady(i)) continue;   // in its backoff window → skip, don't block later chapters
         const est = estBytes(ctx.tracks[i]);
         if (est > budget) continue;                            // bigger than the WHOLE budget → streams; skip past
         return (lookAheadUsed() + est <= budget) ? i : null;   // nearest fetchable upcoming file, if it fits NOW
@@ -227,6 +232,8 @@ const Banking = (() => {
     const t = ctx && ctx.tracks[idx];
     if (!t || !t.partKey) return;
     const ctl = new AbortController(); bankCtl = ctl; bankingIdx = idx;
+    const started = Date.now();
+    let outcome = 'fail';
     try {
       // The one shared streaming byte-loop (downloads use it too). OVERSIZE (too big
       // to hold in memory) → stream it live instead, don't keep retrying.
@@ -248,14 +255,32 @@ const Banking = (() => {
       if (ctx && ctx.idx === idx) paintMeter();   // locallyStored/banks now true → meterPct() = 100
       d.updateFileRows();                          // this chapter's line → full (gray buffered / blue downloaded)
       if (window.PBDebug) PBDebug.log('BANK_DONE', `idx=${idx} bytes=${bytes} ${persisted ? 'disk' : 'RAM'} ramUsed=${usedBytes()}`);
+      retry.delete(idx);                                // full success clears any prior failure
+      outcome = 'ok';
     } catch (e) {
-      if (e && e.code === 'OVERSIZE') {
+      const aborted = ctl.signal.aborted || (e && e.name === 'AbortError');
+      if (aborted) { outcome = 'abort'; }               // a fresh load superseded us — neutral, no penalty
+      else if (e && (e.code === 'OVERSIZE' || e.kind === 'oversize')) {
         skipBank.add(idx);
         if (ctx && ctx.idx === idx) { bankPct = 0; paintMeter(); }   // won't bank → native buffer drives the meter
+        outcome = 'skip';
+      } else if (e && e.kind === 'http' && e.retryable === false) {
+        skipBank.add(idx);                              // permanent 4xx → give up on this chapter for the session
+        outcome = 'skip';
+      } else {                                          // network / 5xx / CORS → back off, don't hammer the relay
+        retry.set(idx, PBLogic.bankNoteFailure(retry.get(idx), Date.now()));
+        outcome = 'fail';
+        if (window.PBDebug) { const ent = retry.get(idx); PBDebug.log('BANK_FAIL', `idx=${idx} track=${t.ratingKey} attempt=${ent.attempts} kind=${(e && e.kind) || 'network'} status=${(e && e.status) || 0} elapsedMs=${Date.now() - started} nextRetryMs=${ent.nextAtMs - Date.now()} audioActive=${!d.audio.paused}`); }
       }
-      /* else: aborted, CORS, or network — skip this one */
     }
-    finally { if (bankCtl === ctl) { bankCtl = null; bankingIdx = -1; if (!ctl.signal.aborted) pumpBank(); } }   // chain the next wanted track
+    finally {
+      if (bankCtl === ctl) {
+        bankCtl = null; bankingIdx = -1;
+        if (outcome === 'ok' || outcome === 'skip') pumpBank();   // make progress immediately — try the next chapter
+        else if (outcome === 'fail') scheduleRepump();            // delayed retry at the soonest backoff deadline
+        // outcome === 'abort' → a fresh load is already coming; do nothing
+      }
+    }
   }
 
   // Book change: banks are keyed by idx, so wipe them when the loaded book changes
@@ -264,6 +289,25 @@ const Banking = (() => {
   // audio 'progress' handler: abort an in-flight bank the instant the element
   // resumes fetching (was `if (bankCtl && elementBusy()) bankCtl.abort()`).
   function abortIfBusy() { if (bankCtl && elementBusy()) { try { bankCtl.abort(); } catch {} } }
+  // After a real (retryable) failure we DON'T immediately re-pump the same chapter
+  // (that was the relay-hammering loop). Instead schedule ONE re-pump at the soonest
+  // backoff deadline; nextToBank then skips still-cooling chapters. Natural audio
+  // events (suspend/stalled/canplaythrough/timeupdate) also re-pump, so this is a
+  // floor, not the only path.
+  function scheduleRepump() {
+    const now = Date.now();
+    let soonest = Infinity;
+    for (const e of retry.values()) if (e.nextAtMs > now && e.nextAtMs < soonest) soonest = e.nextAtMs;
+    if (soonest === Infinity) return;
+    clearTimeout(repumpTimer);
+    repumpTimer = setTimeout(() => { repumpTimer = null; pumpBank(); }, Math.max(50, soonest - now));
+  }
+  // The `playing` audio event owns cancelling a pending stall-recovery switch —
+  // stallTimer lives here (post-.80 extraction), so app.js routes through this
+  // instead of touching a now-out-of-scope variable.
+  function cancelStallRecovery() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } }
+  // Connectivity recovered → drop the backoff so prefetch resumes promptly.
+  function onReconnect() { retry.clear(); clearTimeout(repumpTimer); repumpTimer = null; pumpBank(); }
 
   function init(deps) { d = deps; }
 
@@ -272,8 +316,9 @@ const Banking = (() => {
     has: (idx) => banks.has(idx), bankedUrl, count: () => banks.size, usedBytes,
     bankingIdx: () => bankingIdx, bankPct: () => bankPct,
     nativeBufferedPct, paintMeter, refreshMeter, setBuffered,
-    elementBusy, maybeRecover: maybeRecoverFromBank,
+    elementBusy, maybeRecover: maybeRecoverFromBank, cancelStallRecovery, onReconnect,
     MAX_AHEAD,   // the look-ahead window size — Downloads' buffer-eviction protection uses the same span
+    _test: { retry, nextToBank, retryReady, banks, skipBank },
   };
 })();
 

@@ -394,10 +394,13 @@ const Downloads = (() => {
   // holds hundreds of MB of Uint8Arrays in RAM (Blobs can be paged to disk —
   // the iOS jetsam guard for single-file M4B books).
   const COALESCE_BYTES = 32 * 1024 * 1024;
-  const oversizeErr = () => { const e = new Error('file too large'); e.code = 'OVERSIZE'; return e; };
+  const oversizeErr = () => { const e = new Error('file too large'); e.code = 'OVERSIZE'; e.kind = 'oversize'; return e; };
   async function fetchAudioBlob(url, { signal, onProgress, gate, maxBytes: cap, sizeHint } = {}) {
     const r = await fetch(url, { signal });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    // Tag the outcome so callers can branch (banking: 4xx = give up for the session,
+    // 5xx/429 = retry with backoff). Network errors surface as the native fetch
+    // TypeError / AbortError — callers key off `.kind`/`.name`/`.code`.
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.kind = 'http'; e.status = r.status; e.retryable = (r.status >= 500 || r.status === 429); throw e; }
     const type = (r.headers.get('content-type') || 'audio/mpeg').split(';')[0];
     const total = parseInt(r.headers.get('content-length') || '0', 10) || sizeHint || 0;
     if (cap && total > cap) { try { if (r.body) await r.body.cancel(); } catch {} throw oversizeErr(); }

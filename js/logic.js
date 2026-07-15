@@ -162,10 +162,31 @@ const PBLogic = (() => {
     return 1;
   }
 
-  // NOTE: the banking scheduler (pickNextBank) used to live here too, but app.js
-  // reimplemented selection as nextToBank and the copy here tested dead code —
-  // removed rather than left as false test coverage.
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed };
+  // ---- banking per-chapter retry backoff (pure) -------------------------------
+  // Banking's bankOne used to re-`pumpBank()` immediately after ANY non-oversize
+  // failure, and a network failure was NOT recorded — so a persistent failure
+  // re-selected the SAME chapter instantly and hammered the (relay-only, slow)
+  // Plex forever. These pure helpers give each chapter a backoff schedule the
+  // scheduler honours; banking holds the state map, this decides the timing.
+  const BANK_BACKOFF_MS = [2000, 5000, 15000, 30000];   // 2s, 5s, 15s, 30s, then capped
+  function bankBackoffMs(attempts) {
+    const i = Math.min(Math.max(attempts | 0, 1) - 1, BANK_BACKOFF_MS.length - 1);
+    return BANK_BACKOFF_MS[i];
+  }
+  // entry = { attempts, nextAtMs } | undefined. Returns a NEW entry (immutable).
+  function bankNoteFailure(entry, nowMs) {
+    const attempts = ((entry && entry.attempts) || 0) + 1;
+    return { attempts, nextAtMs: nowMs + bankBackoffMs(attempts) };
+  }
+  // A chapter is eligible to (re)bank when it has no failure record, or its
+  // backoff window has elapsed.
+  function bankRetryReady(entry, nowMs) {
+    return !entry || !entry.nextAtMs || entry.nextAtMs <= nowMs;
+  }
+
+  // bankBackoffMs stays private (used only by bankNoteFailure) — every exported
+  // kernel must be referenced by shipped code (guarded by test/meta.test.js).
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, bankNoteFailure, bankRetryReady };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

@@ -189,3 +189,23 @@ test('displaySpeed ignores a zero/negative control rate and falls through', () =
 test('displaySpeed takes exactly two args (no element-rate source)', () => {
   assert.equal(L.displaySpeed.length, 2);
 });
+
+// ---- banking retry backoff (pure) -------------------------------------------
+test('bankNoteFailure increments attempts and schedules backoff 2/5/15/30s (then capped)', () => {
+  let e = L.bankNoteFailure(undefined, 1000);
+  assert.equal(e.attempts, 1);
+  assert.equal(e.nextAtMs, 1000 + 2000);           // 1st failure → 2s
+  e = L.bankNoteFailure(e, 5000);
+  assert.equal(e.attempts, 2);
+  assert.equal(e.nextAtMs, 5000 + 5000);           // 2nd → 5s
+  e = L.bankNoteFailure(e, 0);   assert.equal(e.attempts, 3); assert.equal(e.nextAtMs, 15000);  // 3rd → 15s
+  e = L.bankNoteFailure(e, 0);   assert.equal(e.attempts, 4); assert.equal(e.nextAtMs, 30000);  // 4th → 30s
+  e = L.bankNoteFailure(e, 0);   assert.equal(e.attempts, 5); assert.equal(e.nextAtMs, 30000);  // capped at 30s
+});
+
+test('bankRetryReady: no record OR elapsed backoff = ready; still-cooling = not ready', () => {
+  assert.equal(L.bankRetryReady(undefined, 1000), true);            // never failed
+  assert.equal(L.bankRetryReady({ attempts: 1, nextAtMs: 5000 }, 4999), false);  // still cooling
+  assert.equal(L.bankRetryReady({ attempts: 1, nextAtMs: 5000 }, 5000), true);   // exactly due
+  assert.equal(L.bankRetryReady({ attempts: 1, nextAtMs: 5000 }, 6000), true);   // past due
+});
