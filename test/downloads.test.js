@@ -109,6 +109,6 @@ test('evictionPlan: a Set protects MULTIPLE tracks (just-written + currently-pla
   assert.deepEqual(evictionPlan(entries, 300, 100, new Set(['playing', 'fresh'])), ['old']);
 });
 
-test('DEFAULT_BUF_MAX is 250 MB', () => {
-  assert.equal(Downloads.DEFAULT_BUF_MAX, 250 * 1024 * 1024);
+test('DEFAULT_BUF_MAX is 512 MB', () => {
+  assert.equal(Downloads.DEFAULT_BUF_MAX, 512 * 1024 * 1024);
 });

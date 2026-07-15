@@ -18,7 +18,7 @@
 const Downloads = (() => {
   const LS = { wifi: 'pb_dl_wifionly', max: 'pb_dl_max', queue: 'pb_dl_queue', bufMax: 'pb_buf_max' };
   const DEFAULT_MAX = 4 * 1024 * 1024 * 1024;        // 4 GB downloads cap
-  const DEFAULT_BUF_MAX = 250 * 1024 * 1024;         // 250 MB persistent-buffer budget
+  const DEFAULT_BUF_MAX = 512 * 1024 * 1024;         // 512 MB default persistent-buffer budget (settable 32 MB – 4 GB on the Downloads screen)
 
   const dbg = (t, m) => { if (window.PBDebug) PBDebug.log(t, m); };
   const available = () => !!(window.Store && Store.available && typeof fetch !== 'undefined');

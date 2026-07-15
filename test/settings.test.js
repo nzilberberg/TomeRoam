@@ -20,11 +20,10 @@ test('defaults when nothing is stored', () => {
   assert.equal(Settings.skipBackSec, 10);
   assert.equal(Settings.skipFwdSec, 10);
   assert.equal(Settings.resetGraceSec, 10);
-  assert.equal(Settings.bufferMb, 128);
-  assert.equal(Settings.bufferBytes, 128 * 1024 * 1024);
-  assert.equal(Settings.freshStart, true);   // default ON
-  assert.equal(Settings.autoUpdate, false);  // default OFF
-  assert.equal(Settings.banking, true);      // default ON (hidden escape hatch)
+  assert.equal(Settings.bufferCurrent, true);   // default ON
+  assert.equal(Settings.bufferAhead, true);     // default ON
+  assert.equal(Settings.freshStart, true);      // default ON
+  assert.equal(Settings.autoUpdate, false);     // default OFF
   assert.equal(Settings.speed, 1.0);
 });
 
@@ -33,11 +32,10 @@ test('set/get round-trips through the same key', () => {
   Settings.setSkipBackSec(30); assert.equal(Settings.skipBackSec, 30);
   Settings.setSkipFwdSec(15); assert.equal(Settings.skipFwdSec, 15);
   Settings.setResetGraceSec(5); assert.equal(Settings.resetGraceSec, 5);
-  Settings.setBufferMb(200); assert.equal(Settings.bufferMb, 200);
-  assert.equal(Settings.bufferBytes, 200 * 1024 * 1024);
+  Settings.setBufferCurrent(false); assert.equal(Settings.bufferCurrent, false);
+  Settings.setBufferAhead(false); assert.equal(Settings.bufferAhead, false);
   Settings.setFreshStart(false); assert.equal(Settings.freshStart, false);
   Settings.setAutoUpdate(true); assert.equal(Settings.autoUpdate, true);
-  Settings.setBanking(false); assert.equal(Settings.banking, false);
   Settings.setSpeed(1.5); assert.equal(Settings.speed, 1.5);
 });
 
@@ -45,8 +43,8 @@ test('booleans store the same encodings the app has always used', () => {
   seed({});
   Settings.setFreshStart(true);  assert.equal(global.localStorage.getItem('pb_freshStart'), '1');
   Settings.setFreshStart(false); assert.equal(global.localStorage.getItem('pb_freshStart'), '0');
-  Settings.setAutoUpdate(true);  assert.equal(global.localStorage.getItem('pb_autoUpdate'), '1');
-  Settings.setBanking(false);    assert.equal(global.localStorage.getItem('pb_banking'), 'off');
+  Settings.setBufferCurrent(false); assert.equal(global.localStorage.getItem('pb_bufferCurrent'), '0');
+  Settings.setBufferAhead(true);    assert.equal(global.localStorage.getItem('pb_bufferAhead'), '1');
 });
 
 test('resetGraceSec honors an explicit 0', () => {
@@ -54,23 +52,15 @@ test('resetGraceSec honors an explicit 0', () => {
   assert.equal(Settings.resetGraceSec, 0);
 });
 
-test('bufferMb: stored 0 ("Off") decodes to the default — legacy quirk, preserved', () => {
-  seed({ pb_bankBudget: '0' });
-  assert.equal(Settings.bufferMb, 128);
-});
-
-test('bufferMb clamps to 256', () => {
-  seed({ pb_bankBudget: '300' });
-  assert.equal(Settings.bufferMb, 256);
-});
-
-test('freshStart / banking decode legacy stored strings', () => {
-  seed({ pb_freshStart: '0', pb_banking: 'off' });
+test('buffer toggles + freshStart decode stored 0/1 (default ON when unset)', () => {
+  seed({ pb_bufferCurrent: '0', pb_bufferAhead: '0', pb_freshStart: '0' });
+  assert.equal(Settings.bufferCurrent, false);
+  assert.equal(Settings.bufferAhead, false);
   assert.equal(Settings.freshStart, false);
-  assert.equal(Settings.banking, false);
-  seed({ pb_freshStart: '1', pb_banking: 'on' });
+  seed({});   // unset → all default ON
+  assert.equal(Settings.bufferCurrent, true);
+  assert.equal(Settings.bufferAhead, true);
   assert.equal(Settings.freshStart, true);
-  assert.equal(Settings.banking, true);
 });
 
 test('speed rejects zero / negative / garbage, falling back to 1.0', () => {
@@ -83,7 +73,7 @@ test('speed rejects zero / negative / garbage, falling back to 1.0', () => {
 test('KEYS are the exact pb_ strings (renaming would orphan saved settings)', () => {
   assert.deepEqual(Settings.KEY, {
     skipBack: 'pb_skipBack', skipFwd: 'pb_skipFwd', resetGrace: 'pb_resetGrace',
-    bufferMb: 'pb_bankBudget', freshStart: 'pb_freshStart', autoUpdate: 'pb_autoUpdate',
-    banking: 'pb_banking', speed: 'pb_speed',
+    bufferCurrent: 'pb_bufferCurrent', bufferAhead: 'pb_bufferAhead',
+    freshStart: 'pb_freshStart', autoUpdate: 'pb_autoUpdate', speed: 'pb_speed',
   });
 });

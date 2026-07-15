@@ -28,6 +28,7 @@ const DownloadsScreen = (() => {
          <div class="dlscreen-body">
            <div class="opt-row"><span class="opt-label" id="dlWifiLabel">Wi‑Fi only</span><span class="opt-ctl"><button id="dlWifi" class="toggle" role="switch"></button></span></div>
            <div class="opt-row"><span class="opt-label">Max download space</span><span class="opt-ctl"><select id="dlMax"></select></span></div>
+           <div class="opt-row"><span class="opt-label">Max buffer space<div class="opt-sub">Auto-buffered chapters (gray); evicts oldest</div></span><span class="opt-ctl"><select id="dlBufMax"></select></span></div>
            <div id="dlUsage" class="dlusage"></div>
            <div class="opt-row"><span class="opt-label">Buffered audio<div id="dlBufTxt" class="opt-sub"></div></span><span class="opt-ctl"><button id="dlClearBuf" class="textbtn">Clear buffer</button></span></div>
            <div class="section-title">Downloaded books</div>
@@ -38,6 +39,9 @@ const DownloadsScreen = (() => {
       const sel = el.querySelector('#dlMax');
       [1, 2, 4, 8, 16].forEach((g) => { const o = document.createElement('option'); o.value = String(g * d.GB); o.textContent = g + ' GB'; sel.appendChild(o); });
       sel.addEventListener('change', (e) => { dl.setMaxBytes(parseInt(e.target.value, 10)); renderUsage(); });
+      const bsel = el.querySelector('#dlBufMax'), MB = 1024 * 1024;
+      [[32 * MB, '32 MB'], [64 * MB, '64 MB'], [128 * MB, '128 MB'], [512 * MB, '512 MB'], [d.GB, '1 GB'], [2 * d.GB, '2 GB'], [3 * d.GB, '3 GB'], [4 * d.GB, '4 GB']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = String(v); o.textContent = l; bsel.appendChild(o); });
+      bsel.addEventListener('change', (e) => { dl.setBufMaxBytes(parseInt(e.target.value, 10)); renderUsage(); });
       el.querySelector('#dlClearBuf').addEventListener('click', () => {
         d.modal({ title: 'Clear buffered audio?', body: '<p>This removes auto-buffered chapters (the gray lines). Your downloaded books (blue) are kept.</p>',
           buttons: [{ label: 'Clear buffer', cls: 'danger', run: () => { dl.clearBuffer(); renderUsage(); } }, { label: 'Cancel' }] });
@@ -51,6 +55,9 @@ const DownloadsScreen = (() => {
     el.querySelector('#dlWifiLabel').textContent = dl.wifiDetectable() ? 'Wi‑Fi only' : 'Confirm downloads';
     el.querySelector('#dlWifi').setAttribute('aria-checked', dl.wifiOnly() ? 'true' : 'false');
     el.querySelector('#dlMax').value = String(dl.maxBytes());
+    const bufSel = el.querySelector('#dlBufMax');
+    bufSel.value = String(dl.bufMaxBytes());
+    bufSel.disabled = !(window.Settings && (Settings.bufferCurrent || Settings.bufferAhead));   // no banking enabled → buffer size is moot
     renderList(); renderUsage();
     if (!unsub) unsub = dl.subscribe(() => { if (el && el.classList.contains('open')) { renderList(); renderUsage(); } });
   }
