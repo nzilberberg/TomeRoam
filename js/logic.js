@@ -162,6 +162,19 @@ const PBLogic = (() => {
     return 1;
   }
 
+  // Whether a playhead position should be written to durable progress / Plex.
+  // A bare "position is truthy" guard silently DROPS an explicit seek to exactly
+  // 0 (drag-to-start, Previous-restart, grab-at-0) — so durable progress and Plex
+  // keep the OLD position and a later resume/another device lands there. But 0
+  // also occurs INCIDENTALLY (pre-metadata during a load, mid chapter-transition),
+  // and writing those would wipe a real bookmark. So allow 0 ONLY when the caller
+  // flags it as an explicit user action. `pos` may be seconds or ms (only >0-vs-0
+  // matters); NaN/Infinity is never recordable.
+  function positionRecordable(pos, allowZero) {
+    if (!Number.isFinite(pos)) return false;
+    return pos > 0 || !!allowZero;
+  }
+
   // ---- banking per-chapter retry backoff (pure) -------------------------------
   // Banking's bankOne used to re-`pumpBank()` immediately after ANY non-oversize
   // failure, and a network failure was NOT recorded — so a persistent failure
@@ -186,7 +199,7 @@ const PBLogic = (() => {
 
   // bankBackoffMs stays private (used only by bankNoteFailure) — every exported
   // kernel must be referenced by shipped code (guarded by test/meta.test.js).
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, bankNoteFailure, bankRetryReady };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, bankNoteFailure, bankRetryReady };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

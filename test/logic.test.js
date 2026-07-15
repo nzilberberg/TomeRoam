@@ -190,6 +190,26 @@ test('displaySpeed takes exactly two args (no element-rate source)', () => {
   assert.equal(L.displaySpeed.length, 2);
 });
 
+// ---- positionRecordable (explicit-zero persistence guard) -------------------
+// A bare "position truthy" guard dropped an explicit seek to exactly 0, so
+// durable progress + Plex kept the old spot. allowZero lets an explicit user
+// action persist 0 while incidental load/transition zeros still don't.
+test('positionRecordable records any positive position (allowZero irrelevant)', () => {
+  assert.equal(L.positionRecordable(12.3, false), true);
+  assert.equal(L.positionRecordable(0.001, false), true);
+});
+test('positionRecordable DROPS an incidental zero (no explicit flag)', () => {
+  assert.equal(L.positionRecordable(0, false), false);
+  assert.equal(L.positionRecordable(0, undefined), false);
+});
+test('positionRecordable KEEPS an explicit zero (user seek/restart/grab)', () => {
+  assert.equal(L.positionRecordable(0, true), true);
+});
+test('positionRecordable rejects NaN/Infinity regardless of allowZero', () => {
+  assert.equal(L.positionRecordable(NaN, true), false);
+  assert.equal(L.positionRecordable(Infinity, true), false);
+});
+
 // ---- banking retry backoff (pure) -------------------------------------------
 test('bankNoteFailure increments attempts and schedules backoff 2/5/15/30s (then capped)', () => {
   let e = L.bankNoteFailure(undefined, 1000);

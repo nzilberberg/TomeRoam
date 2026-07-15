@@ -951,7 +951,7 @@
     ctx.updatedAt = Plex.serverNow();
     Presence.grab(ctx.book, t.ratingKey, (audio.currentTime || 0) * 1000);
     setMirrorClass(false);
-    saveLastPlayed();
+    writeProgress('paused', { allowZero: true });   // grabbing at an explicit spot (incl. 0) persists durably + to Plex
     updateSeekUI();
     if (window.PBDebug) PBDebug.log('PLAY', `scrub GRAB @ ${(audio.currentTime || 0).toFixed(1)}s — peer pauses, staying paused`);
   }
@@ -1078,7 +1078,7 @@
   let curObjUrl = null;   // object URL of the currently-loaded downloaded blob (revoked on next load)
 
   // ---- last-played memory (local; survives reloads) ------------------------
-  function saveLastPlayed() {
+  function saveLastPlayed(opts) {
     if (!ctx) return;
     const t = ctx.tracks[ctx.idx];
     if (!t) return;
@@ -1093,7 +1093,7 @@
         chapter: t.title || '', thumb: (ctx.album && ctx.album.thumb) || '', dur: t.durationMs || 0,
       }));
     } catch { /* storage full/blocked — best effort */ }
-    recordProgress();
+    recordProgress(opts);
   }
 
   // Record OUR current spot for THIS book into the durable Progress repository so a
@@ -1109,10 +1109,12 @@
     const cur = audio.currentTime || 0;
     return { total, cum: before + cur, remain: Math.max(0, total - (before + cur)) };
   }
-  function recordProgress() {
+  function recordProgress(opts) {
     if (!ctx) return;
     const t = ctx.tracks[ctx.idx];
-    if (!t || !audio.currentTime) return;
+    // allowZero: an explicit user action (seek/restart/grab) may land at exactly 0
+    // and MUST persist; incidental load/transition zeros must not (see the helper).
+    if (!t || !PBLogic.positionRecordable(audio.currentTime, opts && opts.allowZero)) return;
     // Roll-over grace: a chapter we auto-advanced INTO plays from 0, but we hold off
     // overwriting its old bookmark until it's played `grace` seconds — so a brief
     // roll-through doesn't wipe real progress. (Fresh-start OFF never sets a guard.)
@@ -1268,7 +1270,11 @@
     clearHandoff();   // an explicit scrub is the user's chosen spot — cancel any pending handoff correction
     ctx.updatedAt = Plex.serverNow();
     Presence.flush(audio.currentTime * 1000);
-    saveLastPlayed();
+    // Explicit user seek → persist the spot on ALL axes now (durable Progress, the
+    // pb_last snapshot, AND Plex), allowing an exact 0 (drag-to-start / Prev-restart).
+    // Previously this only snapshotted; a seek to 0 left the old position in durable
+    // Progress + Plex, so another device (or a cold relaunch) resumed at the old spot.
+    writeProgress(audio.paused ? 'paused' : 'playing', { allowZero: true });
   }
 
   audio.addEventListener('ended', () => {
@@ -1350,11 +1356,14 @@
   let presenceBeat = null;
   function startPresenceBeat() { stopPresenceBeat(); presenceBeat = setInterval(() => { if (ctx && !audio.paused) Presence.flush(audio.currentTime * 1000); }, 30000); }
   function stopPresenceBeat() { if (presenceBeat) { clearInterval(presenceBeat); presenceBeat = null; } }
-  function writeProgress(state) {
+  function writeProgress(state, opts) {
     if (!ctx) return;
     ctx.updatedAt = Plex.serverNow();    // this device just acted on this book
     const t = ctx.tracks[ctx.idx];
-    if (!t || !audio.currentTime) return;
+    // Same zero rule as recordProgress: allow an explicit 0 (so a seek/restart to
+    // the very start reaches Plex), never an incidental pre-metadata/transition 0
+    // (which would clobber the saved offset with a transient load-time 0).
+    if (!t || !PBLogic.positionRecordable(audio.currentTime, opts && opts.allowZero)) return;
     const posMs = audio.currentTime * 1000;
     const durMs = t.durationMs || (audio.duration || 0) * 1000;
     const book = ctx.book, track = t.ratingKey;
@@ -1367,7 +1376,7 @@
       Promise.resolve(Plex.writeTimeline({ ratingKey: track, state, timeMs: posMs, durationMs: durMs }))
         .then((ok) => { if (ok === false) queue(); }).catch(queue);
     }
-    saveLastPlayed();
+    saveLastPlayed(opts);   // carry allowZero through → durable Progress + snapshot also persist an explicit 0
   }
 
   // ---- player UI -----------------------------------------------------------
