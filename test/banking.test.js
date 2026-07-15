@@ -87,6 +87,15 @@ test('a 4xx is a permanent session skip (skipBank), not a backoff', async () => 
   assert.ok(!Banking._test.retry.has(1), 'no backoff for a permanent failure');
 });
 
+test('onReconnect clears an HTTP skip (stale auth / base-switch 404) but KEEPS an oversize skip', () => {
+  setup(AHEAD);
+  Banking._test.skipBank.set(1, { reason: 'oversize' });
+  Banking._test.skipBank.set(2, { reason: 'http', status: 404 });
+  Banking.onReconnect();
+  assert.ok(Banking._test.skipBank.has(1), 'oversize stays skipped — the file is still too big regardless of connection');
+  assert.ok(!Banking._test.skipBank.has(2), 'the HTTP skip is cleared so it gets a fresh attempt');
+});
+
 test('a 5xx backs off (retryable), it does not permanently skip', async () => {
   setup(AHEAD);
   fetchImpl = async () => { const e = new Error('HTTP 503'); e.kind = 'http'; e.status = 503; e.retryable = true; throw e; };

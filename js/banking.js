@@ -23,7 +23,13 @@ const Banking = (() => {
   const MAX_TOTAL_BANK_BYTES = 128 * 1024 * 1024;   // RAM-COPY ceiling (no-SW fallback path) — the .27-era jetsam guard
   const bankBudgetBytes = () => (window.Downloads && Downloads.bufMaxBytes) ? Downloads.bufMaxBytes() : 512 * 1024 * 1024;   // shared disk buffer-space budget; a chapter bigger than the WHOLE budget streams
   const banks = new Map();                  // idx -> { url, bytes } of a fully-downloaded track
-  const skipBank = new Set();               // idxs too big to bank — stream them, don't keep retrying
+  // idx -> { reason: 'oversize' | 'http', status? }. A chapter we won't keep
+  // retrying THIS session — either too big to bank (permanent for the book) or a
+  // non-retryable HTTP status. The REASON matters on reconnect: an oversize skip
+  // is permanent (the file is just too big), but an HTTP skip (a stale 401/403,
+  // a transient 404 while the base URL was switching) should get a fresh chance
+  // once connectivity recovers. onReconnect clears http skips, keeps oversize.
+  const skipBank = new Map();
   let bankBook = null;                      // book `banks` belongs to (keyed by idx → wipe on book change)
   let bankCtl = null;                       // AbortController for the one in-flight download
   let bankingIdx = -1;                      // idx currently downloading
@@ -261,13 +267,13 @@ const Banking = (() => {
       const aborted = ctl.signal.aborted || (e && e.name === 'AbortError');
       if (aborted) { outcome = 'abort'; }               // a fresh load superseded us — neutral, no penalty
       else if (e && (e.code === 'OVERSIZE' || e.kind === 'oversize')) {
-        skipBank.add(idx);
+        skipBank.set(idx, { reason: 'oversize' });      // too big to bank — permanent for this book
         if (ctx && ctx.idx === idx) { bankPct = 0; paintMeter(); }   // won't bank → native buffer drives the meter
         outcome = 'skip';
       } else if (e && e.kind === 'http' && e.retryable === false) {
-        skipBank.add(idx);                              // permanent 4xx → give up on this chapter for the session
+        skipBank.set(idx, { reason: 'http', status: e.status });   // non-retryable 4xx → skip, but clearable on reconnect
         outcome = 'skip';
-      } else {                                          // network / 5xx / CORS → back off, don't hammer the relay
+      } else {                                          // network / 5xx / 408 / 425 / CORS → back off, don't hammer the relay
         retry.set(idx, PBLogic.bankNoteFailure(retry.get(idx), Date.now()));
         outcome = 'fail';
         if (window.PBDebug) { const ent = retry.get(idx); PBDebug.log('BANK_FAIL', `idx=${idx} track=${t.ratingKey} attempt=${ent.attempts} kind=${(e && e.kind) || 'network'} status=${(e && e.status) || 0} elapsedMs=${Date.now() - started} nextRetryMs=${ent.nextAtMs - Date.now()} audioActive=${!d.audio.paused}`); }
@@ -306,8 +312,15 @@ const Banking = (() => {
   // stallTimer lives here (post-.80 extraction), so app.js routes through this
   // instead of touching a now-out-of-scope variable.
   function cancelStallRecovery() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } }
-  // Connectivity recovered → drop the backoff so prefetch resumes promptly.
-  function onReconnect() { retry.clear(); clearTimeout(repumpTimer); repumpTimer = null; pumpBank(); }
+  // Connectivity recovered → drop the backoff so prefetch resumes promptly, and
+  // clear HTTP-reason skips (a stale auth 401/403, a transient 404 during a base
+  // switch) so they get a fresh attempt. Oversize skips stay — the file is still
+  // too big regardless of the connection.
+  function onReconnect() {
+    retry.clear();
+    for (const [i, v] of [...skipBank]) if (v && v.reason === 'http') skipBank.delete(i);
+    clearTimeout(repumpTimer); repumpTimer = null; pumpBank();
+  }
 
   function init(deps) { d = deps; }
 

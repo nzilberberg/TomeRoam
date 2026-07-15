@@ -465,7 +465,11 @@ const Downloads = (() => {
     // Tag the outcome so callers can branch (banking: 4xx = give up for the session,
     // 5xx/429 = retry with backoff). Network errors surface as the native fetch
     // TypeError / AbortError — callers key off `.kind`/`.name`/`.code`.
-    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.kind = 'http'; e.status = r.status; e.retryable = (r.status >= 500 || r.status === 429); throw e; }
+    // Retryable = server-side/transient: 5xx, 429 (rate limit), 408 (request
+    // timeout), 425 (too early). Other 4xx (auth/not-found/bad-request) are
+    // non-retryable HERE; banking still gives an HTTP skip a fresh chance on
+    // reconnect (a stale 401 or a base-switch 404), it just won't hammer now.
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.kind = 'http'; e.status = r.status; e.retryable = (r.status >= 500 || r.status === 429 || r.status === 408 || r.status === 425); throw e; }
     const type = (r.headers.get('content-type') || 'audio/mpeg').split(';')[0];
     const total = parseInt(r.headers.get('content-length') || '0', 10) || sizeHint || 0;
     if (cap && total > cap) { try { if (r.body) await r.body.cancel(); } catch {} throw oversizeErr(); }
