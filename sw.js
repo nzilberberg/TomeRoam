@@ -14,20 +14,20 @@
 //   * ATOMIC VERSIONED caches (`SHELL_CACHE` keyed by BUILD): a build's assets are
 //     precached together; the page is only ever served from ONE build's cache, so
 //     there is no mixed-build window (index.html from build 50 + JS from build 48).
-//   * AUTO-TAKEOVER UPDATES: a new SW precaches its build then skipWaiting()s so
-//     it replaces the previous worker immediately; app.js reloads on
-//     controllerchange (deferred while audio plays) so the page lands fully on the
-//     new build. We do NOT rely on a "waiting + update prompt" flow — it could not
-//     dislodge a still-controlling old worker, which left devices on a stale
-//     index.html (see the install comment). localStorage/token survive across the
-//     swap, and startup still never blocks on the network (cache-first).
+//   * FIRST-INSTALL takeover, but WAIT on UPDATES: the first-ever SW skipWaiting()s
+//     so it controls the page from the first load (offline immediately); a NEW build
+//     over an existing one stays in "waiting" and is applied only when the user taps
+//     Options → App update (or on a full cold launch). Auto-activating an update
+//     flipped the controller under a live page and iOS reloaded it with no user tap
+//     (the .73 surprise auto-update) — see the install comment. localStorage/token
+//     survive the swap, and startup never blocks on the network (cache-first).
 //   * RUNTIME IMAGE CACHE for Plex cover art (separate, build-independent cache),
 //     with a bundled placeholder fallback. Media/API requests are never cached.
 //
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-12.73';
+const BUILD = '2026-07-12.74';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -82,21 +82,28 @@ const PLACEHOLDER = './img/placeholder-cover.svg';
 // deploy where one asset 404s at the CDN edge for a moment — fall back to
 // best-effort per-asset caching so we grab everything that IS available.
 //
-// We call skipWaiting() so this build TAKES OVER immediately. History (learned
-// the hard way in .1–.3): a "waiting" worker that only activates on the update
-// prompt could NOT replace the previous network-first SW while a client stayed
-// alive — the device kept running the OLD sw + a STALE index.html (fresh JS,
-// old HTML with no <script> tags for the new modules → window.Store/Net
-// undefined → offline broken). Auto-takeover + the controllerchange reload in
-// app.js is what actually ships a consistent build. Mixed builds are still
-// impossible because each build serves from its OWN versioned cache and the
-// reload lands entirely on the new one.
+// skipWaiting() — ONLY on the FIRST-ever install (no active worker yet). Then it
+// makes this SW adopt the just-loaded, previously-uncontrolled page immediately
+// so the app is offline-capable from the very first load. (History .1–.3: a
+// waiting worker couldn't dislodge the old NETWORK-FIRST sw, stranding devices on
+// stale HTML — that's why first-install takeover matters. That risk is gone now:
+// the shell is cache-first + ?v=<build> versioned, so builds can't mix.)
+//
+// On an UPDATE (an active worker already exists) we DELIBERATELY do NOT
+// skipWaiting — the new worker stays in "waiting" and the OLD worker keeps
+// control, so the running/resuming page holds its current build. Auto-activating
+// an update flipped the controller out from under a live page and iOS reloaded it
+// onto the new build with NO user tap (the surprise auto-update that landed users
+// on .73). An update now applies only when the user taps Options → App update
+// (postMessage SKIP_WAITING, handled below) or on a genuine full cold launch (no
+// clients → the waiting worker activates naturally). Mixed builds stay impossible
+// either way: each build serves from its OWN versioned cache.
 //
 // The activate guard (won't prune old caches until THIS shell is verified
 // complete) + shellFirst's all-caches fallback keep offline working even if a
 // precache doesn't finish.
 self.addEventListener('install', (e) => {
-  self.skipWaiting();
+  if (!self.registration.active) self.skipWaiting();   // first install only; updates wait for the user
   e.waitUntil((async () => {
     const c = await caches.open(SHELL_CACHE);
     try {

@@ -2457,6 +2457,11 @@
   // is gray/disabled until that SAME "ready" signal fires, then lights up. The
   // update is applied (promote + reload) only when the user taps it. A staged
   // build also still applies on the next COLD launch (the non-disruptive path).
+  // Set true the instant the user taps "App update", so the SW controllerchange
+  // handler can tell a user-initiated activation from a surprise auto-takeover.
+  // A controllerchange with hadController=true but updateApplyRequested=false is
+  // the .73 auto-reload bug recurring (an update activated without a tap).
+  let updateApplyRequested = false;
   function markUpdateAvailable(build) {
     const btn = $('optUpdate');
     if (!btn) return;
@@ -2467,6 +2472,8 @@
   function applyAppUpdate() {
     const btn = $('optUpdate');
     if (btn && btn.disabled) return;
+    updateApplyRequested = true;
+    if (window.PBDebug) PBDebug.log('SW', 'user tapped App update — applying');
     if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
     // APK: promote the staged web build natively + reload.
     try { if (window.TomeRoamNative && TomeRoamNative.applyUpdate) { TomeRoamNative.applyUpdate(); return; } } catch {}
@@ -2523,7 +2530,11 @@
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController) return;   // first install: nothing to offer
-      if (window.PBDebug) PBDebug.log('SW', 'new build active — offering (no auto-reload)');
+      // With the SW no longer auto-skipWaiting on updates (see sw.js install), a
+      // controller change for an existing install should ONLY happen because the
+      // user tapped App update. If this ever logs userApply=false, an update
+      // activated on its own — the surprise-reload bug is back.
+      if (window.PBDebug) PBDebug.log('SW', 'controllerchange hadController=true userApply=' + updateApplyRequested + (updateApplyRequested ? ' (applying)' : ' — NOT user-initiated, unexpected'));
       markUpdateAvailable(null);
       if (window.Net) Net.setUpdateReady();
     });
