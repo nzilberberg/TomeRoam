@@ -1367,8 +1367,11 @@
     saveLastPlayed();
     updatePlayerUI();
   });
-  audio.addEventListener('play', () => { updatePlayIcon(); startWriteTimer(); writeProgress('playing'); Presence.setPlaying(audio.currentTime * 1000); startPresenceBeat(); pumpBank(); });
-  audio.addEventListener('pause', () => { updatePlayIcon(); stopWriteTimer(); writeProgress('paused'); Presence.setPaused(audio.currentTime * 1000); stopPresenceBeat(); Progress.flush(); pumpBank(); });
+  // Keep the OS lock-screen control state synced to ACTUAL element state (not to our
+  // action handlers) — recommended, and it matters now that lock-screen Play is native.
+  const setMediaPlaybackState = (s) => { try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = s; } catch {} };
+  audio.addEventListener('play', () => { setMediaPlaybackState('playing'); updatePlayIcon(); startWriteTimer(); writeProgress('playing'); Presence.setPlaying(audio.currentTime * 1000); startPresenceBeat(); pumpBank(); });
+  audio.addEventListener('pause', () => { setMediaPlaybackState('paused'); updatePlayIcon(); stopWriteTimer(); writeProgress('paused'); Presence.setPaused(audio.currentTime * 1000); stopPresenceBeat(); Progress.flush(); pumpBank(); });
   audio.addEventListener('timeupdate', updateSeekUI);
   // Repaint the blue meter as the native playback buffer grows (`progress`) and as
   // the playhead moves (`timeupdate`) — so it reflects REAL current-stream load,
@@ -2022,7 +2025,18 @@
       artwork: ctx.coverUrl ? [{ src: ctx.coverUrl, sizes: '512x512', type: 'image/jpeg' }] : [],
     });
     const ms = navigator.mediaSession;
-    ms.setActionHandler('play', () => resumePlay());
+    // LOCK-SCREEN PLAY IS NATIVE (handler = null), deliberately. Overriding it with
+    // resumePlay()→audio.play() intercepts iOS's native background-resume path, and
+    // WebKit won't reliably reactivate the audio session for a scripted play() from a
+    // BACKGROUNDED action handler — the element reports `playing` but the clock stays
+    // frozen (the .95–.97 lock-screen "wedge"). Letting iOS resume the already-loaded
+    // element natively is the documented default and sidesteps that. Our `audio`
+    // 'play' listener still runs all the post-play bookkeeping (icon, progress writes,
+    // Presence, heartbeat, banking), so nothing downstream is lost. PAUSE stays custom
+    // (userPause cancels pending retries). The special resumePlay() cases (peer adopt,
+    // errored-element reload, retry cancel) still run for the IN-APP play button; a
+    // lock-screen resume takes the plain native path, which is the normal case.
+    ms.setActionHandler('play', null);
     ms.setActionHandler('pause', () => userPause());
     ms.setActionHandler('seekbackward', () => skipBy(-getSkipBack()));
     ms.setActionHandler('seekforward', () => skipBy(getSkipFwd()));
