@@ -108,8 +108,15 @@ const Browse = (() => {
   }
 
   function showPage(key) {
-    const prev = activeEntry();
-    if (prev && browseVisible()) prev.sy = window.scrollY || 0;   // remember the outgoing page
+    // NB: do NOT save the outgoing page's scroll here. The scroll listener above
+    // already records it continuously while browse is on screen, and saving here is
+    // actively WRONG when we're re-ENTERING browse from elsewhere: applyScreen calls
+    // setView('browse') before render, so browse already counts as visible, while
+    // activeEntry() still points at the page we're about to show (leaving browse
+    // hides the #browse CONTAINER, never the page node) and window.scrollY still
+    // belongs to Home/Options. That saved Home's scroll over the page's own and made
+    // the nav-button path always land at the top (swiping was fine — there the
+    // outgoing really is another browse page).
     restoring = true;   // the swap resizes the document → ignore the clamp's scroll event
     for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
   }
