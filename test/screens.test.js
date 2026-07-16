@@ -34,9 +34,11 @@ test('every sub-screen can be left (has a back button)', () => {
   for (const s of subs) assert.ok(doc.querySelector('#' + s + ' .subback'), `#${s} has no .subback button`);
 });
 
-test('app.js SETTINGS_SUBS matches the hub rows in index.html', () => {
-  const m = readRoot('js/app.js').match(/const SETTINGS_SUBS = \[([^\]]+)\]/);
-  assert.ok(m, 'SETTINGS_SUBS not found in app.js');
+test('nav.js SETTINGS_SUBS matches the hub rows in index.html', () => {
+  // Lives in js/nav.js since the screen-state extraction; app.js aliases it. (This
+  // guard caught that move the moment it happened, which is the point of it.)
+  const m = readRoot('js/nav.js').match(/const SETTINGS_SUBS = \[([^\]]+)\]/);
+  assert.ok(m, 'SETTINGS_SUBS not found in nav.js');
   const list = m[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
   assert.deepEqual(sortd(list), sortd(subs), 'a screen exists in one place but not the other');
 });

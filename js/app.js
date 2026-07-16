@@ -97,93 +97,28 @@
   const status = (msg) => { const s = $('clStatus'); if (s) s.textContent = msg || ''; };
 
   // ---- top-level view + bottom-nav switching -------------------------------
-  let npOpen = false;
-  function setView(v) {   // 'home' | 'browse' | 'options' | a settings sub | 'nowplaying'
-    npOpen = v === 'nowplaying';
-    const optOpen = v === 'options';
-    const subOpen = isSub(v);   // a settings sub-screen (General/Playback/Buffering/Downloads/Diagnostics)
-    // NP, the Options hub and its sub-screens are ADDITIVE overlays: they paint over
-    // whatever tall screen is showing, and the page underneath is NOT touched. Hiding
-    // the tall view shrinks the document, and a short (~viewport-sized) document is
-    // what trips iOS 26's ~50pt fixed-layer displacement (the black-band / Options-bar
-    // saga — a 1-2px token overflow does NOT count as tall). Only real screen switches
-    // (home/browse) swap the in-flow views.
-    if (!npOpen && !optOpen && !subOpen) {
-      $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
-      $('browse').classList.toggle('hidden', v !== 'browse');
-    }
-    // Leave the settings overlays' hidden state untouched when going TO NowPlaying so
-    // whichever one was underneath stays for the NP-back reveal. A sub-screen is a
-    // CHILD of the hub: keep #options MOUNTED underneath it (the opaque sub-screen
-    // covers it) — otherwise the forward slide-in exposes the base view (home/browse)
-    // for the length of the animation, and swipe-back would have no hub to filmstrip
-    // to. So #options shows on Options OR any sub; each sub shows only when it's `v`.
-    if (!npOpen) {
-      $('options').classList.toggle('hidden', !(optOpen || subOpen));
-      for (const s of SETTINGS_SUBS) $(s).classList.toggle('hidden', v !== s);
-    }
-    $('nowplaying').classList.toggle('hidden', !npOpen);
-    document.body.classList.toggle('np-locked', npOpen);   // CSS hook: navbar button/pill swap
-    // Home is the base view (even under an additive overlay) whenever it isn't
-    // parked → give the document real height so the fixed navbar seats at the true
-    // bottom (see .app CSS). This also keeps the NP pill seated when NP is over home.
-    document.body.classList.toggle('home-tall', !$('home').classList.contains('parked'));
-    $('navbar').classList.toggle('hidden', !Plex.isSignedIn());
-    updatePlayerUI();
-  }
-  function setNavActive(which) {   // 'home' | 'authors' | 'books' | 'options' | null
-    document.querySelectorAll('#navbar [data-nav]').forEach((b) => {
-      const on = b.dataset.nav === which;
-      b.classList.toggle('active', on);
-      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
-    });
-  }
-  // Wipe ALL transient swipe styling back to a known-good baseline: remove any
-  // leftover ghost/snapshot panes and clear the inline transform/transition/
-  // will-change/z-index the swipe puts on the REAL elements (#home/#browse/
-  // #options/#nowplaying + the nav pill). Called at the top of applyScreen — the
-  // reconcile point that runs after every swipe (finalize) and every nav — so a
-  // swipe that gets interrupted mid-flight can never leave an element stuck
-  // offscreen/half-transformed and corrupt later swipes (the "erratic after a
-  // while" bug). Safe because applyScreen is NEVER called during an active drag.
-  function resetSwipeStyles(keepGhosts) {
-    if (!keepGhosts) document.querySelectorAll('.nav-ghost').forEach((n) => n.remove());
-    document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone
-    const els = ['home', 'browse', 'options', 'nowplaying', ...SETTINGS_SUBS].map((id) => $(id));
-    els.push(document.querySelector('#navbar .np-actions'));
-    for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }
-  }
+  // The SCREEN-STATE layer lives in js/nav.js (Nav): view visibility, the nav-tab
+  // highlight, swipe-style reset, the applyScreen dispatch, element/overlay
+  // resolution, and the two button-nav animations. app.js keeps the nav STACKS +
+  // intents (navTo/goBack/openSub/closeSub) and the gesture machinery below — they
+  // DRIVE Nav. Thin delegators keep every call site unchanged (hoisted `function`
+  // so callers may precede them; a `const` arrow would TDZ-crash).
+  const SETTINGS_SUBS = Nav.SETTINGS_SUBS;
+  const isSub = Nav.isSub;
+  const isOverlay = Nav.isOverlay;
+  const overlayEl = Nav.overlayEl;
+  const appViewEl = Nav.appViewEl;
+  const viewElFor = Nav.viewElFor;
+  const npOpen = Nav.npOpen;                    // () => bool: NP is the current screen
+  function setView(v) { Nav.setView(v); }
+  function setNavActive(which) { Nav.setNavActive(which); }
+  function resetSwipeStyles(keepGhosts) { Nav.resetSwipeStyles(keepGhosts); }
+  function applyScreen(desc, opts) { Nav.applyScreen(desc, opts); }
+  function slideInView(el, from) { Nav.slideInView(el, from); }
+  function overlayFilmstrip(fromV, toV, dir) { Nav.overlayFilmstrip(fromV, toV, dir); }
   // Navigation is driven by the History API so desktop browser back/forward act
   // exactly like the on-screen back button / swipe. Each screen is a small
   // descriptor pushed as a history state; popstate re-renders it.
-  // opts.resetScroll (default true) — window/panel scroll reset to top.
-  // opts.render (default true) — actually (re)render the view's content. The swipe
-  // carousel already renders the destination live during the drag, so on COMMIT it
-  // re-runs applyScreen with render:false to reconcile visibility only — no second
-  // render (which would reload images = the post-settle flash) and no scroll change.
-  function applyScreen(desc, opts) {
-    const resetScroll = !opts || opts.resetScroll !== false;
-    const render = !opts || opts.render !== false;
-    resetSwipeStyles(opts && opts.keepGhosts);   // baseline: no swipe can leave stale transforms/ghosts behind
-    // Home's fixed-navbar seating is handled by `body.home-tall` (real scroll
-    // height — see .app CSS); the scrollTo just puts it at the top on entry. (The
-    // 1px is a harmless remnant of the abandoned "scroll runway" theory.) NOTE: no
-    // carousel-scroll restore here — home is PARKED (painted), not display:none, so
-    // its carousels keep their scrollLeft on their own; re-setting it would fire a
-    // scroll-snap correction (the "oh wait, let me scroll over" animation).
-    if (!desc || desc.v === 'home') { setView('home'); setNavActive('home'); if (resetScroll) window.scrollTo(0, 1); return; }
-    // Options is an additive overlay (like NP): no document scroll changes —
-    // the page underneath stays exactly as it was. Only its own panel resets.
-    if (desc.v === 'options') { setView('options'); setNavActive('options'); if (render) OptionsScreen.render(); if (resetScroll) $('options').scrollTop = 0; return; }
-    // A settings sub-screen (General/Playback/Buffering/Downloads/Diagnostics) —
-    // additive overlay over the hub; keep the Options nav tab lit ("inside Options").
-    if (isSub(desc.v)) { setView(desc.v); setNavActive('options'); if (render) renderScreen(desc.v); if (resetScroll) $(desc.v).scrollTop = 0; return; }
-    // NP: no scroll reset — the page underneath must stay exactly as it was.
-    if (desc.v === 'nowplaying') { setView('nowplaying'); if (render) renderNowPlaying(); return; }
-    setView('browse');
-    setNavActive(desc.v === 'authors' ? 'authors' : desc.v === 'books' ? 'books' : null);
-    if (render) Browse.render(desc);
-  }
   // NAVIGATION IS IN-MEMORY, not via the History API. iOS standalone PWAs RELOAD the
   // whole page on the OS back/forward SWIPE whenever back-history exists (wiping
   // playback + banks + speed — the interactive swipe reloads, a guard entry doesn't
@@ -192,60 +127,12 @@
   let navStack = [{ v: 'home' }];
   const fwdStack = [];                  // screens backed out of — for browser-style forward
   const currentDesc = () => navStack[navStack.length - 1];
-  const REDUCED = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  // The Options HUB's sub-screens: each is a fixed overlay (id === view name) that
-  // filmstrips in from the hub and back out. Adding one = markup + a module + a hub
-  // row; the nav machinery below is data-driven off this list so app.js doesn't grow
-  // per screen. Diagnostics has no module (its rows are self-injected by debug.js /
-  // logpipe.js), so it's not in renderScreen.
-  const SETTINGS_SUBS = ['general', 'playback', 'buffering', 'downloads', 'diagnostics'];
-  const isSub = (v) => SETTINGS_SUBS.indexOf(v) !== -1;
   function renderScreen(v) {   // re-fill a settings screen's controls from live state
     if (v === 'options') return OptionsScreen.render();
     if (v === 'general') return GeneralScreen.render();
     if (v === 'playback') return PlaybackScreen.render();
     if (v === 'buffering') return BufferingScreen.render();
     if (v === 'downloads') return DownloadsScreen.render();
-  }
-  // Which element renders a screen (NP is a fixed overlay that doesn't slide via this;
-  // #options and every sub-screen have id === view name).
-  const viewElFor = (v) => v === 'nowplaying' ? null : v === 'home' ? $('home') : (v === 'options' || isSub(v)) ? $(v) : $('browse');
-  // Carousel slide: the newly-shown view enters from `from` ('right' forward | 'left' back).
-  function slideInView(el, from) {
-    if (REDUCED || !el) return;
-    const cls = from === 'left' ? 'nav-in-left' : 'nav-in-right';
-    el.classList.remove('nav-in-left', 'nav-in-right');
-    void el.offsetWidth;                                     // restart the animation
-    el.classList.add(cls);
-    el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
-  }
-  // Button-nav filmstrip between two OVERLAY screens (Options ↔ a sub-screen like
-  // Downloads). Unlike slideInView (which animates only the INCOMING pane and lets
-  // whatever's under it show through — fine for an in-flow view over the base
-  // document, but it exposes the base view when one overlay replaces another), this
-  // moves BOTH panes: together they cover the viewport for the whole slide, so the
-  // base never flashes. Matches the swipe-back filmstrip (start/settle). dir: 'fwd'
-  // (toV enters from the right) | 'back' (toV enters from the left). Reconciles
-  // visibility via applyScreen when it lands (which clears these inline styles).
-  function overlayFilmstrip(fromV, toV, dir) {
-    const fromEl = overlayEl(fromV), toEl = overlayEl(toV);
-    const reconcile = () => applyScreen(currentDesc(), { render: false });
-    if (REDUCED || !fromEl || !toEl) { reconcile(); return; }
-    const w = window.innerWidth, off = dir === 'back' ? -w : w;   // incoming start edge
-    toEl.classList.remove('hidden'); fromEl.classList.remove('hidden');
-    toEl.style.transition = 'none'; toEl.style.transform = 'translateX(' + off + 'px)';
-    fromEl.style.transition = 'none'; fromEl.style.transform = 'translateX(0)';
-    void toEl.offsetWidth;                                         // commit start positions
-    let done = false;
-    const finish = () => { if (done) return; done = true; reconcile(); };
-    requestAnimationFrame(() => {
-      const tr = 'transform .24s cubic-bezier(.2,.7,.2,1)';
-      toEl.style.transition = tr; fromEl.style.transition = tr;
-      toEl.style.transform = 'translateX(0)';                     // incoming lands
-      fromEl.style.transform = 'translateX(' + (-off) + 'px)';    // outgoing exits the other way
-    });
-    toEl.addEventListener('transitionend', finish, { once: true });
-    setTimeout(finish, 340);                                      // safety net
   }
   // Forward navigation to a NEW screen (clears the forward stack, slides in from right
   // unless anim is suppressed for lateral bottom-nav tab switches).
@@ -315,9 +202,6 @@
   // below: an overlay slides as its OWN real element (nothing under it is touched, so
   // the underlying page never scrolls); two in-flow views can't coexist, so an
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
-  const isOverlay = (v) => v === 'options' || v === 'nowplaying' || isSub(v);
-  const overlayEl = (v) => $(v);   // every overlay's element id === its view name
-  const appViewEl = (v) => v === 'home' ? $('home') : $('browse');
   function bindSwipeBack() {
     let d = null, finishing = false;
     const navPill = () => $('navbar').querySelector('.np-actions');
@@ -1026,7 +910,7 @@
     const pct = dur ? Math.min(100, (pos / dur) * 100) : 0;
     $('pCur').textContent = fmt(pos);
     paintSeek($('pSeek'), pct);
-    if (npOpen) {
+    if (npOpen()) {
       $('npCur').textContent = fmt(pos);
       paintSeek($('npSeek'), pct);
     }
@@ -1441,7 +1325,7 @@
     // peer extrapolates at the new rate from here.
     Presence.setSpeed(rate, ctx ? audio.currentTime * 1000 : null);
     updatePositionState();   // lock-screen scrubber must extrapolate at the new rate
-    if (ctx) { ctx.updatedAt = Plex.serverNow(); if (npOpen) updateNowPlaying(); }
+    if (ctx) { ctx.updatedAt = Plex.serverNow(); if (npOpen()) updateNowPlaying(); }
   }
 
   // User moved the playhead on THIS device: mark it as our latest activity and
@@ -1574,9 +1458,9 @@
     updatePlayIcon();
     if (window.Downloads) refreshDlUi(ctx.book);   // NP button + transport meter colour for this book
     updateSeekUI();   // paint position/duration from the known spot NOW, not after the element loads
-    if (npOpen) updateNowPlaying();
+    if (npOpen()) updateNowPlaying();
   }
-  function updatePlayIcon() { const b = $('pPlay'); b.innerHTML = playPauseSvg(audio.paused); b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause'); if (npOpen) updateNpPlayIcon(); }
+  function updatePlayIcon() { const b = $('pPlay'); b.innerHTML = playPauseSvg(audio.paused); b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause'); if (npOpen()) updateNpPlayIcon(); }
   // Paint a seek slider (value 0–1000 + the CSS fill var) unless mid-drag — the
   // ONE painter for the transport, Now-Playing, and the peer mirror (three copies
   // of this line used to drift independently).
@@ -1614,7 +1498,7 @@
     if (scrubbing) return;   // mid-drag: skip the library-DOM writes below (their reflow is what stutters the drag)
     if (ctx && !audio.paused) updateBookLines(ctx.book);   // tick the time line for the PLAYING book only (all tiles repaint on the 1s tick)
     updatePlayingFileRow();
-    if (npOpen) updateNowPlaying();
+    if (npOpen()) updateNowPlaying();
   }
 
   // Manual pointer-driven scrubbing for the seek sliders. iOS Safari does NOT
@@ -1704,7 +1588,7 @@
     $('pFwd').title = 'Skip forward ' + getSkipFwd() + 's';
     $('pBack').innerHTML = skipSvg('back', getSkipBack());   // same circular-arrow glyph as the NP skip buttons
     $('pFwd').innerHTML = skipSvg('fwd', getSkipFwd());
-    if (npOpen) buildNpControls();
+    if (npOpen()) buildNpControls();
   }
 
   // ---- Options HUB + settings sub-screens -----------------------------------
@@ -2090,6 +1974,14 @@
   function bind() {
     // The sign-in button is wired by SignInScreen.init (see below).
     // Full-library browse: bottom nav + the Browse module (js/browse.js).
+    // Screen-state layer (js/nav.js): it owns what's on screen; app.js keeps the
+    // stacks/intents + the gesture that drive it. renderScreen/renderNowPlaying/
+    // renderBrowse are injected so Nav never reaches for a global.
+    Nav.init({
+      byId: $, isSignedIn: () => Plex.isSignedIn(), updatePlayerUI,
+      renderScreen, renderNowPlaying, renderBrowse: (desc) => Browse.render(desc),
+      currentDesc,
+    });
     Browse.init({
       mount: $('browse'), fmt,
       onPlay: playFromBrowse, onPlayFile: playFileFromBrowse,
