@@ -200,6 +200,19 @@ const PBLogic = (() => {
     return { trackChanged, reload: trackChanged || !!errored };
   }
 
+  // restoreLastPlayed() rebuilds ctx from the saved snapshot and (used to) ALWAYS
+  // call startTrack(), which empties+reloads the <audio> element. When enterApp()
+  // re-fires mid-playback (an iOS background reload, or an in-memory re-entry), the
+  // saved track is usually the one ALREADY playing — reloading it tears down the
+  // live playhead and, with autoplay off, leaves it paused (the lock-screen
+  // "play-from-paused fails" bug). Reload ONLY when the live element isn't already
+  // on the saved book+track. `elementActive` = the <audio> has a real, non-errored
+  // load to preserve.
+  function shouldReloadOnRestore(savedBook, savedTrack, curBook, curTrack, elementActive) {
+    if (!elementActive) return true;                     // nothing live worth keeping → (re)load
+    return String(savedBook) !== String(curBook) || String(savedTrack) !== String(curTrack);
+  }
+
   // ---- banking per-chapter retry backoff (pure) -------------------------------
   // Banking's bankOne used to re-`pumpBank()` immediately after ANY non-oversize
   // failure, and a network failure was NOT recorded — so a persistent failure
@@ -224,7 +237,7 @@ const PBLogic = (() => {
 
   // bankBackoffMs stays private (used only by bankNoteFailure) — every exported
   // kernel must be referenced by shipped code (guarded by test/meta.test.js).
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, resumeAdoptPlan, bankNoteFailure, bankRetryReady };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, resumeAdoptPlan, shouldReloadOnRestore, bankNoteFailure, bankRetryReady };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

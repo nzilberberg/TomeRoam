@@ -25,6 +25,12 @@
   const resetGraceSec = () => Settings.resetGraceSec;  // Options: seconds before a rolled-into chapter's old progress is discarded
   let rollGuard = null;                     // { track, until } — suppress recording a rolled-into chapter during its grace window
 
+  // Per-page-load id, fresh on every script eval. The PBDebug ring PERSISTS across
+  // reloads, so a stable-per-load id lets a lock-screen report tell an iOS
+  // background RELOAD (a new bootId appears) from an in-memory enterApp re-entry
+  // (same bootId) — the still-unpinned trigger of the resume-kill bug.
+  const bootId = (() => { try { return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).slice(0, 8); } catch { return 'boot'; } })();
+
   // ---- media-load resilience (slow/lossy relay) ----------------------------
   let curLoad = null;          // {idx, seekSec, autoplay} — what we're trying to load, for retry
   let loadGen = 0;             // generation token so a stale loadedmetadata can't fire late
@@ -564,7 +570,12 @@
   // show()/the view-switch and injects enterApp + toast at init (see bind()).
 
   // ---- home (Continue Listening + Recently Added carousels) ----------------
-  async function enterApp() {
+  async function enterApp(reason) {
+    // Entry breadcrumb for the resume-kill trigger: reason + whether we re-entered
+    // WHILE hidden and/or playing (the dangerous mid-playback re-fire). Compare
+    // boot= across two enterApp lines to tell a reload (differs) from an in-memory
+    // re-entry (same). See [[tomeroam-lockscreen-resume-kill-bug]].
+    if (window.PBDebug) PBDebug.log('LIFE', `enterApp reason=${reason || '?'} boot=${bootId} hidden=${document.hidden} playing=${!audio.paused} hadCtx=${!!ctx}`);
     show('library');
     $('navbar').classList.remove('hidden');
     // Single history entry + in-memory nav (see navTo): the OS back-swipe has nothing
@@ -1178,6 +1189,7 @@
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LAST) || 'null'); } catch {}
     if (!saved || !saved.book) { updatePlayerUI(); return; }
+    const prev = ctx;   // capture the LIVE ctx before we rebuild it (enterApp may re-fire mid-playback)
     paintSnapshotBar(saved);   // instant bar from the snapshot; reconciled once ctx lands
     let fetched = false;
     try {
@@ -1185,8 +1197,19 @@
       fetched = true;   // the metadata reads themselves succeeded (live or cached)
       const idx = tracks.findIndex((t) => String(t.ratingKey) === String(saved.track));
       if (!alb || !tracks.length || idx < 0) throw new Error('track no longer exists');
+      // Don't empty+reload the <audio> element if it's ALREADY the live, loaded
+      // track — that's the lock-screen resume-kill: enterApp re-fires during
+      // playback and a reload (autoplay off) leaves the live track paused. Keep the
+      // element; just reconcile ctx/UI. Only reload when the target genuinely differs.
+      const prevT = prev && prev.tracks[prev.idx];
+      const elementLive = !!(audio.src && !audio.error && audio.readyState >= 1);
+      const reload = PBLogic.shouldReloadOnRestore(saved.book, saved.track, prev && prev.book, prevT && prevT.ratingKey, elementLive);
       ctx = { album: alb, tracks, idx, book: saved.book, updatedAt: saved.ts || Plex.serverNow(), coverUrl: alb.thumb ? Plex.artUrl(alb.thumb) : null };
-      startTrack(idx, (saved.pos || 0) / 1000, false);
+      // On a genuine (re)load, preserve play state instead of hardcoding paused: a
+      // cold entry has no live element (audio.paused true → restore paused, as
+      // before); a mid-playback reload keeps playing.
+      if (reload) startTrack(idx, (saved.pos || 0) / 1000, !audio.paused);
+      else if (window.PBDebug) PBDebug.log('PLAY', `restore KEPT live track=${saved.track} @ ${(audio.currentTime || 0).toFixed(1)}s (no reload — element already on target)`);
       updatePlayerUI(); setMediaSession();
     } catch {
       ctx = null;
@@ -2225,6 +2248,7 @@
   window.PBHardReset = hardReset;   // reachable from diagnostics too
 
   async function init() {
+    if (window.PBDebug) PBDebug.log('BOOT', `id=${bootId} hidden=${document.hidden} signedIn=${Plex.isSignedIn()}`);
     // Banking (js/banking.js) — wire it BEFORE bind() registers the audio listeners
     // that drive it (pump/paintMeter/maybeRecover). It reads live playback state via
     // getters and calls back into updateFileRows/startTrack; locallyStored + Plex are
@@ -2348,9 +2372,9 @@
       getSkipBack, getSkipFwd, prevTrack, nextTrack, skipBy, resumePlay, userPause, goBack,
       applyDlBtn, dlBtnAction, openBookMenu,
     });
-    SignInScreen.init({ byId: $, Plex, enterApp, toast });
+    SignInScreen.init({ byId: $, Plex, enterApp: () => enterApp('signin'), toast });
     OptionsScreen.init({ byId: $, Settings, Presence, updateSkipLabels, pumpBank, onSignOut: doSignOut });
-    if (Plex.isSignedIn()) return enterApp();
+    if (Plex.isSignedIn()) return enterApp('init');
     show('signin');
   }
   init();

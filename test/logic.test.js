@@ -245,6 +245,26 @@ test('resumeAdoptPlan: different chapter AND errored → still one track-changin
   assert.deepEqual(L.resumeAdoptPlan(1, 4, true), { trackChanged: true, reload: true });
 });
 
+// ---- shouldReloadOnRestore (lock-screen resume-kill guard) ------------------
+// restoreLastPlayed used to ALWAYS startTrack() (empty+reload the element). When
+// enterApp re-fires mid-playback, the saved track is already live — a reload with
+// autoplay off left it paused (lock-screen "play-from-paused fails"). Reload ONLY
+// when the live element isn't already on the saved book+track.
+test('shouldReloadOnRestore: element already live on the saved track → NO reload', () => {
+  assert.equal(L.shouldReloadOnRestore('bk', 't2', 'bk', 't2', true), false);
+});
+test('shouldReloadOnRestore: no live element (cold entry) → reload', () => {
+  assert.equal(L.shouldReloadOnRestore('bk', 't2', null, null, false), true);
+  assert.equal(L.shouldReloadOnRestore('bk', 't2', 'bk', 't2', false), true, 'errored/empty element is not worth keeping');
+});
+test('shouldReloadOnRestore: live element but a DIFFERENT track/book → reload', () => {
+  assert.equal(L.shouldReloadOnRestore('bk', 't2', 'bk', 't5', true), true, 'different chapter');
+  assert.equal(L.shouldReloadOnRestore('bk', 't2', 'other', 't2', true), true, 'different book');
+});
+test('shouldReloadOnRestore: compares as strings (numeric vs string keys)', () => {
+  assert.equal(L.shouldReloadOnRestore(8913, 42, '8913', '42', true), false);
+});
+
 // ---- banking retry backoff (pure) -------------------------------------------
 test('bankNoteFailure increments attempts and schedules backoff 2/5/15/30s (then capped)', () => {
   let e = L.bankNoteFailure(undefined, 1000);
