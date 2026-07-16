@@ -6,7 +6,7 @@
 // Books & Files rows carry data-book / data-track so the host's presence tick
 // keeps resume/peer numbers live.
 const Browse = (() => {
-  let o = {};                     // { mount, fmt, onPlay, onPlayFile, onOpenAuthor, onOpenFiles, onBack, getResumeEntry, getChapterPct, bindDlBtn, onRender }
+  let o = {};                     // { mount, fmt, onPlay, onPlayFile, onOpenAuthor, onOpenFiles, onBack, getResumeEntry, getChapterPct, bindDlBtn, onRender, playingTrackKey }
   let authorsCache = null;        // authors list is stable within a session (books are cached in plex.js)
 
   // ---- rendered-page CACHE -------------------------------------------------
@@ -46,7 +46,71 @@ const Browse = (() => {
     return desc.v === 'files' ? spinnerHTML : `<div class="browselist">${skelRows(9)}</div>`;
   }
 
+  // ---- per-page scroll memory ----------------------------------------------
+  // Browse pages all ride the ONE shared document scroll, so a page's position is
+  // lost the moment you go anywhere else (Home resets it, another page overwrites
+  // it). Remember it per cache entry (`sy`) and put it back on return.
+  //
+  // Captured from a passive scroll listener rather than a "leaving" hook because
+  // there is no single leave path — you can swap pages, tap Home, open Options, or
+  // swipe. `restoring` gates it: swapping pages changes the document height, so the
+  // browser clamps scrollY and fires a scroll event that would otherwise record a
+  // bogus position against the page we're arriving at.
+  let restoring = false;
+  const browseVisible = () => !!(o.mount && !o.mount.classList.contains('hidden'));
+  function activeEntry() {
+    for (const v of pageCache.values()) if (!v.el.classList.contains('hidden')) return v;
+    return null;
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('scroll', () => {
+      if (restoring || !browseVisible()) return;
+      const cur = activeEntry();
+      if (cur) cur.sy = window.scrollY || 0;
+    }, { passive: true });
+  }
+  // Pure: clamp to what's actually scrollable — this is what makes "as close to the
+  // top as possible" true for a track near the END of the list (it can't reach the
+  // top; the document simply runs out).
+  function clampY(y, scrollHeight, innerHeight) {
+    const max = Math.max(0, scrollHeight - innerHeight);
+    return Math.max(0, Math.min(max, Math.round(y || 0)));
+  }
+  // Pure: the Y a page opens at. Files pages never restore a saved position — they
+  // open at the locally-playing track, else the top; every other page returns to
+  // where you left it.
+  function entryScrollY(descV, savedY, trackY) {
+    if (descV === 'files') return trackY == null ? 0 : trackY;
+    return savedY || 0;
+  }
+  function applyScrollY(y) {
+    const se = document.scrollingElement || document.documentElement;
+    restoring = true;
+    window.scrollTo(0, clampY(y, se.scrollHeight, window.innerHeight));
+    requestAnimationFrame(() => requestAnimationFrame(() => { restoring = false; }));
+  }
+  // Document Y that puts the locally-playing track's row just under the fixed title
+  // bar. null when this book isn't the one loaded here (or its row isn't built).
+  function playingTrackY(book, page) {
+    if (!o.playingTrackKey || !book) return null;
+    const tk = o.playingTrackKey(book.ratingKey);
+    if (tk == null) return null;
+    const row = page.querySelector('.filerow[data-track="' + String(tk).replace(/"/g, '\\"') + '"]');
+    if (!row) return null;
+    const bar = document.querySelector('.topbar');
+    const clear = (bar ? bar.getBoundingClientRect().bottom : 0) + 8;   // sit just below it
+    return (window.scrollY || 0) + row.getBoundingClientRect().top - clear;
+  }
+  // Where a page sits when you arrive at it (see entryScrollY for the rule).
+  function positionOnEnter(desc, page, savedY) {
+    const trackY = desc.v === 'files' ? playingTrackY(desc.book, page) : null;
+    applyScrollY(entryScrollY(desc.v, savedY, trackY));
+  }
+
   function showPage(key) {
+    const prev = activeEntry();
+    if (prev && browseVisible()) prev.sy = window.scrollY || 0;   // remember the outgoing page
+    restoring = true;   // the swap resizes the document → ignore the clamp's scroll event
     for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
   }
   function evictLRU(keepKey) {
@@ -155,6 +219,7 @@ const Browse = (() => {
       hit.order = ++orderSeq;
       showPage(key);
       o.onRender();                   // refresh live resume/peer numbers on the shown page
+      positionOnEnter(desc, hit.el, hit.sy);   // back where you left it (files: at the playing track)
       return;
     }
     // CACHE MISS → fetch, then build into a fresh page node and show it. A brief
@@ -182,9 +247,12 @@ const Browse = (() => {
       page.innerHTML = '';
       buildFor(desc, data, page);
     } catch (e) { page.innerHTML = `<div class="empty">⚠️ ${e.message || 'Could not load.'}</div>`; }
-    window.scrollTo(0, 0);            // fresh page starts at the top
     evictLRU(key);
     o.onRender();
+    // A fresh page has no saved position → top; a files page for the book playing
+    // here opens at its current track. Positioned AFTER onRender so the rows are
+    // built and laid out (the files case measures a row).
+    positionOnEnter(desc, page, 0);
   }
 
   // ---- grouping by first sort-letter --------------------------------------
@@ -423,7 +491,7 @@ const Browse = (() => {
 
   return { init, reset, render, clearCache, patchRows, bookSig,
     // internals exposed for unit tests only (no runtime behaviour change)
-    _test: { keepCover, authorSig, bookSig, bookRow, authorRow } };
+    _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY } };
 })();
 
 // Expose on window (top-level `const Browse` is a lexical global, not

@@ -120,3 +120,33 @@ test('keepCover: old cover not finished loading → does NOT transplant', () => 
   keepCover(oldRow, newRow);
   assert.strictEqual(newRow.querySelector('img.cover'), newImg);
 });
+
+// ---- per-page scroll memory (browse pages share ONE document scroll) --------
+// Rule: Books/Authors/an author's books return to where you left them; a files
+// page never restores — it opens at the track playing HERE, else the top.
+const { entryScrollY, clampY } = Browse._test;
+
+test('entryScrollY: a list page returns to its saved position', () => {
+  assert.equal(entryScrollY('books', 1400, null), 1400);
+  assert.equal(entryScrollY('authors', 220, null), 220);
+  assert.equal(entryScrollY('authorBooks', 90, null), 90);
+});
+test('entryScrollY: a never-visited list page opens at the top', () => {
+  assert.equal(entryScrollY('books', 0, null), 0);
+  assert.equal(entryScrollY('books', undefined, null), 0);
+});
+test('entryScrollY: a files page opens at the locally-playing track, NOT a saved position', () => {
+  assert.equal(entryScrollY('files', 5000, 830), 830);   // saved position deliberately ignored
+});
+test('entryScrollY: a files page for a book not playing here opens at the top', () => {
+  assert.equal(entryScrollY('files', 5000, null), 0);
+});
+test('clampY: a track near the END lands as close to the top as the document allows', () => {
+  // want y=9000 but only 2400 of scroll exists → clamped (can't reach the top)
+  assert.equal(clampY(9000, 3000, 600), 2400);
+});
+test('clampY: never negative, and rounds', () => {
+  assert.equal(clampY(-50, 3000, 600), 0);
+  assert.equal(clampY(120.6, 3000, 600), 121);
+  assert.equal(clampY(500, 400, 600), 0);   // content shorter than the viewport
+});

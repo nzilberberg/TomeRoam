@@ -2099,6 +2099,14 @@
       // Wire a book-row download button (browse.js renders the element).
       bindDlBtn: (btn, b) => { btn.addEventListener('click', (e) => { e.stopPropagation(); dlBtnAction(b.ratingKey, b.title); }); applyDlBtn(btn, b.ratingKey); },
       onRender: () => { renderPresence(); refreshDlUi(); },   // paint live numbers + download buttons after a render
+      // The track playing HERE for this book — null unless this exact book is the
+      // LOCAL playback context (a peer playing it doesn't count). Lets the files
+      // list open at the current chapter instead of the top.
+      playingTrackKey: (bookRk) => {
+        if (!ctx || String(ctx.book) !== String(bookRk)) return null;
+        const t = ctx.tracks && ctx.tracks[ctx.idx];
+        return t ? t.ratingKey : null;
+      },
     });
     document.querySelectorAll('#navbar [data-nav]').forEach((b) => b.addEventListener('click', () => {
       const n = b.dataset.nav;
