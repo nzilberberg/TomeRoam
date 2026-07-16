@@ -680,10 +680,15 @@ body.has-player #buffering, body.has-player #diagnostics { bottom: calc(var(--na
 body.has-player #scrollind { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }   /* top of the transport */
 #scrollind.on { opacity: 1; }
 #scrollind > i { position: absolute; right: 0; top: 0; width: 100%; border-radius: 3px; background: rgba(255,255,255,.34); }
-/* Hide native scrollbars everywhere — they run the full window height behind the
-   fixed bars; the custom indicator (or the A-Z index on browse) is the affordance now. */
-* { scrollbar-width: none; }
-*::-webkit-scrollbar { width: 0; height: 0; }
+/* Hide native scrollbars ONLY on the surfaces the custom indicator supports — the
+   document (Home/Books/Authors) and the settings overlays. Higher, differently-shaped
+   scrollers (Now Playing z60, speed popover z50, track-info sheet z80, book menu z85)
+   sit ABOVE #scrollind and have their own geometry, so they KEEP their native
+   scrollbar affordance (scrollbar.js ignores their scroll events). */
+html, body, #options, #general, #playback, #buffering, #downloads, #diagnostics { scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar,
+#options::-webkit-scrollbar, #general::-webkit-scrollbar, #playback::-webkit-scrollbar,
+#buffering::-webkit-scrollbar, #downloads::-webkit-scrollbar, #diagnostics::-webkit-scrollbar { width: 0; height: 0; }
 
 /* Options HUB rows — tappable list items that drill into each sub-screen. */
 .opthub { margin-top: 4px; }

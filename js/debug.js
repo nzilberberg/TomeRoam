@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-12.110';
+  const BUILD = '2026-07-12.111';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
