@@ -18,7 +18,7 @@ const NowPlayingScreen = (() => {
   //   state:   getCtx, getCurLoad, audio (the <audio> element)
   //   speed:   onSpeedChange, speedCtls (shared array), spd
   //   render:  byId, setArt, paintSeek, fmt, bookTimes, playPauseSvg, skipSvg
-  //   actions: prevTrack, nextTrack, skipBy, resumePlay, goBack, getSkipBack, getSkipFwd
+  //   actions: prevTrack, nextTrack, skipBy, resumePlay, userPause, goBack, getSkipBack, getSkipFwd
   //   dl:      applyDlBtn, dlBtnAction, openBookMenu
   let d = null;
   let npSpeedCtl = null;
@@ -53,7 +53,7 @@ const NowPlayingScreen = (() => {
       <button id="npNext" class="np-rnd" aria-label="Next track"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>`;
     $('npPrev').onclick = d.prevTrack;
     $('npBack').onclick = () => d.skipBy(-d.getSkipBack());
-    $('npPlay').onclick = () => (audio.paused ? d.resumePlay() : audio.pause());
+    $('npPlay').onclick = () => (audio.paused ? d.resumePlay() : d.userPause());
     $('npFwd').onclick = () => d.skipBy(d.getSkipFwd());
     $('npNext').onclick = d.nextTrack;
     updatePlayIcon();

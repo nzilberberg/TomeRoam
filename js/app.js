@@ -953,7 +953,7 @@
   function grabFromPeer() {
     if (!ctx) return;
     const t = ctx.tracks[ctx.idx]; if (!t) return;
-    playbackIntentGen++;   // adopting a peer's spot is an explicit reposition → supersede a pending retry
+    notePlaybackIntent();   // adopting a peer's spot is an explicit reposition → supersede a pending retry
     clearHandoff();   // user picked an explicit spot — don't let a pending sync overwrite it
     ctx.updatedAt = Plex.serverNow();
     Presence.grab(ctx.book, t.ratingKey, (audio.currentTime || 0) * 1000);
@@ -967,6 +967,10 @@
   function stopRenderTick() { if (renderTick) { clearInterval(renderTick); renderTick = null; } }
 
   function onSuperseded(winner) {
+    // A cross-device handoff supersedes any pending stream retry too — else the
+    // reprobe could finish after this pause and start us playing again (two devices
+    // on the same book). Cancel it whether or not we're currently playing.
+    notePlaybackIntent();
     if (!audio.paused) {
       audio.pause();
       toast(`Handed off to ${winner.name || 'another device'}`);
@@ -1211,7 +1215,7 @@
         paused: audio.paused, speed: audio.playbackRate || 1,
       };
     },
-    seek: (sec) => { audio.currentTime = sec; },
+    seek: (sec) => { notePlaybackIntent(); audio.currentTime = sec; },   // a handoff correction is a newer intent → supersede a pending retry
     peerFor,
     debug: (tag, m) => { if (window.PBDebug) PBDebug.log(tag, m); },
   });
@@ -1238,6 +1242,11 @@
   // peer, it just resumes our own loaded spot.
   function resumePlay() {
     if (!ctx) return;
+    notePlaybackIntent();   // user Play supersedes any pending stream retry
+    // If the current load ERRORED, a bare audio.play() can't recover a failed src —
+    // and we just cancelled the retry that would have. Re-load the track now (at
+    // where we were) so an explicit Play is always a real recovery, not a dead end.
+    if (audio.error) { startTrack(ctx.idx, audio.currentTime || (curLoad && curLoad.seekSec) || 0, true); return; }
     const p = livePeerForCtx();
     if (p) {
       const best = bestSource(ctx.book, bookEntries[ctx.book]);
@@ -1272,9 +1281,25 @@
 
   // User moved the playhead on THIS device: mark it as our latest activity and
   // publish immediately so peers pick up the new spot (incl. rewinds) fast.
+  // THE single choke point for "a newer deliberate playback action happened" —
+  // cancels a pending stream retry so it can't later restart the failed track at
+  // its old position/play-state. Bump the intent counter (the in-flight reprobe
+  // phase bails via the retry's gen check) AND clear the delay-phase timer. Call
+  // this from EVERY externally-driven action (seek/skip/Prev, peer grab/adopt,
+  // handoff correction, user play/pause, cross-device supersede) — NOT from the raw
+  // `pause` EVENT (an error itself pauses the element, and that must not cancel the
+  // recovery it triggered).
+  function notePlaybackIntent() {
+    playbackIntentGen++;
+    clearTimeout(loadRetryTimer); loadRetryTimer = null;
+  }
+  // A user/systemic PAUSE action (transport button, media session, sign-out) — as
+  // opposed to the incidental `pause` event — supersedes a pending retry.
+  function userPause() { notePlaybackIntent(); audio.pause(); }
+
   function onManualSeek() {
     if (!ctx) return;
-    playbackIntentGen++;   // explicit reposition supersedes a pending stream retry (see the retry guard)
+    notePlaybackIntent();   // explicit reposition supersedes a pending stream retry (see the retry guard)
     clearHandoff();   // an explicit scrub is the user's chosen spot — cancel any pending handoff correction
     ctx.updatedAt = Plex.serverNow();
     Presence.flush(audio.currentTime * 1000);
@@ -1921,7 +1946,7 @@
     });
     const ms = navigator.mediaSession;
     ms.setActionHandler('play', () => resumePlay());
-    ms.setActionHandler('pause', () => audio.pause());
+    ms.setActionHandler('pause', () => userPause());
     ms.setActionHandler('seekbackward', () => skipBy(-getSkipBack()));
     ms.setActionHandler('seekforward', () => skipBy(getSkipFwd()));
     ms.setActionHandler('previoustrack', prevTrack);
@@ -1978,7 +2003,7 @@
     Presence.setSpeed(savedSpeed);
     speedCtl = SpeedControl.create({ initial: savedSpeed, onChange: onSpeedChange });
     speedCtls.push(speedCtl);   // synced + queried, but intentionally NOT appended to the transport bar
-    $('pPlay').addEventListener('click', () => (audio.paused ? resumePlay() : audio.pause()));
+    $('pPlay').addEventListener('click', () => (audio.paused ? resumePlay() : userPause()));
     $('pBack').addEventListener('click', () => skipBy(-getSkipBack()));
     $('pFwd').addEventListener('click', () => skipBy(getSkipFwd()));
     updateSkipLabels();
@@ -2305,7 +2330,7 @@
     NowPlayingScreen.init({
       byId: $, getCtx: () => ctx, getCurLoad: () => curLoad, audio,
       onSpeedChange, speedCtls, spd, bookTimes, fmt, setArt, paintSeek, playPauseSvg, skipSvg,
-      getSkipBack, getSkipFwd, prevTrack, nextTrack, skipBy, resumePlay, goBack,
+      getSkipBack, getSkipFwd, prevTrack, nextTrack, skipBy, resumePlay, userPause, goBack,
       applyDlBtn, dlBtnAction, openBookMenu,
     });
     SignInScreen.init({ byId: $, Plex, enterApp, toast });

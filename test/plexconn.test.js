@@ -137,6 +137,21 @@ test('a stale probe finishing AFTER a fresh one overwrites no connection metadat
   assert.equal(localStorage.getItem('pb_connKind'), 'local', 'persisted connKind not clobbered');
 });
 
+test('a failed rediscovery replaces the proven-dead cached list (no re-probing obsolete endpoints)', async () => {
+  T.resetConn();
+  localStorage.setItem('pb_server', JSON.stringify({ name: 'Old', machineId: 'm', connections: [{ uri: 'http://dead', local: true }] }));
+  global.fetch = async (url) => {
+    url = String(url);
+    if (url.includes('/api/v2/resources')) return { ok: true, status: 200, json: async () => ([{ provides: 'server', owned: true, clientIdentifier: 'm2', name: 'Fresh', connections: [{ uri: 'http://fresh', relay: true }], accessToken: 'tok' }]) };
+    if (url.includes('/identity')) return { ok: false, status: 503 };   // every probe (dead AND fresh) fails right now
+    return { ok: false, status: 404 };
+  };
+  await Plex.connect().then(() => { throw new Error('connect should reject when nothing is reachable'); }, () => {});
+  const cached = JSON.parse(localStorage.getItem('pb_server'));
+  assert.equal(cached.connections[0].uri, 'http://fresh', 'the dead saved list was replaced by the freshly discovered one');
+  assert.equal(cached.name, 'Fresh', 'cached server metadata refreshed even though the probe failed');
+});
+
 test('concurrent connect() calls share ONE discovery pass', async () => {
   T.resetConn();
   let resourceCalls = 0;

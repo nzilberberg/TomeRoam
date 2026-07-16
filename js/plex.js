@@ -196,11 +196,17 @@ const Plex = (() => {
       // check is BEFORE any shared write, so a stale probe publishes nothing —
       // neither base nor connKind/serverName/cached connections.
       if (gen !== connGen) throw new Error('Plex connection superseded');
+      // Refresh the cached connection list on ANY current-generation outcome —
+      // INCLUDING a probe-failure that rediscovered a fresh list — so a list already
+      // proven dead isn't re-probed on every future attempt (sequential 3.5/12s
+      // probes add up). `cand.connections` is what we just connected through, or the
+      // freshly-rediscovered list on failure.
+      try { localStorage.setItem(LS.server, JSON.stringify({ name: cand.name, machineId: cand.machineId, connections: cand.connections })); } catch {}
+      if (!cand.base) { dbg('CONN', 'FAIL: no connection reachable'); throw new Error('Could not reach your Plex server.'); }
       base = cand.base;
       connKind = cand.kind;
       serverName = cand.name;
       try { localStorage.setItem(LS.connKind, cand.kind); } catch {}
-      try { localStorage.setItem(LS.server, JSON.stringify({ name: cand.name, machineId: cand.machineId, connections: cand.connections })); } catch {}
       // Remember the winning host so cover-art URLs resolve to the SAME origin when
       // OFFLINE (base is null then) — that origin is the SW image cache's key, so
       // previously-loaded covers keep rendering. Not used for API calls.
@@ -226,18 +232,18 @@ const Plex = (() => {
     let hit = await tryConns(conns, tkn);
     // All dead — network changed, or a cached relay endpoint rotated out of the
     // pool. Rediscover a fresh connection list once and try again. (No removeItem
-    // here anymore: a successful connect overwrites LS.server via the candidate,
-    // and a stale probe must not mutate it — see connect().)
+    // here: a stale probe must not mutate LS.server; connect() refreshes it — even
+    // on failure — from the candidate's `connections` under the generation check.)
     if (!hit && saved) {
       dbg('CONN', 'all cached connections dead — rediscovering');
       const d = await discoverServer();
       conns = d.connections; name = d.name; machineId = d.machineId;
       hit = await tryConns(d.connections, d.token || tkn);
     }
-    if (!hit) { dbg('CONN', 'FAIL: no connection reachable'); throw new Error('Could not reach your Plex server.'); }
-    // A candidate — connect() publishes base + all metadata together after the
-    // generation check.
-    return { base: hit.uri, kind: hit.kind, name, machineId, connections: conns };
+    // A candidate — connect() publishes it after the generation check. On a probe
+    // failure (base:null) `conns` is the freshly-discovered list, so connect() still
+    // refreshes the cache and future attempts don't re-probe the dead saved list.
+    return { base: hit ? hit.uri : null, kind: hit ? hit.kind : null, name, machineId, connections: conns };
   }
   // Base to build ART/stream URLs against even before/without a live connection
   // (offline): the last host that worked. API calls still require connect().
