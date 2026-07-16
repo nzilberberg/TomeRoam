@@ -668,6 +668,23 @@ body.has-player #buffering, body.has-player #diagnostics { bottom: calc(var(--na
 .subhdr { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .subback { background: none; border: 0; color: var(--accent); font-size: .95rem; padding: 4px 2px; cursor: pointer; }
 .subttl { font-size: 1.15rem; font-weight: 700; }
+/* Custom scroll indicator (js/scrollbar.js) — confined to the gap between the fixed
+   title bar and the transport/nav bar, since the native document scrollbar can't be
+   inset (see the module header). Native scrollbars are hidden app-wide below. */
+#scrollind {
+  position: fixed; right: 2px; z-index: 34; width: 3px; pointer-events: none;
+  top: calc(var(--safe-top) + 51px);                 /* bottom of the title bar */
+  bottom: calc(var(--nav-h) + var(--nav-pad));       /* top of the nav bar */
+  opacity: 0; transition: opacity .35s ease;
+}
+body.has-player #scrollind { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }   /* top of the transport */
+#scrollind.on { opacity: 1; }
+#scrollind > i { position: absolute; right: 0; top: 0; width: 100%; border-radius: 3px; background: rgba(255,255,255,.34); }
+/* Hide native scrollbars everywhere — they run the full window height behind the
+   fixed bars; the custom indicator (or the A-Z index on browse) is the affordance now. */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { width: 0; height: 0; }
+
 /* Options HUB rows — tappable list items that drill into each sub-screen. */
 .opthub { margin-top: 4px; }
 .hubrow { display: flex; align-items: center; justify-content: space-between; width: 100%;
