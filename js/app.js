@@ -38,6 +38,7 @@
   let curLoad = null;          // {idx, seekSec, autoplay} — what we're trying to load, for retry
   let loadGen = 0;             // generation token so a stale loadedmetadata can't fire late
   let restoreGen = 0;          // generation token so a slow restoreLastPlayed can't clobber newer playback
+  let playReqGen = 0;          // generation token so two rapid book selections can't resolve out of order
 
   // ---- banking / buffering (js/banking.js — Banking) ------------------------
   // The whole prefetch/whole-bank subsystem + the blue buffered meter live in the
@@ -1020,8 +1021,18 @@
   //     beat a faster peer on a same-book takeover → you'd resume behind it).
   //   * playBookAt — an EXPLICIT track/offset (files view): nothing to arbitrate.
   async function beginPlayback(book, alb, resolveTarget) {
+    // An explicit playback request OWNS the outcome from the moment it starts:
+    //   * bump restoreGen so an in-flight restoreLastPlayed bails IMMEDIATELY — not
+    //     only once our startTrack (below) eventually bumps loadGen. Without this, a
+    //     restore whose metadata resolves DURING our tracksForBook() await still
+    //     passes its gen check and reloads the OLD book before our startTrack runs.
+    //   * capture a play-request gen so two rapid book taps can't finish out of order
+    //     — a slow first fetch resolving after a faster second would otherwise win.
+    const myReq = ++playReqGen;
+    restoreGen++;
     try {
       const tracks = await tracksForBook(book);
+      if (myReq !== playReqGen) return;   // a newer explicit play superseded this one mid-fetch
       if (!tracks.length) return toast('No playable files for this book.');
       const { track, posMs } = resolveTarget(tracks);
       if (ctx) { recordProgress(); if (String(ctx.book) !== String(book)) writeProgress('paused'); }   // capture the outgoing chapter (AFTER the target is fixed)
@@ -1235,12 +1246,16 @@
       else if (window.PBDebug) PBDebug.log('PLAY', `restore KEPT live track=${saved.track} @ ${(audio.currentTime || 0).toFixed(1)}s (no reload — element already on target)`);
       updatePlayerUI(); setMediaSession();
     } catch {
-      ctx = null;
-      // Confirmed gone (metadata loaded but the track's missing) → forget it and retract
-      // the optimistic bar. A transient/offline failure (fetched=false) keeps the snapshot
-      // bar up as correct last-known state; cache-first reads make this branch near-unreachable
-      // for the last-played book, and a later restore/reconnect wires ctx when it can.
-      if (fetched) { localStorage.removeItem(LAST); updatePlayerUI(); }
+      // Superseded by newer playback while we were fetching (or via the throw below
+      // after a successful fetch) → don't touch a newer ctx. Same guard as the success
+      // path — otherwise a REJECTED restore of A after the user started B would null
+      // B's live context (progress/presence/transport then lose the current book).
+      if (!PBLogic.restoreStillCurrent(myRestore, restoreGen, enterLoadGen, loadGen)) return;
+      // Only FORGET the last-played book when metadata actually loaded and proved the
+      // saved track is gone (fetched → the 'track no longer exists' throw). A transient/
+      // offline rejection (fetched=false) keeps the live/prev ctx + the snapshot bar as
+      // last-known state — nulling ctx on a blip used to drop the still-playing book.
+      if (fetched) { ctx = null; localStorage.removeItem(LAST); updatePlayerUI(); }
     }
   }
 
