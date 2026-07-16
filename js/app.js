@@ -1022,18 +1022,36 @@
   //   * playBookAt — an EXPLICIT track/offset (files view): nothing to arbitrate.
   async function beginPlayback(book, alb, resolveTarget) {
     // An explicit playback request OWNS the outcome from the moment it starts:
+    //   * Playback.noteIntent() INVALIDATES any stale stream-retry / lock-screen-wedge
+    //     recovery from the OLD book. Those capture loadGen+intentGen, and we bump
+    //     NEITHER until our own startTrack (after the await) — so without this an old
+    //     retry would still pass its gen check and fire loadTrack() DURING our fetch,
+    //     reloading the old book (and, via the old startTrack→cancelPlayRequest coupling,
+    //     even cancelling THIS newer selection). noteIntent clears their timers now.
     //   * bump restoreGen so an in-flight restoreLastPlayed bails IMMEDIATELY — not
-    //     only once our startTrack (below) eventually bumps loadGen. Without this, a
-    //     restore whose metadata resolves DURING our tracksForBook() await still
-    //     passes its gen check and reloads the OLD book before our startTrack runs.
+    //     only once our startTrack eventually bumps loadGen.
     //   * capture a play-request gen so two rapid book taps can't finish out of order
     //     — a slow first fetch resolving after a faster second would otherwise win.
+    Playback.noteIntent();
     const myReq = ++playReqGen;
     restoreGen++;
+    // PHASE 1 — fetch the track list. A rejection is only OUR failure if we're still
+    // current; an older, superseded request that rejects must stay silent (no false
+    // "Could not start playback" over the newer selection).
+    let tracks;
     try {
-      const tracks = await tracksForBook(book);
-      if (myReq !== playReqGen) return;   // a newer explicit play superseded this one mid-fetch
-      if (!tracks.length) return toast('No playable files for this book.');
+      tracks = await tracksForBook(book);
+    } catch (e) {
+      if (myReq === playReqGen) toast(e.message || 'Could not start playback');
+      return;
+    }
+    if (myReq !== playReqGen) return;   // a newer explicit play superseded this one mid-fetch
+    if (!tracks.length) return toast('No playable files for this book.');
+    // PHASE 2 — apply. Past the ownership check the rest is SYNCHRONOUS (no await), so
+    // nothing can supersede us midway → a throw here IS this request's real failure and
+    // is always reported (the .104 single-try suppressed it once the request's own
+    // startTrack had — pre-fix — bumped playReqGen against itself).
+    try {
       const { track, posMs } = resolveTarget(tracks);
       if (ctx) { recordProgress(); if (String(ctx.book) !== String(book)) writeProgress('paused'); }   // capture the outgoing chapter (AFTER the target is fixed)
       let idx = tracks.findIndex((t) => String(t.ratingKey) === String(track));
@@ -1046,8 +1064,8 @@
       // Announce to the ecosystem that this device now owns this book.
       Presence.claimPlaying(book, tracks[idx].ratingKey, posMs || 0, tracks[idx].ratingKey);
     } catch (e) {
-      if (myReq !== playReqGen) return;   // a superseded request that rejects must not report a false failure over the newer one
       toast(e.message || 'Could not start playback');
+      if (window.PBDebug) PBDebug.log('PLAY', `begin playback apply failed: ${(e && e.message) || e}`);
     }
   }
   function playBook(entry, alb) {
@@ -1075,7 +1093,6 @@
     Banking.ensureBook(ctx.book);   // banks are per-book (keyed by idx) — wipe on book change
     curLoad = { idx, seekSec, autoplay };       // remembered so a network error can retry this exact load
     Playback.cancelRetry();                       // a new load supersedes any pending stream retry
-    cancelPlayRequest();                          // a committed load supersedes any not-yet-started book selection (Next/adopt/auto-advance)
     const gen = ++loadGen;                       // invalidate any in-flight loadedmetadata from a prior src
     // Prefer an already-banked copy of this track (network-proof, no re-buffer);
     // otherwise stream. Then re-point the meter + prefetch window at this track.
@@ -1371,10 +1388,14 @@
   // supersede, sign-out) — NOT from the raw `pause` EVENT (an error itself pauses the
   // element, and that must not cancel the recovery it triggered).
   // A not-yet-committed book selection (beginPlayback awaiting its track list) must be
-  // cancelled by any NEWER playback intent or teardown — otherwise it can recreate ctx,
+  // cancelled by any NEWER EXPLICIT intent or teardown — otherwise it can recreate ctx,
   // start audio (a banked/downloaded track needs no fresh Plex request), and publish a
   // Presence claim after the user moved on or signed out. beginPlayback captures
-  // playReqGen and bails if it moved; this is the one place that moves it.
+  // playReqGen and bails if it moved. Moved ONLY by genuine newer-intent actions:
+  // notePlaybackIntent (resume/seek/skip/Next/Prev/grab/handoff/userPause→sign-out) and
+  // a fresh beginPlayback. Deliberately NOT from startTrack — that also runs for OLD
+  // internal recovery (a stale stream-retry / wedge reload / restore / auto-advance),
+  // which must never cancel a NEWER selection.
   function cancelPlayRequest() { playReqGen++; }
   function notePlaybackIntent() { cancelPlayRequest(); Playback.noteIntent(); }
   // A user/systemic PAUSE action (transport button, media session, sign-out) — as
@@ -1601,13 +1622,18 @@
     Presence.setTrack(rk, seekSec * 1000);
     updatePlayerUI(); setMediaSession();
   }
+  // Next/Prev are EXPLICIT user intent → route through notePlaybackIntent so they
+  // supersede a not-yet-started book selection (and cancel stale retry/wedge work),
+  // like resume/seek/pause. rollToTrack itself must NOT (it's also the auto-advance
+  // path from `ended`, which a newer book tap should win over).
   function prevTrack() {
     if (!ctx) return;
+    notePlaybackIntent();
     // >10s into the track → restart it; otherwise step to the previous track.
     if ((audio.currentTime || 0) > 10) { audio.currentTime = 0; onManualSeek(); return; }
     if (ctx.idx > 0) { recordProgress(); rollToTrack(ctx.idx - 1); }
   }
-  function nextTrack() { if (ctx && ctx.idx < ctx.tracks.length - 1) { recordProgress(); rollToTrack(ctx.idx + 1); } }
+  function nextTrack() { if (ctx && ctx.idx < ctx.tracks.length - 1) { notePlaybackIntent(); recordProgress(); rollToTrack(ctx.idx + 1); } }
   function updateSkipLabels() {
     $('pBack').title = 'Skip back ' + getSkipBack() + 's';
     $('pFwd').title = 'Skip forward ' + getSkipFwd() + 's';
