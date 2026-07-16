@@ -115,8 +115,12 @@
     }
     // Leave the overlays' hidden state untouched when going TO NowPlaying so
     // whichever one was underneath stays for the NP-back reveal (matches the old
-    // Options behaviour); Options and Downloads are mutually exclusive otherwise.
-    if (!npOpen) { $('options').classList.toggle('hidden', !optOpen); $('downloads').classList.toggle('hidden', !dlOpen); }
+    // Options behaviour). Downloads is a CHILD overlay of Options: keep Options
+    // MOUNTED underneath it (Downloads is opaque and covers it) — otherwise the
+    // forward slide-in of Downloads exposes the base view (home/browse) in the
+    // not-yet-covered area for the length of the animation, and swipe-back would
+    // have no Options to filmstrip to. So Options shows on Options OR Downloads.
+    if (!npOpen) { $('options').classList.toggle('hidden', !(optOpen || dlOpen)); $('downloads').classList.toggle('hidden', !dlOpen); }
     $('nowplaying').classList.toggle('hidden', !npOpen);
     document.body.classList.toggle('np-locked', npOpen);   // CSS hook: navbar button/pill swap
     // Home is the base view (even under an additive overlay) whenever it isn't
