@@ -1382,15 +1382,21 @@
   });
   audio.addEventListener('timeupdate', paintMeter);
   // ---- iOS lock-screen resume WEDGE watchdog --------------------------------
-  // Confirmed on device (.95 wifi logs): after a lock-screen pause→play, the
+  // Confirmed on device (.95/.96 wifi logs): after a lock-screen pause→play, the
   // <audio> element fires `play`+`playing` but the media clock NEVER advances — it
   // reports playing, produces no sound, and stays stuck even after foregrounding,
-  // WITH buffered data at the playhead. That's an iOS platform wedge, not the app
-  // reloading the element (no startTrack/emptied in those logs). Detect it (clock
-  // not advancing shortly after `playing`, while forward buffer exists so it's a
-  // wedge, not genuine starvation) and un-stick with a micro re-seek. Heavily
-  // logged so the next report says whether the nudge RECOVERED or FAILED.
+  // WITH forward buffer at the playhead. That's an iOS platform wedge, not the app
+  // reloading the element. A micro RE-SEEK does NOT un-stick it (`.96`: seek fired,
+  // clock still frozen). What DOES play in the same session is a FRESH LOAD (the
+  // foreground play started at `buf=none` and advanced). So the recovery is a
+  // RELOAD at the reached spot — startTrack (which also re-prefers a local `./__dl/`
+  // copy when there is one). Capped to avoid a reload loop if the reload also wedges
+  // (e.g. iOS won't reactivate the audio session until foreground); the foreground
+  // re-check (visibilitychange) then gets a fresh, uncapped attempt where it should
+  // stick. Heavily logged so the report says RECOVERED / still-frozen.
   let wedgeTimer = null;
+  let wedgeReloads = 0;   // consecutive reload recoveries without a healthy advance
+  const MAX_WEDGE_RELOADS = 2;
   function forwardBufferedSecApp() {
     const b = audio.buffered, ct = audio.currentTime || 0;
     for (let i = 0; i < b.length; i++) if (ct >= b.start(i) - 1 && ct <= b.end(i) + 1) return b.end(i) - ct;
@@ -1398,21 +1404,20 @@
   }
   function armWedgeWatchdog() {
     clearTimeout(wedgeTimer);
-    if (audio.paused) return;
+    if (audio.paused || !ctx) return;
     const t0 = audio.currentTime || 0;
     wedgeTimer = setTimeout(() => {
       wedgeTimer = null;
-      if (audio.paused) return;                          // paused since → not wedged
-      if ((audio.currentTime || 0) - t0 > 0.05) return;  // clock advanced → healthy
-      const fwd = forwardBufferedSecApp();
-      if (fwd < 2) return;                               // no forward data → real starvation (stall recovery owns it), not a wedge
-      if (window.PBDebug) PBDebug.log('PLAY', `WEDGE playing but clock frozen at ${t0.toFixed(1)}s hidden=${document.hidden} fwdBuf=${fwd.toFixed(0)}s — nudging`);
-      try { audio.currentTime = t0 + 0.05; } catch {}    // micro re-seek to un-stick the element
-      const t1 = audio.currentTime || 0;
-      setTimeout(() => {
-        const ok = !audio.paused && (audio.currentTime || 0) - t1 > 0.05;
-        if (window.PBDebug) PBDebug.log('PLAY', `WEDGE nudge ${ok ? 'RECOVERED' : 'FAILED'} at ${(audio.currentTime || 0).toFixed(1)}s hidden=${document.hidden}`);
-      }, 1600);
+      if (audio.paused || !ctx) return;                  // paused/torn down since → not wedged
+      if ((audio.currentTime || 0) - t0 > 0.05) { wedgeReloads = 0; return; }   // clock advanced → healthy, reset the cap
+      if (forwardBufferedSecApp() < 2) return;           // no forward data → real starvation (stall recovery owns it), not a wedge
+      if (wedgeReloads >= MAX_WEDGE_RELOADS) {
+        if (window.PBDebug) PBDebug.log('PLAY', `WEDGE still frozen at ${t0.toFixed(1)}s after ${wedgeReloads} reloads hidden=${document.hidden} — giving up until foreground`);
+        return;
+      }
+      wedgeReloads++;
+      if (window.PBDebug) PBDebug.log('PLAY', `WEDGE playing but clock frozen at ${t0.toFixed(1)}s hidden=${document.hidden} fwdBuf=${forwardBufferedSecApp().toFixed(0)}s — reloading (attempt ${wedgeReloads})`);
+      startTrack(ctx.idx, t0, true);                     // fresh load at the reached spot; its `playing` re-arms this watchdog to verify
     }, 1400);
   }
   // iOS keeps networkState=LOADING and fires 'stalled' (not 'suspend') when it goes
@@ -2114,7 +2119,13 @@
     bindScrub($('pSeek'));
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { writeProgress(audio.paused ? 'paused' : 'playing'); Presence.setActive(false); Progress.flush(); Progress.setActive(false); stopRenderTick(); }
-      else if (!$('library').classList.contains('hidden')) { Presence.setActive(true); Progress.setActive(true); startRenderTick(); }
+      else if (!$('library').classList.contains('hidden')) {
+        Presence.setActive(true); Progress.setActive(true); startRenderTick();
+        // Foregrounding is a fresh chance to un-wedge a lock-screen-frozen element
+        // (iOS may only reactivate the audio session on foreground). Reset the cap and
+        // re-check: if it's "playing" but frozen, the watchdog reloads it now.
+        if (!audio.paused) { wedgeReloads = 0; armWedgeWatchdog(); }
+      }
     });
     // Back online → push whatever we recorded offline, then re-read peers so a LWW
     // merge settles who's most recent (offline data wins only if genuinely newer).
