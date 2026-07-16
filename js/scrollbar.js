@@ -54,11 +54,15 @@ const ScrollBar = (() => {
     return { top: t.scrollTop, total: t.scrollHeight, view: t.clientHeight, doc: false };
   }
 
-  // The A-Z index of the ACTIVE (visible, non-hidden cached) browse page. Checking a
-  // bare `.alphaindex` would (a) match a HIDDEN cached page's index and (b) be true
-  // for a browse index merely mounted UNDER a settings overlay — both wrong.
+  // Is the browse A-Z index ACTUALLY on screen? It's a descendant of the #browse
+  // container (o.mount). Three things must all hold: #browse itself is showing (it
+  // gets `.hidden` when you leave browse for Home/Options — but the cached
+  // `.browsepage` inside it KEEPS its non-hidden class, so checking the page alone
+  // left the index "shown" forever and permanently suppressed the Home indicator),
+  // the active cached page isn't `.hidden`, and it has an index. Purely class-based
+  // so it's testable (no layout / offsetParent).
   function activeAlphaShown() {
-    return !!document.querySelector('.browsepage:not(.hidden) .alphaindex');
+    return !!document.querySelector('#browse:not(.hidden) .browsepage:not(.hidden) .alphaindex');
   }
 
   // Pure: only DOCUMENT scroll defers to the browse A-Z index; element (overlay)

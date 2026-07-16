@@ -66,33 +66,55 @@ test('surfaceKind: document/window → doc; settings overlay → overlay; anythi
 });
 
 // ---- activeAlphaShown (jsdom) ----------------------------------------------
-function browsePage(hidden) {
+// Real structure: #browse (the Browse mount, hidden when you leave browse) >
+// .browsepage (LRU-cached, inactive ones .hidden) > .alphaindex.
+function mount(hiddenContainer) {
+  let b = document.getElementById('browse');
+  if (!b) { b = document.createElement('div'); b.id = 'browse'; document.body.appendChild(b); }
+  b.className = hiddenContainer ? 'hidden' : '';
+  b.innerHTML = '';
+  return b;
+}
+function addPage(m, hidden) {
   const p = document.createElement('div');
   p.className = 'browsepage' + (hidden ? ' hidden' : '');
   const idx = document.createElement('div'); idx.className = 'alphaindex';
   p.appendChild(idx);
-  return p;
+  m.appendChild(p);
 }
-function reset() { document.querySelectorAll('.browsepage').forEach((n) => n.remove()); }
 
 test('activeAlphaShown: no browse pages → false', () => {
-  reset();
+  mount(false);
   assert.equal(activeAlphaShown(), false);
 });
-test('activeAlphaShown: an active (non-hidden) browse index → true', () => {
-  reset();
-  document.body.appendChild(browsePage(false));
+test('activeAlphaShown: an active (non-hidden) browse index in a shown #browse → true', () => {
+  addPage(mount(false), false);
   assert.equal(activeAlphaShown(), true);
 });
 test('activeAlphaShown: HIDDEN cached index first in DOM, active index after → true (reviewer scenario 2)', () => {
-  reset();
-  document.body.appendChild(browsePage(true));   // hidden Authors, first in DOM
-  document.body.appendChild(browsePage(false));  // active Books, after
-  assert.equal(activeAlphaShown(), true);        // matches the ACTIVE one, not the first
+  const m = mount(false);
+  addPage(m, true);    // hidden Authors, first in DOM
+  addPage(m, false);   // active Books, after
+  assert.equal(activeAlphaShown(), true);   // matches the ACTIVE one, not the first
 });
 test('activeAlphaShown: only hidden cached indexes → false', () => {
-  reset();
-  document.body.appendChild(browsePage(true));
-  document.body.appendChild(browsePage(true));
+  const m = mount(false);
+  addPage(m, true); addPage(m, true);
   assert.equal(activeAlphaShown(), false);
+});
+// THE regression the user hit: leaving Books for Home hides the #browse CONTAINER,
+// but the cached .browsepage inside keeps its non-hidden class. Checking the page
+// alone left the index "shown" forever → the Home indicator was suppressed
+// permanently, on every screen, until a reload.
+test('activeAlphaShown: cached non-hidden page inside a HIDDEN #browse (on Home) → false', () => {
+  const m = mount(true);     // #browse hidden — we navigated away from browse
+  addPage(m, false);         // the cached page itself is still NOT .hidden
+  assert.equal(activeAlphaShown(), false);
+});
+test('activeAlphaShown: returning to browse (container shown again) → true', () => {
+  const m = mount(true);
+  addPage(m, false);
+  assert.equal(activeAlphaShown(), false);
+  document.getElementById('browse').className = '';   // back on Books
+  assert.equal(activeAlphaShown(), true);
 });
