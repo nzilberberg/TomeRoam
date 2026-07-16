@@ -20,6 +20,17 @@ const T = Plex._test;
 
 beforeEach(() => { T.resetConn(); global.localStorage.clear(); global.localStorage.setItem('pb_token', 'tok'); });
 
+test('resetConn is PUBLIC (net.js reset-on-reconnect + stream-retry re-probe depend on it)', () => {
+  // Regression guard: resetConn was once test-only, so net.js's `Plex.resetConn &&`
+  // guard silently no-op'd and the reset-on-network-change never fired. It MUST stay
+  // on the public API. Calling it clears the cached base so the next connect re-probes.
+  assert.equal(typeof Plex.resetConn, 'function', 'resetConn must be public, not _test-only');
+  T.setBase('http://cur');
+  Plex.resetConn();
+  global.localStorage.setItem('pb_lastBase', 'http://last');
+  assert.equal(T.curBase(), 'http://last', 'after resetConn the live base is cleared (falls back to last-good)');
+});
+
 test('curBase() prefers the live base, else the persisted last-good host', () => {
   T.resetConn();
   global.localStorage.setItem('pb_lastBase', 'http://last');

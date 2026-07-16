@@ -794,6 +794,12 @@ const Plex = (() => {
     getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist, makeBoard,
     resetBookProgress,
     notificationWsUrl,
+    // Drop the cached base + any in-flight probe so the NEXT connect() re-resolves a
+    // fresh endpoint. Used on a network change / resume (net.js) and before a stream
+    // retry (a stale/rotated relay base is the usual first-play-after-sign-in failure).
+    // NOTE: this was previously only under _test, so net.js's `Plex.resetConn &&`
+    // guard silently no-op'd — the reset-on-reconnect never actually fired.
+    resetConn: () => { base = null; connecting = null; },
     // internals exposed for the unit tests only (no runtime behaviour change)
     _test: {
       kindOf, orderByLastKind, mapBook, mapTracks, curBase, changed, withCache,

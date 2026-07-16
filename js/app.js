@@ -1323,24 +1323,43 @@
   audio.addEventListener('error', () => {
     const err = audio.error;
     if (!err || err.code === err.MEDIA_ERR_ABORTED) return;
-    if (window.PBDebug) PBDebug.log('AUDIO_ERR', `code=${err.code} t=${(audio.currentTime||0).toFixed(1)} ${(err.message||'')}`);
     // If this exact track is already fully local (RAM bank or the persisted
     // buffer/download), recover from the local copy immediately — startTrack
     // prefers it, so no network + no backoff. Only when the failing src was the
     // STREAM, though: an error on the local path itself must not zero-delay-loop.
     const srcWasLocal = !!(audio.src && (audio.src.startsWith('blob:') || audio.src.includes('/__dl/')));
+    if (window.PBDebug) PBDebug.log('AUDIO_ERR', `code=${err.code} t=${(audio.currentTime||0).toFixed(1)} src=${srcWasLocal ? 'local' : 'stream'} ${(err.message||'')}`);
     const haveBank = !!(curLoad && !srcWasLocal && (Banking.has(curLoad.idx) || locallyStored(curLoad.idx)));
-    if (curLoad && err.code === err.MEDIA_ERR_NETWORK && (haveBank || loadRetry < MAX_LOAD_RETRY)) {
+    // Which STREAM errors are recoverable: a network drop (code 2) OR — the common
+    // FIRST-play-after-sign-in case — a stale/rotated relay base that curBase() fell
+    // back to (pb_lastBase) before connect() verified one, which surfaces as code 4
+    // (SRC_NOT_SUPPORTED), NOT code 2. The old retry only handled code 2 AND reloaded
+    // the SAME dead URL every attempt (no re-probe) → it exhausted and showed
+    // "Playback error"; retapping worked only because connect() had warmed a fresh
+    // base by then. Now: retry code 2 or 4, and RE-RESOLVE the base first so the
+    // reload probes a fresh endpoint. A local-src error keeps the old code-2 retry.
+    const retryable = (err.code === err.MEDIA_ERR_NETWORK)
+      || (!srcWasLocal && err.code === err.MEDIA_ERR_SRC_NOT_SUPPORTED);
+    if (curLoad && (haveBank || (retryable && loadRetry < MAX_LOAD_RETRY))) {
       const at = Math.max(audio.currentTime || 0, curLoad.seekSec || 0);   // resume where we were
       const wasPlaying = !audio.paused || curLoad.autoplay;
+      const reprobe = !haveBank && !srcWasLocal;   // re-resolve a fresh base only for a stream retry
       let delay;
       if (haveBank) { delay = 0; toast('Playing from downloaded copy'); }
       else { loadRetry++; delay = Math.min(1000 * 2 ** (loadRetry - 1), 8000); toast(`Connection hiccup — retrying… (${loadRetry}/${MAX_LOAD_RETRY})`); }
       clearTimeout(loadRetryTimer);
       loadRetryTimer = setTimeout(() => {
         if (!ctx) return;
-        if (window.PBDebug) PBDebug.log('PLAY', `retrying load idx=${curLoad.idx} at=${at.toFixed(1)}s (attempt ${loadRetry}/${MAX_LOAD_RETRY}${haveBank ? ', from bank' : ''})`);
-        startTrack(curLoad.idx, at, wasPlaying);
+        const go = () => {
+          if (!ctx) return;
+          if (window.PBDebug) PBDebug.log('PLAY', `retrying load idx=${curLoad.idx} at=${at.toFixed(1)}s (attempt ${loadRetry}/${MAX_LOAD_RETRY}${haveBank ? ', from bank' : reprobe ? ', fresh base' : ''})`);
+          startTrack(curLoad.idx, at, wasPlaying);
+        };
+        // A stream retry re-resolves the connection first (the stale base was the
+        // likely cause). connect() short-circuits on a good base, so it's cheap when
+        // the base is already fine; on failure we still retry (bounded) from cache.
+        if (reprobe && window.Plex && Plex.resetConn) { Plex.resetConn(); Promise.resolve(Plex.connect && Plex.connect()).catch(() => {}).then(go); }
+        else go();
       }, delay);
       return;
     }
