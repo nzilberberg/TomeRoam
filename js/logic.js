@@ -213,6 +213,19 @@ const PBLogic = (() => {
     return String(savedBook) !== String(curBook) || String(savedTrack) !== String(curTrack);
   }
 
+  // restoreLastPlayed() runs shouldReloadOnRestore + reassigns the global `ctx`
+  // BEHIND an async metadata read (getAlbum/getAlbumTracks). If the user starts
+  // another book / changes chapter / auto-advances while that read is in flight, the
+  // captured `prev` (and the reload decision from it) is stale and reassigning `ctx`
+  // would clobber the newer playback — either reloading the old book, or leaving the
+  // element on B while ctx claims A (Presence/Progress/Plex then mis-attribute B's
+  // position to A). Only current when neither a newer restore (restoreGen) nor a real
+  // load (loadGen — bumped by every startTrack) has superseded this one. Same shape
+  // as retryStillCurrent, named for the restore seam.
+  function restoreStillCurrent(capRestoreGen, curRestoreGen, capLoadGen, curLoadGen) {
+    return capRestoreGen === curRestoreGen && capLoadGen === curLoadGen;
+  }
+
   // ---- banking per-chapter retry backoff (pure) -------------------------------
   // Banking's bankOne used to re-`pumpBank()` immediately after ANY non-oversize
   // failure, and a network failure was NOT recorded — so a persistent failure
@@ -237,7 +250,7 @@ const PBLogic = (() => {
 
   // bankBackoffMs stays private (used only by bankNoteFailure) — every exported
   // kernel must be referenced by shipped code (guarded by test/meta.test.js).
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, resumeAdoptPlan, shouldReloadOnRestore, bankNoteFailure, bankRetryReady };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, resumeAdoptPlan, shouldReloadOnRestore, restoreStillCurrent, bankNoteFailure, bankRetryReady };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

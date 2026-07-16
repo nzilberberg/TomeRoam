@@ -39,8 +39,16 @@ const Playback = (() => {
   // Any newer DELIBERATE action (seek/skip/Prev-restart, peer grab/adopt, handoff
   // correction, user play/pause, cross-device supersede, sign-out) calls this to
   // cancel a pending stream retry so it can't later yank playback back to the
-  // failed track's old position/state.
-  function noteIntent() { intentGen++; cancelRetry(); }
+  // failed track's old position/state — AND to cancel any pending lock-screen wedge
+  // recovery, whose captured position is now stale (reloading it would undo the
+  // reposition the user just made). See onPlaying() for the load-gen half.
+  function noteIntent() {
+    intentGen++;
+    cancelRetry();
+    clearTimeout(wedgeTimer); wedgeTimer = null;
+    bgResumePending = null;
+    wedgeReloads = 0;
+  }
   function cancelRetry() { clearTimeout(loadRetryTimer); loadRetryTimer = null; }
   function resetRetry() { loadRetry = 0; }   // called from onMeta — got metadata → connection good
 
@@ -109,14 +117,22 @@ const Playback = (() => {
     clearTimeout(wedgeTimer);
     if (audio.paused || !d.getCtx()) return;
     const t0 = audio.currentTime || 0;
+    // Bind this watch to the load + intent it was armed under. A backward seek,
+    // skip, chapter change, or peer adoption during the 1.4s window leaves the clock
+    // legitimately AT/BELOW t0 (looks "frozen") with t0 now stale — so a superseded
+    // watch must NOT diagnose a wedge or reload t0. intentGen catches seeks/adopts;
+    // loadGen (bumped by every startTrack — rollToTrack, auto-advance, adopt-reload)
+    // catches chapter/book changes that don't go through noteIntent.
+    const wLoad = d.getLoadGen(), wIntent = intentGen;
     wedgeTimer = setTimeout(() => {
       wedgeTimer = null;
       const ctx = d.getCtx();
       if (audio.paused || !ctx) return;                              // paused/torn down → not wedged
+      if (!PBLogic.retryStillCurrent(wLoad, d.getLoadGen(), wIntent, intentGen)) return;   // a newer seek/skip/load superseded this watch
       if ((audio.currentTime || 0) - t0 > 0.05) { wedgeReloads = 0; return; }   // advanced → healthy
       if (forwardBufferedSec() < 2) return;                          // no forward data → real starvation, not a wedge
       if (d.hidden()) {
-        bgResumePending = { idx: ctx.idx, position: t0 };
+        bgResumePending = { idx: ctx.idx, position: t0, load: wLoad, intent: wIntent };
         dbg('PLAY', `WEDGE hidden at ${t0.toFixed(1)}s — deferring recovery until foreground (iOS bg audio-session limit)`);
         return;
       }
@@ -131,6 +147,14 @@ const Playback = (() => {
     const ctx = d.getCtx();
     if (bgResumePending && ctx) {
       const p = bgResumePending; bgResumePending = null; wedgeReloads = 0;
+      // A skip/seek/chapter-change while still locked (a lock-screen control, or a
+      // natural chapter roll) supersedes the deferred recovery — reloading the OLD
+      // chapter/position would undo it. (noteIntent already drops it on a seek/adopt;
+      // this catches a startTrack-only path that bumped loadGen without noteIntent.)
+      if (!PBLogic.retryStillCurrent(p.load, d.getLoadGen(), p.intent, intentGen)) {
+        dbg('PLAY', `WEDGE recovery superseded (newer load/seek) — skipping stale reload of idx=${p.idx}`);
+        return;
+      }
       dbg('PLAY', `WEDGE foreground recovery — reloading idx=${p.idx} at ${p.position.toFixed(1)}s`);
       d.loadTrack(p.idx, p.position, true);
     }

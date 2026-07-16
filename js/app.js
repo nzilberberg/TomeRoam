@@ -37,6 +37,7 @@
   // in js/playback.js (Playback) — extracted so its races are unit-testable.
   let curLoad = null;          // {idx, seekSec, autoplay} — what we're trying to load, for retry
   let loadGen = 0;             // generation token so a stale loadedmetadata can't fire late
+  let restoreGen = 0;          // generation token so a slow restoreLastPlayed can't clobber newer playback
 
   // ---- banking / buffering (js/banking.js — Banking) ------------------------
   // The whole prefetch/whole-bank subsystem + the blue buffered meter live in the
@@ -1184,11 +1185,26 @@
     try { saved = JSON.parse(localStorage.getItem(LAST) || 'null'); } catch {}
     if (!saved || !saved.book) { updatePlayerUI(); return; }
     const prev = ctx;   // capture the LIVE ctx before we rebuild it (enterApp may re-fire mid-playback)
+    // Own this restore across its async metadata read. enterApp() deliberately
+    // re-fires while playback exists, and getAlbum/getAlbumTracks can resolve AFTER
+    // the user has started another book / skipped a chapter / auto-advanced. `prev`
+    // (and the reload decision below) would then be stale: reassigning ctx blindly
+    // either reloads the OLD book over the new one, or leaves the element playing B
+    // while ctx claims A (Presence/Progress/Plex then mis-attribute B's position to
+    // A). Capture the restore + load generation and bail if either moved. loadGen is
+    // bumped by every startTrack (playBook, rollToTrack, adopt); restoreGen guards a
+    // newer restore superseding this one.
+    const myRestore = ++restoreGen;
+    const enterLoadGen = loadGen;
     paintSnapshotBar(saved);   // instant bar from the snapshot; reconciled once ctx lands
     let fetched = false;
     try {
       const [alb, tracks] = await Promise.all([Plex.getAlbum(saved.book), Plex.getAlbumTracks(saved.book)]);
       fetched = true;   // the metadata reads themselves succeeded (live or cached)
+      if (!PBLogic.restoreStillCurrent(myRestore, restoreGen, enterLoadGen, loadGen)) {
+        if (window.PBDebug) PBDebug.log('PLAY', `restore SUPERSEDED (restore ${myRestore}/${restoreGen}, load ${enterLoadGen}/${loadGen}) — keeping current playback`);
+        return;   // a newer book/chapter/restore won while we were fetching; don't clobber it
+      }
       const idx = tracks.findIndex((t) => String(t.ratingKey) === String(saved.track));
       if (!alb || !tracks.length || idx < 0) throw new Error('track no longer exists');
       // Don't empty+reload the <audio> element if it's ALREADY the live, loaded

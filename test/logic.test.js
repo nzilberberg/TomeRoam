@@ -265,6 +265,24 @@ test('shouldReloadOnRestore: compares as strings (numeric vs string keys)', () =
   assert.equal(L.shouldReloadOnRestore(8913, 42, '8913', '42', true), false);
 });
 
+// ---- restoreStillCurrent (restore-vs-newer-playback supersession guard) ------
+// restoreLastPlayed reassigns the global ctx BEHIND an async metadata read. If the
+// user starts another book / skips / auto-advances while it's in flight, the resolved
+// restore must NOT clobber the newer playback. Current only when neither a newer
+// restore (restoreGen) nor a real load (loadGen, bumped by every startTrack) moved.
+test('restoreStillCurrent proceeds only when both restore + load generations are unchanged', () => {
+  assert.equal(L.restoreStillCurrent(3, 3, 7, 7), true, 'nothing raced → apply the restore');
+});
+test('restoreStillCurrent bails when a startTrack ran during the fetch (loadGen moved)', () => {
+  assert.equal(L.restoreStillCurrent(3, 3, 7, 8), false, 'another book/chapter loaded → keep it');
+});
+test('restoreStillCurrent bails when a newer restore superseded this one (restoreGen moved)', () => {
+  assert.equal(L.restoreStillCurrent(3, 4, 7, 7), false);
+});
+test('restoreStillCurrent bails when both moved', () => {
+  assert.equal(L.restoreStillCurrent(3, 5, 7, 9), false);
+});
+
 // ---- banking retry backoff (pure) -------------------------------------------
 test('bankNoteFailure increments attempts and schedules backoff 2/5/15/30s (then capped)', () => {
   let e = L.bankNoteFailure(undefined, 1000);

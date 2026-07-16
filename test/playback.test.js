@@ -144,3 +144,49 @@ test('genuine buffer STARVATION (no forward data) is left to stall recovery, not
   assert.equal(w.loads.length, 0);
   assert.equal(Playback._test.bgResumePending(), null);
 });
+
+// ---- wedge ownership: a newer action must not be undone by a stale watchdog -----
+// (Finding 1 of the .101-vs-.94 review: onPlaying's watchdog captured only t0, so a
+// legitimate backward move looked "frozen" and the recovery reloaded the OLD spot.)
+test('a backward SEEK (noteIntent) during the wedge window is not mistaken for a frozen clock', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const w = world({ hidden: false });
+  Playback.onPlaying();                              // watchdog armed at t0=50
+  w.audio.currentTime = 45;                          // user scrubbed BACKWARD (legitimately below t0)
+  Playback.noteIntent();                             // onManualSeek → notePlaybackIntent
+  t.mock.timers.tick(1400);
+  assert.equal(w.loads.length, 0, 'the deliberate rewind was NOT undone by a wedge reload');
+});
+
+test('a chapter change (loadGen bump, no noteIntent — auto-advance/rollToTrack) supersedes the watch', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const w = world({ hidden: false });
+  Playback.onPlaying();                              // armed under loadGen 5, t0=50
+  w.loadGen = 6;                                     // startTrack ran (rollToTrack / natural advance)
+  w.audio.currentTime = 1;                           // new chapter near its start (below t0 → looks "frozen")
+  t.mock.timers.tick(1400);
+  assert.equal(w.loads.length, 0, 'the stale watch did not reload the OLD position onto the new chapter');
+});
+
+test('a skip while STILL LOCKED (loadGen bump) supersedes the deferred wedge recovery', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const w = world({ hidden: true });
+  Playback.onPlaying(); t.mock.timers.tick(1400);    // real wedge deferred while hidden
+  assert.ok(Playback._test.bgResumePending());
+  w.loadGen = 6;                                     // user pressed Next on the lock screen → startTrack
+  w.hidden = false;
+  Playback.onVisible();
+  assert.equal(w.loads.length, 0, 'did NOT reload the old chapter/position over the newer skip');
+  assert.equal(Playback._test.bgResumePending(), null, 'stale pending cleared');
+});
+
+test('a seek while STILL LOCKED (noteIntent) drops the deferred wedge recovery immediately', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const w = world({ hidden: true });
+  Playback.onPlaying(); t.mock.timers.tick(1400);
+  assert.ok(Playback._test.bgResumePending());
+  Playback.noteIntent();                             // lock-screen scrub
+  assert.equal(Playback._test.bgResumePending(), null, 'pending recovery dropped on the newer intent');
+  w.hidden = false; Playback.onVisible();
+  assert.equal(w.loads.length, 0);
+});
