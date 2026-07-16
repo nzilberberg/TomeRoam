@@ -24,9 +24,11 @@ Screen); Android runs a self-contained WebView build published under Releases.
   played with no network.
 - **Optional Lyrion (LMS) add-on.** If you also run the companion Lyrion plugin
   on your server, TomeRoam *additionally* surfaces the resume offset for books
-  you played in **other** Plex apps (Prologue, Plexamp, …). That single value is
-  the one thing Plex hides over its HTTP API. It is purely additive — the app is
-  fully functional without the plugin.
+  you played in **other** Plex apps (Prologue, Plexamp, …). Plex's metadata API
+  never returns a saved audiobook `viewOffset`, and once the session ends that
+  value survives only in Plex's own database — which a server-side plugin can
+  read. Purely additive: the app is fully functional without the plugin, and
+  nothing else depends on it.
 
 ## Why a position needs syncing at all
 
@@ -43,15 +45,28 @@ position back on open.
 | `index.html`, `css/`, `js/` | the app — classic `<script>` modules, no bundler |
 | `sw.js` | service worker (cache-first shell + cover cache + `__dl` range serving) |
 | `build.json` | build stamp + update / Android-OTA manifest |
-| `test/` | Node `--test` unit + contract suites |
+| `test/` | Node `--test` suites — pure kernels, contract/seam tests, and DOM tests driven against the real `index.html` |
 | `tools/` | desktop debug tooling — see [`tools/README.md`](tools/README.md) |
 | `types/` | ambient type declarations for `// @ts-check` (dev-only) |
 | `android/` | self-contained WebView APK (raw aapt2/d8 build, no Gradle) |
 
-Key modules: `js/logic.js` (pure decision kernel), `js/plex.js` (Plex client),
-`js/presence.js` + `js/progress.js` (the live + durable multi-device layer),
-`js/net.js` / `js/store.js` / `js/syncqueue.js` / `js/downloads.js` (offline),
-and `js/app.js` (UI + playback).
+Key modules:
+
+| Module | Owns |
+|--------|------|
+| `js/logic.js` | pure decision kernel — resume/merge/handoff/retry rules, no DOM |
+| `js/plex.js` | Plex client: PIN sign-in, connection ranking (local → remote → relay), the playlist "boards" |
+| `js/presence.js`, `js/progress.js` | the live and the durable halves of the multi-device layer |
+| `js/nav.js` | screen state: which view is visible, the screen dispatch, the transitions |
+| `js/playback.js` | the playback intent/retry/recovery state machine |
+| `js/browse.js` | library lists — cached page nodes, A–Z index, per-page scroll memory |
+| `js/store.js`, `js/net.js`, `js/downloads.js`, `js/banking.js`, `js/syncqueue.js` | offline: IndexedDB, connectivity, downloads + auto-buffering, the durable write queue |
+| `js/*-screen.js` | one module per screen — the Options hub and its General / Playback / Buffering / Downloads sub-screens, plus Home, Now-Playing, Sign-in |
+| `js/app.js` | the playback core, the nav stacks + swipe gesture, and the wiring that injects the above |
+
+Modules are plain IIFEs that publish themselves on `window` and read the world
+through dependencies injected at `init()` — that boundary is what makes them
+testable without a browser.
 
 ## Development
 
@@ -65,6 +80,23 @@ npm run lint          # ESLint (a narrow, high-signal rule set)
 npm run typecheck     # tsc --noEmit over files opted in with // @ts-check
 npm run stamp:check   # verify the build stamp is coherent across files
 ```
+
+### Tests
+
+Tests here are meant to be able to **fail**, which shapes how they're written:
+
+- DOM and screen tests parse the **real `index.html`** rather than a hand-written
+  fixture. A fixture written from the same assumptions as the code reproduces its
+  bugs instead of catching them — that has happened here, so the shipped file is
+  the fixture.
+- Several suites are **structural guards** over things nothing else keeps in sync.
+  The settings-screen list, for example, is encoded in `index.html`, `js/nav.js`,
+  `js/scrollbar.js` and `css/app.css`; a test asserts all four agree. Another
+  decodes the shipped icon PNGs and checks they're intact, centred and not blank
+  (a broken icon is invisible to lint, types, and every other test).
+- The pure kernels in `js/logic.js` are tested in isolation; the async ownership
+  rules (generation guards) are driven with fake timers and fake animation frames
+  so interleavings are deterministic rather than racy.
 
 ### The build stamp
 
