@@ -8,17 +8,17 @@
 // SCOPED rule in app.css) and draw our own thin indicator here.
 //
 // SCOPE (important): the indicator only covers surfaces whose scroll fits the
-// title-bar→transport band: the DOCUMENT (Home/Books/Authors) and the settings
-// overlays (#options + subs). Higher, differently-shaped scrollers — Now Playing
-// (z60), the speed popover (z50), the track-info sheet (z80), the book menu (z85) —
-// sit ABOVE this indicator and have their OWN geometry, so they KEEP their native
-// scrollbars and this module ignores their scroll events (surfaceKind → null).
+// title-bar→transport band: the DOCUMENT (Home / Books / Authors / files) and the
+// settings overlays (#options + subs). Higher, differently-shaped scrollers — Now
+// Playing (z60), the speed popover (z50), the track-info sheet (z80), the book menu
+// (z85) — sit ABOVE this indicator and have their OWN geometry, so they KEEP their
+// native scrollbars and this module ignores their scroll events (surfaceKind → null).
 //
-// Browse screens (Books/Authors) carry the A-Z .alphaindex on the right edge as the
-// document-scroll affordance, so the indicator suppresses itself for DOCUMENT scroll
-// while the ACTIVE (non-hidden cached) browse page's index is shown. Element
-// scrollers (settings overlays) are NEVER suppressed by that — an unrelated A-Z index
-// mounted underneath a settings overlay must not blank the overlay's indicator.
+// It shows on EVERY supported screen, including Books/Authors, where it sits beside
+// the A-Z .alphaindex (which is shifted left in app.css to make room). An earlier
+// version suppressed itself while an A-Z index was up; that special case caused two
+// bugs (it blanked settings overlays opened over browse, and a cached browse page
+// left it suppressed forever) and the user wants the bar everywhere — so it's gone.
 const ScrollBar = (() => {
   let el = null, thumb = null, hideT = null;
   const MIN_THUMB = 26;   // px — never a dot you can't see
@@ -37,9 +37,9 @@ const ScrollBar = (() => {
 
   const isDoc = (t) => t === document || t === document.documentElement || t === document.body || t === window;
 
-  // 'doc' = the window/document scroll; 'overlay' = a settings sub-screen's own
-  // scroll; null = anything else (NP / sheet / popover / modal / stray element) →
-  // NOT ours, leave its native scrollbar alone.
+  // 'doc' = the window/document scroll (Home / Books / Authors / files); 'overlay' =
+  // a settings sub-screen's own scroll; null = anything else (NP / sheet / popover /
+  // modal / stray element) → NOT ours, leave its native scrollbar alone.
   function surfaceKind(t) {
     if (isDoc(t)) return 'doc';
     if (t && typeof t.matches === 'function' && t.matches(OVERLAY_SEL)) return 'overlay';
@@ -54,25 +54,9 @@ const ScrollBar = (() => {
     return { top: t.scrollTop, total: t.scrollHeight, view: t.clientHeight, doc: false };
   }
 
-  // Is the browse A-Z index ACTUALLY on screen? It's a descendant of the #browse
-  // container (o.mount). Three things must all hold: #browse itself is showing (it
-  // gets `.hidden` when you leave browse for Home/Options — but the cached
-  // `.browsepage` inside it KEEPS its non-hidden class, so checking the page alone
-  // left the index "shown" forever and permanently suppressed the Home indicator),
-  // the active cached page isn't `.hidden`, and it has an index. Purely class-based
-  // so it's testable (no layout / offsetParent).
-  function activeAlphaShown() {
-    return !!document.querySelector('#browse:not(.hidden) .browsepage:not(.hidden) .alphaindex');
-  }
-
-  // Pure: only DOCUMENT scroll defers to the browse A-Z index; element (overlay)
-  // scrollers never do (their affordance is this indicator, native is hidden).
-  function suppressedFor(kind, activeAlpha) { return kind === 'doc' && activeAlpha; }
-
   // Pure: given the scroll metrics + band height, decide whether/where to draw the
   // thumb. `ignore` skips near-empty scroll (the document's ~12vh iOS-26 runway).
-  function computeThumb(suppress, m, band, ignore, minThumb) {
-    if (suppress) return { show: false };
+  function computeThumb(m, band, ignore, minThumb) {
     const maxScroll = m.total - m.view;
     if (maxScroll <= ignore || band <= 0) return { show: false };
     const th = Math.max(minThumb, Math.round(band * (m.view / m.total)));
@@ -93,8 +77,7 @@ const ScrollBar = (() => {
     if (!kind) { el.classList.remove('on'); return; }   // unsupported surface — keeps its native scrollbar
     const m = metrics(t);
     const ignore = kind === 'doc' ? Math.round(window.innerHeight * 0.14) : 4;
-    const activeAlpha = kind === 'doc' ? activeAlphaShown() : false;
-    const r = computeThumb(suppressedFor(kind, activeAlpha), m, el.clientHeight, ignore, MIN_THUMB);
+    const r = computeThumb(m, el.clientHeight, ignore, MIN_THUMB);
     if (!r.show) { el.classList.remove('on'); return; }
     thumb.style.height = r.thumbH + 'px';
     thumb.style.transform = 'translateY(' + r.thumbY + 'px)';
@@ -111,7 +94,7 @@ const ScrollBar = (() => {
     else init();
   }
 
-  return { init, update, _test: { surfaceKind, activeAlphaShown, suppressedFor, computeThumb } };
+  return { init, update, _test: { surfaceKind, computeThumb } };
 })();
 
 if (typeof window !== 'undefined') window.ScrollBar = ScrollBar;

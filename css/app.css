@@ -577,7 +577,9 @@ body.np-locked .navbar { background: transparent; border-top: 0; backdrop-filter
    (z 0); overlays now cover it, and it still rides with #browse when it transforms
    during a swipe. */
 .alphaindex {
-  position: fixed; right: 1px; z-index: 24;
+  /* right: 9px (not 1px) leaves the extreme edge for the scroll indicator
+     (#scrollind, 3px @ right:2px) so the letters and the bar sit side by side. */
+  position: fixed; right: 9px; z-index: 24;
   top: calc(var(--safe-top) + 66px); bottom: calc(var(--nav-h) + var(--nav-pad) + 16px);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 4px 2px; user-select: none; touch-action: none; overflow: hidden;
