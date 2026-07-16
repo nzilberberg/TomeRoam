@@ -50,12 +50,14 @@ public class MainActivity extends Activity {
     // web-only builds. When build.json publishes a higher nativeVersion, ApkUpdater
     // offers a one-tap APK self-update; ordinary web pushes flow silently via
     // WebUpdater and never touch this number.
+    // 5: the WebView's own View scrollbars (setVerticalScrollBarEnabled(false)) —
+    //    a native View draws them for the document scroll and CSS cannot reach them.
     // 4: the launcher icon. build.ps1 bakes res/mipmap-xxxhdpi/ic_launcher.png from
     //    icons/icon-192.png, which was corrupt (~90% empty, artwork shifted off the
     //    right edge) for every build up to and including vc15 — so every installed
     //    APK has a broken icon. That file is baked in, so a web OTA can NOT repair
     //    it: offering the new APK is the only delivery path. Fixed in web .117.
-    private static final int NATIVE_VERSION = 4;
+    private static final int NATIVE_VERSION = 5;
 
     private WebView web;
     private File webRoot;   // writable web root (filesDir/web/current); null -> serve from assets
@@ -77,6 +79,16 @@ public class MainActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF14171C);
+        // WebView is an Android View, and a View draws its OWN scrollbars for the
+        // document scroll — they are NOT the page's scrollbars and CSS cannot reach
+        // them. app.css hides the native scrollbars on the surfaces our custom
+        // indicator covers (js/scrollbar.js), but that only governs what Chromium
+        // renders INSIDE the page: on Android the platform's fading View scrollbar
+        // still painted on top, which is why the app looked right on iOS (no View
+        // layer) and wrong here. Turn the View's own scrollbars off so the custom
+        // in-band indicator is the only one, on every platform.
+        web.setVerticalScrollBarEnabled(false);
+        web.setHorizontalScrollBarEnabled(false);
 
         // Android 15 (targetSdk 35) FORCES edge-to-edge: the WebView draws behind the
         // status + navigation bars. The web app's fixed bottom nav bar therefore
