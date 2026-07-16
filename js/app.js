@@ -1045,7 +1045,10 @@
       setMediaSession();
       // Announce to the ecosystem that this device now owns this book.
       Presence.claimPlaying(book, tracks[idx].ratingKey, posMs || 0, tracks[idx].ratingKey);
-    } catch (e) { toast(e.message || 'Could not start playback'); }
+    } catch (e) {
+      if (myReq !== playReqGen) return;   // a superseded request that rejects must not report a false failure over the newer one
+      toast(e.message || 'Could not start playback');
+    }
   }
   function playBook(entry, alb) {
     // If a peer is LIVE on this book it wins bestSource (a playing peer's recency
@@ -1072,6 +1075,7 @@
     Banking.ensureBook(ctx.book);   // banks are per-book (keyed by idx) — wipe on book change
     curLoad = { idx, seekSec, autoplay };       // remembered so a network error can retry this exact load
     Playback.cancelRetry();                       // a new load supersedes any pending stream retry
+    cancelPlayRequest();                          // a committed load supersedes any not-yet-started book selection (Next/adopt/auto-advance)
     const gen = ++loadGen;                       // invalidate any in-flight loadedmetadata from a prior src
     // Prefer an already-banked copy of this track (network-proof, no re-buffer);
     // otherwise stream. Then re-point the meter + prefetch window at this track.
@@ -1221,41 +1225,44 @@
     const myRestore = ++restoreGen;
     const enterLoadGen = loadGen;
     paintSnapshotBar(saved);   // instant bar from the snapshot; reconciled once ctx lands
-    let fetched = false;
+    // PHASE 1 — metadata fetch ONLY. A REJECTION here is transient/offline: keep the
+    // live ctx + snapshot bar as last-known state, never forget the book. Splitting
+    // this out is the fix for the "fetched proves nothing" hole: the apply phase (3)
+    // must NOT share this handler, or a downstream throw (startTrack/artUrl/UI) would be
+    // misclassified as "track missing" and erase the last-played record.
+    let alb, tracks;
     try {
-      const [alb, tracks] = await Promise.all([Plex.getAlbum(saved.book), Plex.getAlbumTracks(saved.book)]);
-      fetched = true;   // the metadata reads themselves succeeded (live or cached)
-      if (!PBLogic.restoreStillCurrent(myRestore, restoreGen, enterLoadGen, loadGen)) {
-        if (window.PBDebug) PBDebug.log('PLAY', `restore SUPERSEDED (restore ${myRestore}/${restoreGen}, load ${enterLoadGen}/${loadGen}) — keeping current playback`);
-        return;   // a newer book/chapter/restore won while we were fetching; don't clobber it
-      }
-      const idx = tracks.findIndex((t) => String(t.ratingKey) === String(saved.track));
-      if (!alb || !tracks.length || idx < 0) throw new Error('track no longer exists');
-      // Don't empty+reload the <audio> element if it's ALREADY the live, loaded
-      // track — that's the lock-screen resume-kill: enterApp re-fires during
-      // playback and a reload (autoplay off) leaves the live track paused. Keep the
-      // element; just reconcile ctx/UI. Only reload when the target genuinely differs.
+      [alb, tracks] = await Promise.all([Plex.getAlbum(saved.book), Plex.getAlbumTracks(saved.book)]);
+    } catch {
+      return;   // transient — preserve state (we touch nothing here, so ownership is moot)
+    }
+    // A newer book/chapter/restore won while we were fetching → don't clobber it.
+    if (!PBLogic.restoreStillCurrent(myRestore, restoreGen, enterLoadGen, loadGen)) {
+      if (window.PBDebug) PBDebug.log('PLAY', `restore SUPERSEDED (restore ${myRestore}/${restoreGen}, load ${enterLoadGen}/${loadGen}) — keeping current playback`);
+      return;
+    }
+    // PHASE 2 — the fetch SUCCEEDED. Forget the last-played book ONLY on the explicit
+    // "track gone" condition (album/track genuinely absent), never because a later
+    // statement threw. ctx here is still `prev`; nulling it discards the vanished book.
+    const idx = Array.isArray(tracks) ? tracks.findIndex((t) => String(t.ratingKey) === String(saved.track)) : -1;
+    if (!alb || idx < 0) { ctx = null; localStorage.removeItem(LAST); updatePlayerUI(); return; }
+    // PHASE 3 — apply. Guarded so a failure here logs but NEVER erases last-played
+    // (that's phase 2's sole job). Don't empty+reload the <audio> if it's ALREADY the
+    // live, loaded track — the lock-screen resume-kill: enterApp re-fires mid-playback
+    // and a reload with autoplay off leaves it paused; only reload when the target
+    // genuinely differs, and preserve play-state on a genuine reload (cold entry has no
+    // live element → audio.paused true → restores paused; a mid-playback reload keeps
+    // playing).
+    try {
       const prevT = prev && prev.tracks[prev.idx];
       const elementLive = !!(audio.src && !audio.error && audio.readyState >= 1);
       const reload = PBLogic.shouldReloadOnRestore(saved.book, saved.track, prev && prev.book, prevT && prevT.ratingKey, elementLive);
       ctx = { album: alb, tracks, idx, book: saved.book, updatedAt: saved.ts || Plex.serverNow(), coverUrl: alb.thumb ? Plex.artUrl(alb.thumb) : null };
-      // On a genuine (re)load, preserve play state instead of hardcoding paused: a
-      // cold entry has no live element (audio.paused true → restore paused, as
-      // before); a mid-playback reload keeps playing.
       if (reload) startTrack(idx, (saved.pos || 0) / 1000, !audio.paused);
       else if (window.PBDebug) PBDebug.log('PLAY', `restore KEPT live track=${saved.track} @ ${(audio.currentTime || 0).toFixed(1)}s (no reload — element already on target)`);
       updatePlayerUI(); setMediaSession();
-    } catch {
-      // Superseded by newer playback while we were fetching (or via the throw below
-      // after a successful fetch) → don't touch a newer ctx. Same guard as the success
-      // path — otherwise a REJECTED restore of A after the user started B would null
-      // B's live context (progress/presence/transport then lose the current book).
-      if (!PBLogic.restoreStillCurrent(myRestore, restoreGen, enterLoadGen, loadGen)) return;
-      // Only FORGET the last-played book when metadata actually loaded and proved the
-      // saved track is gone (fetched → the 'track no longer exists' throw). A transient/
-      // offline rejection (fetched=false) keeps the live/prev ctx + the snapshot bar as
-      // last-known state — nulling ctx on a blip used to drop the still-playing book.
-      if (fetched) { ctx = null; localStorage.removeItem(LAST); updatePlayerUI(); }
+    } catch (e) {
+      if (window.PBDebug) PBDebug.log('PLAY', `restore apply failed: ${(e && e.message) || e} — keeping last-played`);
     }
   }
 
@@ -1363,7 +1370,13 @@
   // Prev, peer grab/adopt, handoff correction, user play/pause, cross-device
   // supersede, sign-out) — NOT from the raw `pause` EVENT (an error itself pauses the
   // element, and that must not cancel the recovery it triggered).
-  function notePlaybackIntent() { Playback.noteIntent(); }
+  // A not-yet-committed book selection (beginPlayback awaiting its track list) must be
+  // cancelled by any NEWER playback intent or teardown — otherwise it can recreate ctx,
+  // start audio (a banked/downloaded track needs no fresh Plex request), and publish a
+  // Presence claim after the user moved on or signed out. beginPlayback captures
+  // playReqGen and bails if it moved; this is the one place that moves it.
+  function cancelPlayRequest() { playReqGen++; }
+  function notePlaybackIntent() { cancelPlayRequest(); Playback.noteIntent(); }
   // A user/systemic PAUSE action (transport button, media session, sign-out) — as
   // opposed to the incidental `pause` event — supersedes a pending retry.
   function userPause() { notePlaybackIntent(); audio.pause(); }
@@ -1608,7 +1621,7 @@
   // app.js keeps the shared bits it injects: updateSkipLabels (transport bar),
   // pumpBank (banking), and doSignOut (the app-lifecycle teardown below).
   function doSignOut() {
-    userPause(); Plex.signOut(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');   // userPause (not bare audio.pause) cancels a pending stream retry timer + bumps intent
+    userPause(); Plex.signOut(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');   // userPause (not bare audio.pause) → notePlaybackIntent: cancels a pending stream retry timer, bumps intent, AND cancels a not-yet-started book selection (playReqGen) so it can't start audio/claim presence after sign-out
     $('navbar').classList.add('hidden'); Browse.reset(); setView('home'); setNavActive('home');
     localStorage.removeItem(LAST);
     Presence.setActive(false); Progress.setActive(false); stopRenderTick();
