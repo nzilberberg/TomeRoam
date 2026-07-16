@@ -1371,7 +1371,7 @@
   // action handlers) — recommended, and it matters now that lock-screen Play is native.
   const setMediaPlaybackState = (s) => { try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = s; } catch {} };
   audio.addEventListener('play', () => { setMediaPlaybackState('playing'); updatePlayIcon(); startWriteTimer(); writeProgress('playing'); Presence.setPlaying(audio.currentTime * 1000); startPresenceBeat(); pumpBank(); });
-  audio.addEventListener('pause', () => { setMediaPlaybackState('paused'); updatePlayIcon(); stopWriteTimer(); writeProgress('paused'); Presence.setPaused(audio.currentTime * 1000); stopPresenceBeat(); Progress.flush(); pumpBank(); });
+  audio.addEventListener('pause', () => { bgResumePending = null; setMediaPlaybackState('paused'); updatePlayIcon(); stopWriteTimer(); writeProgress('paused'); Presence.setPaused(audio.currentTime * 1000); stopPresenceBeat(); Progress.flush(); pumpBank(); });
   audio.addEventListener('timeupdate', updateSeekUI);
   // Repaint the blue meter as the native playback buffer grows (`progress`) and as
   // the playhead moves (`timeupdate`) — so it reflects REAL current-stream load,
@@ -1385,20 +1385,24 @@
   });
   audio.addEventListener('timeupdate', paintMeter);
   // ---- iOS lock-screen resume WEDGE watchdog --------------------------------
-  // Confirmed on device (.95/.96 wifi logs): after a lock-screen pause→play, the
-  // <audio> element fires `play`+`playing` but the media clock NEVER advances — it
-  // reports playing, produces no sound, and stays stuck even after foregrounding,
-  // WITH forward buffer at the playhead. That's an iOS platform wedge, not the app
-  // reloading the element. A micro RE-SEEK does NOT un-stick it (`.96`: seek fired,
-  // clock still frozen). What DOES play in the same session is a FRESH LOAD (the
-  // foreground play started at `buf=none` and advanced). So the recovery is a
-  // RELOAD at the reached spot — startTrack (which also re-prefers a local `./__dl/`
-  // copy when there is one). Capped to avoid a reload loop if the reload also wedges
-  // (e.g. iOS won't reactivate the audio session until foreground); the foreground
-  // re-check (visibilitychange) then gets a fresh, uncapped attempt where it should
-  // stick. Heavily logged so the report says RECOVERED / still-frozen.
+  // Confirmed on device + web research (WebKit #198277, Apple DevForums 762582):
+  // after a lock-screen pause→play the <audio> element fires `play`+`playing` but the
+  // media clock NEVER advances — it reports playing, produces no sound, and stays
+  // frozen until FOREGROUND. It's an iOS AVAudioSession limitation: a backgrounded,
+  // previously-paused WebView element can't reactivate its audio session while still
+  // backgrounded. NOT fixable from the web layer.
+  //   * While HIDDEN a reload is USELESS and harmful — `.97`/`.98` logs proved
+  //     startTrack just discards the live element + stalls a second op that also
+  //     waits until foreground. So while hidden we do NOT touch the element; we
+  //     record a pending recovery and let it play on foreground.
+  //   * A fresh LOAD DOES play once foreground — so on visibilitychange→visible we
+  //     startTrack the pending spot (see the visibilitychange handler). That gives an
+  //     immediate resume the instant the user unlocks (the PWA ceiling).
+  //   * A FOREGROUND wedge (rare) is reloaded in place (a fresh load plays here),
+  //     capped so it can't loop.
   let wedgeTimer = null;
-  let wedgeReloads = 0;   // consecutive reload recoveries without a healthy advance
+  let bgResumePending = null;   // {idx, position} — a lock-screen wedge to recover on foreground
+  let wedgeReloads = 0;         // consecutive FOREGROUND reloads without a healthy advance
   const MAX_WEDGE_RELOADS = 2;
   function forwardBufferedSecApp() {
     const b = audio.buffered, ct = audio.currentTime || 0;
@@ -1412,15 +1416,21 @@
     wedgeTimer = setTimeout(() => {
       wedgeTimer = null;
       if (audio.paused || !ctx) return;                  // paused/torn down since → not wedged
-      if ((audio.currentTime || 0) - t0 > 0.05) { wedgeReloads = 0; return; }   // clock advanced → healthy, reset the cap
+      if ((audio.currentTime || 0) - t0 > 0.05) { wedgeReloads = 0; return; }   // clock advanced → healthy
       if (forwardBufferedSecApp() < 2) return;           // no forward data → real starvation (stall recovery owns it), not a wedge
+      if (document.hidden) {
+        // Can't repair while backgrounded — defer, don't thrash the element.
+        bgResumePending = { idx: ctx.idx, position: t0 };
+        if (window.PBDebug) PBDebug.log('PLAY', `WEDGE hidden at ${t0.toFixed(1)}s — deferring recovery until foreground (iOS bg audio-session limit)`);
+        return;
+      }
       if (wedgeReloads >= MAX_WEDGE_RELOADS) {
-        if (window.PBDebug) PBDebug.log('PLAY', `WEDGE still frozen at ${t0.toFixed(1)}s after ${wedgeReloads} reloads hidden=${document.hidden} — giving up until foreground`);
+        if (window.PBDebug) PBDebug.log('PLAY', `WEDGE still frozen (foreground) at ${t0.toFixed(1)}s after ${wedgeReloads} reloads — giving up`);
         return;
       }
       wedgeReloads++;
-      if (window.PBDebug) PBDebug.log('PLAY', `WEDGE playing but clock frozen at ${t0.toFixed(1)}s hidden=${document.hidden} fwdBuf=${forwardBufferedSecApp().toFixed(0)}s — reloading (attempt ${wedgeReloads})`);
-      startTrack(ctx.idx, t0, true);                     // fresh load at the reached spot; its `playing` re-arms this watchdog to verify
+      if (window.PBDebug) PBDebug.log('PLAY', `WEDGE foreground frozen at ${t0.toFixed(1)}s — reloading (attempt ${wedgeReloads})`);
+      startTrack(ctx.idx, t0, true);                     // fresh load at the reached spot; its `playing` re-arms this watchdog
     }, 1400);
   }
   // iOS keeps networkState=LOADING and fires 'stalled' (not 'suspend') when it goes
@@ -2025,18 +2035,13 @@
       artwork: ctx.coverUrl ? [{ src: ctx.coverUrl, sizes: '512x512', type: 'image/jpeg' }] : [],
     });
     const ms = navigator.mediaSession;
-    // LOCK-SCREEN PLAY IS NATIVE (handler = null), deliberately. Overriding it with
-    // resumePlay()→audio.play() intercepts iOS's native background-resume path, and
-    // WebKit won't reliably reactivate the audio session for a scripted play() from a
-    // BACKGROUNDED action handler — the element reports `playing` but the clock stays
-    // frozen (the .95–.97 lock-screen "wedge"). Letting iOS resume the already-loaded
-    // element natively is the documented default and sidesteps that. Our `audio`
-    // 'play' listener still runs all the post-play bookkeeping (icon, progress writes,
-    // Presence, heartbeat, banking), so nothing downstream is lost. PAUSE stays custom
-    // (userPause cancels pending retries). The special resumePlay() cases (peer adopt,
-    // errored-element reload, retry cancel) still run for the IN-APP play button; a
-    // lock-screen resume takes the plain native path, which is the normal case.
-    ms.setActionHandler('play', null);
+    // Custom Play handler RETAINED. `.98` tried native (handler=null) — no benefit:
+    // the lock-screen resume-from-pause wedge is an iOS AVAudioSession limitation
+    // (a backgrounded, previously-paused WebView element can't reactivate its audio
+    // session until foreground — WebKit #198277 / Apple DevForums 762582), so HOW
+    // play() is invoked doesn't matter. Meanwhile resumePlay() IS needed for the
+    // in-app cases (live-peer adoption, errored-element reload, pending-retry cancel).
+    ms.setActionHandler('play', () => resumePlay());
     ms.setActionHandler('pause', () => userPause());
     ms.setActionHandler('seekbackward', () => skipBy(-getSkipBack()));
     ms.setActionHandler('seekforward', () => skipBy(getSkipFwd()));
@@ -2135,10 +2140,15 @@
       if (document.hidden) { writeProgress(audio.paused ? 'paused' : 'playing'); Presence.setActive(false); Progress.flush(); Progress.setActive(false); stopRenderTick(); }
       else if (!$('library').classList.contains('hidden')) {
         Presence.setActive(true); Progress.setActive(true); startRenderTick();
-        // Foregrounding is a fresh chance to un-wedge a lock-screen-frozen element
-        // (iOS may only reactivate the audio session on foreground). Reset the cap and
-        // re-check: if it's "playing" but frozen, the watchdog reloads it now.
-        if (!audio.paused) { wedgeReloads = 0; armWedgeWatchdog(); }
+        // A lock-screen resume that WEDGED while backgrounded left a pending recovery
+        // (see armWedgeWatchdog). Foreground reactivates the audio session, so a fresh
+        // load plays now — reload the pending spot so playback resumes the instant the
+        // user unlocks, instead of them landing on a silent "playing" element.
+        if (bgResumePending && ctx) {
+          const p = bgResumePending; bgResumePending = null; wedgeReloads = 0;
+          if (window.PBDebug) PBDebug.log('PLAY', `WEDGE foreground recovery — reloading idx=${p.idx} at ${p.position.toFixed(1)}s`);
+          startTrack(p.idx, p.position, true);
+        }
       }
     });
     // Back online → push whatever we recorded offline, then re-read peers so a LWW
