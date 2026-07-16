@@ -227,6 +227,24 @@ test('retryStillCurrent drops the retry when both moved', () => {
   assert.equal(L.retryStillCurrent(5, 7, 2, 4), false);
 });
 
+// ---- resumeAdoptPlan (peer-adoption transition decision) --------------------
+// Regression for the .92 bug: `trackChanged` was re-read from ctx AFTER startTrack
+// set ctx.idx = peerIdx, so it was always false and the new presence track was
+// never published → the mesh saw the OLD chapter at the new position. The decision
+// must come from the indices, computed before any mutation.
+test('resumeAdoptPlan: different chapter → trackChanged + reload (publish new track)', () => {
+  assert.deepEqual(L.resumeAdoptPlan(0, 3, false), { trackChanged: true, reload: true });
+});
+test('resumeAdoptPlan: same chapter, healthy → seek+play in place (no reload, no track change)', () => {
+  assert.deepEqual(L.resumeAdoptPlan(2, 2, false), { trackChanged: false, reload: false });
+});
+test('resumeAdoptPlan: same chapter but ERRORED → reload in place, track unchanged', () => {
+  assert.deepEqual(L.resumeAdoptPlan(2, 2, true), { trackChanged: false, reload: true });
+});
+test('resumeAdoptPlan: different chapter AND errored → still one track-changing reload', () => {
+  assert.deepEqual(L.resumeAdoptPlan(1, 4, true), { trackChanged: true, reload: true });
+});
+
 // ---- banking retry backoff (pure) -------------------------------------------
 test('bankNoteFailure increments attempts and schedules backoff 2/5/15/30s (then capped)', () => {
   let e = L.bankNoteFailure(undefined, 1000);

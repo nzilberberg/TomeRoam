@@ -1253,14 +1253,23 @@
       const best = bestSource(ctx.book, bookEntries[ctx.book]);
       const idx = ctx.tracks.findIndex((t) => String(t.ratingKey) === String(best.track));
       if (idx >= 0) {
+        // Decide BEFORE startTrack mutates ctx.idx (see resumeAdoptPlan).
+        const plan = PBLogic.resumeAdoptPlan(ctx.idx, idx, errored);
         if (window.PBDebug) PBDebug.log('PLAY', `resume ADOPT ${p.name || 'peer'} idx=${idx} pos=${((best.pos || 0) / 1000).toFixed(1)}s${errored ? ' (reload — errored)' : ''}`);
         ctx.updatedAt = Plex.serverNow();
         armHandoff(ctx.book, p);   // sync to the live peer's true position at first sound + on its pause
         const pos = (best.pos || 0) / 1000;
-        // Same chapter + healthy element → seek+play; a different chapter OR an
-        // errored element → (re)load the PEER's chapter/position, never our own idx.
-        if (idx === ctx.idx && !errored) { audio.currentTime = pos; audio.play(); }
-        else { startTrack(idx, pos, true); if (idx !== ctx.idx) Presence.setTrack(best.track, best.pos || 0); }
+        // Same chapter + healthy element → seek+play in place. Otherwise it's a FULL
+        // chapter transition (like rollToTrack): publish the new presence track FIRST
+        // — so the imminent `play` event's Presence.setPlaying claims the RIGHT
+        // chapter — then load, then refresh the player UI + Media Session (startTrack
+        // updates neither, so the transport title / lock-screen would stay stale).
+        if (!plan.reload) { audio.currentTime = pos; audio.play().catch(() => {}); }
+        else {
+          if (plan.trackChanged) Presence.setTrack(best.track, best.pos || 0);
+          startTrack(idx, pos, true);
+          updatePlayerUI(); setMediaSession();
+        }
         return;
       }
     }

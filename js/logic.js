@@ -186,11 +186,25 @@ const PBLogic = (() => {
     return capLoadGen === curLoadGen && capIntentGen === curIntentGen;
   }
 
+  // resumePlay's peer-adoption branch. Given OUR current track index, the PEER's
+  // target index, and whether our media element errored, decide the transition.
+  // `trackChanged` MUST come from the indices (inputs) — NOT be re-read from ctx
+  // AFTER startTrack(), which sets ctx.idx = peerIdx synchronously, making a
+  // post-hoc "did the chapter change?" test always-false so the new presence track
+  // never got published (the mesh then saw us claiming the OLD chapter at the new
+  // chapter's position — corrupting handoff). `reload` = go through startTrack (a
+  // different chapter, or an errored element that a bare play() can't revive); else
+  // seek + play in place.
+  function resumeAdoptPlan(curIdx, peerIdx, errored) {
+    const trackChanged = peerIdx !== curIdx;
+    return { trackChanged, reload: trackChanged || !!errored };
+  }
+
   // ---- banking per-chapter retry backoff (pure) -------------------------------
   // Banking's bankOne used to re-`pumpBank()` immediately after ANY non-oversize
   // failure, and a network failure was NOT recorded — so a persistent failure
-  // re-selected the SAME chapter instantly and hammered the (relay-only, slow)
-  // Plex forever. These pure helpers give each chapter a backoff schedule the
+  // re-selected the SAME chapter instantly and hammered Plex (potentially over
+  // the slow relay fallback) forever. These pure helpers give each chapter a backoff schedule the
   // scheduler honours; banking holds the state map, this decides the timing.
   const BANK_BACKOFF_MS = [2000, 5000, 15000, 30000];   // 2s, 5s, 15s, 30s, then capped
   function bankBackoffMs(attempts) {
@@ -210,7 +224,7 @@ const PBLogic = (() => {
 
   // bankBackoffMs stays private (used only by bankNoteFailure) — every exported
   // kernel must be referenced by shipped code (guarded by test/meta.test.js).
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, bankNoteFailure, bankRetryReady };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, resumeAdoptPlan, bankNoteFailure, bankRetryReady };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;
