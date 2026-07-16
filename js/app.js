@@ -204,6 +204,34 @@
     el.classList.add(cls);
     el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
   }
+  // Button-nav filmstrip between two OVERLAY screens (Options ↔ a sub-screen like
+  // Downloads). Unlike slideInView (which animates only the INCOMING pane and lets
+  // whatever's under it show through — fine for an in-flow view over the base
+  // document, but it exposes the base view when one overlay replaces another), this
+  // moves BOTH panes: together they cover the viewport for the whole slide, so the
+  // base never flashes. Matches the swipe-back filmstrip (start/settle). dir: 'fwd'
+  // (toV enters from the right) | 'back' (toV enters from the left). Reconciles
+  // visibility via applyScreen when it lands (which clears these inline styles).
+  function overlayFilmstrip(fromV, toV, dir) {
+    const fromEl = overlayEl(fromV), toEl = overlayEl(toV);
+    const reconcile = () => applyScreen(currentDesc(), { render: false });
+    if (REDUCED || !fromEl || !toEl) { reconcile(); return; }
+    const w = window.innerWidth, off = dir === 'back' ? -w : w;   // incoming start edge
+    toEl.classList.remove('hidden'); fromEl.classList.remove('hidden');
+    toEl.style.transition = 'none'; toEl.style.transform = 'translateX(' + off + 'px)';
+    fromEl.style.transition = 'none'; fromEl.style.transform = 'translateX(0)';
+    void toEl.offsetWidth;                                         // commit start positions
+    let done = false;
+    const finish = () => { if (done) return; done = true; reconcile(); };
+    requestAnimationFrame(() => {
+      const tr = 'transform .24s cubic-bezier(.2,.7,.2,1)';
+      toEl.style.transition = tr; fromEl.style.transition = tr;
+      toEl.style.transform = 'translateX(0)';                     // incoming lands
+      fromEl.style.transform = 'translateX(' + (-off) + 'px)';    // outgoing exits the other way
+    });
+    toEl.addEventListener('transitionend', finish, { once: true });
+    setTimeout(finish, 340);                                      // safety net
+  }
   // Forward navigation to a NEW screen (clears the forward stack, slides in from right
   // unless anim is suppressed for lateral bottom-nav tab switches).
   function navTo(desc, anim = 'right') {
@@ -227,9 +255,25 @@
   function goAuthors() { navTo({ v: 'authors' }, null); }
   function goBooks() { navTo({ v: 'books' }, null); }
   function goOptions() { navTo({ v: 'options' }, null); }
-  // Downloads is a forward drill-in FROM Options (not a lateral tab), so it slides
-  // in from the right and swipe-back / the ‹ Back button filmstrips it out again.
-  function openDownloads() { navTo({ v: 'downloads' }); }
+  // Downloads is a forward drill-in FROM Options (not a lateral tab). From Options
+  // it FILMSTRIPS in (both panes move — no base-view flash); from elsewhere (e.g.
+  // the book menu) it falls back to the standard slide. Back is closeDownloads(),
+  // which filmstrips Downloads out and Options back in — same look as swipe-back.
+  function openDownloads() {
+    if (currentDesc().v === 'options') {
+      navStack.push({ v: 'downloads' }); fwdStack.length = 0;
+      DownloadsScreen.render();
+      overlayFilmstrip('options', 'downloads', 'fwd');
+    } else navTo({ v: 'downloads' });
+  }
+  function closeDownloads() {
+    const prev = navStack[navStack.length - 2];
+    if (currentDesc().v === 'downloads' && prev && prev.v === 'options') {
+      fwdStack.push(navStack.pop());
+      OptionsScreen.render();
+      overlayFilmstrip('downloads', 'options', 'back');
+    } else goBack();
+  }
   function openAuthor(a) { navTo({ v: 'authorBooks', author: { ratingKey: a.ratingKey, title: a.title } }); }
   function openFiles(b) { navTo({ v: 'files', book: b }); }
   function openNowPlaying() { if (ctx) navTo({ v: 'nowplaying' }); }
@@ -2405,7 +2449,7 @@
       Downloads.subscribe(refreshDlUi);
       DownloadsScreen.init({
         Downloads: window.Downloads, toast, modal, fmtGB, GB, DLICO,
-        confirmRemove: confirmRemoveDownload, byId: $, goBack, openDownloads,
+        confirmRemove: confirmRemoveDownload, byId: $, onBack: closeDownloads, openDownloads,
       });
       DownloadsScreen.injectOptionRow();
     }

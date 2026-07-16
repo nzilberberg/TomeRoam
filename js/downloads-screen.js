@@ -12,7 +12,7 @@
 // unit-test; the size-cap/eviction logic it drives lives in downloads.js.
 const DownloadsScreen = (() => {
   // Injected by app.js: { Downloads, toast, modal, fmtGB, GB, DLICO, confirmRemove,
-  //                       byId, goBack, openDownloads }
+  //                       byId, onBack, openDownloads }
   let d = null;
   let bound = false;  // controls wired once (also guards the single subscription)
 
@@ -23,7 +23,7 @@ const DownloadsScreen = (() => {
   function bindControls() {
     if (bound) return;
     const $ = d.byId, dl = d.Downloads;
-    const back = $('dlBack'); if (back) back.addEventListener('click', () => d.goBack());
+    const back = $('dlBack'); if (back) back.addEventListener('click', () => d.onBack());
     const sel = $('dlMax');
     [1, 2, 4, 8, 16].forEach((g) => { const o = document.createElement('option'); o.value = String(g * d.GB); o.textContent = g + ' GB'; sel.appendChild(o); });
     sel.addEventListener('change', (e) => { dl.setMaxBytes(parseInt(e.target.value, 10)); renderUsage(); });
