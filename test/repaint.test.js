@@ -150,3 +150,47 @@ test('clampY: never negative, and rounds', () => {
   assert.equal(clampY(120.6, 3000, 600), 121);
   assert.equal(clampY(500, 400, 600), 0);   // content shorter than the viewport
 });
+
+// ---- overlapping scroll restorations (the .116 review's finding) ------------
+// applyScrollY clears `restoring` from a callback two animation frames later. With
+// no ownership token, an OLDER restore's finalizer clears the flag out from under a
+// NEWER restore that started in between — and the scroll listener then records the
+// swap's transitional/clamped position over the arriving page's remembered `sy`,
+// destroying exactly what this system exists to preserve. Same stale-finalizer class
+// as the .89 connect() probe bug. Driven with a fake rAF so the interleaving is
+// deterministic rather than a race.
+const { applyScrollY, isRestoring } = Browse._test;
+
+let frames = [];
+global.requestAnimationFrame = (cb) => { frames.push(cb); return frames.length; };
+global.window.scrollTo = () => {};
+const runOneFrame = () => { const due = frames; frames = []; due.forEach((cb) => cb()); };
+
+test('a stale restore finalizer cannot end a newer restore', () => {
+  frames = [];
+  applyScrollY(100);            // restore A
+  assert.equal(isRestoring(), true);
+  runOneFrame();                // only A's FIRST frame — A's finalizer is still pending
+
+  applyScrollY(900);            // restore B starts before A finished
+  assert.equal(isRestoring(), true);
+
+  runOneFrame();                // A's stale 2nd frame fires here (+ B's 1st)
+  assert.equal(isRestoring(), true, 'A must NOT release B\'s restoration');
+
+  runOneFrame();                // B's own 2nd frame
+  assert.equal(isRestoring(), false, 'B\'s own finalizer ends it');
+});
+
+test('a restore in flight is not ended by an unrelated page swap taking ownership', () => {
+  frames = [];
+  applyScrollY(100);            // restore A
+  runOneFrame();                // A frame 1
+  Browse._test.showPage('nope');   // a swap takes ownership (no finalizer of its own)
+  runOneFrame();                // A's stale finalizer must not clear the swap's guard
+  runOneFrame();
+  assert.equal(isRestoring(), true, 'the swap owns the guard until its applyScrollY clears it');
+  applyScrollY(0);              // the arriving page's restore
+  runOneFrame(); runOneFrame();
+  assert.equal(isRestoring(), false);
+});

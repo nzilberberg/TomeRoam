@@ -57,6 +57,16 @@ const Browse = (() => {
   // browser clamps scrollY and fires a scroll event that would otherwise record a
   // bogus position against the page we're arriving at.
   let restoring = false;
+  let restoreGen = 0;
+  // ONE owned restoration operation. beginRestore() takes ownership and hands back a
+  // token; only the CURRENT owner may end it. Without the token an older restore's
+  // delayed (2-frame) finalizer clears the flag out from under a NEWER restore that
+  // started in the meantime — the scroll listener then records the swap's transitional
+  // /clamped position over the arriving page's `sy`, losing exactly what this system
+  // exists to keep. Same stale-finalizer class as the .89 connect() bug, where a
+  // superseded probe's finalizer cleared a newer probe's state; fixed the same way.
+  function beginRestore() { restoring = true; return ++restoreGen; }
+  function endRestore(token) { if (token === restoreGen) restoring = false; }
   const browseVisible = () => !!(o.mount && !o.mount.classList.contains('hidden'));
   function activeEntry() {
     for (const v of pageCache.values()) if (!v.el.classList.contains('hidden')) return v;
@@ -85,9 +95,10 @@ const Browse = (() => {
   }
   function applyScrollY(y) {
     const se = document.scrollingElement || document.documentElement;
-    restoring = true;
+    const mine = beginRestore();
     window.scrollTo(0, clampY(y, se.scrollHeight, window.innerHeight));
-    requestAnimationFrame(() => requestAnimationFrame(() => { restoring = false; }));
+    // Two frames: the scroll + any clamp it provokes must both land first.
+    requestAnimationFrame(() => requestAnimationFrame(() => endRestore(mine)));
   }
   // Document Y that puts the locally-playing track's row just under the fixed title
   // bar. null when this book isn't the one loaded here (or its row isn't built).
@@ -117,7 +128,10 @@ const Browse = (() => {
     // belongs to Home/Options. That saved Home's scroll over the page's own and made
     // the nav-button path always land at the top (swiping was fine — there the
     // outgoing really is another browse page).
-    restoring = true;   // the swap resizes the document → ignore the clamp's scroll event
+    beginRestore();   // the swap resizes the document → ignore the clamp's scroll event.
+    // Takes ownership too, so a previous restore's in-flight finalizer can't end
+    // ours; the applyScrollY that follows (immediately on a cache hit, or after the
+    // fetch on a fresh page) owns it from there and clears it.
     for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
   }
   function evictLRU(keepKey) {
@@ -498,7 +512,8 @@ const Browse = (() => {
 
   return { init, reset, render, clearCache, patchRows, bookSig,
     // internals exposed for unit tests only (no runtime behaviour change)
-    _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY } };
+    _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY,
+      applyScrollY, showPage, isRestoring: () => restoring } };
 })();
 
 // Expose on window (top-level `const Browse` is a lexical global, not
