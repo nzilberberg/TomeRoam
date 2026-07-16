@@ -97,6 +97,46 @@ test('a probe superseded by resetConn() cannot overwrite a fresh connection, nor
   assert.equal(T.isConnecting(), false, 'B cleared connecting on completion');
 });
 
+test('a stale probe finishing AFTER a fresh one overwrites no connection metadata (base/kind/name/cache)', async () => {
+  // The finding-#2 race: even when the fresh probe (B) publishes first, a late stale
+  // probe (A) used to mutate connKind / serverName / LS.server mid-flight. All such
+  // writes must now be deferred past the generation check, so A publishes nothing.
+  T.resetConn();
+  const deferred = () => { let resolve; const p = new Promise((r) => { resolve = r; }); return { p, resolve }; };
+  const disc = [];
+  global.fetch = async (url) => {
+    url = String(url);
+    if (url.includes('/api/v2/resources')) { const d = deferred(); disc.push(d); return { ok: true, status: 200, json: async () => (await d.p) }; }
+    if (url.includes('/identity')) return { ok: true, status: 200 };
+    return { ok: false, status: 404 };
+  };
+  const server = (uri, name, flag) => ([{ provides: 'server', owned: true, clientIdentifier: 'm-' + name, name, connections: [{ uri, ...flag }], accessToken: 'tok' }]);
+
+  const pA = Plex.connect();
+  await sleep(1);
+  T.resetConn();
+  const pB = Plex.connect();
+  await sleep(1);
+  assert.equal(disc.length, 2, 'two probes in flight');
+
+  // B (fresh) resolves FIRST and publishes everything.
+  disc[1].resolve(server('http://B', 'ServerB', { local: true }));
+  assert.equal(await pB, 'http://B');
+  assert.equal(Plex.getConnKind(), 'local');
+  assert.equal(Plex.getServerName(), 'ServerB');
+  assert.equal(JSON.parse(localStorage.getItem('pb_server')).name, 'ServerB');
+  assert.equal(localStorage.getItem('pb_connKind'), 'local');
+
+  // A (stale, relay, different name) resolves AFTER — it must change nothing.
+  disc[0].resolve(server('http://A', 'ServerA', { relay: true }));
+  await pA.then(() => { throw new Error('stale A should reject'); }, () => {});
+  assert.equal(Plex.getBase(), 'http://B', 'base unchanged');
+  assert.equal(Plex.getConnKind(), 'local', 'connKind not clobbered by the stale relay probe');
+  assert.equal(Plex.getServerName(), 'ServerB', 'serverName not clobbered');
+  assert.equal(JSON.parse(localStorage.getItem('pb_server')).name, 'ServerB', 'cached connection list not clobbered');
+  assert.equal(localStorage.getItem('pb_connKind'), 'local', 'persisted connKind not clobbered');
+});
+
 test('concurrent connect() calls share ONE discovery pass', async () => {
   T.resetConn();
   let resourceCalls = 0;

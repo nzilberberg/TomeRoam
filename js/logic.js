@@ -175,6 +175,17 @@ const PBLogic = (() => {
     return pos > 0 || !!allowZero;
   }
 
+  // A scheduled load-retry (after a stream error, once its reprobe resolves) must
+  // fire ONLY if it's still the user's current intent. TWO monotonic counters,
+  // captured when the retry was scheduled: `loadGen` (a new startTrack — different
+  // chapter/book) AND `intentGen` (an explicit reposition/adoption: seek, skip,
+  // Previous-restart, peer grab — none of which start a new load, so loadGen alone
+  // misses them). If EITHER moved, a newer action superseded the retry → drop it,
+  // so the retry can't yank playback back to the failed track's old position.
+  function retryStillCurrent(capLoadGen, curLoadGen, capIntentGen, curIntentGen) {
+    return capLoadGen === curLoadGen && capIntentGen === curIntentGen;
+  }
+
   // ---- banking per-chapter retry backoff (pure) -------------------------------
   // Banking's bankOne used to re-`pumpBank()` immediately after ANY non-oversize
   // failure, and a network failure was NOT recorded — so a persistent failure
@@ -199,7 +210,7 @@ const PBLogic = (() => {
 
   // bankBackoffMs stays private (used only by bankNoteFailure) — every exported
   // kernel must be referenced by shipped code (guarded by test/meta.test.js).
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, bankNoteFailure, bankRetryReady };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, bankNoteFailure, bankRetryReady };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

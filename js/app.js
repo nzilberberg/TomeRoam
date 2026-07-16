@@ -28,6 +28,12 @@
   // ---- media-load resilience (slow/lossy relay) ----------------------------
   let curLoad = null;          // {idx, seekSec, autoplay} — what we're trying to load, for retry
   let loadGen = 0;             // generation token so a stale loadedmetadata can't fire late
+  // Bumped by every EXPLICIT reposition/adoption that startTrack does NOT drive
+  // (seek/skip/Prev-restart via onManualSeek, peer grab). A pending stream retry
+  // captures this so a scrub during its (relay-slow) reprobe isn't undone. Kept
+  // SEPARATE from loadGen: loadGen also gates async src/loadedmetadata, so bumping
+  // it on a mid-load seek would cancel legitimate in-flight load work.
+  let playbackIntentGen = 0;
   let loadRetry = 0;
   let loadRetryTimer = null;
   const MAX_LOAD_RETRY = 4;
@@ -947,6 +953,7 @@
   function grabFromPeer() {
     if (!ctx) return;
     const t = ctx.tracks[ctx.idx]; if (!t) return;
+    playbackIntentGen++;   // adopting a peer's spot is an explicit reposition → supersede a pending retry
     clearHandoff();   // user picked an explicit spot — don't let a pending sync overwrite it
     ctx.updatedAt = Plex.serverNow();
     Presence.grab(ctx.book, t.ratingKey, (audio.currentTime || 0) * 1000);
@@ -1267,6 +1274,7 @@
   // publish immediately so peers pick up the new spot (incl. rewinds) fast.
   function onManualSeek() {
     if (!ctx) return;
+    playbackIntentGen++;   // explicit reposition supersedes a pending stream retry (see the retry guard)
     clearHandoff();   // an explicit scrub is the user's chosen spot — cancel any pending handoff correction
     ctx.updatedAt = Plex.serverNow();
     Presence.flush(audio.currentTime * 1000);
@@ -1347,16 +1355,17 @@
       let delay;
       if (haveBank) { delay = 0; toast('Playing from downloaded copy'); }
       else { loadRetry++; delay = Math.min(1000 * 2 ** (loadRetry - 1), 8000); toast(`Connection hiccup — retrying… (${loadRetry}/${MAX_LOAD_RETRY})`); }
-      // Capture the load this retry belongs to. A stream retry awaits a reprobe
-      // (seconds on a slow relay), during which the user can pick another chapter/
-      // book or seek — each bumps loadGen. Without this guard the resolved retry
-      // would restart whatever is current at the FAILED track's old position/idx.
-      const retryGen = loadGen;
+      // Capture what this retry belongs to. A stream retry awaits a reprobe (seconds
+      // on a slow relay); during it the user can pick another chapter/book (bumps
+      // loadGen) OR seek/skip/Prev/grab a peer (bumps playbackIntentGen — those do
+      // NOT start a new load, so loadGen alone would miss them and the retry would
+      // yank playback back to the failed track's old position). Guard on BOTH.
+      const retryGen = loadGen, retryIntent = playbackIntentGen;
       const retryIdx = curLoad.idx;
       clearTimeout(loadRetryTimer);
       loadRetryTimer = setTimeout(() => {
         const go = () => {
-          if (!ctx || loadGen !== retryGen) return;   // a newer load supersedes this stale retry
+          if (!ctx || !PBLogic.retryStillCurrent(retryGen, loadGen, retryIntent, playbackIntentGen)) return;   // superseded by a newer load or explicit action
           if (window.PBDebug) PBDebug.log('PLAY', `retrying load idx=${retryIdx} at=${at.toFixed(1)}s (attempt ${loadRetry}/${MAX_LOAD_RETRY}${haveBank ? ', from bank' : reprobe ? ', fresh base' : ''})`);
           startTrack(retryIdx, at, wasPlaying);
         };

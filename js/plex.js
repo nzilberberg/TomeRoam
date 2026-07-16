@@ -121,11 +121,10 @@ const Plex = (() => {
       const rank = (c) => (c.local ? 0 : c.relay ? 2 : 1);
       return rank(a) - rank(b);
     });
-    localStorage.setItem(LS.server, JSON.stringify({
-      name: srv.name, machineId: srv.clientIdentifier, connections: conns,
-    }));
-    serverName = srv.name;
-    return { connections: conns, token: srv.accessToken || token() };
+    // Return the discovered metadata WITHOUT publishing it — connect() commits
+    // serverName / LS.server together with base AFTER the generation check, so a
+    // superseded probe can't leave stale server/connection metadata behind.
+    return { connections: conns, token: srv.accessToken || token(), name: srv.name, machineId: srv.clientIdentifier };
   }
 
   // Probe connections; first that answers /identity wins. Timeouts are
@@ -154,17 +153,18 @@ const Plex = (() => {
     return r.ok;
   }
 
-  // One sequential pass over a connection list; returns the winning uri or null.
+  // One sequential pass over a connection list; returns { uri, kind } of the winner
+  // or null. Does NOT write connKind/LS.connKind — connect() publishes those after
+  // its generation check (a stale probe must not mutate the connection kind).
   async function tryConns(conns, tkn) {
     for (const c of orderByLastKind(conns)) {
       const timeout = c.local ? LOCAL_TIMEOUT_MS : RELAY_TIMEOUT_MS;   // relay/remote get the long budget
       const t0 = Date.now();
       try {
         if (await probeConn(c.uri, tkn, timeout)) {
-          connKind = kindOf(c);
-          try { localStorage.setItem(LS.connKind, connKind); } catch {}
-          dbg('CONN', `${connKind} OK ${Date.now() - t0}ms ${new URL(c.uri).host}`);
-          return c.uri;
+          const kind = kindOf(c);
+          dbg('CONN', `${kind} OK ${Date.now() - t0}ms ${new URL(c.uri).host}`);
+          return { uri: c.uri, kind };
         }
         dbg('CONN', `${kindOf(c)} answered !ok ${Date.now() - t0}ms`);
       } catch (e) { dbg('CONN', `${kindOf(c)} fail ${Date.now() - t0}ms ${(e && e.name) || ''}`); }
@@ -190,16 +190,22 @@ const Plex = (() => {
     if (base) return Promise.resolve(base);
     if (connecting) return connecting;
     const gen = connGen;
-    const attempt = _connect().then((hit) => {
-      // Superseded by a resetConn() mid-probe → don't adopt this (suspect) base;
-      // reject so the caller re-probes rather than running on a stale endpoint.
+    const attempt = _connect().then((cand) => {
+      // Superseded by a resetConn() mid-probe → don't adopt this (suspect) result;
+      // reject so the caller re-probes rather than running on a stale endpoint. The
+      // check is BEFORE any shared write, so a stale probe publishes nothing —
+      // neither base nor connKind/serverName/cached connections.
       if (gen !== connGen) throw new Error('Plex connection superseded');
-      base = hit;
+      base = cand.base;
+      connKind = cand.kind;
+      serverName = cand.name;
+      try { localStorage.setItem(LS.connKind, cand.kind); } catch {}
+      try { localStorage.setItem(LS.server, JSON.stringify({ name: cand.name, machineId: cand.machineId, connections: cand.connections })); } catch {}
       // Remember the winning host so cover-art URLs resolve to the SAME origin when
       // OFFLINE (base is null then) — that origin is the SW image cache's key, so
       // previously-loaded covers keep rendering. Not used for API calls.
       try { localStorage.setItem('pb_lastBase', base); } catch {}
-      return hit;
+      return base;
     });
     // Identity-safe finalizer: clear `connecting` ONLY if it still points at THIS
     // attempt. A stale attempt settling after a reset must not null a newer probe's
@@ -213,21 +219,25 @@ const Plex = (() => {
   async function _connect() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LS.server) || 'null'); } catch {}
-    let conns, tkn = token();
-    if (saved && saved.connections) { conns = saved.connections; serverName = saved.name; }
-    else { const d = await discoverServer(); conns = d.connections; tkn = d.token; }
+    let conns, tkn = token(), name = null, machineId = null;
+    if (saved && saved.connections) { conns = saved.connections; name = saved.name; machineId = saved.machineId; }
+    else { const d = await discoverServer(); conns = d.connections; tkn = d.token; name = d.name; machineId = d.machineId; }
 
     let hit = await tryConns(conns, tkn);
     // All dead — network changed, or a cached relay endpoint rotated out of the
-    // pool. Rediscover a fresh connection list once and try again.
+    // pool. Rediscover a fresh connection list once and try again. (No removeItem
+    // here anymore: a successful connect overwrites LS.server via the candidate,
+    // and a stale probe must not mutate it — see connect().)
     if (!hit && saved) {
       dbg('CONN', 'all cached connections dead — rediscovering');
-      localStorage.removeItem(LS.server);
       const d = await discoverServer();
+      conns = d.connections; name = d.name; machineId = d.machineId;
       hit = await tryConns(d.connections, d.token || tkn);
     }
     if (!hit) { dbg('CONN', 'FAIL: no connection reachable'); throw new Error('Could not reach your Plex server.'); }
-    return hit;
+    // A candidate — connect() publishes base + all metadata together after the
+    // generation check.
+    return { base: hit.uri, kind: hit.kind, name, machineId, connections: conns };
   }
   // Base to build ART/stream URLs against even before/without a live connection
   // (offline): the last host that worked. API calls still require connect().

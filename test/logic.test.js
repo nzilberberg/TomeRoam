@@ -210,6 +210,23 @@ test('positionRecordable rejects NaN/Infinity regardless of allowZero', () => {
   assert.equal(L.positionRecordable(Infinity, true), false);
 });
 
+// ---- retryStillCurrent (stream-retry supersession guard) --------------------
+// A stream retry that awaits a reprobe must be dropped if the user did anything
+// explicit meanwhile. loadGen catches a new load; intentGen catches a seek/skip/
+// grab that does NOT start a load (the case the .89 loadGen-only guard missed).
+test('retryStillCurrent proceeds only when BOTH generations are unchanged', () => {
+  assert.equal(L.retryStillCurrent(5, 5, 2, 2), true, 'nothing changed → retry fires');
+});
+test('retryStillCurrent drops the retry when a new load happened (loadGen moved)', () => {
+  assert.equal(L.retryStillCurrent(5, 6, 2, 2), false);
+});
+test('retryStillCurrent drops the retry when an explicit seek/grab happened (intentGen moved)', () => {
+  assert.equal(L.retryStillCurrent(5, 5, 2, 3), false, 'a mid-reprobe seek supersedes — this is the .89 gap');
+});
+test('retryStillCurrent drops the retry when both moved', () => {
+  assert.equal(L.retryStillCurrent(5, 7, 2, 4), false);
+});
+
 // ---- banking retry backoff (pure) -------------------------------------------
 test('bankNoteFailure increments attempts and schedules backoff 2/5/15/30s (then capped)', () => {
   let e = L.bankNoteFailure(undefined, 1000);
