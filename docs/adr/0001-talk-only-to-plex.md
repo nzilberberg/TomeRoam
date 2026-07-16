@@ -28,6 +28,9 @@ Plex to remember where you were.
   facts are load-bearing and hard to re-derive; they're documented in code
   comments in `js/plex.js` (e.g. `connect()` must probe connections
   *sequentially*; the section listing omits `leafCount`/`viewedLeafCount`).
-- The user's Plex is often **relay-only and slow** (multi-second, frequent
-  failures); every network, timeout, and offline assumption must hold there, not
-  just on a fast LAN.
+- The client's path to Plex is **per-session**: direct-local on the home LAN,
+  direct-remote when away (Remote Access is port-mapped), and a **slow relay
+  fallback** (~1–2 Mbps, multi-second, frequent failures) only when the client's
+  network can't reach the mapped port (e.g. CGNAT cellular). Every network,
+  timeout, and offline assumption must hold on that relay fallback, not just on a
+  fast LAN — but it is a fallback, not the default.

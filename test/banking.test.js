@@ -1,7 +1,7 @@
 // Tests for js/banking.js — the prefetch/buffering scheduler's RETRY state machine.
 // The pure backoff math lives in logic.test.js; this drives the module with fake
 // deps to prove the immediate-retry loop is gone (a non-oversize failure used to
-// re-select the SAME chapter instantly and hammer the relay-only Plex forever):
+// re-select the SAME chapter instantly and hammer Plex (potentially the slow relay) forever):
 // a network failure backs off instead of re-fetching, an abort is neutral, a 4xx
 // is skipped until reconnect, success clears state, a book change clears state, one
 // failed chapter does not block a later eligible one.

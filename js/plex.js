@@ -135,14 +135,17 @@ const Plex = (() => {
 
   // Probe connections; first that answers /identity wins. Timeouts are
   // per-connection-TYPE: a private/local .plex.direct URI that isn't on our
-  // current LAN fails (or hangs) fast, so we cap it short; the RELAY is the
-  // only route when away from home and its cold TLS handshake can take 9s+
-  // (Plex rotates relay endpoints in a pool), so it gets a much longer budget.
-  // We also try the last-known-good path first, so an off-home launch hits the
-  // relay immediately instead of burning seconds on dead local probes.
+  // current LAN fails (or hangs) fast, so we cap it short. Away from home the
+  // route is either a direct-remote mapping (fast) or, when the client's network
+  // can't reach the mapped port (e.g. CGNAT cellular), the RELAY fallback — whose
+  // cold TLS handshake can take 9s+ (Plex rotates relay endpoints in a pool). We
+  // can't tell which applies until we probe, so BOTH non-local kinds share the
+  // long budget. We also try the last-known-good path first, so an off-home
+  // launch hits the path that worked last instead of burning seconds on dead
+  // local probes.
   // Kept strictly SEQUENTIAL on purpose — parallel Promise.any broke this.
   const LOCAL_TIMEOUT_MS = 3500;
-  const RELAY_TIMEOUT_MS = 12000;
+  const REMOTE_TIMEOUT_MS = 12000;   // covers BOTH direct-remote and relay
 
   const kindOf = (c) => (c.local ? 'local' : (c.relay ? 'relay' : 'remote'));
 
@@ -164,7 +167,7 @@ const Plex = (() => {
   // its generation check (a stale probe must not mutate the connection kind).
   async function tryConns(conns, tkn) {
     for (const c of orderByLastKind(conns)) {
-      const timeout = c.local ? LOCAL_TIMEOUT_MS : RELAY_TIMEOUT_MS;   // relay/remote get the long budget
+      const timeout = c.local ? LOCAL_TIMEOUT_MS : REMOTE_TIMEOUT_MS;   // direct-remote + relay get the long budget
       const t0 = Date.now();
       try {
         if (await probeConn(c.uri, tkn, timeout)) {
