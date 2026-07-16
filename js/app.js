@@ -1381,13 +1381,47 @@
     Banking.abortIfBusy();
   });
   audio.addEventListener('timeupdate', paintMeter);
+  // ---- iOS lock-screen resume WEDGE watchdog --------------------------------
+  // Confirmed on device (.95 wifi logs): after a lock-screen pause→play, the
+  // <audio> element fires `play`+`playing` but the media clock NEVER advances — it
+  // reports playing, produces no sound, and stays stuck even after foregrounding,
+  // WITH buffered data at the playhead. That's an iOS platform wedge, not the app
+  // reloading the element (no startTrack/emptied in those logs). Detect it (clock
+  // not advancing shortly after `playing`, while forward buffer exists so it's a
+  // wedge, not genuine starvation) and un-stick with a micro re-seek. Heavily
+  // logged so the next report says whether the nudge RECOVERED or FAILED.
+  let wedgeTimer = null;
+  function forwardBufferedSecApp() {
+    const b = audio.buffered, ct = audio.currentTime || 0;
+    for (let i = 0; i < b.length; i++) if (ct >= b.start(i) - 1 && ct <= b.end(i) + 1) return b.end(i) - ct;
+    return 0;
+  }
+  function armWedgeWatchdog() {
+    clearTimeout(wedgeTimer);
+    if (audio.paused) return;
+    const t0 = audio.currentTime || 0;
+    wedgeTimer = setTimeout(() => {
+      wedgeTimer = null;
+      if (audio.paused) return;                          // paused since → not wedged
+      if ((audio.currentTime || 0) - t0 > 0.05) return;  // clock advanced → healthy
+      const fwd = forwardBufferedSecApp();
+      if (fwd < 2) return;                               // no forward data → real starvation (stall recovery owns it), not a wedge
+      if (window.PBDebug) PBDebug.log('PLAY', `WEDGE playing but clock frozen at ${t0.toFixed(1)}s hidden=${document.hidden} fwdBuf=${fwd.toFixed(0)}s — nudging`);
+      try { audio.currentTime = t0 + 0.05; } catch {}    // micro re-seek to un-stick the element
+      const t1 = audio.currentTime || 0;
+      setTimeout(() => {
+        const ok = !audio.paused && (audio.currentTime || 0) - t1 > 0.05;
+        if (window.PBDebug) PBDebug.log('PLAY', `WEDGE nudge ${ok ? 'RECOVERED' : 'FAILED'} at ${(audio.currentTime || 0).toFixed(1)}s hidden=${document.hidden}`);
+      }, 1600);
+    }, 1400);
+  }
   // iOS keeps networkState=LOADING and fires 'stalled' (not 'suspend') when it goes
   // idle on a big buffer — both are prefetch windows; pumpBank's buffer gate decides.
   audio.addEventListener('suspend', pumpBank);
   audio.addEventListener('stalled', () => { pumpBank(); maybeRecoverFromBank(); });
   audio.addEventListener('canplaythrough', pumpBank);
   audio.addEventListener('waiting', maybeRecoverFromBank);
-  audio.addEventListener('playing', () => { Banking.cancelStallRecovery(); maybeReanchorHandoff(); });
+  audio.addEventListener('playing', () => { Banking.cancelStallRecovery(); maybeReanchorHandoff(); armWedgeWatchdog(); });
   // Network drops on a slow relay surface as MEDIA_ERR_NETWORK — don't give up,
   // reload the same track at the position we'd reached, with exponential backoff.
   // MEDIA_ERR_ABORTED just means we swapped src on purpose, so ignore it.
