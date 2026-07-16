@@ -60,6 +60,12 @@ const Plex = (() => {
     localStorage.removeItem(LS.connKind);
     localStorage.removeItem('pb_lastBase');
     base = null; serverName = null; sectionKey = null; booksCache = null;
+    // Invalidate connection work too (same as resetConn): a probe started under the
+    // OLD session must not pass the generation check afterward and republish base/
+    // serverName/pb_server into a fresh sign-in. signOut() is also called on a 401
+    // (not only via the UI sign-out), so the invalidation belongs HERE, not in the
+    // app's doSignOut.
+    connecting = null; connGen++;
   }
 
   // --- sign-in: plex.tv PIN flow, SEPARATE-TAB style ------------------------

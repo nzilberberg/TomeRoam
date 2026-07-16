@@ -137,6 +137,25 @@ test('a stale probe finishing AFTER a fresh one overwrites no connection metadat
   assert.equal(localStorage.getItem('pb_connKind'), 'local', 'persisted connKind not clobbered');
 });
 
+test('signOut() invalidates an in-flight probe so it cannot publish into the next session', async () => {
+  T.resetConn();
+  const deferred = () => { let resolve; const p = new Promise((r) => { resolve = r; }); return { p, resolve }; };
+  const disc = [];
+  global.fetch = async (url) => {
+    url = String(url);
+    if (url.includes('/api/v2/resources')) { const d = deferred(); disc.push(d); return { ok: true, status: 200, json: async () => (await d.p) }; }
+    if (url.includes('/identity')) return { ok: true, status: 200 };
+    return { ok: false, status: 404 };
+  };
+  const pA = Plex.connect();   // probe parks on discovery
+  await sleep(1);
+  Plex.signOut();              // sign-out (or a 401) mid-probe must invalidate it
+  disc[0].resolve([{ provides: 'server', owned: true, clientIdentifier: 'm', name: 'Old', connections: [{ uri: 'http://old', local: true }], accessToken: 'tok' }]);
+  await pA.then(() => { throw new Error('an old-session probe must not resolve into the new session'); }, () => {});
+  assert.equal(Plex.getBase(), null, 'the signed-out session did not adopt the stale probe base');
+  assert.equal(localStorage.getItem('pb_server'), null, 'no server metadata was republished after sign-out');
+});
+
 test('a failed rediscovery replaces the proven-dead cached list (no re-probing obsolete endpoints)', async () => {
   T.resetConn();
   localStorage.setItem('pb_server', JSON.stringify({ name: 'Old', machineId: 'm', connections: [{ uri: 'http://dead', local: true }] }));

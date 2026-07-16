@@ -1243,25 +1243,31 @@
   function resumePlay() {
     if (!ctx) return;
     notePlaybackIntent();   // user Play supersedes any pending stream retry
-    // If the current load ERRORED, a bare audio.play() can't recover a failed src —
-    // and we just cancelled the retry that would have. Re-load the track now (at
-    // where we were) so an explicit Play is always a real recovery, not a dead end.
-    if (audio.error) { startTrack(ctx.idx, audio.currentTime || (curLoad && curLoad.seekSec) || 0, true); return; }
+    // A failed load can't be revived by a bare audio.play() — it needs a reload. But
+    // resolve the live-PEER target FIRST: if a peer owns+plays this book, an explicit
+    // Play must ADOPT the peer's live chapter/position (the reason this app exists),
+    // NOT reload our own stale local spot — even when our element errored.
+    const errored = !!audio.error;
     const p = livePeerForCtx();
     if (p) {
       const best = bestSource(ctx.book, bookEntries[ctx.book]);
       const idx = ctx.tracks.findIndex((t) => String(t.ratingKey) === String(best.track));
       if (idx >= 0) {
-        if (window.PBDebug) PBDebug.log('PLAY', `resume ADOPT ${p.name || 'peer'} idx=${idx} pos=${((best.pos || 0) / 1000).toFixed(1)}s`);
+        if (window.PBDebug) PBDebug.log('PLAY', `resume ADOPT ${p.name || 'peer'} idx=${idx} pos=${((best.pos || 0) / 1000).toFixed(1)}s${errored ? ' (reload — errored)' : ''}`);
         ctx.updatedAt = Plex.serverNow();
         armHandoff(ctx.book, p);   // sync to the live peer's true position at first sound + on its pause
-        if (idx === ctx.idx) { audio.currentTime = (best.pos || 0) / 1000; audio.play(); }
-        else { startTrack(idx, (best.pos || 0) / 1000); Presence.setTrack(best.track, best.pos || 0); }   // peer moved to another chapter → load it + fix our board's track
+        const pos = (best.pos || 0) / 1000;
+        // Same chapter + healthy element → seek+play; a different chapter OR an
+        // errored element → (re)load the PEER's chapter/position, never our own idx.
+        if (idx === ctx.idx && !errored) { audio.currentTime = pos; audio.play(); }
+        else { startTrack(idx, pos, true); if (idx !== ctx.idx) Presence.setTrack(best.track, best.pos || 0); }
         return;
       }
     }
+    // No live peer: reload our local target if the element errored, else plain play.
     ctx.updatedAt = Plex.serverNow();
-    audio.play();
+    if (errored) startTrack(ctx.idx, audio.currentTime || (curLoad && curLoad.seekSec) || 0, true);
+    else audio.play();
   }
 
   // User changed playback speed on THIS device. Apply it locally AND publish a
@@ -1586,7 +1592,7 @@
   // app.js keeps the shared bits it injects: updateSkipLabels (transport bar),
   // pumpBank (banking), and doSignOut (the app-lifecycle teardown below).
   function doSignOut() {
-    Plex.signOut(); audio.pause(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');
+    userPause(); Plex.signOut(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');   // userPause (not bare audio.pause) cancels a pending stream retry timer + bumps intent
     $('navbar').classList.add('hidden'); Browse.reset(); setView('home'); setNavActive('home');
     localStorage.removeItem(LAST);
     Presence.setActive(false); Progress.setActive(false); stopRenderTick();
