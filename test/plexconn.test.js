@@ -61,6 +61,42 @@ test('ping() returns true when identity answers ok', async () => {
   assert.equal(Plex.getBase(), 'http://live');
 });
 
+test('a probe superseded by resetConn() cannot overwrite a fresh connection, nor clear its finalizer', async () => {
+  // The .88 resetConn race: nulling `connecting` let a stale in-flight probe (A)
+  // finish, publish its (suspect) base, and — via its finalizer — clear a NEWER
+  // probe's (B) `connecting`, defeating the single-probe guard. Generation-tagging
+  // must make A a no-op after a reset.
+  T.resetConn();
+  const deferred = () => { let resolve; const p = new Promise((r) => { resolve = r; }); return { p, resolve }; };
+  const disc = [];   // one deferred per /api/v2/resources call, resolved by the test
+  global.fetch = async (url) => {
+    url = String(url);
+    if (url.includes('/api/v2/resources')) { const d = deferred(); disc.push(d); return { ok: true, status: 200, json: async () => (await d.p) }; }
+    if (url.includes('/identity')) return { ok: true, status: 200 };
+    return { ok: false, status: 404 };
+  };
+  const server = (uri) => ([{ provides: 'server', owned: true, clientIdentifier: 'm', name: 'S', connections: [{ uri, local: true }], accessToken: 'tok' }]);
+
+  const pA = Plex.connect();                 // attempt A parks on discovery
+  await sleep(1);
+  assert.equal(disc.length, 1, 'A reached discovery');
+
+  T.resetConn();                             // network changed → supersede A
+  const pB = Plex.connect();                 // attempt B must probe fresh (connecting was cleared)
+  await sleep(1);
+  assert.equal(disc.length, 2, 'a NEW probe (B) started after the reset');
+
+  disc[0].resolve(server('http://A'));       // the STALE attempt resolves first
+  await pA.then(() => { throw new Error('stale attempt A should reject'); }, () => {});
+  assert.equal(Plex.getBase(), null, 'the superseded probe did NOT publish its base');
+  assert.equal(T.isConnecting(), true, "A's finalizer did NOT clear B's in-flight connecting");
+
+  disc[1].resolve(server('http://B'));       // the fresh attempt wins
+  assert.equal(await pB, 'http://B');
+  assert.equal(Plex.getBase(), 'http://B', 'the fresh connection is the one that stuck');
+  assert.equal(T.isConnecting(), false, 'B cleared connecting on completion');
+});
+
 test('concurrent connect() calls share ONE discovery pass', async () => {
   T.resetConn();
   let resourceCalls = 0;

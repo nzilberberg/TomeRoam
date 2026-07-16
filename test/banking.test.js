@@ -3,7 +3,7 @@
 // deps to prove the immediate-retry loop is gone (a non-oversize failure used to
 // re-select the SAME chapter instantly and hammer the relay-only Plex forever):
 // a network failure backs off instead of re-fetching, an abort is neutral, a 4xx
-// is a permanent skip, success clears state, a book change clears state, and one
+// is skipped until reconnect, success clears state, a book change clears state, one
 // failed chapter does not block a later eligible one.
 const { test, afterEach } = require('node:test');
 const assert = require('node:assert');
@@ -78,13 +78,14 @@ test('an abort is neutral — neither a retry entry nor a skip', async () => {
   assert.ok(!Banking._test.skipBank.has(1), 'abort does not skip the chapter');
 });
 
-test('a 4xx is a permanent session skip (skipBank), not a backoff', async () => {
+test('a non-retryable 4xx is skipped (until reconnect), not backed off', async () => {
   setup(AHEAD);
   fetchImpl = async () => { const e = new Error('HTTP 404'); e.kind = 'http'; e.status = 404; e.retryable = false; throw e; };
   Banking.pump();
   await flush();
-  assert.ok(Banking._test.skipBank.has(1), 'non-retryable HTTP → skip for the session');
-  assert.ok(!Banking._test.retry.has(1), 'no backoff for a permanent failure');
+  const skip = Banking._test.skipBank.get(1);
+  assert.ok(skip && skip.reason === 'http', 'non-retryable HTTP → skip with reason=http (cleared on reconnect, see the onReconnect test)');
+  assert.ok(!Banking._test.retry.has(1), 'no backoff entry for a non-retryable 4xx');
 });
 
 test('onReconnect clears an HTTP skip (stale auth / base-switch 404) but KEEPS an oversize skip', () => {

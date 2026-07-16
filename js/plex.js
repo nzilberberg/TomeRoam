@@ -178,14 +178,39 @@ const Plex = (() => {
   // produces 16s＋ AbortError thrash (the codebase note: "connect() must stay
   // sequential"). One shared attempt fixes that.
   let connecting = null;
+  // Generation counter bumped by resetConn(). A probe that started under an older
+  // generation must NOT publish its result: resetConn() clears `base` precisely
+  // because the endpoint it found is suspect (a rotated/dead relay), so letting a
+  // late in-flight probe write that stale base back would defeat the reset — and,
+  // worse, its finalizer could clear a NEWER probe's `connecting` reference and
+  // break the single-probe serialization guard (the fix for the 16s AbortError
+  // thrash). See resetConn().
+  let connGen = 0;
   function connect() {
     if (base) return Promise.resolve(base);
     if (connecting) return connecting;
-    connecting = _connect().finally(() => { connecting = null; });
-    return connecting;
+    const gen = connGen;
+    const attempt = _connect().then((hit) => {
+      // Superseded by a resetConn() mid-probe → don't adopt this (suspect) base;
+      // reject so the caller re-probes rather than running on a stale endpoint.
+      if (gen !== connGen) throw new Error('Plex connection superseded');
+      base = hit;
+      // Remember the winning host so cover-art URLs resolve to the SAME origin when
+      // OFFLINE (base is null then) — that origin is the SW image cache's key, so
+      // previously-loaded covers keep rendering. Not used for API calls.
+      try { localStorage.setItem('pb_lastBase', base); } catch {}
+      return hit;
+    });
+    // Identity-safe finalizer: clear `connecting` ONLY if it still points at THIS
+    // attempt. A stale attempt settling after a reset must not null a newer probe's
+    // reference (that would let a third caller start an overlapping attempt).
+    const exposed = attempt.finally(() => { if (connecting === exposed) connecting = null; });
+    connecting = exposed;
+    return exposed;
   }
+  // Returns the reachable base URL WITHOUT publishing it — connect() adopts it under
+  // the generation guard so a superseded probe can't overwrite a fresh connection.
   async function _connect() {
-    if (base) return base;
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LS.server) || 'null'); } catch {}
     let conns, tkn = token();
@@ -202,12 +227,7 @@ const Plex = (() => {
       hit = await tryConns(d.connections, d.token || tkn);
     }
     if (!hit) { dbg('CONN', 'FAIL: no connection reachable'); throw new Error('Could not reach your Plex server.'); }
-    base = hit;
-    // Remember the winning host so cover-art URLs resolve to the SAME origin when
-    // OFFLINE (base is null then) — that origin is the SW image cache's key, so
-    // previously-loaded covers keep rendering. Not used for API calls.
-    try { localStorage.setItem('pb_lastBase', base); } catch {}
-    return base;
+    return hit;
   }
   // Base to build ART/stream URLs against even before/without a live connection
   // (offline): the last host that worked. API calls still require connect().
@@ -797,14 +817,16 @@ const Plex = (() => {
     // Drop the cached base + any in-flight probe so the NEXT connect() re-resolves a
     // fresh endpoint. Used on a network change / resume (net.js) and before a stream
     // retry (a stale/rotated relay base is the usual first-play-after-sign-in failure).
+    // Bumps connGen so a probe already in flight can neither publish its (now
+    // suspect) base nor clear a newer probe's `connecting` reference.
     // NOTE: this was previously only under _test, so net.js's `Plex.resetConn &&`
     // guard silently no-op'd — the reset-on-reconnect never actually fired.
-    resetConn: () => { base = null; connecting = null; },
+    resetConn: () => { base = null; connecting = null; connGen++; },
     // internals exposed for the unit tests only (no runtime behaviour change)
     _test: {
       kindOf, orderByLastKind, mapBook, mapTracks, curBase, changed, withCache,
       setBase: (b) => { base = b; },
-      resetConn: () => { base = null; connecting = null; },
+      resetConn: () => { base = null; connecting = null; connGen++; },
       isConnecting: () => !!connecting,
     },
   };

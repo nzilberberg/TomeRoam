@@ -1347,13 +1347,18 @@
       let delay;
       if (haveBank) { delay = 0; toast('Playing from downloaded copy'); }
       else { loadRetry++; delay = Math.min(1000 * 2 ** (loadRetry - 1), 8000); toast(`Connection hiccup — retrying… (${loadRetry}/${MAX_LOAD_RETRY})`); }
+      // Capture the load this retry belongs to. A stream retry awaits a reprobe
+      // (seconds on a slow relay), during which the user can pick another chapter/
+      // book or seek — each bumps loadGen. Without this guard the resolved retry
+      // would restart whatever is current at the FAILED track's old position/idx.
+      const retryGen = loadGen;
+      const retryIdx = curLoad.idx;
       clearTimeout(loadRetryTimer);
       loadRetryTimer = setTimeout(() => {
-        if (!ctx) return;
         const go = () => {
-          if (!ctx) return;
-          if (window.PBDebug) PBDebug.log('PLAY', `retrying load idx=${curLoad.idx} at=${at.toFixed(1)}s (attempt ${loadRetry}/${MAX_LOAD_RETRY}${haveBank ? ', from bank' : reprobe ? ', fresh base' : ''})`);
-          startTrack(curLoad.idx, at, wasPlaying);
+          if (!ctx || loadGen !== retryGen) return;   // a newer load supersedes this stale retry
+          if (window.PBDebug) PBDebug.log('PLAY', `retrying load idx=${retryIdx} at=${at.toFixed(1)}s (attempt ${loadRetry}/${MAX_LOAD_RETRY}${haveBank ? ', from bank' : reprobe ? ', fresh base' : ''})`);
+          startTrack(retryIdx, at, wasPlaying);
         };
         // A stream retry re-resolves the connection first (the stale base was the
         // likely cause). connect() short-circuits on a good base, so it's cheap when
