@@ -70,6 +70,13 @@ const NowPlayingScreen = (() => {
     const $ = d.byId, ctx = d.getCtx(), audio = d.audio, curLoad = d.getCurLoad();
     if (!ctx) return;
     const t = ctx.tracks[ctx.idx];
+    // Refresh the CHAPTER TITLE here, not only in render(): a chapter transition
+    // that happens while NP is open (peer adoption, auto-advance) routes through
+    // updatePlayerUI()→update(), which used to leave the big NP title on the old
+    // chapter. Guarded so the ~4x/sec tick only writes when it actually changed.
+    const title = t.title || ('Chapter ' + (ctx.idx + 1));
+    const npTrack = $('npTrack');
+    if (npTrack && npTrack.textContent !== title) npTrack.textContent = title;
     const cur = audio.currentTime || (curLoad && curLoad.seekSec) || 0;   // known spot during the load window (see updateSeekUI)
     const dur = audio.duration || (t.durationMs || 0) / 1000;
     // INTENDED speed, not audio.playbackRate — the element's rate resets to 1 on
