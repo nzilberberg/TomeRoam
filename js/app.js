@@ -97,20 +97,25 @@
 
   // ---- top-level view + bottom-nav switching -------------------------------
   let npOpen = false;
-  function setView(v) {   // 'home' | 'browse' | 'options' | 'nowplaying'
+  function setView(v) {   // 'home' | 'browse' | 'options' | 'downloads' | 'nowplaying'
     npOpen = v === 'nowplaying';
     const optOpen = v === 'options';
-    // NP and Options are ADDITIVE overlays: they paint over whatever tall
-    // screen is showing, and the page underneath is NOT touched. Hiding the
-    // tall view shrinks the document, and a short (~viewport-sized) document
-    // is what trips iOS 26's ~50pt fixed-layer displacement (the black-band /
-    // Options-bar saga — a 1-2px token overflow does NOT count as tall).
-    // Only real screen switches (home/browse) swap the in-flow views.
-    if (!npOpen && !optOpen) {
+    const dlOpen = v === 'downloads';   // Options sub-screen — same overlay model
+    // NP, Options and its sub-screens (Downloads) are ADDITIVE overlays: they
+    // paint over whatever tall screen is showing, and the page underneath is NOT
+    // touched. Hiding the tall view shrinks the document, and a short
+    // (~viewport-sized) document is what trips iOS 26's ~50pt fixed-layer
+    // displacement (the black-band / Options-bar saga — a 1-2px token overflow
+    // does NOT count as tall). Only real screen switches (home/browse) swap the
+    // in-flow views.
+    if (!npOpen && !optOpen && !dlOpen) {
       $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
       $('browse').classList.toggle('hidden', v !== 'browse');
     }
-    if (!npOpen) $('options').classList.toggle('hidden', !optOpen);
+    // Leave the overlays' hidden state untouched when going TO NowPlaying so
+    // whichever one was underneath stays for the NP-back reveal (matches the old
+    // Options behaviour); Options and Downloads are mutually exclusive otherwise.
+    if (!npOpen) { $('options').classList.toggle('hidden', !optOpen); $('downloads').classList.toggle('hidden', !dlOpen); }
     $('nowplaying').classList.toggle('hidden', !npOpen);
     document.body.classList.toggle('np-locked', npOpen);   // CSS hook: navbar button/pill swap
     // Home is the base view (even under an additive overlay) whenever it isn't
@@ -138,7 +143,7 @@
   function resetSwipeStyles(keepGhosts) {
     if (!keepGhosts) document.querySelectorAll('.nav-ghost').forEach((n) => n.remove());
     document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone
-    const els = ['home', 'browse', 'options', 'nowplaying'].map((id) => $(id));
+    const els = ['home', 'browse', 'options', 'downloads', 'nowplaying'].map((id) => $(id));
     els.push(document.querySelector('#navbar .np-actions'));
     for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }
   }
@@ -164,6 +169,9 @@
     // Options is an additive overlay (like NP): no document scroll changes —
     // the page underneath stays exactly as it was. Only its own panel resets.
     if (desc.v === 'options') { setView('options'); setNavActive('options'); if (render) OptionsScreen.render(); if (resetScroll) $('options').scrollTop = 0; return; }
+    // Downloads is a sub-screen of Options (same additive-overlay treatment);
+    // keep the Options nav tab lit so it reads as "inside Options".
+    if (desc.v === 'downloads') { setView('downloads'); setNavActive('options'); if (render) DownloadsScreen.render(); if (resetScroll) $('downloads').scrollTop = 0; return; }
     // NP: no scroll reset — the page underneath must stay exactly as it was.
     if (desc.v === 'nowplaying') { setView('nowplaying'); if (render) renderNowPlaying(); return; }
     setView('browse');
@@ -181,7 +189,7 @@
   const REDUCED = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   // Which .app view element renders a screen (NP is a fixed overlay outside .app — it
   // doesn't slide; the incoming .app view slides in over/under it instead).
-  const viewElFor = (v) => v === 'options' ? $('options') : v === 'home' ? $('home') : v === 'nowplaying' ? null : $('browse');
+  const viewElFor = (v) => v === 'options' ? $('options') : v === 'downloads' ? $('downloads') : v === 'home' ? $('home') : v === 'nowplaying' ? null : $('browse');
   // Carousel slide: the newly-shown view enters from `from` ('right' forward | 'left' back).
   function slideInView(el, from) {
     if (REDUCED || !el) return;
@@ -214,6 +222,9 @@
   function goAuthors() { navTo({ v: 'authors' }, null); }
   function goBooks() { navTo({ v: 'books' }, null); }
   function goOptions() { navTo({ v: 'options' }, null); }
+  // Downloads is a forward drill-in FROM Options (not a lateral tab), so it slides
+  // in from the right and swipe-back / the ‹ Back button filmstrips it out again.
+  function openDownloads() { navTo({ v: 'downloads' }); }
   function openAuthor(a) { navTo({ v: 'authorBooks', author: { ratingKey: a.ratingKey, title: a.title } }); }
   function openFiles(b) { navTo({ v: 'files', book: b }); }
   function openNowPlaying() { if (ctx) navTo({ v: 'nowplaying' }); }
@@ -237,8 +248,8 @@
   // below: an overlay slides as its OWN real element (nothing under it is touched, so
   // the underlying page never scrolls); two in-flow views can't coexist, so an
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
-  const isOverlay = (v) => v === 'options' || v === 'nowplaying';
-  const overlayEl = (v) => v === 'nowplaying' ? $('nowplaying') : $('options');
+  const isOverlay = (v) => v === 'options' || v === 'nowplaying' || v === 'downloads';
+  const overlayEl = (v) => v === 'nowplaying' ? $('nowplaying') : v === 'downloads' ? $('downloads') : $('options');
   const appViewEl = (v) => v === 'home' ? $('home') : $('browse');
   function bindSwipeBack() {
     let d = null, finishing = false;
@@ -336,6 +347,7 @@
       // is the OUTGOING screen of THIS swipe (back from Options → tracks): there it's the
       // mover that must slide out, so hiding it makes it vanish mid-drag.
       if (!d || d.from.v !== 'options') $('options').classList.add('hidden');
+      if (!d || d.from.v !== 'downloads') $('downloads').classList.add('hidden');
       if (desc.v === 'home') { $('home').classList.remove('parked'); $('browse').classList.add('hidden'); }
       else { $('browse').classList.remove('hidden'); $('home').classList.add('parked'); if (render) Browse.render(desc); }
     }
@@ -385,6 +397,7 @@
       if (toOv) {
         const el = overlayEl(toV);
         if (toV === 'nowplaying') { renderNowPlaying(); document.body.classList.remove('np-locked'); }
+        else if (toV === 'downloads') DownloadsScreen.render();
         else OptionsScreen.render();
         el.classList.remove('hidden');
         incoming = { el, base: off };
@@ -1669,7 +1682,7 @@
       if (st === 'done') items.push({ label: 'Remove download', ico: DLICO.trash, confirm: true, run: () => dl.remove(book) });
       else if (st === 'downloading' || st === 'queued') items.push({ label: st === 'queued' ? 'Cancel queued download' : 'Cancel download', ico: DLICO.x, run: () => dl.remove(book) });
       else items.push({ label: 'Download book', ico: DLICO.down, run: () => startBookDownload(book, title) });
-      items.push({ label: 'Manage downloads', ico: DLICO.gear, run: () => DownloadsScreen.open() });
+      items.push({ label: 'Manage downloads', ico: DLICO.gear, run: () => openDownloads() });
     }
     items.push({
       label: 'Reset Progress', danger: true, confirm: true,
@@ -1808,11 +1821,12 @@
   }
 
   // ---- the Downloads management screen ------------------------------------
-  // Extracted to js/downloads-screen.js (DownloadsScreen) — owns its own DOM,
-  // listeners, rendering, and refresh subscription. Wired via DownloadsScreen.init(...)
-  // in the startup section below; the book menu and Options row call
-  // DownloadsScreen.open() / DownloadsScreen.injectOptionRow(). The shared bits it
-  // leans on (toast/modal/fmtGB/GB/DLICO/confirmRemoveDownload) stay here and are
+  // Extracted to js/downloads-screen.js (DownloadsScreen) — renders + binds the
+  // static #downloads overlay and owns its refresh subscription. It's a sub-screen
+  // of Options in the nav system ({v:'downloads'}), so the book menu and Options row
+  // reach it via openDownloads() (navTo) and it filmstrips out via goBack()/swipe;
+  // DownloadsScreen.injectOptionRow() adds the Options "Manage" row. The shared bits
+  // it leans on (toast/modal/fmtGB/GB/DLICO/confirmRemoveDownload) stay here and are
   // injected, so there's one copy each.
 
   // ---- shared indicators (tile badge, NP button, files rows, carousel) -----
@@ -2333,7 +2347,7 @@
       Downloads.subscribe(refreshDlUi);
       DownloadsScreen.init({
         Downloads: window.Downloads, toast, modal, fmtGB, GB, DLICO,
-        confirmRemove: confirmRemoveDownload, byId: $,
+        confirmRemove: confirmRemoveDownload, byId: $, goBack, openDownloads,
       });
       DownloadsScreen.injectOptionRow();
     }
