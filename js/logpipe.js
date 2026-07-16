@@ -166,22 +166,24 @@ const LogPipe = (() => {
     } finally { reporting = false; }
   }
 
-  // ---- Options UI --------------------------------------------------------------
+  // ---- Diagnostics UI ----------------------------------------------------------
+  // Rows live on the Options → Diagnostics sub-screen (#diagnostics), alongside the
+  // Open log / Cache / Console row injected by debug.js.
   function injectOptions() {
-    const opt = document.getElementById('options');
-    if (!opt || document.getElementById('pb-livedbg')) return;
+    const host = document.getElementById('diagnostics');
+    if (!host || document.getElementById('pb-livedbg')) return;
     const mk = (html) => {
       const row = document.createElement('div');
       row.className = 'opt-row';
       row.innerHTML = html;
-      const stamp = opt.querySelector('.buildstamp');    // keep the build stamp last
-      if (stamp) opt.insertBefore(row, stamp); else opt.appendChild(row);
+      host.appendChild(row);
       return row;
     };
-    const live = mk('<span class="opt-label">Live debug</span><span class="opt-ctl"><select id="pb-livedbg"><option value="0">Off</option><option value="1">On</option></select></span>');
-    const sel = live.querySelector('#pb-livedbg');
-    sel.value = isOn() ? '1' : '0';
-    sel.addEventListener('change', (e) => setOn(e.target.value === '1'));
+    // Live debug = an on/off toggle button, matching the app's other switches.
+    const live = mk('<span class="opt-label">Live debug</span><span class="opt-ctl"><button id="pb-livedbg" class="toggle" role="switch"></button></span>');
+    const btn = live.querySelector('#pb-livedbg');
+    btn.setAttribute('aria-checked', isOn() ? 'true' : 'false');
+    btn.addEventListener('click', () => { const on = isOn(); setOn(!on); btn.setAttribute('aria-checked', on ? 'false' : 'true'); });
     const rep = mk('<span class="opt-label">Bug report</span><span class="opt-ctl"><button id="pb-report" class="textbtn">Send report</button></span>');
     rep.querySelector('#pb-report').addEventListener('click', report);
   }

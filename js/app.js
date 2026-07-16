@@ -98,29 +98,30 @@
 
   // ---- top-level view + bottom-nav switching -------------------------------
   let npOpen = false;
-  function setView(v) {   // 'home' | 'browse' | 'options' | 'downloads' | 'nowplaying'
+  function setView(v) {   // 'home' | 'browse' | 'options' | a settings sub | 'nowplaying'
     npOpen = v === 'nowplaying';
     const optOpen = v === 'options';
-    const dlOpen = v === 'downloads';   // Options sub-screen — same overlay model
-    // NP, Options and its sub-screens (Downloads) are ADDITIVE overlays: they
-    // paint over whatever tall screen is showing, and the page underneath is NOT
-    // touched. Hiding the tall view shrinks the document, and a short
-    // (~viewport-sized) document is what trips iOS 26's ~50pt fixed-layer
-    // displacement (the black-band / Options-bar saga — a 1-2px token overflow
-    // does NOT count as tall). Only real screen switches (home/browse) swap the
-    // in-flow views.
-    if (!npOpen && !optOpen && !dlOpen) {
+    const subOpen = isSub(v);   // a settings sub-screen (General/Playback/Buffering/Downloads/Diagnostics)
+    // NP, the Options hub and its sub-screens are ADDITIVE overlays: they paint over
+    // whatever tall screen is showing, and the page underneath is NOT touched. Hiding
+    // the tall view shrinks the document, and a short (~viewport-sized) document is
+    // what trips iOS 26's ~50pt fixed-layer displacement (the black-band / Options-bar
+    // saga — a 1-2px token overflow does NOT count as tall). Only real screen switches
+    // (home/browse) swap the in-flow views.
+    if (!npOpen && !optOpen && !subOpen) {
       $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
       $('browse').classList.toggle('hidden', v !== 'browse');
     }
-    // Leave the overlays' hidden state untouched when going TO NowPlaying so
-    // whichever one was underneath stays for the NP-back reveal (matches the old
-    // Options behaviour). Downloads is a CHILD overlay of Options: keep Options
-    // MOUNTED underneath it (Downloads is opaque and covers it) — otherwise the
-    // forward slide-in of Downloads exposes the base view (home/browse) in the
-    // not-yet-covered area for the length of the animation, and swipe-back would
-    // have no Options to filmstrip to. So Options shows on Options OR Downloads.
-    if (!npOpen) { $('options').classList.toggle('hidden', !(optOpen || dlOpen)); $('downloads').classList.toggle('hidden', !dlOpen); }
+    // Leave the settings overlays' hidden state untouched when going TO NowPlaying so
+    // whichever one was underneath stays for the NP-back reveal. A sub-screen is a
+    // CHILD of the hub: keep #options MOUNTED underneath it (the opaque sub-screen
+    // covers it) — otherwise the forward slide-in exposes the base view (home/browse)
+    // for the length of the animation, and swipe-back would have no hub to filmstrip
+    // to. So #options shows on Options OR any sub; each sub shows only when it's `v`.
+    if (!npOpen) {
+      $('options').classList.toggle('hidden', !(optOpen || subOpen));
+      for (const s of SETTINGS_SUBS) $(s).classList.toggle('hidden', v !== s);
+    }
     $('nowplaying').classList.toggle('hidden', !npOpen);
     document.body.classList.toggle('np-locked', npOpen);   // CSS hook: navbar button/pill swap
     // Home is the base view (even under an additive overlay) whenever it isn't
@@ -148,7 +149,7 @@
   function resetSwipeStyles(keepGhosts) {
     if (!keepGhosts) document.querySelectorAll('.nav-ghost').forEach((n) => n.remove());
     document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone
-    const els = ['home', 'browse', 'options', 'downloads', 'nowplaying'].map((id) => $(id));
+    const els = ['home', 'browse', 'options', 'nowplaying', ...SETTINGS_SUBS].map((id) => $(id));
     els.push(document.querySelector('#navbar .np-actions'));
     for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }
   }
@@ -174,9 +175,9 @@
     // Options is an additive overlay (like NP): no document scroll changes —
     // the page underneath stays exactly as it was. Only its own panel resets.
     if (desc.v === 'options') { setView('options'); setNavActive('options'); if (render) OptionsScreen.render(); if (resetScroll) $('options').scrollTop = 0; return; }
-    // Downloads is a sub-screen of Options (same additive-overlay treatment);
-    // keep the Options nav tab lit so it reads as "inside Options".
-    if (desc.v === 'downloads') { setView('downloads'); setNavActive('options'); if (render) DownloadsScreen.render(); if (resetScroll) $('downloads').scrollTop = 0; return; }
+    // A settings sub-screen (General/Playback/Buffering/Downloads/Diagnostics) —
+    // additive overlay over the hub; keep the Options nav tab lit ("inside Options").
+    if (isSub(desc.v)) { setView(desc.v); setNavActive('options'); if (render) renderScreen(desc.v); if (resetScroll) $(desc.v).scrollTop = 0; return; }
     // NP: no scroll reset — the page underneath must stay exactly as it was.
     if (desc.v === 'nowplaying') { setView('nowplaying'); if (render) renderNowPlaying(); return; }
     setView('browse');
@@ -192,9 +193,23 @@
   const fwdStack = [];                  // screens backed out of — for browser-style forward
   const currentDesc = () => navStack[navStack.length - 1];
   const REDUCED = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  // Which .app view element renders a screen (NP is a fixed overlay outside .app — it
-  // doesn't slide; the incoming .app view slides in over/under it instead).
-  const viewElFor = (v) => v === 'options' ? $('options') : v === 'downloads' ? $('downloads') : v === 'home' ? $('home') : v === 'nowplaying' ? null : $('browse');
+  // The Options HUB's sub-screens: each is a fixed overlay (id === view name) that
+  // filmstrips in from the hub and back out. Adding one = markup + a module + a hub
+  // row; the nav machinery below is data-driven off this list so app.js doesn't grow
+  // per screen. Diagnostics has no module (its rows are self-injected by debug.js /
+  // logpipe.js), so it's not in renderScreen.
+  const SETTINGS_SUBS = ['general', 'playback', 'buffering', 'downloads', 'diagnostics'];
+  const isSub = (v) => SETTINGS_SUBS.indexOf(v) !== -1;
+  function renderScreen(v) {   // re-fill a settings screen's controls from live state
+    if (v === 'options') return OptionsScreen.render();
+    if (v === 'general') return GeneralScreen.render();
+    if (v === 'playback') return PlaybackScreen.render();
+    if (v === 'buffering') return BufferingScreen.render();
+    if (v === 'downloads') return DownloadsScreen.render();
+  }
+  // Which element renders a screen (NP is a fixed overlay that doesn't slide via this;
+  // #options and every sub-screen have id === view name).
+  const viewElFor = (v) => v === 'nowplaying' ? null : v === 'home' ? $('home') : (v === 'options' || isSub(v)) ? $(v) : $('browse');
   // Carousel slide: the newly-shown view enters from `from` ('right' forward | 'left' back).
   function slideInView(el, from) {
     if (REDUCED || !el) return;
@@ -255,25 +270,28 @@
   function goAuthors() { navTo({ v: 'authors' }, null); }
   function goBooks() { navTo({ v: 'books' }, null); }
   function goOptions() { navTo({ v: 'options' }, null); }
-  // Downloads is a forward drill-in FROM Options (not a lateral tab). From Options
-  // it FILMSTRIPS in (both panes move — no base-view flash); from elsewhere (e.g.
-  // the book menu) it falls back to the standard slide. Back is closeDownloads(),
-  // which filmstrips Downloads out and Options back in — same look as swipe-back.
-  function openDownloads() {
+  // A settings sub-screen is a forward drill-in FROM the Options hub (not a lateral
+  // tab). From the hub it FILMSTRIPS in (both panes move — no base-view flash); from
+  // elsewhere (e.g. the book menu → Downloads) it falls back to the standard slide.
+  function openSub(v) {
     if (currentDesc().v === 'options') {
-      navStack.push({ v: 'downloads' }); fwdStack.length = 0;
-      DownloadsScreen.render();
-      overlayFilmstrip('options', 'downloads', 'fwd');
-    } else navTo({ v: 'downloads' });
+      navStack.push({ v }); fwdStack.length = 0;
+      renderScreen(v);
+      overlayFilmstrip('options', v, 'fwd');
+    } else navTo({ v });
   }
-  function closeDownloads() {
+  // ‹ Back / the sub-screen's own back button: filmstrip the sub out and the hub back
+  // in (same look as swipe-back). Falls back to goBack() if the parent isn't the hub.
+  function closeSub() {
+    const fromV = currentDesc().v;
     const prev = navStack[navStack.length - 2];
-    if (currentDesc().v === 'downloads' && prev && prev.v === 'options') {
+    if (isSub(fromV) && prev && prev.v === 'options') {
       fwdStack.push(navStack.pop());
       OptionsScreen.render();
-      overlayFilmstrip('downloads', 'options', 'back');
+      overlayFilmstrip(fromV, 'options', 'back');
     } else goBack();
   }
+  const openDownloads = () => openSub('downloads');   // book-menu "Manage downloads"
   function openAuthor(a) { navTo({ v: 'authorBooks', author: { ratingKey: a.ratingKey, title: a.title } }); }
   function openFiles(b) { navTo({ v: 'files', book: b }); }
   function openNowPlaying() { if (ctx) navTo({ v: 'nowplaying' }); }
@@ -297,8 +315,8 @@
   // below: an overlay slides as its OWN real element (nothing under it is touched, so
   // the underlying page never scrolls); two in-flow views can't coexist, so an
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
-  const isOverlay = (v) => v === 'options' || v === 'nowplaying' || v === 'downloads';
-  const overlayEl = (v) => v === 'nowplaying' ? $('nowplaying') : v === 'downloads' ? $('downloads') : $('options');
+  const isOverlay = (v) => v === 'options' || v === 'nowplaying' || isSub(v);
+  const overlayEl = (v) => $(v);   // every overlay's element id === its view name
   const appViewEl = (v) => v === 'home' ? $('home') : $('browse');
   function bindSwipeBack() {
     let d = null, finishing = false;
@@ -391,12 +409,11 @@
     // when it's a NEW screen (forward). On BACK the destination is the very screen the
     // overlay/parent was opened over, so it's already there — no re-render (no flash).
     function showAppView(desc, render) {
-      // Hide a STALE options overlay lurking over the base view (NP opened from Options
-      // → an NP→chapter-list swipe would show Options through it). But NOT when Options
-      // is the OUTGOING screen of THIS swipe (back from Options → tracks): there it's the
-      // mover that must slide out, so hiding it makes it vanish mid-drag.
-      if (!d || d.from.v !== 'options') $('options').classList.add('hidden');
-      if (!d || d.from.v !== 'downloads') $('downloads').classList.add('hidden');
+      // Hide a STALE settings overlay lurking over the base view (NP opened from
+      // Options → an NP→chapter-list swipe would show it through). But NOT the one
+      // that's the OUTGOING screen of THIS swipe (back from Options → tracks): there
+      // it's the mover that must slide out, so hiding it makes it vanish mid-drag.
+      for (const s of ['options', ...SETTINGS_SUBS]) if (!d || d.from.v !== s) $(s).classList.add('hidden');
       if (desc.v === 'home') { $('home').classList.remove('parked'); $('browse').classList.add('hidden'); }
       else { $('browse').classList.remove('hidden'); $('home').classList.add('parked'); if (render) Browse.render(desc); }
     }
@@ -446,8 +463,7 @@
       if (toOv) {
         const el = overlayEl(toV);
         if (toV === 'nowplaying') { renderNowPlaying(); document.body.classList.remove('np-locked'); }
-        else if (toV === 'downloads') DownloadsScreen.render();
-        else OptionsScreen.render();
+        else renderScreen(toV);   // 'options' or any settings sub-screen
         el.classList.remove('hidden');
         incoming = { el, base: off };
         if (toV === 'nowplaying') pill = { el: npPillClone(), base: off };
@@ -728,7 +744,7 @@
       Progress.init({ onMerged: () => { if (!document.hidden) renderPresence(); } });
     }
     Progress.setActive(true);
-    OptionsScreen.renderDeviceName();
+    GeneralScreen.renderDeviceName();
     startRenderTick();
   }
 
@@ -1045,8 +1061,9 @@
     }
   }
 
-  // renderDeviceName + the Options render/bindings moved to js/options-screen.js
-  // (OptionsScreen, review #20). app.js calls OptionsScreen.renderDeviceName().
+  // The device-name row lives on the General settings sub-screen now
+  // (js/general-screen.js); app.js calls GeneralScreen.renderDeviceName() when
+  // presence inits so the name is current before the screen is first opened.
 
   // ---- playback ------------------------------------------------------------
   // Track list for a book WITHOUT a network round-trip when we already have it —
@@ -1690,10 +1707,11 @@
     if (npOpen) buildNpControls();
   }
 
-  // ---- Options screen (js/options-screen.js — OptionsScreen) ----------------
-  // renderOptions/renderDeviceName + the control bindings live in OptionsScreen;
-  // app.js keeps the shared bits it injects: updateSkipLabels (transport bar),
-  // pumpBank (banking), and doSignOut (the app-lifecycle teardown below).
+  // ---- Options HUB + settings sub-screens -----------------------------------
+  // OptionsScreen (js/options-screen.js) is now just the hub (nav rows → openSub).
+  // The settings themselves live in per-screen modules: general/playback/buffering/
+  // downloads-screen.js. app.js injects the shared bits they lean on: updateSkipLabels
+  // (transport bar), pumpBank (banking), Settings/Presence, and doSignOut (teardown).
   function doSignOut() {
     userPause(); Plex.signOut(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');   // userPause (not bare audio.pause) → notePlaybackIntent: cancels a pending stream retry timer, bumps intent, AND cancels a not-yet-started book selection (playReqGen) so it can't start audio/claim presence after sign-out
     $('navbar').classList.add('hidden'); Browse.reset(); setView('home'); setNavActive('home');
@@ -1924,12 +1942,11 @@
 
   // ---- the Downloads management screen ------------------------------------
   // Extracted to js/downloads-screen.js (DownloadsScreen) — renders + binds the
-  // static #downloads overlay and owns its refresh subscription. It's a sub-screen
-  // of Options in the nav system ({v:'downloads'}), so the book menu and Options row
-  // reach it via openDownloads() (navTo) and it filmstrips out via goBack()/swipe;
-  // DownloadsScreen.injectOptionRow() adds the Options "Manage" row. The shared bits
-  // it leans on (toast/modal/fmtGB/GB/DLICO/confirmRemoveDownload) stay here and are
-  // injected, so there's one copy each.
+  // static #downloads overlay and owns its refresh subscription. It's a settings
+  // sub-screen ({v:'downloads'}) reached from the Options hub row (openSub) or the
+  // book menu (openDownloads); it filmstrips out via ‹ Back (closeSub) / swipe. The
+  // shared bits it leans on (toast/modal/fmtGB/GB/DLICO/confirmRemoveDownload) stay
+  // here and are injected, so there's one copy each.
 
   // ---- shared indicators (tile badge, NP button, files rows, carousel) -----
   function setDlBadge(el, book) {
@@ -2449,9 +2466,8 @@
       Downloads.subscribe(refreshDlUi);
       DownloadsScreen.init({
         Downloads: window.Downloads, toast, modal, fmtGB, GB, DLICO,
-        confirmRemove: confirmRemoveDownload, byId: $, onBack: closeDownloads, openDownloads,
+        confirmRemove: confirmRemoveDownload, byId: $, onBack: closeSub, openDownloads,
       });
-      DownloadsScreen.injectOptionRow();
     }
     // Screens are independent of Downloads — wire them unconditionally.
     HomeScreen.init({ byId: $, renderTile, renderPresence, status, bookEntries });
@@ -2462,7 +2478,14 @@
       applyDlBtn, dlBtnAction, openBookMenu,
     });
     SignInScreen.init({ byId: $, Plex, enterApp: () => enterApp('signin'), toast });
-    OptionsScreen.init({ byId: $, Settings, Presence, updateSkipLabels, pumpBank, onSignOut: doSignOut });
+    // Options HUB + its settings sub-screens (each a filmstrip overlay). The hub just
+    // routes to sub-screens via openSub; each sub owns its own controls + ‹ Back.
+    OptionsScreen.init({ byId: $, openSub, Downloads: window.Downloads });
+    GeneralScreen.init({ byId: $, Settings, Presence, onSignOut: doSignOut, onBack: closeSub });
+    PlaybackScreen.init({ byId: $, Settings, updateSkipLabels, onBack: closeSub });
+    BufferingScreen.init({ byId: $, Settings, Downloads: window.Downloads, pumpBank, modal, fmtGB, GB, onBack: closeSub });
+    // Diagnostics has no module (rows self-inject from debug.js/logpipe.js) — just its ‹ Back.
+    const dgBack = $('dgBack'); if (dgBack) dgBack.addEventListener('click', closeSub);
     if (Plex.isSignedIn()) return enterApp('init');
     show('signin');
   }

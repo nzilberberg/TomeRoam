@@ -639,23 +639,31 @@ input.dl-src { --buffer: var(--downloaded); }
 .pbmodal-btn.primary { background: var(--downloaded); color: #06121d; }
 .pbmodal-btn.danger { background: #b4462f; color: #fff; }
 
-/* Downloads = a sub-screen of Options. Same additive-overlay model as #options
-   (fixed panel with its own scroller painted over the untouched tall screen, so
-   the fixed nav bar can't be displaced — the iOS-26 reasoning). z 26: one above
-   #options so it filmstrips ON TOP of it during an Options→Downloads swipe, still
-   under topbar(30)/transport(35)/navbar(40). */
-#downloads {
+/* Options SUB-SCREENS (General/Playback/Buffering/Downloads/Diagnostics). Same
+   additive-overlay model as #options (fixed panel with its own scroller painted over
+   the untouched tall screen, so the fixed nav bar can't be displaced — the iOS-26
+   reasoning). z 26: one above #options so a sub-screen filmstrips ON TOP of it, still
+   under topbar(30)/transport(35)/navbar(40). Only one is ever open at a time. */
+#downloads, #general, #playback, #buffering, #diagnostics {
   position: fixed; left: 0; right: 0; top: 0; bottom: calc(var(--nav-h) + var(--nav-pad));
   z-index: 26;
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
   padding: calc(var(--safe-top) + 58px) max(16px, calc((100% - 608px) / 2)) 40px;
 }
-body.has-player #downloads { padding-bottom: 130px; }   /* clear the transport */
-/* Sub-screen back header (Downloads + future Options sub-pages). */
+body.has-player #downloads, body.has-player #general, body.has-player #playback,
+body.has-player #buffering, body.has-player #diagnostics { padding-bottom: 130px; }   /* clear the transport */
+/* Sub-screen back header. */
 .subhdr { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .subback { background: none; border: 0; color: var(--accent); font-size: .95rem; padding: 4px 2px; cursor: pointer; }
 .subttl { font-size: 1.15rem; font-weight: 700; }
+/* Options HUB rows — tappable list items that drill into each sub-screen. */
+.opthub { margin-top: 4px; }
+.hubrow { display: flex; align-items: center; justify-content: space-between; width: 100%;
+  background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.08);
+  color: var(--text); font-size: 1rem; padding: 15px 2px; cursor: pointer; text-align: left; }
+.hubrow:active { background: var(--card2); }
+.hubrow .chev { color: var(--muted); font-size: 1.3rem; line-height: 1; }
 .dlusage { margin: 10px 0 4px; }
 .dlbar { height: 8px; border-radius: 4px; background: var(--seek-track); overflow: hidden; }
 .dlbar i { display: block; height: 100%; background: var(--downloaded); }

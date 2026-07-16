@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-12.107';
+  const BUILD = '2026-07-12.108';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -456,26 +456,32 @@
   }
 
   // ---- ways to open --------------------------------------------------------
-  // 1) Visible rows injected into the Options screen (gear): the log panel and
-  //    the Eruda console. (logpipe.js injects its Live debug + Report rows.)
+  // 1) Visible rows on the Diagnostics sub-screen (Options → Diagnostics): the log
+  //    panel, cache snapshot, and the Eruda console. (logpipe.js injects its Live
+  //    debug + Report rows there too.) The build-stamp footer stays on the Options
+  //    HUB (#options), which is the screen the user lands on.
   function injectOptionsButton() {
+    const diag = document.getElementById('diagnostics');
+    if (diag && !document.getElementById('pbdbg-open')) {
+      const row = document.createElement('div');
+      row.className = 'opt-row';
+      row.innerHTML = '<span class="opt-label">Diagnostics</span>' +
+        '<span class="opt-ctl"><button id="pbdbg-open" class="textbtn">Open log</button>' +
+        '<button id="pbdbg-diag" class="textbtn">Cache</button>' +
+        '<button id="pbdbg-console" class="textbtn">Console</button></span>';
+      diag.appendChild(row);
+      row.querySelector('#pbdbg-open').addEventListener('click', open);
+      row.querySelector('#pbdbg-diag').addEventListener('click', openDiag);
+      row.querySelector('#pbdbg-console').addEventListener('click', openConsole);
+    }
     const opt = document.getElementById('options');
-    if (!opt || document.getElementById('pbdbg-open')) return;
-    const row = document.createElement('div');
-    row.className = 'opt-row';
-    row.innerHTML = '<span class="opt-label">Diagnostics</span>' +
-      '<span class="opt-ctl"><button id="pbdbg-open" class="textbtn">Open log</button>' +
-      '<button id="pbdbg-diag" class="textbtn">Cache</button>' +
-      '<button id="pbdbg-console" class="textbtn">Console</button></span>';
-    opt.appendChild(row);
-    row.querySelector('#pbdbg-open').addEventListener('click', open);
-    row.querySelector('#pbdbg-diag').addEventListener('click', openDiag);
-    row.querySelector('#pbdbg-console').addEventListener('click', openConsole);
-    const stamp = document.createElement('div');
-    stamp.className = 'buildstamp';
-    stamp.textContent = 'Build ' + BUILD;
-    stamp.style.cssText = 'text-align:center;opacity:.5;font-size:12px;margin-top:18px';
-    opt.appendChild(stamp);
+    if (opt && !opt.querySelector('.buildstamp')) {
+      const stamp = document.createElement('div');
+      stamp.className = 'buildstamp';
+      stamp.textContent = 'Build ' + BUILD;
+      stamp.style.cssText = 'text-align:center;opacity:.5;font-size:12px;margin-top:18px';
+      opt.appendChild(stamp);
+    }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectOptionsButton);
   else injectOptionsButton();

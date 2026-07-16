@@ -13,11 +13,11 @@
   <!-- Single build stamp for this shell. MUST match js/debug.js BUILD, sw.js
        BUILD, build.json, and the ?v= on every asset below. A test guards it.
        app.js compares this to the loaded JS build to detect a stale/mixed shell. -->
-  <meta name="tomeroam-build" content="2026-07-12.107" />
+  <meta name="tomeroam-build" content="2026-07-12.108" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="icon" href="icon.svg" />
-  <link rel="stylesheet" href="css/app.css?v=2026-07-12.107" />
+  <link rel="stylesheet" href="css/app.css?v=2026-07-12.108" />
   <title>TomeRoam Player</title>
 </head>
 <body>
@@ -61,32 +61,62 @@
       <!-- BROWSE: Authors / Books (rendered by js/browse.js) -->
       <div id="browse" class="view hidden"></div>
 
-      <!-- OPTIONS -->
+      <!-- OPTIONS HUB — navigation only; each row filmstrips into its sub-screen
+           (see openSub/closeSub + SETTINGS_SUBS in app.js). debug.js appends the
+           build-stamp footer here. -->
       <div id="options" class="view hidden">
         <div class="section-title">Options</div>
+        <div id="optHub" class="opthub">
+          <button class="hubrow" data-sub="general"><span>General</span><span class="chev" aria-hidden="true">›</span></button>
+          <button class="hubrow" data-sub="playback"><span>Playback</span><span class="chev" aria-hidden="true">›</span></button>
+          <button class="hubrow" data-sub="buffering"><span>Buffering</span><span class="chev" aria-hidden="true">›</span></button>
+          <button class="hubrow" data-sub="downloads"><span>Downloads</span><span class="chev" aria-hidden="true">›</span></button>
+          <button class="hubrow" data-sub="diagnostics"><span>Diagnostics</span><span class="chev" aria-hidden="true">›</span></button>
+        </div>
+      </div>
+
+      <!-- GENERAL sub-screen (js/general-screen.js): device identity + app lifecycle.
+           #optUpdate stays app.js-owned (app-update lifecycle). -->
+      <div id="general" class="view hidden">
+        <div class="subhdr"><button id="gnBack" class="subback" aria-label="Back">‹ Back</button><span class="subttl">General</span></div>
         <div id="deviceName" class="devicename"></div>
-        <div class="opt-row"><span class="opt-label">Skip back</span><span class="opt-ctl"><select id="optSkipBack"></select><span class="opt-unit">sec</span></span></div>
-        <div class="opt-row"><span class="opt-label">Skip forward</span><span class="opt-ctl"><select id="optSkipFwd"></select><span class="opt-unit">sec</span></span></div>
-        <div class="opt-row"><span class="opt-label">Buffer current track<div class="opt-sub">Keep the whole current chapter on device so it keeps playing if your connection drops mid-chapter.</div></span><span class="opt-ctl"><button id="optBufCurrent" class="toggle" role="switch"></button></span></div>
-        <div class="opt-row"><span class="opt-label">Buffer tracks ahead<div class="opt-sub">Download upcoming chapters in advance for seamless, offline-safe chapter changes.</div></span><span class="opt-ctl"><button id="optBufAhead" class="toggle" role="switch"></button></span></div>
-        <div class="opt-row"><span class="opt-label">Fresh start on auto-advance</span><span class="opt-ctl"><button id="optFreshStart" class="toggle" role="switch"></button></span></div>
-        <div class="opt-row"><span class="opt-label">Reset chapter progress after</span><span class="opt-ctl"><select id="optResetGrace"></select><span class="opt-unit">sec</span></span></div>
         <div class="opt-row hidden" id="optAutoUpdateRow"><span class="opt-label">Auto update on launch</span><span class="opt-ctl"><button id="optAutoUpdate" class="toggle" role="switch"></button></span></div>
         <div class="opt-row"><span class="opt-label">App update</span><span class="opt-ctl"><button id="optUpdate" class="updbtn" disabled>Up to date</button></span></div>
         <div class="opt-row"><span class="opt-label">Account</span><button id="signout" class="textbtn">Sign out</button></div>
       </div>
 
-      <!-- DOWNLOADS (sub-screen of Options; additive overlay like #options so it
-           filmstrips in/out via the nav system — see setView/applyScreen) -->
+      <!-- PLAYBACK sub-screen (js/playback-screen.js) -->
+      <div id="playback" class="view hidden">
+        <div class="subhdr"><button id="pbBack" class="subback" aria-label="Back">‹ Back</button><span class="subttl">Playback</span></div>
+        <div class="opt-row"><span class="opt-label">Skip back</span><span class="opt-ctl"><select id="optSkipBack"></select><span class="opt-unit">sec</span></span></div>
+        <div class="opt-row"><span class="opt-label">Skip forward</span><span class="opt-ctl"><select id="optSkipFwd"></select><span class="opt-unit">sec</span></span></div>
+        <div class="opt-row"><span class="opt-label">Fresh start on auto-advance</span><span class="opt-ctl"><button id="optFreshStart" class="toggle" role="switch"></button></span></div>
+        <div class="opt-row"><span class="opt-label">Reset chapter progress after</span><span class="opt-ctl"><select id="optResetGrace"></select><span class="opt-unit">sec</span></span></div>
+      </div>
+
+      <!-- BUFFERING sub-screen (js/buffering-screen.js): the auto/gray tier -->
+      <div id="buffering" class="view hidden">
+        <div class="subhdr"><button id="bfBack" class="subback" aria-label="Back">‹ Back</button><span class="subttl">Buffering</span></div>
+        <div class="opt-row"><span class="opt-label">Buffer current track<div class="opt-sub">Keep the whole current chapter on device so it keeps playing if your connection drops mid-chapter.</div></span><span class="opt-ctl"><button id="optBufCurrent" class="toggle" role="switch"></button></span></div>
+        <div class="opt-row"><span class="opt-label">Buffer tracks ahead<div class="opt-sub">Download upcoming chapters in advance for seamless, offline-safe chapter changes.</div></span><span class="opt-ctl"><button id="optBufAhead" class="toggle" role="switch"></button></span></div>
+        <div class="opt-row"><span class="opt-label">Max buffer space<div class="opt-sub">Auto-buffered chapters (gray); evicts oldest</div></span><span class="opt-ctl"><select id="dlBufMax"></select></span></div>
+        <div class="opt-row"><span class="opt-label">Buffered audio<div id="dlBufTxt" class="opt-sub"></div></span><span class="opt-ctl"><button id="dlClearBuf" class="textbtn">Clear buffer</button></span></div>
+      </div>
+
+      <!-- DOWNLOADS sub-screen (js/downloads-screen.js): the pinned/blue tier -->
       <div id="downloads" class="view hidden">
         <div class="subhdr"><button id="dlBack" class="subback" aria-label="Back">‹ Back</button><span class="subttl">Downloads</span></div>
         <div class="opt-row"><span class="opt-label" id="dlWifiLabel">Wi‑Fi only</span><span class="opt-ctl"><button id="dlWifi" class="toggle" role="switch"></button></span></div>
         <div class="opt-row"><span class="opt-label">Max download space</span><span class="opt-ctl"><select id="dlMax"></select></span></div>
-        <div class="opt-row"><span class="opt-label">Max buffer space<div class="opt-sub">Auto-buffered chapters (gray); evicts oldest</div></span><span class="opt-ctl"><select id="dlBufMax"></select></span></div>
         <div id="dlUsage" class="dlusage"></div>
-        <div class="opt-row"><span class="opt-label">Buffered audio<div id="dlBufTxt" class="opt-sub"></div></span><span class="opt-ctl"><button id="dlClearBuf" class="textbtn">Clear buffer</button></span></div>
         <div class="section-title">Downloaded books</div>
         <div id="dlList" class="dllist"></div>
+      </div>
+
+      <!-- DIAGNOSTICS sub-screen: rows injected by debug.js (Open log/Cache/Console)
+           and logpipe.js (Live debug toggle, Bug report). #dgBack wired in app.js. -->
+      <div id="diagnostics" class="view hidden">
+        <div class="subhdr"><button id="dgBack" class="subback" aria-label="Back">‹ Back</button><span class="subttl">Diagnostics</span></div>
       </div>
     </section>
   </div>
@@ -190,29 +220,32 @@
 
   <!-- Build-stamped so a stale index.html can never pair with fresh JS (or vice
        versa): each ?v= must match the meta build above + sw.js precache. -->
-  <script src="js/logic.js?v=2026-07-12.107"></script>
-  <script src="js/settings.js?v=2026-07-12.107"></script>
-  <script src="js/debug.js?v=2026-07-12.107"></script>
-  <script src="js/store.js?v=2026-07-12.107"></script>
-  <script src="js/artloader.js?v=2026-07-12.107"></script>
-  <script src="js/plex.js?v=2026-07-12.107"></script>
-  <script src="js/presence.js?v=2026-07-12.107"></script>
-  <script src="js/progress.js?v=2026-07-12.107"></script>
-  <script src="js/syncqueue.js?v=2026-07-12.107"></script>
-  <script src="js/net.js?v=2026-07-12.107"></script>
-  <script src="js/downloads.js?v=2026-07-12.107"></script>
-  <script src="js/logpipe.js?v=2026-07-12.107"></script>
-  <script src="js/speed.js?v=2026-07-12.107"></script>
-  <script src="js/browse.js?v=2026-07-12.107"></script>
-  <script src="js/warmer.js?v=2026-07-12.107"></script>
-  <script src="js/handoff.js?v=2026-07-12.107"></script>
-  <script src="js/downloads-screen.js?v=2026-07-12.107"></script>
-  <script src="js/options-screen.js?v=2026-07-12.107"></script>
-  <script src="js/signin-screen.js?v=2026-07-12.107"></script>
-  <script src="js/home-screen.js?v=2026-07-12.107"></script>
-  <script src="js/nowplaying-screen.js?v=2026-07-12.107"></script>
-  <script src="js/banking.js?v=2026-07-12.107"></script>
-  <script src="js/playback.js?v=2026-07-12.107"></script>
-  <script src="js/app.js?v=2026-07-12.107"></script>
+  <script src="js/logic.js?v=2026-07-12.108"></script>
+  <script src="js/settings.js?v=2026-07-12.108"></script>
+  <script src="js/debug.js?v=2026-07-12.108"></script>
+  <script src="js/store.js?v=2026-07-12.108"></script>
+  <script src="js/artloader.js?v=2026-07-12.108"></script>
+  <script src="js/plex.js?v=2026-07-12.108"></script>
+  <script src="js/presence.js?v=2026-07-12.108"></script>
+  <script src="js/progress.js?v=2026-07-12.108"></script>
+  <script src="js/syncqueue.js?v=2026-07-12.108"></script>
+  <script src="js/net.js?v=2026-07-12.108"></script>
+  <script src="js/downloads.js?v=2026-07-12.108"></script>
+  <script src="js/logpipe.js?v=2026-07-12.108"></script>
+  <script src="js/speed.js?v=2026-07-12.108"></script>
+  <script src="js/browse.js?v=2026-07-12.108"></script>
+  <script src="js/warmer.js?v=2026-07-12.108"></script>
+  <script src="js/handoff.js?v=2026-07-12.108"></script>
+  <script src="js/downloads-screen.js?v=2026-07-12.108"></script>
+  <script src="js/buffering-screen.js?v=2026-07-12.108"></script>
+  <script src="js/playback-screen.js?v=2026-07-12.108"></script>
+  <script src="js/general-screen.js?v=2026-07-12.108"></script>
+  <script src="js/options-screen.js?v=2026-07-12.108"></script>
+  <script src="js/signin-screen.js?v=2026-07-12.108"></script>
+  <script src="js/home-screen.js?v=2026-07-12.108"></script>
+  <script src="js/nowplaying-screen.js?v=2026-07-12.108"></script>
+  <script src="js/banking.js?v=2026-07-12.108"></script>
+  <script src="js/playback.js?v=2026-07-12.108"></script>
+  <script src="js/app.js?v=2026-07-12.108"></script>
 </body>
 </html>
