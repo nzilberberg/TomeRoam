@@ -32,17 +32,11 @@
   const bootId = (() => { try { return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).slice(0, 8); } catch { return 'boot'; } })();
 
   // ---- media-load resilience (slow/lossy relay) ----------------------------
+  // curLoad + loadGen stay here (startTrack owns them; Playback READS loadGen via a
+  // getter to detect supersession). The retry / intent / wedge STATE MACHINE lives
+  // in js/playback.js (Playback) — extracted so its races are unit-testable.
   let curLoad = null;          // {idx, seekSec, autoplay} — what we're trying to load, for retry
   let loadGen = 0;             // generation token so a stale loadedmetadata can't fire late
-  // Bumped by every EXPLICIT reposition/adoption that startTrack does NOT drive
-  // (seek/skip/Prev-restart via onManualSeek, peer grab). A pending stream retry
-  // captures this so a scrub during its (relay-slow) reprobe isn't undone. Kept
-  // SEPARATE from loadGen: loadGen also gates async src/loadedmetadata, so bumping
-  // it on a mid-load seek would cancel legitimate in-flight load work.
-  let playbackIntentGen = 0;
-  let loadRetry = 0;
-  let loadRetryTimer = null;
-  const MAX_LOAD_RETRY = 4;
 
   // ---- banking / buffering (js/banking.js — Banking) ------------------------
   // The whole prefetch/whole-bank subsystem + the blue buffered meter live in the
@@ -1052,7 +1046,7 @@
     ctx.idx = idx;
     Banking.ensureBook(ctx.book);   // banks are per-book (keyed by idx) — wipe on book change
     curLoad = { idx, seekSec, autoplay };       // remembered so a network error can retry this exact load
-    clearTimeout(loadRetryTimer);
+    Playback.cancelRetry();                       // a new load supersedes any pending stream retry
     const gen = ++loadGen;                       // invalidate any in-flight loadedmetadata from a prior src
     // Prefer an already-banked copy of this track (network-proof, no re-buffer);
     // otherwise stream. Then re-point the meter + prefetch window at this track.
@@ -1060,7 +1054,7 @@
     Progress.setSeed(t.ratingKey);   // give the durable-progress board a track to seed its playlist
     const onMeta = () => {
       if (gen !== loadGen) return;               // superseded by a newer load — ignore
-      loadRetry = 0;                             // got metadata → connection is good again
+      Playback.resetRetry();                     // got metadata → connection is good again
       if (seekSec > 0 && seekSec < (audio.duration || Infinity)) audio.currentTime = seekSec;
       if (speedCtl) audio.playbackRate = speedCtl.getRate();   // rate can reset on new src
       if (autoplay) audio.play().catch(() => {});
@@ -1320,17 +1314,12 @@
   // User moved the playhead on THIS device: mark it as our latest activity and
   // publish immediately so peers pick up the new spot (incl. rewinds) fast.
   // THE single choke point for "a newer deliberate playback action happened" —
-  // cancels a pending stream retry so it can't later restart the failed track at
-  // its old position/play-state. Bump the intent counter (the in-flight reprobe
-  // phase bails via the retry's gen check) AND clear the delay-phase timer. Call
-  // this from EVERY externally-driven action (seek/skip/Prev, peer grab/adopt,
-  // handoff correction, user play/pause, cross-device supersede) — NOT from the raw
-  // `pause` EVENT (an error itself pauses the element, and that must not cancel the
-  // recovery it triggered).
-  function notePlaybackIntent() {
-    playbackIntentGen++;
-    clearTimeout(loadRetryTimer); loadRetryTimer = null;
-  }
+  // delegates to Playback (js/playback.js), which bumps the intent counter + cancels
+  // any pending stream retry. Call from EVERY externally-driven action (seek/skip/
+  // Prev, peer grab/adopt, handoff correction, user play/pause, cross-device
+  // supersede, sign-out) — NOT from the raw `pause` EVENT (an error itself pauses the
+  // element, and that must not cancel the recovery it triggered).
+  function notePlaybackIntent() { Playback.noteIntent(); }
   // A user/systemic PAUSE action (transport button, media session, sign-out) — as
   // opposed to the incidental `pause` event — supersedes a pending retry.
   function userPause() { notePlaybackIntent(); audio.pause(); }
@@ -1371,7 +1360,7 @@
   // action handlers) — recommended, and it matters now that lock-screen Play is native.
   const setMediaPlaybackState = (s) => { try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = s; } catch {} };
   audio.addEventListener('play', () => { setMediaPlaybackState('playing'); updatePlayIcon(); startWriteTimer(); writeProgress('playing'); Presence.setPlaying(audio.currentTime * 1000); startPresenceBeat(); pumpBank(); });
-  audio.addEventListener('pause', () => { bgResumePending = null; setMediaPlaybackState('paused'); updatePlayIcon(); stopWriteTimer(); writeProgress('paused'); Presence.setPaused(audio.currentTime * 1000); stopPresenceBeat(); Progress.flush(); pumpBank(); });
+  audio.addEventListener('pause', () => { Playback.onPause(); setMediaPlaybackState('paused'); updatePlayIcon(); stopWriteTimer(); writeProgress('paused'); Presence.setPaused(audio.currentTime * 1000); stopPresenceBeat(); Progress.flush(); pumpBank(); });
   audio.addEventListener('timeupdate', updateSeekUI);
   // Repaint the blue meter as the native playback buffer grows (`progress`) and as
   // the playhead moves (`timeupdate`) — so it reflects REAL current-stream load,
@@ -1384,116 +1373,15 @@
     Banking.abortIfBusy();
   });
   audio.addEventListener('timeupdate', paintMeter);
-  // ---- iOS lock-screen resume WEDGE watchdog --------------------------------
-  // Confirmed on device + web research (WebKit #198277, Apple DevForums 762582):
-  // after a lock-screen pause→play the <audio> element fires `play`+`playing` but the
-  // media clock NEVER advances — it reports playing, produces no sound, and stays
-  // frozen until FOREGROUND. It's an iOS AVAudioSession limitation: a backgrounded,
-  // previously-paused WebView element can't reactivate its audio session while still
-  // backgrounded. NOT fixable from the web layer.
-  //   * While HIDDEN a reload is USELESS and harmful — `.97`/`.98` logs proved
-  //     startTrack just discards the live element + stalls a second op that also
-  //     waits until foreground. So while hidden we do NOT touch the element; we
-  //     record a pending recovery and let it play on foreground.
-  //   * A fresh LOAD DOES play once foreground — so on visibilitychange→visible we
-  //     startTrack the pending spot (see the visibilitychange handler). That gives an
-  //     immediate resume the instant the user unlocks (the PWA ceiling).
-  //   * A FOREGROUND wedge (rare) is reloaded in place (a fresh load plays here),
-  //     capped so it can't loop.
-  let wedgeTimer = null;
-  let bgResumePending = null;   // {idx, position} — a lock-screen wedge to recover on foreground
-  let wedgeReloads = 0;         // consecutive FOREGROUND reloads without a healthy advance
-  const MAX_WEDGE_RELOADS = 2;
-  function forwardBufferedSecApp() {
-    const b = audio.buffered, ct = audio.currentTime || 0;
-    for (let i = 0; i < b.length; i++) if (ct >= b.start(i) - 1 && ct <= b.end(i) + 1) return b.end(i) - ct;
-    return 0;
-  }
-  function armWedgeWatchdog() {
-    clearTimeout(wedgeTimer);
-    if (audio.paused || !ctx) return;
-    const t0 = audio.currentTime || 0;
-    wedgeTimer = setTimeout(() => {
-      wedgeTimer = null;
-      if (audio.paused || !ctx) return;                  // paused/torn down since → not wedged
-      if ((audio.currentTime || 0) - t0 > 0.05) { wedgeReloads = 0; return; }   // clock advanced → healthy
-      if (forwardBufferedSecApp() < 2) return;           // no forward data → real starvation (stall recovery owns it), not a wedge
-      if (document.hidden) {
-        // Can't repair while backgrounded — defer, don't thrash the element.
-        bgResumePending = { idx: ctx.idx, position: t0 };
-        if (window.PBDebug) PBDebug.log('PLAY', `WEDGE hidden at ${t0.toFixed(1)}s — deferring recovery until foreground (iOS bg audio-session limit)`);
-        return;
-      }
-      if (wedgeReloads >= MAX_WEDGE_RELOADS) {
-        if (window.PBDebug) PBDebug.log('PLAY', `WEDGE still frozen (foreground) at ${t0.toFixed(1)}s after ${wedgeReloads} reloads — giving up`);
-        return;
-      }
-      wedgeReloads++;
-      if (window.PBDebug) PBDebug.log('PLAY', `WEDGE foreground frozen at ${t0.toFixed(1)}s — reloading (attempt ${wedgeReloads})`);
-      startTrack(ctx.idx, t0, true);                     // fresh load at the reached spot; its `playing` re-arms this watchdog
-    }, 1400);
-  }
   // iOS keeps networkState=LOADING and fires 'stalled' (not 'suspend') when it goes
   // idle on a big buffer — both are prefetch windows; pumpBank's buffer gate decides.
   audio.addEventListener('suspend', pumpBank);
   audio.addEventListener('stalled', () => { pumpBank(); maybeRecoverFromBank(); });
   audio.addEventListener('canplaythrough', pumpBank);
   audio.addEventListener('waiting', maybeRecoverFromBank);
-  audio.addEventListener('playing', () => { Banking.cancelStallRecovery(); maybeReanchorHandoff(); armWedgeWatchdog(); });
-  // Network drops on a slow relay surface as MEDIA_ERR_NETWORK — don't give up,
-  // reload the same track at the position we'd reached, with exponential backoff.
-  // MEDIA_ERR_ABORTED just means we swapped src on purpose, so ignore it.
-  audio.addEventListener('error', () => {
-    const err = audio.error;
-    if (!err || err.code === err.MEDIA_ERR_ABORTED) return;
-    // If this exact track is already fully local (RAM bank or the persisted
-    // buffer/download), recover from the local copy immediately — startTrack
-    // prefers it, so no network + no backoff. Only when the failing src was the
-    // STREAM, though: an error on the local path itself must not zero-delay-loop.
-    const srcWasLocal = !!(audio.src && (audio.src.startsWith('blob:') || audio.src.includes('/__dl/')));
-    if (window.PBDebug) PBDebug.log('AUDIO_ERR', `code=${err.code} t=${(audio.currentTime||0).toFixed(1)} src=${srcWasLocal ? 'local' : 'stream'} ${(err.message||'')}`);
-    const haveBank = !!(curLoad && !srcWasLocal && (Banking.has(curLoad.idx) || locallyStored(curLoad.idx)));
-    // Which STREAM errors are recoverable: a network drop (code 2) OR — the common
-    // FIRST-play-after-sign-in case — a stale/rotated relay base that curBase() fell
-    // back to (pb_lastBase) before connect() verified one, which surfaces as code 4
-    // (SRC_NOT_SUPPORTED), NOT code 2. The old retry only handled code 2 AND reloaded
-    // the SAME dead URL every attempt (no re-probe) → it exhausted and showed
-    // "Playback error"; retapping worked only because connect() had warmed a fresh
-    // base by then. Now: retry code 2 or 4, and RE-RESOLVE the base first so the
-    // reload probes a fresh endpoint. A local-src error keeps the old code-2 retry.
-    const retryable = (err.code === err.MEDIA_ERR_NETWORK)
-      || (!srcWasLocal && err.code === err.MEDIA_ERR_SRC_NOT_SUPPORTED);
-    if (curLoad && (haveBank || (retryable && loadRetry < MAX_LOAD_RETRY))) {
-      const at = Math.max(audio.currentTime || 0, curLoad.seekSec || 0);   // resume where we were
-      const wasPlaying = !audio.paused || curLoad.autoplay;
-      const reprobe = !haveBank && !srcWasLocal;   // re-resolve a fresh base only for a stream retry
-      let delay;
-      if (haveBank) { delay = 0; toast('Playing from downloaded copy'); }
-      else { loadRetry++; delay = Math.min(1000 * 2 ** (loadRetry - 1), 8000); toast(`Connection hiccup — retrying… (${loadRetry}/${MAX_LOAD_RETRY})`); }
-      // Capture what this retry belongs to. A stream retry awaits a reprobe (seconds
-      // on a slow relay); during it the user can pick another chapter/book (bumps
-      // loadGen) OR seek/skip/Prev/grab a peer (bumps playbackIntentGen — those do
-      // NOT start a new load, so loadGen alone would miss them and the retry would
-      // yank playback back to the failed track's old position). Guard on BOTH.
-      const retryGen = loadGen, retryIntent = playbackIntentGen;
-      const retryIdx = curLoad.idx;
-      clearTimeout(loadRetryTimer);
-      loadRetryTimer = setTimeout(() => {
-        const go = () => {
-          if (!ctx || !PBLogic.retryStillCurrent(retryGen, loadGen, retryIntent, playbackIntentGen)) return;   // superseded by a newer load or explicit action
-          if (window.PBDebug) PBDebug.log('PLAY', `retrying load idx=${retryIdx} at=${at.toFixed(1)}s (attempt ${loadRetry}/${MAX_LOAD_RETRY}${haveBank ? ', from bank' : reprobe ? ', fresh base' : ''})`);
-          startTrack(retryIdx, at, wasPlaying);
-        };
-        // A stream retry re-resolves the connection first (the stale base was the
-        // likely cause). connect() short-circuits on a good base, so it's cheap when
-        // the base is already fine; on failure we still retry (bounded) from cache.
-        if (reprobe && window.Plex && Plex.resetConn) { Plex.resetConn(); Promise.resolve(Plex.connect && Plex.connect()).catch(() => {}).then(go); }
-        else go();
-      }, delay);
-      return;
-    }
-    toast('Playback error — could not load audio.');
-  });
+  // Playback's wedge watchdog + stream-error retry (state machine in js/playback.js).
+  audio.addEventListener('playing', () => { Banking.cancelStallRecovery(); maybeReanchorHandoff(); Playback.onPlaying(); });
+  audio.addEventListener('error', () => Playback.onError());
 
   // ---- progress write-back -------------------------------------------------
   function startWriteTimer() { stopWriteTimer(); writeTimer = setInterval(() => writeProgress('playing'), 15000); }
@@ -2140,15 +2028,7 @@
       if (document.hidden) { writeProgress(audio.paused ? 'paused' : 'playing'); Presence.setActive(false); Progress.flush(); Progress.setActive(false); stopRenderTick(); }
       else if (!$('library').classList.contains('hidden')) {
         Presence.setActive(true); Progress.setActive(true); startRenderTick();
-        // A lock-screen resume that WEDGED while backgrounded left a pending recovery
-        // (see armWedgeWatchdog). Foreground reactivates the audio session, so a fresh
-        // load plays now — reload the pending spot so playback resumes the instant the
-        // user unlocks, instead of them landing on a silent "playing" element.
-        if (bgResumePending && ctx) {
-          const p = bgResumePending; bgResumePending = null; wedgeReloads = 0;
-          if (window.PBDebug) PBDebug.log('PLAY', `WEDGE foreground recovery — reloading idx=${p.idx} at ${p.position.toFixed(1)}s`);
-          startTrack(p.idx, p.position, true);
-        }
+        Playback.onVisible();   // recover a lock-screen wedge deferred while backgrounded (js/playback.js)
       }
     });
     // Back online → push whatever we recorded offline, then re-read peers so a LWW
@@ -2325,6 +2205,14 @@
     Banking.init({
       getCtx: () => ctx, getCurLoad: () => curLoad, audio, Settings, byId: $,
       updateFileRows, startTrack, toast, locallyStored, Plex,
+    });
+    // PlaybackController (js/playback.js) — the retry / intent / wedge state machine.
+    // Reads loadGen via a getter (startTrack still bumps it); loadTrack = startTrack.
+    Playback.init({
+      audio, getCtx: () => ctx, getCurLoad: () => curLoad, getLoadGen: () => loadGen,
+      loadTrack: startTrack, hasLocal: (idx) => (Banking.has(idx) || locallyStored(idx)),
+      connect: () => Plex.connect(), resetConn: () => (Plex.resetConn && Plex.resetConn()),
+      toast, hidden: () => document.hidden,
     });
     // Diagnostics: instrument the audio element (media events + stall watchdog)
     // and provide the state snapshot the log pipe / remote `state` command use.
