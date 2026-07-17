@@ -870,6 +870,93 @@ test('a RESET tombstone from the target is preserved and verified before its boa
   assert.ok(payload.rst.some((r) => r[0] === '2314' && r[1] === rstTs), 'the reset row rides OUR verified shards before the only other copy was destroyed');
 });
 
+// ---- .134 review finding: identity purges the TARGET carries are durable state too
+const CID = 'pbpwa-cthree-9';
+test('a purge-of-a-third-identity carried ONLY by the target is preserved before its boards die (no resurrection of C)', async () => {
+  await fresh();
+  // Third identity C has a stale record that we replicate (C itself is long gone).
+  await foreignShard('cdevcccc', CID, 'Old iPad', [
+    { book: '4242', bk: { t: 'tc', o: 1000, cum: 1000, tot: 2000, ts: NOW - 40 * 60 * 1000 } },
+  ]);
+  const { grk } = await plantGhost(NOW - 40 * 60 * 1000);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  assert.ok(Progress.bookRecord('4242'), 'precondition: C record visible');
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.state.failDeletes = true;
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  NOW += 20 * 60 * 1000;
+
+  // B published a purge of C AFTER our ordinary poll cached its board — the fresh
+  // cleanup read is the ONLY place we can ever learn it before B's boards die.
+  const cPurgeTs = NOW - 15 * 60 * 1000;               // old → B stays quiet
+  const realList = srv.plex.listBoards;
+  let armedCalls = 0, injected = false;
+  srv.plex.listBoards = async (prefix) => {
+    if (prefix === 'pb_prog_' && ++armedCalls === 2 && !injected) {
+      injected = true;
+      await srv.plex.writeSummary(grk, JSON.stringify({
+        v: 1, id: GID, name: 'Old iPhone',
+        books: { 2314: { bk: { t: 'tr3', o: 910191, cum: 910191, tot: 9999000, ts: NOW - 40 * 60 * 1000 } } },
+        purged: { [CID]: cPurgeTs },
+      }));
+    }
+    return realList(prefix);
+  };
+  srv.state.failDeletes = false;
+  await T.poll();
+  srv.plex.listBoards = realList;
+  assert.ok(injected, 'the late purge actually appeared');
+
+  assert.ok(!srv.boards.has(grk), 'cleanup completed');
+  assert.equal(T.purgedMap()[CID], cPurgeTs, 'the purge-of-C was ADOPTED from the fresh read before deletion');
+  const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
+  assert.ok((payload.purge || []).some((r) => r[0] === CID && r[1] === cPurgeTs), 'and rides OUR verified shards — C cannot resurrect');
+  assert.equal(Progress.bookRecord('4242'), null, 'C\'s stale record is suppressed after the sole carrier died');
+});
+
+test('a target purge changing BETWEEN the two stability reads defers the delete', async () => {
+  await fresh();
+  const ts0 = NOW - 40 * 60 * 1000;                    // the plant-time record ts — the injection must NOT move it
+  const { grk } = await plantGhost(ts0);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.state.failDeletes = true;
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  NOW += 20 * 60 * 1000;
+
+  const cPurgeTs = NOW - 15 * 60 * 1000;
+  const realList = srv.plex.listBoards;
+  let armedCalls = 0, injected = false;
+  srv.plex.listBoards = async (prefix) => {
+    if (prefix === 'pb_prog_' && ++armedCalls === 3 && !injected) {   // between read 1 and read 2
+      injected = true;
+      // ONLY the purge map changes — bk ts identical to the plant, so the old
+      // (purge-blind) signature sees no difference. That is the point.
+      await srv.plex.writeSummary(grk, JSON.stringify({
+        v: 1, id: GID, name: 'Old iPhone',
+        books: { 2314: { bk: { t: 'tr3', o: 910191, cum: 910191, tot: 9999000, ts: ts0 } } },
+        purged: { [CID]: cPurgeTs },
+      }));
+    }
+    return realList(prefix);
+  };
+  srv.state.failDeletes = false;
+  await T.poll();
+  srv.plex.listBoards = realList;
+  assert.ok(injected, 'the race actually fired');
+  assert.ok(srv.boards.has(grk), 'purge change between reads → boards KEPT (bk/rst/inventory alone are not the signature)');
+
+  await T.poll();                                      // next pass absorbs the purge, then completes
+  assert.ok(!srv.boards.has(grk), 'cleanup completed');
+  assert.equal(T.purgedMap()[CID], cPurgeTs, 'the mid-race purge was captured, not destroyed');
+});
+
 test('SURFACE: a corrupted shard reads as degraded in syncState, never as empty', async () => {
   await fresh();
   Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 90000, tot: 3600000 });

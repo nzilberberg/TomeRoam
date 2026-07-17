@@ -785,9 +785,21 @@ const Progress = (() => {
   async function freshTargetRead(entry) {
     const sources = [];
     const legacyRks = [], shardRks = [];
+    const purges = {};   // identity purges the target carries — durable state like any record
+    let maxTs = 0;
     try {
       for (const b of (await Plex.listBoards(PREFIX)).filter((x) => !(x.title || '').startsWith(SHARD_PREFIX))) {
-        try { const p = JSON.parse(b.summary); if (p && p.id === entry.id) { sources.push(p); legacyRks.push(b.ratingKey); } } catch { /* foreign junk */ }
+        try {
+          const p = JSON.parse(b.summary);
+          if (p && p.id === entry.id) {
+            sources.push(p); legacyRks.push(b.ratingKey);
+            for (const id in (p.purged || {})) {
+              const t = p.purged[id] || 0;
+              if (t > (purges[id] || 0)) purges[id] = t;
+              if (t > maxTs) maxTs = t;   // a fresh purge the target published IS writer activity
+            }
+          }
+        } catch { /* foreign junk */ }
       }
     } catch { return null; }
     if (shards) {
@@ -800,15 +812,19 @@ const Progress = (() => {
             for (const b of (s.boards || [])) shardRks.push(b.rk);
           }
         }
+        // Conservative: the GLOBAL verified purge view rides the signature too. An
+        // unrelated purge changing between reads costs one deferral — safe; a
+        // missed one costs a resurrection — not.
+        for (const id in (r.purges || {})) if ((r.purges[id] || 0) > (purges[id] || 0)) purges[id] = r.purges[id];
       } catch { return null; }
     }
-    let maxTs = 0;
     for (const src of sources) for (const book in (src.books || {})) {
       const s = src.books[book];
       if (s.bk && (s.bk.ts || 0) > maxTs) maxTs = s.bk.ts;
       if ((s.rst || 0) > maxTs) maxTs = s.rst;
     }
-    return { sources, legacyRks, shardRks, maxTs, sig: JSON.stringify([legacyRks.slice().sort(), shardRks.slice().sort(), maxTs]) };
+    const purgeRows = Object.keys(purges).sort().map((id) => [id, purges[id]]);
+    return { sources, legacyRks, shardRks, maxTs, purges, sig: JSON.stringify([legacyRks.slice().sort(), shardRks.slice().sort(), maxTs, purgeRows]) };
   }
 
   // Finish a (possibly long-pending) deletion. Without target cooperation or a
@@ -835,6 +851,10 @@ const Progress = (() => {
       dbg('PROG', `delete of ${entry.name || entry.key}: target still ACTIVE — purge holds, board removal deferred until quiet`);
       return { done: false, deleted: 0 };
     }
+    // The target may be the SOLE carrier of identity purges (it deleted a third
+    // device and nobody else heard). Adopt them BEFORE the verified publication
+    // below, so they ride OUR shards before the only other copy is destroyed.
+    adoptPurges(r1.purges);
     if (!(await preservePostPurgeRecords(entry, r1.sources))) {
       dbg('PROG', `delete of ${entry.name || entry.key}: records not yet verifiably preserved — boards kept`);
       return { done: false, deleted: 0 };
