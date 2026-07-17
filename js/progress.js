@@ -741,33 +741,36 @@ const Progress = (() => {
     return r.failed.length ? { ok: false, deleted: r.deleted, error: 'some boards could not be removed — try again' } : { ok: true, deleted: r.deleted };
   }
 
-  // Before destroying a deleted identity's boards, capture every record it wrote
-  // AFTER the purge — IMMEDIATELY, bypassing the ordinary 10-minute replication
-  // stability gate. That gate exists to stop write churn from a live peer's
-  // moving position; it must never govern destructive cleanup, where the target's
-  // boards may hold the ONLY copy of legitimate post-purge listening. Returns
-  // true only when any captured record is verifiably published in OUR shards
-  // (read-back), or nothing needed capturing.
+  // Before destroying a deleted identity's boards, capture everything of value it
+  // still holds — every position written AFTER the purge (bypassing the ordinary
+  // 10-minute replication stability gate: that gate stops write churn from a live
+  // peer's moving position; it must never govern destructive cleanup) AND its
+  // reset tombstones (resets are real actions, deliberately not suppressed by the
+  // identity purge — they must outlive the boards too). Then ALWAYS force-publish
+  // and await read-back verification — even when this invocation copied nothing:
+  // the record may sit in local state from an earlier pass (ordinary adoption, a
+  // prior failed attempt) with only a DEFERRED publish behind it, and "already
+  // copied locally" is not "durably published". Deletion is rare and destructive;
+  // it always pays for a verified snapshot.
   async function preservePostPurgeRecords(entry) {
     if (!entry.id) return true;
     let changed = false;
     for (const src of peerBoards.concat(shardBoards)) {
       if (!src || src.id !== entry.id) continue;
       for (const book in (src.books || {})) {
-        const bk = src.books[book].bk;
-        if (!bk || (bk.ts || 0) <= entry.purgeTs) continue;    // at/before the purge = deleted data
-        const cur = replica.books[book];
-        if (cur && cur.bk && (cur.bk.ts || 0) >= (bk.ts || 0)) continue;
-        replica.books[book] = Object.assign({}, cur, {
-          bk: { t: bk.t, o: bk.o || 0, cum: bk.cum || 0, tot: bk.tot || 0, ts: bk.ts || 0, origin: entry.id, name: src.name || '' },
-        });
-        changed = true;
+        const s = src.books[book];
+        const cur = replica.books[book] || {};
+        if (s.bk && (s.bk.ts || 0) > entry.purgeTs && (!cur.bk || (s.bk.ts || 0) > (cur.bk.ts || 0))) {
+          cur.bk = { t: s.bk.t, o: s.bk.o || 0, cum: s.bk.cum || 0, tot: s.bk.tot || 0, ts: s.bk.ts || 0, origin: entry.id, name: src.name || '' };
+          changed = true;
+        }
+        if (s.rst && s.rst > (cur.rst || 0)) { cur.rst = s.rst; cur.rstOrigin = entry.id; changed = true; }
+        if (cur.bk || cur.rst) replica.books[book] = cur;
       }
     }
-    if (!changed) return true;
-    saveReplica();
-    scheduleShardPublish(true);
+    if (changed) saveReplica();
     if (!shards) return true;
+    scheduleShardPublish(true);
     await shards.flush();
     const st = shards.syncState();
     return !st.unsynced && !st.lastError;
