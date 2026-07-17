@@ -55,7 +55,12 @@ const DownloadsScreen = (() => {
     const info = await d.Downloads.storageInfo();
     const pct = info.max ? Math.min(100, Math.round((info.used / info.max) * 100)) : 0;
     const q = info.quotaSupported ? ` · device free ≈ ${d.fmtGB(Math.max(0, info.quota - info.quotaUsage))}` : '';
-    box.innerHTML = `<div class="dlbar"><i style="width:${pct}%"></i></div><div class="dlusage-txt">${d.fmtGB(info.used)} of ${d.fmtGB(info.max)}${q}</div>`;
+    // The bar tracks downloads against THEIR cap, but downloads aren't the whole
+    // footprint — buffered audio is real bytes under a separate budget on another
+    // screen. Name the true total here so this screen can't read as "this is all
+    // TomeRoam is holding". Omitted when there's no buffer, to stay quiet.
+    const b = info.buffered ? ` · ${d.fmtGB(info.buffered)} buffered · ${d.fmtGB(info.total)} on device` : '';
+    box.innerHTML = `<div class="dlbar"><i style="width:${pct}%"></i></div><div class="dlusage-txt">${d.fmtGB(info.used)} of ${d.fmtGB(info.max)}${b}${q}</div>`;
   }
 
   async function renderList() {

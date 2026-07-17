@@ -298,9 +298,24 @@ const Downloads = (() => {
 
   // ---- cap / quota ----------------------------------------------------------
   const capFits = (used, need, max) => used + need <= max;
+  // Decide whether `need` more bytes fit the device quota. Pure so it can be tested
+  // against a platform estimate that LIES (see below).
+  //
+  // iOS/WebKit's estimate().usage is blind to IndexedDB blobs: measured on-device
+  // 2026-07-16, it reported 9.6MB both BEFORE and AFTER a 305MB book downloaded
+  // (the book played in airplane mode, so the bytes were certainly there, and our
+  // own accounting reported 305MB correctly). Trusting est.usage there makes this
+  // guard permanently inert — it compares ~0 against a 38GB quota and waves through
+  // every write until the disk physically fills. So take whichever usage figure is
+  // LARGER: ours is a reliable floor, and the platform's may legitimately exceed it
+  // (Cache Storage and other things we don't track).
+  const quotaFitsWith = (est, localUsed, need) => {
+    if (!est || !est.supported || !est.quota) return true;   // unknown quota → allow (cap still applies)
+    return Math.max(est.usage || 0, localUsed) + need <= est.quota * 0.95;
+  };
   async function quotaFits(need) {
-    try { const e = await Store.estimate(); if (e && e.supported && e.quota) return (e.usage || 0) + need <= e.quota * 0.95; } catch {}
-    return true;   // unknown quota → allow (cap still applies)
+    try { return quotaFitsWith(await Store.estimate(), usedBytes + bufBytes, need); } catch {}
+    return true;   // estimate threw → allow (cap still applies)
   }
   const trackBytes = (tracks) => tracks.reduce((n, t) => n + (t.size || 0), 0);
 
@@ -554,9 +569,15 @@ const Downloads = (() => {
     if (!available()) return [];
     try { const rows = await Store.allDl(); return rows.sort((a, b) => (b.ts || 0) - (a.ts || 0)); } catch { return []; }
   }
+  // `used` is DOWNLOADS only (what the cap governs). `buffered` and `total` are here
+  // so callers can report the true on-device footprint — a screen showing `used`
+  // alone implies downloads are everything we hold, and buffered audio is real bytes.
   async function storageInfo() {
     const est = await Store.estimate();
-    return { used: usedBytes, max: maxBytes(), quota: est.supported ? est.quota : 0, quotaUsage: est.supported ? est.usage : 0, quotaSupported: !!est.supported };
+    return {
+      used: usedBytes, buffered: bufBytes, total: usedBytes + bufBytes, max: maxBytes(),
+      quota: est.supported ? est.quota : 0, quotaUsage: est.supported ? est.usage : 0, quotaSupported: !!est.supported,
+    };
   }
 
   // ---- lifecycle ------------------------------------------------------------
@@ -632,7 +653,7 @@ const Downloads = (() => {
     fetchAudioBlob,   // the one shared streaming byte-loop (banking uses it too)
     listDownloaded, storageInfo,
     wifiOnly, setWifiOnly, wifiDetectable, maxBytes, setMaxBytes, bufMaxBytes, setBufMaxBytes, DEFAULT_MAX, DEFAULT_BUF_MAX,
-    _test: { decideStart, capFits, frac, unmetered, evictionPlan, parseByteLimit, pendingCleanup, drainCleanup, removePersisted },
+    _test: { decideStart, capFits, quotaFitsWith, frac, unmetered, evictionPlan, parseByteLimit, pendingCleanup, drainCleanup, removePersisted },
   };
 })();
 

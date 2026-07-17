@@ -10,7 +10,7 @@ function memLS() {
 }
 global.localStorage = memLS();
 const Downloads = require('../js/downloads.js');
-const { decideStart, capFits, frac } = Downloads._test;
+const { decideStart, capFits, quotaFitsWith, frac } = Downloads._test;
 
 test('Wi-Fi-Only OFF → always start immediately', () => {
   assert.deepEqual(decideStart(false, true), { start: true });
@@ -35,6 +35,37 @@ test('capFits enforces the download-space budget', () => {
   assert.equal(capFits(3 * GB, 0.5 * GB, 4 * GB), true);
   assert.equal(capFits(3.8 * GB, 0.5 * GB, 4 * GB), false);
   assert.equal(capFits(0, 4 * GB, 4 * GB), true);   // exactly fits
+});
+
+// These numbers are NOT invented: they were measured on the user's iPhone on
+// 2026-07-16. estimate() reported usage=9.6MB and quota≈38GB while 305MB of book
+// was downloaded and playing in airplane mode. WebKit's usage figure simply does
+// not see IndexedDB blobs. A stubbed estimate() returning sensible numbers would
+// have passed against the OLD code and caught nothing — the whole point of this
+// test is that it reproduces a platform behaviour we would never have guessed.
+const MB = 1024 * 1024, GB = 1024 * MB;
+const IOS_LIES = { supported: true, usage: 9.6 * MB, quota: 38 * GB };
+
+test('quotaFits trusts our own accounting when the platform under-reports (iOS/WebKit)', () => {
+  // Nearly full by our reckoning; the platform still claims we have used ~nothing.
+  // Trusting est.usage here yields 9.6MB + 2GB <= 36.1GB → true, and we would write
+  // 2GB onto a device with ~1GB left. Our accounting must win.
+  assert.equal(quotaFitsWith(IOS_LIES, 37 * GB, 2 * GB), false);
+  // Same lying estimate, but genuinely little stored → allow.
+  assert.equal(quotaFitsWith(IOS_LIES, 305 * MB, 1 * GB), true);
+});
+
+test('quotaFits still defers to the platform when IT reports more than we track', () => {
+  // Cache Storage, other origins' share, etc. are real and ours to respect — the fix
+  // must be max(), not "always ignore the platform".
+  const honest = { supported: true, usage: 36 * GB, quota: 38 * GB };
+  assert.equal(quotaFitsWith(honest, 1 * GB, 1 * GB), false);
+});
+
+test('quotaFits allows when the quota is unknown (cap still applies)', () => {
+  assert.equal(quotaFitsWith({ supported: false }, 0, 1 * GB), true);
+  assert.equal(quotaFitsWith({ supported: true, quota: 0 }, 0, 1 * GB), true);
+  assert.equal(quotaFitsWith(null, 0, 1 * GB), true);
 });
 
 test('progress fraction is clamped and safe for zero-length books', () => {
