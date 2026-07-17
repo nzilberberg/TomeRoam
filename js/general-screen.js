@@ -75,7 +75,7 @@ const GeneralScreen = (() => {
       if (dev.id) {
         btn('Adopt', async () => {
           const activeWarn = dev.quiet ? '' : '\n\n⚠ This device looks ACTIVE right now — if it is another live device (not your old self), adopting it will mislabel its listening as yours.';
-          if (!confirm(`Adopt "${dev.name || dev.key}"?\n\nIts listening positions become this device's own (green turns orange) and its old boards are removed. Only do this if that device was YOU (e.g. before a reinstall).${activeWarn}`)) return;
+          if (!confirm(`Adopt "${dev.name || dev.key}"?\n\nIts listening positions become this device's own (green turns orange) and its old boards are removed. Only do this if that device was YOU — e.g. this phone, before it was reinstalled.${activeWarn}`)) return;
           const r = await d.Progress.adoptIdentity(dev);
           d.toast(r.ok ? `Adopted ${r.adopted} position(s)` : 'Adopt failed: ' + r.error);
         });
