@@ -774,8 +774,17 @@ const Plex = (() => {
     return out;
   }
 
+  // Status-aware: true only when the playlist is confirmed GONE — 2xx, or 404
+  // (already absent = successful cleanup). Network errors and other statuses are
+  // false: device deletion keeps its cleanup transaction open until every board
+  // is confirmed removed (a swallowed failure here once let "delete pending"
+  // clear its queue and a later retry mint a wider purge timestamp).
   async function deletePlaylist(rk) {
-    try { const b = await connect(); await fetch(b + '/playlists/' + rk, { method: 'DELETE', headers: plexHeaders({ 'X-Plex-Token': token() }) }); } catch {}
+    try {
+      const b = await connect();
+      const r = await fetch(b + '/playlists/' + rk, { method: 'DELETE', headers: plexHeaders({ 'X-Plex-Token': token() }) });
+      return r.ok || r.status === 404;
+    } catch { return false; }
   }
 
   // Fresh read of ONE playlist's summary — the content read-back the durable

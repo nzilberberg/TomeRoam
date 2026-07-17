@@ -22,8 +22,9 @@ function fakeServer() {
   const boards = new Map();
   let nextRk = 500;
   const deleted = [];
+  const state = { failDeletes: false };
   return {
-    boards, deleted,
+    boards, deleted, state,
     byTitle(t) { for (const [rk, b] of boards) if (b.title === t) return { rk, ...b }; return null; },
     plex: {
       // Production-faithful: Plex createPlaylist creates unconditionally, no title
@@ -35,7 +36,16 @@ function fakeServer() {
       readSummary: async (rk) => (boards.has(rk) ? boards.get(rk).summary : null),
       listBoards: async (prefix) => Array.from(boards, ([ratingKey, b]) => ({ ratingKey, title: b.title, summary: b.summary }))
         .filter((b) => b.title.startsWith(prefix)),   // startsWith — the real (overlapping) semantics
-      deleteBoard: async (rk) => { const b = boards.get(rk); if (b) deleted.push(b.title); boards.delete(rk); },
+      // Status-aware like the real Plex.deletePlaylist: false on failure (network /
+      // 401 / 500 — all indistinguishable at this contract level), true when the
+      // board is confirmed gone (2xx or 404-already-absent).
+      deleteBoard: async (rk) => {
+        if (state.failDeletes) return false;
+        const b = boards.get(rk);
+        if (!b) return true;                     // 404 ≡ already removed
+        deleted.push(b.title); boards.delete(rk);
+        return true;
+      },
     },
   };
 }
@@ -576,6 +586,64 @@ test('records the target created AFTER the original purge survive the delayed cl
   assert.ok(!srv.boards.has(grk), 'boards removed by the delayed cleanup');
   const rec = Progress.bookRecord('7007');
   assert.ok(rec && rec.ts === ts2 && rec.by === GID, 'post-purge listening survives the cleanup (preserved via the replica)');
+});
+
+// ---- .130 review finding: cleanup failures must keep the transaction open --------
+test('CLEANUP failure keeps the pending transaction: boards stay listed, auto-retry finishes, 404 counts as removed', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  const { grk, srk, prk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.state.failDeletes = true;                        // purge publishes fine; playlist DELETEs fail
+  NOW += 1000;
+  const r1 = await Progress.deleteDevice(g);
+  assert.equal(r1.ok, false);
+  assert.equal(r1.pending, true, 'cleanup failure = still pending, never silent success');
+  assert.ok(srv.boards.has(grk) && srv.boards.has(srk) && srv.boards.has(prk), 'boards untouched');
+  assert.ok(Progress.pendingDeletes()[g.key], 'transaction retained');
+  assert.ok(Progress.devices().some((x) => x.id === GID), 'row still visible — a failed cleanup is not hidden');
+
+  srv.boards.delete(prk);                              // one board vanishes on its own → 404 must count as removed
+  srv.state.failDeletes = false;
+  await T.poll();                                      // ordinary poll finishes the cleanup
+  assert.ok(!srv.boards.has(grk) && !srv.boards.has(srk), 'remaining boards removed');
+  assert.deepEqual(Progress.pendingDeletes(), {}, 'transaction closed only when every board is confirmed gone');
+  assert.ok(!Progress.devices().some((x) => x.id === GID));
+});
+
+test('repeated Delete through CLEANUP failure keeps the original timestamp; post-purge records survive completion', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  const { grk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.state.failDeletes = true;
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  const ts1 = T.purgedMap()[GID];
+  NOW += 9999;
+  const again = await Progress.deleteDevice(Progress.devices().find((x) => x.id === GID) || g);
+  assert.equal(again.pending, true);
+  assert.equal(T.purgedMap()[GID], ts1, 'a cleanup retry never widens the purge');
+
+  // The ghost was live and keeps playing while cleanup is stuck.
+  const ts2 = ts1 + 60 * 1000;
+  await srv.plex.writeSummary(grk, JSON.stringify({
+    v: 1, id: GID, name: 'Old iPhone',
+    books: { 7007: { bk: { t: 'trN', o: 3000, cum: 3000, tot: 9000000, ts: ts2 } } },
+  }));
+  NOW = ts2 + 11 * 60 * 1000;                          // stable → replica adopts before cleanup lands
+  srv.state.failDeletes = false;
+  await T.poll();
+  assert.equal(T.purgedMap()[GID], ts1, 'floor still the original');
+  assert.ok(!srv.boards.has(grk), 'cleanup completed');
+  const rec = Progress.bookRecord('7007');
+  assert.ok(rec && rec.ts === ts2 && rec.by === GID, 'records written after the original purge survive');
 });
 
 test('SURFACE: a corrupted shard reads as degraded in syncState, never as empty', async () => {

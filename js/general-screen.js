@@ -91,7 +91,7 @@ const GeneralScreen = (() => {
         if (!confirm(msg)) return;
         const r = await d.Progress.deleteDevice(dev);
         d.toast(r.ok ? (dev.unresolved ? 'Storage removed' : 'Device deleted')
-          : r.pending ? 'Delete pending — its boards stay until the deletion is safely published'
+          : r.pending ? 'Delete pending — it will finish automatically'
             : 'Delete failed: ' + r.error);
       });
       btn(ign[dev.key] ? 'Unignore' : 'Ignore', async () => { setIgnored(dev.key, !ign[dev.key]); });

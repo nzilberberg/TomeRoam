@@ -607,23 +607,35 @@ const Progress = (() => {
   // presence). Best-effort per board; local views pruned so the list updates
   // without waiting for the next poll. A LIVE device self-heals: it recreates
   // its boards on its next publish.
+  // Returns { deleted, failed, remainingLegacyRk, remainingShardBoards } — every
+  // board is either CONFIRMED gone (2xx/404 from the status-aware delete) or kept
+  // in the remaining/failed lists so the cleanup transaction stays open. Local
+  // inventories are pruned only for confirmed removals; a failed board must keep
+  // its Devices row visible.
   async function removeDeviceBoards(desc) {
-    let n = 0;
-    const del = async (rk) => { try { await Plex.deletePlaylist(rk); n++; } catch { /* lingers to a retry */ } };
-    if (desc.legacyRk != null) await del(desc.legacyRk);
-    for (const rk of desc.shardBoards || []) await del(rk);
+    let deleted = 0;
+    const failed = [];
+    const del = async (rk) => {
+      let ok = false;
+      try { ok = await Plex.deletePlaylist(rk) !== false; } catch { ok = false; }
+      if (ok) deleted++; else failed.push(rk);
+      return ok;
+    };
+    let remainingLegacyRk = null;
+    if (desc.legacyRk != null && !(await del(desc.legacyRk))) remainingLegacyRk = desc.legacyRk;
+    const remainingShardBoards = [];
+    for (const rk of desc.shardBoards || []) if (!(await del(rk))) remainingShardBoards.push(rk);
     if (desc.id) {
       try {
         for (const b of await Plex.listBoards('pb_dev_')) {
           try { const p = JSON.parse(b.summary); if (p && p.id === desc.id) await del(b.ratingKey); } catch { /* not ours to judge */ }
         }
-      } catch { /* presence sweep is best-effort */ }
+      } catch { failed.push('pb_dev_?'); /* couldn't even sweep — keep the transaction open */ }
     }
-    legacyInv = legacyInv.filter((l) => l.id !== desc.id || l.rk !== desc.legacyRk);
-    if (desc.shardDev) delete shardInv[desc.shardDev];
-    if (desc.id) peerBoards = peerBoards.filter((p) => p.id !== desc.id);
-    cachePeerBoards();
-    return n;
+    if (remainingLegacyRk == null) legacyInv = legacyInv.filter((l) => !(l.id === desc.id || l.rk === desc.legacyRk));
+    if (desc.shardDev && !remainingShardBoards.length) delete shardInv[desc.shardDev];
+    if (desc.id && !failed.length) { peerBoards = peerBoards.filter((p) => p.id !== desc.id); cachePeerBoards(); }
+    return { deleted, failed, remainingLegacyRk, remainingShardBoards };
   }
 
   // ADOPT: "that dead identity was me." Its records become THIS device's own —
@@ -668,10 +680,10 @@ const Progress = (() => {
       const st = shards.syncState();
       if (st.unsynced || st.lastError) return { ok: false, error: st.lastError || 'sync incomplete — boards kept', adopted };
     }
-    const deleted = await removeDeviceBoards(desc);
+    const r = await removeDeviceBoards(desc);
     rebuild(); cbMerged();
-    dbg('PROG', `adopted identity ${desc.name || desc.id}: ${adopted} record(s), ${deleted} board(s) removed`);
-    return { ok: true, adopted, deleted };
+    dbg('PROG', `adopted identity ${desc.name || desc.id}: ${adopted} record(s), ${r.deleted} board(s) removed${r.failed.length ? ` (${r.failed.length} failed — row stays until cleaned)` : ''}`);
+    return { ok: true, adopted, deleted: r.deleted };
   }
 
   // DELETE: a real delete. Publishes a per-identity purge tombstone (purged[id] =
@@ -717,33 +729,43 @@ const Progress = (() => {
       // contract is: deletion is PENDING — the entry above completes it (boards
       // removed, queue cleared) from poll() once a publish verifies.
       if (st.unsynced || st.lastError) return { ok: false, pending: true, error: st.lastError || 'purge not yet durably published' };
-      const deleted = await completeDelete(pendingDeletes[desc.key]);
-      return { ok: true, deleted };
+      const c = await completeDelete(pendingDeletes[desc.key]);
+      if (!c.done) return { ok: false, pending: true, deleted: c.deleted, error: 'board cleanup incomplete — retrying automatically' };
+      return { ok: true, deleted: c.deleted };
     } else if (shards) {
       await shards.flush();            // unresolved sets: board cleanup only, nothing destructive to gate
     }
-    const deleted = await removeDeviceBoards(desc);
+    const r = await removeDeviceBoards(desc);
     rebuild(); cbMerged();
-    dbg('PROG', `deleted device ${desc.name || desc.key}: ${deleted} board(s) removed`);
-    return { ok: true, deleted };
+    dbg('PROG', `deleted device ${desc.name || desc.key}: ${r.deleted} board(s) removed${r.failed.length ? ` (${r.failed.length} failed)` : ''}`);
+    return r.failed.length ? { ok: false, deleted: r.deleted, error: 'some boards could not be removed — try again' } : { ok: true, deleted: r.deleted };
   }
 
   // Finish a (possibly long-pending) deletion: remove the identity's boards using
-  // the FRESHEST inventory we have (boards can change while pending), then clear
-  // the queue entry. The purge floor itself is already durable and published.
+  // the FRESHEST inventory we have (boards can change while pending). The queue
+  // entry — and with it the ORIGINAL purge timestamp — is cleared ONLY when every
+  // board is confirmed gone; a partial cleanup keeps the transaction open (with
+  // the remaining boards) so the next poll retries and a re-pressed Delete stays
+  // an idempotent continuation, never a wider deletion.
   async function completeDelete(entry) {
     const cur = devices().find((x) => x.key === entry.key);
-    const deleted = await removeDeviceBoards({
+    const r = await removeDeviceBoards({
       key: entry.key, id: entry.id,
       legacyRk: cur && cur.legacyRk != null ? cur.legacyRk : entry.legacyRk,
       shardDev: (cur && cur.shardDev) || entry.shardDev,
       shardBoards: (cur && cur.shardBoards && cur.shardBoards.length) ? cur.shardBoards : (entry.shardBoards || []),
     });
+    if (r.failed.length) {
+      pendingDeletes[entry.key] = Object.assign({}, entry, { legacyRk: r.remainingLegacyRk, shardBoards: r.remainingShardBoards });
+      savePendingDeletes();
+      dbg('PROG', `delete of ${entry.name || entry.key}: cleanup incomplete (${r.failed.length} board(s) remain) — will retry`);
+      return { done: false, deleted: r.deleted };
+    }
     delete pendingDeletes[entry.key];
     savePendingDeletes();
     rebuild(); cbMerged();
-    dbg('PROG', `deleted device ${entry.name || entry.key}: purge @${entry.purgeTs}; ${deleted} board(s) removed`);
-    return deleted;
+    dbg('PROG', `deleted device ${entry.name || entry.key}: purge @${entry.purgeTs}; ${r.deleted} board(s) removed`);
+    return { done: true, deleted: r.deleted };
   }
 
   // Poll hook: once the shard writer is settled-and-clean AND a snapshot carrying
