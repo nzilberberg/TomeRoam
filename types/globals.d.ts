@@ -62,6 +62,7 @@ declare var createShardStore: any;
 declare var Presence: any;
 declare var Warmer: any;
 declare var Browse: any;
+declare var VirtualList: any;
 declare var Downloads: any;
 declare var DownloadsScreen: any;
 declare var OptionsScreen: any;
