@@ -69,11 +69,13 @@ const GeneralScreen = (() => {
         ctl.appendChild(b);
         return b;
       };
-      // Adopt: only for QUIET identities with a known id — adopting a live device
-      // would put two writers on one identity (breaks the single-writer boards).
-      if (dev.quiet && dev.id) {
+      // Adopt: always offered when the identity is known — the reinstall case it
+      // exists for happens MINUTES after the ghost's last activity, so no timer
+      // gates it. An apparently-active device just gets a louder warning.
+      if (dev.id) {
         btn('Adopt', async () => {
-          if (!confirm(`Adopt "${dev.name || dev.key}"?\n\nIts listening positions become this device's own (green turns orange) and its old boards are removed. Only do this if that device was YOU (e.g. before a reinstall).`)) return;
+          const activeWarn = dev.quiet ? '' : '\n\n⚠ This device looks ACTIVE right now — if it is another live device (not your old self), adopting it will mislabel its listening as yours.';
+          if (!confirm(`Adopt "${dev.name || dev.key}"?\n\nIts listening positions become this device's own (green turns orange) and its old boards are removed. Only do this if that device was YOU (e.g. before a reinstall).${activeWarn}`)) return;
           const r = await d.Progress.adoptIdentity(dev);
           d.toast(r.ok ? `Adopted ${r.adopted} position(s)` : 'Adopt failed: ' + r.error);
         });

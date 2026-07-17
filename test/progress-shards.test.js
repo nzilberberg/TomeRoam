@@ -270,12 +270,17 @@ test('devices(): a ghost identity is inventoried with name, last-seen, quiet, an
   assert.ok(!list.some((x) => x.id === ME), 'we never list ourselves');
 });
 
-test('devices(): a RECENTLY active identity is not quiet (Adopt withheld)', async () => {
+test('devices(): a RECENTLY active identity is flagged not-quiet (display hint — Adopt is never gated)', async () => {
   await fresh();
-  await plantGhost(NOW - 60 * 1000);   // active an hour... a minute ago
+  await plantGhost(NOW - 60 * 1000);   // active a minute ago
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
   await T.poll();
   const g = Progress.devices().find((x) => x.id === GID);
-  assert.equal(g.quiet, false, 'recent activity → not quiet → no Adopt offer');
+  assert.equal(g.quiet, false, 'recent activity → flagged active (UI warns, never withholds)');
+  // And adoption itself works immediately — the reinstall-now case.
+  const res = await Progress.adoptIdentity(g);
+  assert.ok(res.ok, res.error || '');
+  assert.ok(Progress.isMine(Progress.bookRecord('2314')), 'adopted seconds after the ghost was last active');
 });
 
 test('ADOPT: records become MINE with their ORIGINAL timestamps; every ghost board is removed', async () => {

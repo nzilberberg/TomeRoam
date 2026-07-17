@@ -507,11 +507,12 @@ const Progress = (() => {
   // clientId, so the old identity's boards render as a green ghost). No hardware
   // id exists to resolve that automatically — only the human can. `quiet` gates
   // Adopt in the UI: adopting a LIVE device would put two writers on one identity.
-  // Adopt copies records to OUR identity and never shares a writer with the old
-  // one, so the only thing this gate prevents is adopting a device that's being
-  // actively used (mis-colouring + a pointless board recreate). 10 minutes covers
-  // "reinstalled, reopened, adopt my old self NOW" — the reinstall case Adopt
-  // exists for. (Data/resume never waits on this: records merge on the first poll.)
+  // `quiet` is a DISPLAY HINT ONLY — it never gates Adopt. The feature's whole
+  // point is "reinstalled: restore this phone to its old self, NOW", and right
+  // after a reinstall the ghost's last activity is minutes old. Adopt copies
+  // records to OUR identity and never shares a writer with the old one, so
+  // adopting a genuinely-live device costs only a wrong colour + a board
+  // recreate — a human decision behind a confirm, not a timer's.
   const QUIET_MS = 10 * 60 * 1000;
   function devices() {
     const out = {};
