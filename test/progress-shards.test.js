@@ -646,8 +646,8 @@ test('repeated Delete through CLEANUP failure keeps the original timestamp; post
   assert.ok(rec && rec.ts === ts2 && rec.by === GID, 'records written after the original purge survive');
 });
 
-// ---- .131 review finding: cleanup must preserve FRESH post-purge records ----------
-test('cleanup preserves a post-purge record even INSIDE the 10-minute stability window (verified before boards die)', async () => {
+// ---- .131/.133 review findings: preservation + the active-writer boundary --------
+test('an ACTIVE target is never board-deleted: purge holds, cleanup defers, then completes once quiet — record preserved', async () => {
   await fresh();
   const ts = NOW - 30 * 60 * 1000;
   const { grk } = await plantGhost(ts);
@@ -660,27 +660,110 @@ test('cleanup preserves a post-purge record even INSIDE the 10-minute stability 
   await Progress.deleteDevice(g);
   const ts1 = T.purgedMap()[GID];
 
-  // The live target writes ONE MINUTE after the purge — its boards are the only
-  // copy, and the record is far too fresh for the ordinary replication gate.
+  // The live target writes ONE MINUTE after the purge — its boards are the only copy.
   const ts2 = ts1 + 60 * 1000;
   await srv.plex.writeSummary(grk, JSON.stringify({
     v: 1, id: GID, name: 'Old iPhone',
     books: { 7007: { bk: { t: 'trN', o: 3000, cum: 3000, tot: 9000000, ts: ts2 } } },
   }));
-  NOW = ts2 + 30 * 1000;                               // deliberately INSIDE STABLE_MS — do not dodge the race
-  srv.state.failDeletes = false;                       // cleanup heals immediately
-  await T.poll();                                      // must preserve-then-delete, not delete-then-lose
+  NOW = ts2 + 30 * 1000;                               // target is ACTIVE (30s since its last write)
+  srv.state.failDeletes = false;                       // deletes would succeed — the activity gate must stop them
+  await T.poll();
+  assert.ok(srv.boards.has(grk), 'boards of an ACTIVE identity are never removed (no atomicity against a live writer)');
+  assert.ok(Progress.pendingDeletes()[g.key], 'transaction stays open');
+  assert.equal(T.purgedMap()[GID], ts1, 'purge (suppression) is fully in force meanwhile');
 
-  assert.ok(!srv.boards.has(grk), 'cleanup completed');
-  const rep = T.replicaBooks()['7007'];
-  assert.ok(rep && rep.bk && rep.bk.ts === ts2 && rep.bk.origin === GID, 'fresh post-purge record captured into the replica FIRST');
+  NOW = ts2 + 11 * 60 * 1000;                          // target goes quiet
+  await T.poll();                                      // fresh-read → preserve+verify → stable re-read → delete
+  assert.ok(!srv.boards.has(grk), 'cleanup completed once quiet');
   const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
   const row = payload.bk.find((r) => r[0] === '7007');
-  assert.ok(row && row[5] === ts2, 'and verifiably published in OUR shards before the only other copy was destroyed');
-
-  await T.poll();                                      // a later poll (boards gone) must still see it
+  assert.ok(row && row[5] === ts2, 'the post-purge record was verifiably published before the boards died');
+  await T.poll();
   const rec = Progress.bookRecord('7007');
   assert.ok(rec && rec.ts === ts2 && rec.by === GID, 'the record outlives the deleted boards');
+});
+
+test('a target board that CHANGES during preservation defers the delete; the new record is captured on the next pass', async () => {
+  await fresh();
+  const ts = NOW - 40 * 60 * 1000;
+  const { grk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.state.failDeletes = true;
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  const ts1 = T.purgedMap()[GID];
+  NOW += 20 * 60 * 1000;                               // target quiet — cleanup will attempt
+
+  // Mid-preservation race: the target publishes one more (post-purge, but old
+  // enough to stay "quiet") record BETWEEN the two stability reads. The armed
+  // listing counter fires at the START of the second fresh read: armed call 1 =
+  // the poll's own legacy read, call 2 = stability read #1, call 3 = read #2.
+  const tsMid = ts1 + 60 * 1000;                       // > purge, and ~19 min before NOW → still quiet
+  const realList = srv.plex.listBoards;
+  const realWrite = srv.plex.writeSummary;
+  let armedCalls = 0, injected = false;
+  srv.plex.listBoards = async (prefix) => {
+    if (prefix === 'pb_prog_' && ++armedCalls === 3 && !injected) {
+      injected = true;
+      await realWrite(grk, JSON.stringify({
+        v: 1, id: GID, name: 'Old iPhone',
+        books: { 6006: { bk: { t: 'trM', o: 9000, cum: 9000, tot: 9000000, ts: tsMid } } },
+      }));
+    }
+    return realList(prefix);
+  };
+  srv.state.failDeletes = false;
+  await T.poll();
+  srv.plex.listBoards = realList;
+  assert.ok(injected, 'the race actually fired');
+  assert.ok(srv.boards.has(grk), 'stability re-read caught the mid-preservation write — boards kept');
+  assert.ok(Progress.pendingDeletes()[g.key], 'transaction still open');
+
+  await T.poll();                                      // next pass: fresh read includes the new record
+  assert.ok(!srv.boards.has(grk), 'cleanup completed after a stable double-read');
+  const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
+  const row = payload.bk.find((r) => r[0] === '6006');
+  assert.ok(row && row[5] === tsMid, 'the record written during the race was captured before deletion');
+});
+
+test('a NEW target shard appearing during cleanup defers the delete and is absorbed before removal', async () => {
+  await fresh();
+  const ts = NOW - 40 * 60 * 1000;
+  const { grk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.state.failDeletes = true;
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  NOW += 20 * 60 * 1000;
+
+  // Between the two stability reads, a NEW shard board for the target appears
+  // (same armed-counter vehicle as above: call 3 = the second fresh read).
+  const realList = srv.plex.listBoards;
+  let armedCalls = 0, injected = false;
+  srv.plex.listBoards = async (prefix) => {
+    if (prefix === 'pb_prog_' && ++armedCalls === 3 && !injected) {
+      injected = true;
+      await foreignShard('ghostdev2', GID, 'Old iPhone', []);
+    }
+    return realList(prefix);
+  };
+  srv.state.failDeletes = false;
+  await T.poll();
+  srv.plex.listBoards = realList;
+  assert.ok(injected, 'the race actually fired');
+  assert.ok(srv.boards.has(grk), 'inventory change caught — boards kept');
+
+  await T.poll();
+  assert.ok(!srv.boards.has(grk), 'cleanup completed');
+  assert.ok(!srv.byTitle('pb_prog2_ghostdev2_p'), 'the late-appearing shard was removed too');
+  assert.deepEqual(Progress.pendingDeletes(), {}, 'queue cleared only after EVERY board was gone');
 });
 
 test('cleanup REFUSES to delete boards while the post-purge preservation cannot be verified', async () => {
@@ -700,7 +783,7 @@ test('cleanup REFUSES to delete boards while the post-purge preservation cannot 
     v: 1, id: GID, name: 'Old iPhone',
     books: { 7007: { bk: { t: 'trN', o: 3000, cum: 3000, tot: 9000000, ts: ts2 } } },
   }));
-  NOW = ts2 + 30 * 1000;
+  NOW = ts2 + 11 * 60 * 1000;                          // quiet — the refusal below must be VERIFICATION's, not the activity gate's
   srv.state.failDeletes = false;                       // deletes work again…
   const realWrite = srv.plex.writeSummary;
   srv.plex.writeSummary = async () => 200;             // …but publication is silently discarded
@@ -773,7 +856,7 @@ test('a RESET tombstone from the target is preserved and verified before its boa
     v: 1, id: GID, name: 'Old iPhone',
     books: { 2314: { rst: rstTs } },
   }));
-  NOW += 60 * 1000;
+  NOW = rstTs + 11 * 60 * 1000;                        // quiet — the refusal below must be VERIFICATION's
   const realWrite = srv.plex.writeSummary;
   srv.plex.writeSummary = async () => 200;
   srv.state.failDeletes = false;

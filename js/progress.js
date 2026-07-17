@@ -622,7 +622,8 @@ const Progress = (() => {
       return ok;
     };
     let remainingLegacyRk = null;
-    if (desc.legacyRk != null && !(await del(desc.legacyRk))) remainingLegacyRk = desc.legacyRk;
+    const legacyList = desc.legacyRks || (desc.legacyRk != null ? [desc.legacyRk] : []);
+    for (const rk of legacyList) if (!(await del(rk))) remainingLegacyRk = rk;
     const remainingShardBoards = [];
     for (const rk of desc.shardBoards || []) if (!(await del(rk))) remainingShardBoards.push(rk);
     if (desc.id) {
@@ -752,10 +753,10 @@ const Progress = (() => {
   // prior failed attempt) with only a DEFERRED publish behind it, and "already
   // copied locally" is not "durably published". Deletion is rare and destructive;
   // it always pays for a verified snapshot.
-  async function preservePostPurgeRecords(entry) {
+  async function preservePostPurgeRecords(entry, sources) {
     if (!entry.id) return true;
     let changed = false;
-    for (const src of peerBoards.concat(shardBoards)) {
+    for (const src of (sources || peerBoards.concat(shardBoards))) {
       if (!src || src.id !== entry.id) continue;
       for (const book in (src.books || {})) {
         const s = src.books[book];
@@ -776,23 +777,78 @@ const Progress = (() => {
     return !st.unsynced && !st.lastError;
   }
 
-  // Finish a (possibly long-pending) deletion: remove the identity's boards using
-  // the FRESHEST inventory we have (boards can change while pending). The queue
-  // entry — and with it the ORIGINAL purge timestamp — is cleared ONLY when every
-  // board is confirmed gone; a partial cleanup keeps the transaction open (with
-  // the remaining boards) so the next poll retries and a re-pressed Delete stays
-  // an idempotent continuation, never a wider deletion.
+  // A FRESH server-side view of everything the identity still holds — its boards
+  // (legacy + every shard, including any that appeared since), their records, and
+  // a change signature. Destruction must never operate on the poll's cached
+  // snapshot: a live writer can publish between that read and the delete.
+  // Returns null when the read itself fails (can't read → can't safely destroy).
+  async function freshTargetRead(entry) {
+    const sources = [];
+    const legacyRks = [], shardRks = [];
+    try {
+      for (const b of (await Plex.listBoards(PREFIX)).filter((x) => !(x.title || '').startsWith(SHARD_PREFIX))) {
+        try { const p = JSON.parse(b.summary); if (p && p.id === entry.id) { sources.push(p); legacyRks.push(b.ratingKey); } } catch { /* foreign junk */ }
+      }
+    } catch { return null; }
+    if (shards) {
+      try {
+        const r = await shards.readAll();
+        for (const src of shardEntriesToBoards(r.entries)) if (src.id === entry.id) sources.push(src);
+        for (const dev8 in (r.devices || {})) {
+          const s = r.devices[dev8];
+          if ((s.id && s.id === entry.id) || (entry.shardDev && dev8 === entry.shardDev)) {
+            for (const b of (s.boards || [])) shardRks.push(b.rk);
+          }
+        }
+      } catch { return null; }
+    }
+    let maxTs = 0;
+    for (const src of sources) for (const book in (src.books || {})) {
+      const s = src.books[book];
+      if (s.bk && (s.bk.ts || 0) > maxTs) maxTs = s.bk.ts;
+      if ((s.rst || 0) > maxTs) maxTs = s.rst;
+    }
+    return { sources, legacyRks, shardRks, maxTs, sig: JSON.stringify([legacyRks.slice().sort(), shardRks.slice().sort(), maxTs]) };
+  }
+
+  // Finish a (possibly long-pending) deletion. Without target cooperation or a
+  // Plex compare-and-swap, deleting an ACTIVELY-WRITING device's boards cannot be
+  // made atomic — so we don't try: the purge (already durable + published) keeps
+  // its old records suppressed everywhere, the live device keeps playing and its
+  // post-purge records flow normally, and PHYSICAL board removal waits until the
+  // identity has gone quiet. Then: fresh-read → preserve+verify → fresh-read
+  // AGAIN — boards are destroyed only when both reads describe the same state
+  // and the identity is still quiet. The queue entry — with its ORIGINAL purge
+  // timestamp — survives every deferral, so a retry is always the same
+  // transaction, never a wider one.
   async function completeDelete(entry) {
-    if (!(await preservePostPurgeRecords(entry))) {
-      dbg('PROG', `delete of ${entry.name || entry.key}: post-purge records not yet verifiably preserved — boards kept`);
+    if (!entry.id) return { done: false, deleted: 0 };
+    const r1 = await freshTargetRead(entry);
+    if (!r1) return { done: false, deleted: 0 };
+    let lastSeen = r1.maxTs;
+    try {
+      if (typeof Presence !== 'undefined' && Presence.cachedPeers) {
+        for (const p of Presence.cachedPeers()) if (p.id === entry.id && (p.at || 0) > lastSeen) lastSeen = p.at;
+      }
+    } catch { /* presence optional */ }
+    if (lastSeen && now() - lastSeen <= QUIET_MS) {
+      dbg('PROG', `delete of ${entry.name || entry.key}: target still ACTIVE — purge holds, board removal deferred until quiet`);
       return { done: false, deleted: 0 };
     }
-    const cur = devices().find((x) => x.key === entry.key);
+    if (!(await preservePostPurgeRecords(entry, r1.sources))) {
+      dbg('PROG', `delete of ${entry.name || entry.key}: records not yet verifiably preserved — boards kept`);
+      return { done: false, deleted: 0 };
+    }
+    const r2 = await freshTargetRead(entry);
+    if (!r2 || r2.sig !== r1.sig) {
+      dbg('PROG', `delete of ${entry.name || entry.key}: target changed during preservation — retrying next poll`);
+      return { done: false, deleted: 0 };
+    }
     const r = await removeDeviceBoards({
       key: entry.key, id: entry.id,
-      legacyRk: cur && cur.legacyRk != null ? cur.legacyRk : entry.legacyRk,
-      shardDev: (cur && cur.shardDev) || entry.shardDev,
-      shardBoards: (cur && cur.shardBoards && cur.shardBoards.length) ? cur.shardBoards : (entry.shardBoards || []),
+      legacyRks: r2.legacyRks,
+      shardDev: entry.shardDev,
+      shardBoards: r2.shardRks,
     });
     if (r.failed.length) {
       pendingDeletes[entry.key] = Object.assign({}, entry, { legacyRk: r.remainingLegacyRk, shardBoards: r.remainingShardBoards });
