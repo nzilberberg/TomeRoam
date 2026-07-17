@@ -37,10 +37,13 @@ const VirtualList = (() => {
     let y = 0;
     for (let gi = 0; gi < groupedItems.length; gi++) {
       const src = groupedItems[gi];
+      // A falsy letter = a FLAT (headerless) group — author pages use one big
+      // ungrouped list; its header stride is zero and no letterhead renders.
+      const headH = src.letter ? strides.header : 0;
       const g = {
         letter: src.letter, items: src.items, count: src.items.length,
-        top: y, rowsTop: y + strides.header,
-        height: strides.header + src.items.length * strides.row,
+        top: y, rowsTop: y + headH,
+        height: headH + src.items.length * strides.row,
       };
       groups.push(g);
       for (let li = 0; li < src.items.length; li++) {
@@ -113,6 +116,7 @@ const VirtualList = (() => {
   let rafPending = false;
   function onDocScroll() {
     if (!activeCtl || rafPending) return;
+    if (!activeCtl.isVisible()) return;   // browse hidden (Home/Options scrolling) → not our scroll
     rafPending = true;
     requestAnimationFrame(() => { rafPending = false; if (activeCtl) activeCtl._realize(); });
   }
@@ -146,11 +150,13 @@ const VirtualList = (() => {
       for (const g of model.groups) {
         const shell = document.createElement('div');
         shell.className = 'lettergroup vshell';
-        shell.dataset.sec = g.letter;
-        const lh = document.createElement('div');
-        lh.className = 'letterhead';
-        lh.textContent = g.letter;
-        shell.appendChild(lh);
+        if (g.letter) {
+          shell.dataset.sec = g.letter;
+          const lh = document.createElement('div');
+          lh.className = 'letterhead';
+          lh.textContent = g.letter;
+          shell.appendChild(lh);
+        }
         const rowsEl = document.createElement('div');
         rowsEl.className = 'vrows';
         rowsEl.style.position = 'relative';
@@ -238,6 +244,13 @@ const VirtualList = (() => {
     buildShells();
     const api = {
       activate, deactivate, destroy, update, _realize,
+      // Visible = the container actually renders (an ancestor display:none —
+      // browse hidden behind Home — means document scrolls are not ours).
+      isVisible: opts.isVisible || (() => {
+        const c = opts.container;
+        try { return !!(c.isConnected && (c.offsetParent !== null || c.getClientRects().length)); }
+        catch { return !!c.isConnected; }
+      }),
       state: () => state,
       realizedCount: () => rows.size,
       model: () => model,

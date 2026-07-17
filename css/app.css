@@ -713,3 +713,20 @@ html::-webkit-scrollbar, body::-webkit-scrollbar,
 
 /* Downloads screen: buffered-audio sub-line under the row label. */
 .opt-sub { font-size: 11.5px; opacity: .6; margin-top: 2px; font-weight: 400; }
+
+/* ---- virtualized lists (fill-to-budget scaling, lists > 600 items) ----------
+   Fixed geometry is the CONTRACT: the JS windowing math reads --v-row/--v-head
+   from here (one source of truth — no JS copy to diverge). Rows get a fixed
+   height and .pline reserves its tallest (live-peer) case so a peer name
+   appearing can never change the stride. Small libraries never add the
+   .virtual-list class, so none of this touches them. */
+.virtual-list { --v-row: 94px; --v-head: 35px; }
+.virtual-list .vrows { position: relative; }
+.virtual-list .book { height: 84px; margin-bottom: 0; box-sizing: border-box; overflow: hidden; }
+.virtual-list .book .pline { min-height: 2.1em; }
+/* Unrealized area: a card-coloured stripe per row slot, so a hard fling shows a
+   skeleton beat instead of a void until rows materialize. */
+.virtual-list .vrows {
+  background: repeating-linear-gradient(180deg, var(--card) 0 84px, transparent 84px 94px);
+  border-radius: var(--radius);
+}

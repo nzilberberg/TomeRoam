@@ -22,11 +22,55 @@ const Browse = (() => {
   const keyOf = (d) => d.v === 'authorBooks' ? 'author:' + d.author.ratingKey
     : d.v === 'files' ? 'files:' + d.book.ratingKey : d.v;
 
+  // ---- fill-to-budget virtualization (scaling WS1b/c) -------------------------
+  // A list past VirtualList.FULL_RENDER_MAX renders through js/virtuallist.js
+  // (per-group shells + windowed rows); at or under it, the classic full renderer
+  // below runs byte-for-byte unchanged. The controller lifecycle is OWNED HERE
+  // (the §6.5 state machine): showPage() activates the shown page's controller
+  // and deactivates the rest; evictLRU/clearCache/reset/buildFor destroy them.
+  const VL = (typeof VirtualList !== 'undefined') ? VirtualList : null;
+  let vlOpts = null;              // test-only override (injected metrics/strides)
+  function vStrides(container) {
+    let row = 94, header = 35;    // fallbacks; CSS custom props are the source of truth
+    try {
+      const cs = getComputedStyle(container);
+      row = parseFloat(cs.getPropertyValue('--v-row')) || row;
+      header = parseFloat(cs.getPropertyValue('--v-head')) || header;
+    } catch { /* jsdom / detached */ }
+    return { row, header };
+  }
+  // A removed virtual row must detach its cover from the art pipeline (the IO
+  // retains observed targets — this is the leak the plan calls out).
+  function releaseRow(el) {
+    if (typeof window === 'undefined' || !window.ArtLoader || !ArtLoader.release) return;
+    el.querySelectorAll('img[data-art]').forEach((img) => ArtLoader.release(img));
+  }
+  // Newly materialized rows need live resume/peer numbers NOW, not at the next
+  // 1s tick — rAF-debounced so a realize burst costs one onRender.
+  let renderPing = false;
+  function pingRender() {
+    if (renderPing) return;
+    renderPing = true;
+    requestAnimationFrame(() => { renderPing = false; o.onRender(); });
+  }
+  function destroyController(el) {
+    if (el && el._vctl) { el._vctl.destroy(); el._vctl = null; }
+  }
+
   function init(opts) { o = opts; }
-  function reset() { authorsCache = null; pageCache.clear(); if (o.mount) o.mount.innerHTML = ''; }
+  function reset() {
+    authorsCache = null;
+    pageCache.forEach((v) => destroyController(v.el));
+    pageCache.clear();
+    if (o.mount) o.mount.innerHTML = '';
+  }
   // Drop cached pages so lists rebuild from fresh data (pull-to-refresh). Safe to
   // call while browse is hidden (home). Removes the page nodes; keeps the mount.
-  function clearCache() { authorsCache = null; pageCache.forEach((v) => { if (v.el.parentNode) v.el.remove(); }); pageCache.clear(); }
+  function clearCache() {
+    authorsCache = null;
+    pageCache.forEach((v) => { destroyController(v.el); if (v.el.parentNode) v.el.remove(); });
+    pageCache.clear();
+  }
 
   const spinnerHTML = '<div class="center"><div class="spinner"></div></div>';
 
@@ -133,13 +177,21 @@ const Browse = (() => {
     // ours; the applyScrollY that follows (immediately on a cache hit, or after the
     // fetch on a fresh page) owns it from there and clears it.
     for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
+    // Virtual controllers follow visibility: the shown page's controller realizes;
+    // hidden ones dematerialize to ~0 rows (keep data + anchor).
+    for (const [k, v] of pageCache) {
+      const c = v.el._vctl;
+      if (!c) continue;
+      if (k === key) c.activate(); else c.deactivate();
+    }
   }
   function evictLRU(keepKey) {
     while (pageCache.size > MAX_PAGES) {
       let oldK = null, oldO = Infinity;
       for (const [k, v] of pageCache) if (k !== keepKey && v.order < oldO) { oldO = v.order; oldK = k; }
       if (oldK == null) break;
-      const v = pageCache.get(oldK); if (v && v.el.parentNode) v.el.remove();
+      const v = pageCache.get(oldK);
+      if (v) { destroyController(v.el); if (v.el.parentNode) v.el.remove(); }
       pageCache.delete(oldK);
     }
   }
@@ -171,10 +223,13 @@ const Browse = (() => {
     if (desc.v === 'files') return await Plex.getAlbumTracks(desc.book.ratingKey, { onFresh });
   }
   function buildFor(desc, data, el) {
+    destroyController(el);   // a structural rebuild replaces any prior virtual controller
     if (desc.v === 'authors') listView(el, 'Authors', data, authorRow, false);
     else if (desc.v === 'books') listView(el, 'Books', data, bookRow, false);
     else if (desc.v === 'authorBooks') authorView(el, data.author, data.books);
     else if (desc.v === 'files') filesView(el, desc.book, data);
+    // A rebuilt virtual page must resume realizing if it's the page on screen.
+    if (el._vctl && !el.classList.contains('hidden') && browseVisible()) el._vctl.activate();
   }
 
   // ---- in-place keyed reconcile (background-revalidate repaint) -------------
@@ -223,6 +278,19 @@ const Browse = (() => {
   }
   // Try an in-place patch for this screen; false → the caller does a full rebuild.
   function patchInPlace(desc, page, data) {
+    // A VIRTUAL page never goes through patchRows (it counts rows — realized ≠
+    // total would always read as structural). The controller's update() rebuilds
+    // the model and keeps the viewport anchored (SWR never jumps the view).
+    const ctl = page._vctl;
+    if (ctl) {
+      if (desc.v === 'authors' || desc.v === 'books') { ctl.update(groupedFor(data)); return true; }
+      if (desc.v === 'authorBooks') {
+        if (JSON.stringify(data.author) !== page._authorSig) return false;   // header changed → full rebuild
+        ctl.update([{ letter: '', items: data.books.slice().sort(bySort) }]);
+        return true;
+      }
+      return false;
+    }
     if (desc.v === 'authors') return patchRows(page, data, authorRow, authorSig);
     if (desc.v === 'books') return patchRows(page, data, bookRow, bookSig);
     if (desc.v === 'authorBooks') {
@@ -330,6 +398,32 @@ const Browse = (() => {
     return el;
   }
 
+  // groupByLetter's Map → the [{letter, items}] shape the virtualizer consumes.
+  function groupedFor(items) {
+    const { groups, letters } = groupByLetter(items);
+    return letters.map((L) => ({ letter: L, items: groups.get(L) }));
+  }
+
+  // Windowed list for a >FULL_RENDER_MAX page: same header/index/rows, but rows
+  // materialize through the controller (created here; ACTIVATED by showPage —
+  // the lifecycle owner). `flat` = the author-page shape: one headerless group,
+  // no A–Z index.
+  function virtualView(m, list, groupedItems, rowFn, letters) {
+    list.classList.add('virtual-list');
+    m.appendChild(list);
+    const ctl = VL.createController(Object.assign({
+      container: list,
+      groupedItems,
+      rowFn,
+      strides: vStrides(list),
+      release: releaseRow,
+      onMaterialized: pingRender,
+      scrollTo: (y) => window.scrollTo(0, y),
+    }, vlOpts || {}));
+    m._vctl = ctl;
+    if (letters) m.appendChild(buildIndex(m, letters));
+  }
+
   function listView(m, title, items, rowFn, drill) {
     const { groups, letters } = groupByLetter(items);
     m.innerHTML = '';
@@ -338,6 +432,10 @@ const Browse = (() => {
     if (note) m.appendChild(note);
     const list = document.createElement('div');
     list.className = 'browselist';
+    if (VL && items.length > VL.FULL_RENDER_MAX) {   // fill-to-budget: same look, windowed rows
+      virtualView(m, list, letters.map((L) => ({ letter: L, items: groups.get(L) })), rowFn, letters);
+      return;
+    }
     for (const L of letters) {
       const g = document.createElement('div');
       g.className = 'lettergroup'; g.dataset.sec = L;
@@ -361,6 +459,10 @@ const Browse = (() => {
     // No A–Z index here → book rows span the full width.
     const list = document.createElement('div');
     list.className = 'browselist authorlist';
+    if (VL && books.length > VL.FULL_RENDER_MAX) {   // one flat headerless group, windowed
+      virtualView(m, list, [{ letter: '', items: books.slice().sort(bySort) }], bookRow, null);
+      return;
+    }
     for (const b of books.slice().sort(bySort)) list.appendChild(bookRow(b));
     m.appendChild(list);
   }
@@ -462,6 +564,9 @@ const Browse = (() => {
 
   function filesView(m, book, tracks) {
     m.innerHTML = '';
+    // Deliberately NOT virtualized (chapter lists are small) — but a pathological
+    // count must not pass silently (scaling plan WS1c).
+    if (tracks.length > 600 && typeof PBDebug !== 'undefined') PBDebug.log('BROWSE', 'pathological chapter count: ' + tracks.length + ' (book ' + book.ratingKey + ')');
     m.appendChild(header(book.title || 'Book', true));
     const resume = o.getResumeEntry ? o.getResumeEntry(book.ratingKey) : null;
 
@@ -528,7 +633,9 @@ const Browse = (() => {
   return { init, reset, render, clearCache, patchRows, bookSig,
     // internals exposed for unit tests only (no runtime behaviour change)
     _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY,
-      applyScrollY, showPage, isRestoring: () => restoring } };
+      applyScrollY, showPage, isRestoring: () => restoring,
+      listView, authorView, patchInPlace, groupedFor, pageCache,
+      setVlOpts: (v) => { vlOpts = v; } } };
 })();
 
 // Expose on window (top-level `const Browse` is a lexical global, not

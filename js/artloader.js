@@ -31,16 +31,30 @@
     : null;
 
   function enqueue(img) {
-    if (!img.dataset.art || img.dataset.artState) return;   // no url, or already queued/loading/done
+    if (!img.dataset.art || img.dataset.artState || img.dataset.artReleased) return;   // no url / already handled / disposed
     img.dataset.artState = 'queued';
     queue.push(img);
     pump();
   }
 
+  // Disposal for windowed lists (scaling WS1b): a row leaving the virtual window
+  // must fully detach its cover from the pipeline — the IntersectionObserver
+  // RETAINS observed targets, so relying on disconnected-node checks alone leaks
+  // under sustained scrolling. Marks the img released (a pending retry timer that
+  // later fires re-enters enqueue and is refused by the flag), unobserves it, and
+  // purges it from the pending queue.
+  function release(img) {
+    if (!img) return;
+    img.dataset.artReleased = '1';
+    if (io) { try { io.unobserve(img); } catch { /* already gone */ } }
+    const qi = queue.indexOf(img);
+    if (qi >= 0) queue.splice(qi, 1);
+  }
+
   function pump() {
     while (inflight < MAX_INFLIGHT && queue.length) {
       const img = queue.shift();
-      if (!img.isConnected) continue;                        // scrolled away / re-rendered
+      if (!img.isConnected || img.dataset.artReleased) continue;   // scrolled away / re-rendered / disposed
       const art = img.dataset.art;
       if (!art) continue;
       const tries = (+img.dataset.artRetry || 0);
@@ -127,5 +141,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 
-  window.ArtLoader = { scan, observe };
+  window.ArtLoader = { scan, observe, release };
 })();
