@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-17.135';
+const BUILD = '2026-07-17.136';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -172,7 +172,9 @@ self.addEventListener('message', (e) => {
     const work = (async () => {
       try {
         const c = await caches.open(IMG_CACHE);
-        await c.delete(imageKey(new URL(d.url)));
+        const key = imageKey(new URL(d.url));
+        await c.delete(key);
+        await imgForget(key);   // keep the FIFO index honest about the eviction
       } catch {}
     })();
     if (e.waitUntil) e.waitUntil(work);
@@ -217,7 +219,7 @@ self.addEventListener('fetch', (e) => {
     case 'probe': e.respondWith(probeOnly(req)); return;
     case 'download': e.respondWith(serveDownloadedAudio(req, decodeURIComponent(url.pathname.split('/__dl/')[1] || ''))); return;
     case 'shell': e.respondWith(shellFirst(req)); return;
-    case 'image': e.respondWith(imageFirst(req, url)); return;
+    case 'image': e.respondWith(imageFirst(e, req, url)); return;
     // 'passthrough' → do not call respondWith; let the request hit the network.
   }
 });
@@ -322,9 +324,70 @@ async function probeOnly(req) {
   }
 }
 
+// ---- cover-cache FIFO bound (fill-to-budget scaling WS3) --------------------
+// Entry-COUNT high/low-water FIFO (responses are opaque → bytes unreadable).
+// Insertion order persists as a JSON index entry inside IMG_CACHE itself; the
+// index is authoritative (cache.keys() order is not guaranteed) and unknown-age
+// keys reconcile as OLDEST. ALL index/trim I/O is serialized through one promise
+// chain and tied to the fetch event's waitUntil (the worker may terminate right
+// after returning the image). Inert under ~4000 covers — a small library never
+// reaches the high-water mark.
+const COVER_CACHE_HIGH = 4000;
+const COVER_CACHE_LOW = 3600;
+const IMG_INDEX_KEY = './__img-index';
+const IMG_INDEX_FLUSH_EVERY = 20;       // amortize index writes during scroll bursts
+let imgOrder = null;                    // authoritative in-memory order (loaded lazily)
+let imgKnown = null;                    // Set mirror for O(1) membership
+let imgUnflushed = 0;
+let imgChain = Promise.resolve();       // serializes every index/trim operation
+
+async function imgEnsureOrder(cache) {
+  if (imgOrder) return;
+  let stored = [];
+  try { const idx = await cache.match(IMG_INDEX_KEY); if (idx) stored = await idx.json(); } catch { stored = []; }
+  const actual = (await cache.keys()).map((r) => r.url).filter((u) => !u.endsWith('__img-index'));
+  imgOrder = SWKit.imgReconcileOrder(Array.isArray(stored) ? stored : [], actual);
+  imgKnown = new Set(imgOrder);
+}
+const imgFlushIndex = (cache) => cache.put(IMG_INDEX_KEY, new Response(JSON.stringify(imgOrder))).catch(() => {});
+// Note a newly cached cover; trim past the high-water mark. Returns the chained
+// promise so the caller can waitUntil it.
+function imgNote(key) {
+  imgChain = imgChain.then(async () => {
+    const cache = await caches.open(IMG_CACHE);
+    await imgEnsureOrder(cache);
+    if (!imgKnown.has(key)) { imgOrder.push(key); imgKnown.add(key); imgUnflushed++; }
+    if (imgOrder.length > COVER_CACHE_HIGH) {
+      const plan = SWKit.imgTrimPlan(imgOrder, COVER_CACHE_HIGH, COVER_CACHE_LOW);
+      for (const k of plan.drop) { await cache.delete(k).catch(() => {}); imgKnown.delete(k); }
+      imgOrder = plan.keep;
+      imgUnflushed = 0;
+      await imgFlushIndex(cache);
+      console.log('[sw] cover cache trimmed to', imgOrder.length);
+    } else if (imgUnflushed >= IMG_INDEX_FLUSH_EVERY) {
+      imgUnflushed = 0;
+      await imgFlushIndex(cache);
+    }
+  }).catch(() => {});
+  return imgChain;
+}
+// A poisoned entry was evicted — forget its slot too (serialized like the rest).
+function imgForget(key) {
+  imgChain = imgChain.then(async () => {
+    const cache = await caches.open(IMG_CACHE);
+    await imgEnsureOrder(cache);
+    if (imgKnown.has(key)) {
+      imgKnown.delete(key);
+      imgOrder = imgOrder.filter((k) => k !== key);
+      await imgFlushIndex(cache);
+    }
+  }).catch(() => {});
+  return imgChain;
+}
+
 // Cover art: cache-first on a TOKEN-STRIPPED key (so the same cover is found even
 // after Plex rotates the token, and no token is ever written into a cache key).
-async function imageFirst(req, url) {
+async function imageFirst(evt, req, url) {
   const cache = await caches.open(IMG_CACHE);
   const key = imageKey(url);
   const hit = await cache.match(key);
@@ -334,7 +397,12 @@ async function imageFirst(req, url) {
     // Cache real successes and opaque cross-origin responses (can't inspect status
     // on opaque, but a genuine relay RESET REJECTS the fetch and lands in catch —
     // so we don't cache connection failures, only completed responses).
-    if (res && (res.ok || res.type === 'opaque')) cache.put(key, res.clone()).catch(() => {});
+    if (res && (res.ok || res.type === 'opaque')) {
+      // Tied to waitUntil: the write + FIFO accounting must survive the worker
+      // being terminated right after the response returns.
+      const work = cache.put(key, res.clone()).then(() => imgNote(key)).catch(() => {});
+      if (evt && evt.waitUntil) evt.waitUntil(work);
+    }
     return res;
   } catch {
     const shell = await caches.open(SHELL_CACHE);

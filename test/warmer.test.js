@@ -22,7 +22,7 @@ test('nextConc halves on failure, floored at 1', () => {
 test('buildWork enumerates each author (books + bio) then each book (tracks)', () => {
   const authors = [{ ratingKey: 'a1' }, { ratingKey: 'a2' }];
   const books = [{ ratingKey: 'b1' }];
-  assert.deepEqual(buildWork(authors, books), [
+  assert.deepEqual(buildWork(authors, books).work, [
     { t: 'authorBooks', rk: 'a1' }, { t: 'author', rk: 'a1' },
     { t: 'authorBooks', rk: 'a2' }, { t: 'author', rk: 'a2' },
     { t: 'tracks', rk: 'b1' },
@@ -30,6 +30,6 @@ test('buildWork enumerates each author (books + bio) then each book (tracks)', (
 });
 
 test('buildWork tolerates missing/empty inputs', () => {
-  assert.deepEqual(buildWork(null, null), []);
-  assert.deepEqual(buildWork([], []), []);
+  assert.deepEqual(buildWork(null, null), { work: [], skipped: 0 });
+  assert.deepEqual(buildWork([], []), { work: [], skipped: 0 });
 });

@@ -550,7 +550,28 @@ const Plex = (() => {
   }
 
   // Big container size so we get the WHOLE library in one request.
-  const BIG = { 'X-Plex-Container-Start': '0', 'X-Plex-Container-Size': '20000' };
+  const REQUEST_CAP = 20000;
+  const BIG = { 'X-Plex-Container-Start': '0', 'X-Plex-Container-Size': String(REQUEST_CAP) };
+
+  // ---- library-listing truncation detection (fill-to-budget scaling WS4.1) ----
+  // A library past REQUEST_CAP silently LOSES items with today's one-big-request
+  // fetch. Detect it: `totalSize` vs returned count → 'truncated' (definitely),
+  // 'possible' (no totalSize but returned exactly the cap — can't tell a 20k-exact
+  // library from a capped one), or 'complete'. Pure predicate; per-kind state is
+  // surfaced on the affected Browse list header (no silent caps) + the debug log.
+  function truncationState(totalSize, returnedCount, cap) {
+    const total = Number(totalSize);
+    if (Number.isFinite(total) && total > returnedCount) return 'truncated';
+    if (!Number.isFinite(total) && returnedCount === cap) return 'possible';
+    return 'complete';
+  }
+  const truncation = { authors: { state: 'complete', total: 0, returned: 0 }, books: { state: 'complete', total: 0, returned: 0 } };
+  function noteTruncation(kind, mc, returned) {
+    const state = truncationState(mc && mc.totalSize, returned, REQUEST_CAP);
+    truncation[kind] = { state, total: Number((mc && mc.totalSize)) || 0, returned };
+    if (state !== 'complete') dbg('TRUNC', `${kind} listing ${state}: returned ${returned}${truncation[kind].total ? ' of ' + truncation[kind].total : ''}`);
+  }
+  const libraryTruncation = () => truncation;
 
   // Authors (artists). Lightweight: title + thumb + album count only — NO
   // per-book progress/time work (this screen never shows times).
@@ -560,11 +581,13 @@ const Plex = (() => {
       live: async () => {
         const key = await getSectionKey();
         const mc = await api(`/library/sections/${key}/all`, { params: { type: 8 }, headers: BIG });
-        return (mc.Metadata || []).map((a) => ({
+        const out = (mc.Metadata || []).map((a) => ({
           ratingKey: a.ratingKey, title: a.title || 'Unknown',
           titleSort: a.titleSort || a.title || '', thumb: a.thumb || null,
           childCount: a.childCount || 0,
         }));
+        noteTruncation('authors', mc, out.length);
+        return out;
       },
       store: (authors) => Store.cacheAuthors(authors),
     }, opts);
@@ -573,6 +596,7 @@ const Plex = (() => {
   const mapBook = (b) => ({
     ratingKey: b.ratingKey, title: b.title || 'Book',
     titleSort: b.titleSort || b.title || '', parentTitle: b.parentTitle || '',
+    parentRatingKey: b.parentRatingKey || null,   // book→author link (warmer recency selection needs it)
     thumb: b.thumb || b.parentThumb || null,
     leafCount: b.leafCount || 0, viewedLeafCount: b.viewedLeafCount || 0,
     lastViewedAt: b.lastViewedAt || 0, addedAt: b.addedAt || 0,
@@ -596,6 +620,7 @@ const Plex = (() => {
         const key = await getSectionKey();
         const mc = await api(`/library/sections/${key}/all`, { params: { type: 9 }, headers: BIG });
         booksCache = (mc.Metadata || []).map(mapBook);
+        noteTruncation('books', mc, booksCache.length);
         dbg('CACHE', 'getBooks live: ' + booksCache.length + ' books');
         return booksCache;
       },
@@ -853,7 +878,7 @@ const Plex = (() => {
   return {
     isSignedIn, signOut, startPin, pollPin, connect, ping, getClientId: clientId, serverNow,
     getResumeMap, getAlbum, getAlbumTracks,
-    getAuthors, getBooks, getAuthorBooks, getAuthor,
+    getAuthors, getBooks, getAuthorBooks, getAuthor, libraryTruncation,
     getTrackInfo, clearCaches, foregroundBusy,
     streamUrl, artUrl, writeTimeline, getServerName, getBase, getConnKind,
     getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist, makeBoard, readPlaylistSummary,
@@ -870,6 +895,7 @@ const Plex = (() => {
     // internals exposed for the unit tests only (no runtime behaviour change)
     _test: {
       kindOf, orderByLastKind, mapBook, mapTracks, curBase, changed, withCache,
+      truncationState, noteTruncation, REQUEST_CAP,
       setBase: (b) => { base = b; },
       resetConn: () => { base = null; connecting = null; connGen++; },
       isConnecting: () => !!connecting,

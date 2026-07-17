@@ -60,7 +60,33 @@
     return 'passthrough';
   }
 
-  const api = { parseRange, isImageRoute, routeFor };
+  // ---- cover-cache FIFO planning (fill-to-budget scaling WS3) ----------------
+  // IMG_CACHE holds OPAQUE responses (byte sizes unreadable) → bounded by ENTRY
+  // COUNT with an insertion-order index persisted in the cache itself.
+  // cache.keys() order is NOT spec-guaranteed, so the persisted index is
+  // authoritative; keys the index doesn't know (the SW terminated before an index
+  // flush) are treated as OLDEST — evicted first, deterministic. Pure planning
+  // here; the serialized cache I/O lives in sw.js.
+  /** Merge the persisted order with reality: drop vanished keys, keep known order,
+   *  put unknown-age keys FIRST (evicted first). */
+  function imgReconcileOrder(order, actualKeys) {
+    const actual = new Set(actualKeys);
+    const known = [], knownSet = new Set();
+    for (const k of (order || [])) {
+      if (actual.has(k) && !knownSet.has(k)) { known.push(k); knownSet.add(k); }
+    }
+    const unknown = [];
+    for (const k of actualKeys) if (!knownSet.has(k)) unknown.push(k);
+    return unknown.concat(known);
+  }
+  /** High/low-water trim: nothing until COUNT EXCEEDS high, then down to low. */
+  function imgTrimPlan(order, high, low) {
+    if (order.length <= high) return { drop: [], keep: order };
+    const n = order.length - low;
+    return { drop: order.slice(0, n), keep: order.slice(n) };
+  }
+
+  const api = { parseRange, isImageRoute, routeFor, imgReconcileOrder, imgTrimPlan };
   if (typeof self !== 'undefined') self.SWKit = api;                         // service worker (importScripts)
   else if (typeof globalThis !== 'undefined') globalThis.SWKit = api;
   if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = api;   // Node tests

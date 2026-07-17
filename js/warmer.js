@@ -30,13 +30,45 @@ const Warmer = (() => {
   // AIMD step: +1 on a clean fetch, halve on a failure. Pure → unit-tested.
   const nextConc = (c, ok) => ok ? Math.min(MAX_CONC, c + 1) : Math.max(1, c >> 1);
 
-  // Phase-2 work list from the two top-level lists: every author's book list +
-  // bio, then every book's chapter list. Pure → unit-tested.
-  function buildWork(authors, books) {
+  // WS2a: budget the warmer in REQUESTS (2/author + 1/book), not books — an
+  // unbudgeted list never finishes on a 20k library and floods the relay forever.
+  const WARM_WORK_BUDGET = 1500;
+
+  // Phase-2 work list from the two top-level lists. UNDER budget → today's exact
+  // authors-first list, unchanged (small-library network behaviour is identical —
+  // a recency reorder would alter it even though all work eventually runs).
+  // OVER budget → recency-first selection: recently-played books' chapter lists →
+  // recently-added → those books' authors → remaining authors → remaining books,
+  // deduped, until the budget fills. Pure → unit-tested. Returns { work, skipped }
+  // so the caller can LOG the cut (no silent caps).
+  function buildWork(authors, books, budget = WARM_WORK_BUDGET) {
+    const full = [];
+    for (const a of (authors || [])) { full.push({ t: 'authorBooks', rk: a.ratingKey }); full.push({ t: 'author', rk: a.ratingKey }); }
+    for (const b of (books || [])) full.push({ t: 'tracks', rk: b.ratingKey });
+    if (full.length <= budget) return { work: full, skipped: 0 };
+
+    const seen = new Set();
     const w = [];
-    for (const a of (authors || [])) { w.push({ t: 'authorBooks', rk: a.ratingKey }); w.push({ t: 'author', rk: a.ratingKey }); }
-    for (const b of (books || [])) w.push({ t: 'tracks', rk: b.ratingKey });
-    return w;
+    const push = (t, rk) => {
+      if (rk == null || w.length >= budget) return;
+      const k = t + ':' + rk;
+      if (seen.has(k)) return;
+      seen.add(k); w.push({ t, rk });
+    };
+    const authorRks = new Set((authors || []).map((a) => String(a.ratingKey)));
+    const pushAuthor = (rk) => {
+      if (rk == null || !authorRks.has(String(rk))) return;
+      push('authorBooks', rk); push('author', rk);
+    };
+    const played = (books || []).filter((b) => b.lastViewedAt).sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
+    const added = (books || []).slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+    for (const b of played) push('tracks', b.ratingKey);
+    for (const b of added) push('tracks', b.ratingKey);
+    for (const b of played) pushAuthor(b.parentRatingKey);
+    for (const b of added) pushAuthor(b.parentRatingKey);
+    for (const a of (authors || [])) pushAuthor(a.ratingKey);
+    for (const b of (books || [])) push('tracks', b.ratingKey);
+    return { work: w, skipped: full.length - w.length };
   }
 
   function doItem(it) {
@@ -81,8 +113,9 @@ const Warmer = (() => {
         Plex.getAuthors({ warm: true }).catch(() => []),
         Plex.getBooks({ warm: true }).catch(() => []),
       ]);
-      queue = buildWork(authors, books);
-      dbg('start — ' + queue.length + ' pages queued');
+      const { work, skipped } = buildWork(authors, books);
+      queue = work;
+      dbg('start — ' + queue.length + ' pages queued' + (skipped ? ` (budget: ${skipped} requests skipped of ${queue.length + skipped})` : ''));
       pump();
     } catch (e) { dbg('start failed: ' + ((/** @type {Error} */ (e))?.message || 'err')); }
   }
@@ -92,7 +125,7 @@ const Warmer = (() => {
   return {
     start, pause,
     // internals exposed for unit tests only
-    _test: { nextConc, buildWork, MAX_CONC },
+    _test: { nextConc, buildWork, MAX_CONC, WARM_WORK_BUDGET },
   };
 })();
 

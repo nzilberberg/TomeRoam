@@ -317,10 +317,25 @@ const Browse = (() => {
   // Each *View builds into the passed page node `m` (a .browsepage in the cache),
   // NOT directly into o.mount — so pages persist. Scroll/onRender are the host's
   // (render()) job. Letter-group ids are page-scoped to stay unique across pages.
+  // WS4.1: a truncated listing is surfaced ON THE AFFECTED LIST, not only in a
+  // debug line — no silent caps. (kind: 'authors' | 'books'.)
+  function truncationNote(kind) {
+    const t = (typeof Plex !== 'undefined' && Plex.libraryTruncation) ? Plex.libraryTruncation()[kind] : null;
+    if (!t || t.state === 'complete') return null;
+    const el = document.createElement('div');
+    el.className = 'statusline truncnote';
+    el.textContent = t.state === 'truncated'
+      ? `⚠️ Showing the first ${t.returned.toLocaleString()} of ${t.total.toLocaleString()} — the list is truncated.`
+      : `⚠️ Showing ${t.returned.toLocaleString()} — the list may be truncated.`;
+    return el;
+  }
+
   function listView(m, title, items, rowFn, drill) {
     const { groups, letters } = groupByLetter(items);
     m.innerHTML = '';
     m.appendChild(header(`${title} · ${items.length}`, drill));
+    const note = truncationNote(title === 'Authors' ? 'authors' : 'books');
+    if (note) m.appendChild(note);
     const list = document.createElement('div');
     list.className = 'browselist';
     for (const L of letters) {
