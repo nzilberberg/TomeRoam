@@ -78,6 +78,11 @@ const createShardStore = (opts) => {
   //   Redirect: { v:2, dev, prefix, parent?, splitId?, redirect:[p0,p1], redirectId }
   // Rows sorted by book id; origins deduped in row order → identical input builds
   // an identical payload, so verified-content comparison is plain string equality.
+  // Identity purges ("Delete device") ride EVERY data payload of this device's
+  // set, so they travel the read-back-verified channel — a purge is destructive
+  // authority and must never depend on the status-trusting legacy write. Tiny
+  // (one row per deleted identity, ever), sorted for determinism.
+  let purgeRows = [];                                  // [[identityId, ts], ...] — set per publish pass
   function buildDataPayload(prefix, entries, meta) {
     const rows = entries.slice().sort((a, b) => (a.book < b.book ? -1 : a.book > b.book ? 1 : 0));
     const origins = [], names = [], oIdx = {};
@@ -95,6 +100,7 @@ const createShardStore = (opts) => {
     if (clientId) p.id = clientId;                    // writer identity (the device list attributes shard sets by it)
     if (meta && meta.parent != null) { p.parent = meta.parent; p.splitId = meta.splitId; }
     p.origins = origins; p.names = names; p.bk = bk; p.rst = rst;
+    if (purgeRows.length) p.purge = purgeRows;
     return p;
   }
   function payloadEntries(p) {
@@ -273,21 +279,29 @@ const createShardStore = (opts) => {
 
   async function publishSnapshot(snap) {
     if (!tree) await loadMine();
+    purgeRows = snap.purge || [];
+    const entries = snap.entries;
     // An EMPTY snapshot never publishes: a device that ever held records always has
     // entries (tombstones are permanent), so empty-over-data can only mean a
     // damaged/partially-wiped local store — overwriting the server copy with it
     // would be data loss. A fresh device with no records has nothing to write.
-    if (!snap.length) { if (tree.size) log('SHARD', 'refusing to publish an EMPTY snapshot over existing shards'); return; }
+    // (A purge-only snapshot IS publishable: deleting a device you never listened
+    // with is a legitimate first write.)
+    if (!entries.length && !purgeRows.length) { if (tree.size) log('SHARD', 'refusing to publish an EMPTY snapshot over existing shards'); return; }
     // myLeaves() yields disjoint prefixes covering the whole hash space, so every
     // book routes to exactly one leaf.
     for (const leaf of myLeaves()) {
-      await ensureLeaf(leaf, snap.filter((e) => owns(leaf, e.book)));
+      await ensureLeaf(leaf, entries.filter((e) => owns(leaf, e.book)));
     }
   }
 
   // ---- public write API --------------------------------------------------------
-  function ensurePublished(entries) {
-    pending = entries.slice();
+  // `purgeMap` ({identityId: ts}) rides every data payload — see purgeRows above.
+  function ensurePublished(entries, purgeMap) {
+    pending = {
+      entries: entries.slice(),
+      purge: Object.keys(purgeMap || {}).sort().map((id) => [id, purgeMap[id]]),
+    };
     if (!pendingSince) pendingSince = Date.now();
     kick();
   }
@@ -327,6 +341,7 @@ const createShardStore = (opts) => {
     const boards = await plex.listBoards();
     const byDev = new Map();   // dev → Map<prefix, {payload?, kind?, corrupt?}>
     const inv = {};            // dev → { id, name, boards:[{rk,prefix}], newestTs } — the device-list inventory
+    const purges = {};         // identityId → max purge ts across every readable payload (LWW-max: debris is harmless)
     for (const b of boards) {
       const id = parseTitle(b.title || '');
       if (!id) continue;
@@ -340,6 +355,9 @@ const createShardStore = (opts) => {
           dv.id = p.id;
           const oi = (p.origins || []).indexOf(p.id);
           if (oi >= 0) dv.name = (p.names || [])[oi] || '';
+        }
+        for (const row of p.purge || []) {
+          if (row && row[0] && (row[1] || 0) > (purges[row[0]] || 0)) purges[row[0]] = row[1];
         }
       } catch (e) {
         // Before declaring corruption, retry once with a direct per-playlist read —
@@ -397,7 +415,7 @@ const createShardStore = (opts) => {
     }
     degradedRead = degraded;
     const unique = new Set(entries.map((e) => e.bk ? `${e.book}|${e.bk.origin}|${e.bk.ts}` : `${e.book}|rst|${e.rst}`));
-    return { entries, degraded, devices: inv, stats: { devices: byDev.size, storedRecords, uniqueRecords: unique.size } };
+    return { entries, degraded, devices: inv, purges, stats: { devices: byDev.size, storedRecords, uniqueRecords: unique.size } };
   }
 
   function syncState() {

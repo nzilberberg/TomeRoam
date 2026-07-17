@@ -438,6 +438,22 @@ test('a STALE persisted ratingKey hint self-heals on 404 instead of looping fore
   assert.equal((await store.readAll()).entries.length, 1);
 });
 
+test('identity purges ride the verified payloads and round-trip through readAll (max-ts merge)', async () => {
+  const fake = fakeServer();
+  const store = makeStore(fake, { maxRequestBytes: 8000 });
+  store.ensurePublished([entry(BOOKS[0], T0)], { 'pbpwa-dead-1': T0 + 500 });
+  await store.flush();
+  assert.equal(store.syncState().unsynced, false);
+  const r = await store.readAll();
+  assert.equal(r.purges['pbpwa-dead-1'], T0 + 500, 'purge readable by every device from the shard channel');
+  // A second writer with an OLDER purge of the same identity: readers keep the max.
+  const other = makeStore(fake, { deviceId: 'devbbbb2', maxRequestBytes: 8000 });
+  other.ensurePublished([entry(BOOKS[1], T0, 'pbpwa-b', 'Pixel')], { 'pbpwa-dead-1': T0 + 100 });
+  await other.flush();
+  const r2 = await store.readAll();
+  assert.equal(r2.purges['pbpwa-dead-1'], T0 + 500, 'max timestamp wins across writers');
+});
+
 // ---- routing hash -------------------------------------------------------------------
 test('hashBits: stable, 32 binary chars, spreads realistic ids across both root children', () => {
   const fake = fakeServer();

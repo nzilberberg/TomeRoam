@@ -55,7 +55,7 @@ const GeneralScreen = (() => {
       const label = document.createElement('span');
       label.className = 'opt-label';
       label.innerHTML = '<span></span><div class="opt-sub"></div>';
-      label.firstChild.textContent = (dev.name || '(unnamed device)') + (ign[dev.key] ? ' · ignored' : '');
+      label.firstChild.textContent = (dev.name || (dev.unresolved ? 'Unlinked storage (old app version)' : '(unnamed device)')) + (ign[dev.key] ? ' · ignored' : '');
       label.lastChild.textContent = agoStr(dev.lastSeen) + (dev.quiet ? '' : ' · active');
       const ctl = document.createElement('span');
       ctl.className = 'opt-ctl';
@@ -81,9 +81,14 @@ const GeneralScreen = (() => {
         });
       }
       btn('Delete', async () => {
-        if (!confirm(`Delete "${dev.name || dev.key}"?\n\nIts recorded positions are DELETED everywhere and its boards removed from Plex. Books you also played on other devices keep their newer progress. A live device you delete keeps playing and re-registers itself.`)) return;
+        // An unresolved set (pre-.123 storage with no writer identity) cannot be
+        // purged — be honest that this only removes its storage boards.
+        const msg = dev.unresolved
+          ? `Delete this unlinked storage?\n\nIts playlists are removed from Plex. Because this old storage names no identity, positions already replicated to other devices are NOT deleted.`
+          : `Delete "${dev.name || dev.key}"?\n\nIts recorded positions are DELETED everywhere and its boards removed from Plex. Books you also played on other devices keep their newer progress. A live device you delete keeps playing and re-registers itself.`;
+        if (!confirm(msg)) return;
         const r = await d.Progress.deleteDevice(dev);
-        d.toast(r.ok ? 'Device deleted' : 'Delete failed: ' + r.error);
+        d.toast(r.ok ? (dev.unresolved ? 'Storage removed' : 'Device deleted') : 'Delete failed: ' + r.error);
       });
       btn(ign[dev.key] ? 'Unignore' : 'Ignore', async () => { setIgnored(dev.key, !ign[dev.key]); });
       row.appendChild(label); row.appendChild(ctl);

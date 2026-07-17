@@ -379,6 +379,133 @@ test('a record NEWER than the purge survives (deleting a live device is self-hea
   assert.ok(rec && rec.o === 5000 && rec.by === GID, 'post-purge playback wins normally — nothing is bricked');
 });
 
+// ---- .127 review findings: purges must be durable, universal, and honest ---------
+test('DELETE is GATED on verified purge publication: unverifiable sync → boards kept, delete refused', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  const { grk, srk, prk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  // Plex's measured failure mode: 200, content silently discarded.
+  const realWrite = srv.plex.writeSummary;
+  srv.plex.writeSummary = async () => 200;
+  NOW += 1000;
+  const refused = await Progress.deleteDevice(g);
+  assert.equal(refused.ok, false, 'destructive deletion must not proceed on an unverified purge');
+  assert.ok(srv.boards.has(grk) && srv.boards.has(srk) && srv.boards.has(prk), 'every board kept');
+
+  srv.plex.writeSummary = realWrite;
+  const res = await Progress.deleteDevice(g);
+  assert.ok(res.ok, res.error || '');
+  assert.ok(!srv.boards.has(grk) && !srv.boards.has(srk) && !srv.boards.has(prk), 'boards removed after verification');
+  // The purge rides the READ-BACK-VERIFIED shard payload, not just the legacy summary.
+  const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
+  assert.ok((payload.purge || []).some((r) => r[0] === GID && r[1] > 0), 'purge present in the verified TR2 payload');
+});
+
+test('a legacy board fresh ONLY via its purge map is not pruned as stale', async () => {
+  await fresh();
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await publishAll();
+  // A peer board whose books are ancient but which carries a FRESH purge.
+  const rk = await srv.plex.createBoard('pb_prog_oldpurger');
+  await srv.plex.writeSummary(rk, JSON.stringify({
+    v: 1, id: 'pbpwa-purger-1', name: 'Pixel',
+    books: { 111: { bk: { t: 't', o: 1, cum: 1, tot: 2, ts: NOW - 100 * 24 * 3600 * 1000 } } },
+    purged: { 'pbpwa-someone': NOW - 1000 },
+  }));
+  await T.poll();
+  await new Promise((r) => setTimeout(r, 25));   // pruner is fire-and-forget
+  assert.ok(srv.boards.has(rk), 'the purge timestamp keeps the board alive (losing it would lose the purge)');
+});
+
+test('a purge of THIS device is honored: authored records at/before it are dropped, newer survive, none republished', async () => {
+  await fresh();
+  Progress.recordBook('1001', { t: 'trA', o: 5000, cum: 5000, tot: 60000 });   // authored @ NOW
+  const purgeAt = NOW + 5000;
+  NOW += 10000;
+  Progress.recordBook('2002', { t: 'trB', o: 7000, cum: 7000, tot: 60000 });   // authored AFTER the purge
+  // A peer (which deleted us while we were offline) publishes the purge.
+  const rk = await srv.plex.createBoard('pb_prog_peerdel01');
+  await srv.plex.writeSummary(rk, JSON.stringify({ v: 1, id: 'pbpwa-live-1', name: 'Pixel', books: {}, purged: { [ME]: purgeAt } }));
+  await T.poll();
+
+  assert.equal(Progress.bookRecord('1001'), null, 'pre-purge authored record deleted locally');
+  assert.equal(T.mineBooks()['1001'], undefined, 'gone from the authored store, not just hidden');
+  const kept = Progress.bookRecord('2002');
+  assert.ok(kept && Progress.isMine(kept), 'post-purge listening survives');
+  const pub = T.entriesForPublish();
+  assert.ok(!pub.some((e) => e.book === '1001' && e.bk), 'the deleted record is never republished');
+  assert.ok(pub.some((e) => e.book === '2002' && e.bk), 'the newer record still publishes');
+});
+
+test('ADOPT respects the purge floor: only post-purge records are adopted', async () => {
+  await fresh();
+  const oldTs = NOW - 3 * 24 * 3600 * 1000;
+  const { grk } = await plantGhost(oldTs);                    // book 2314 @ oldTs
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+  NOW += 1000;
+  const purgeAt = NOW;
+  await Progress.deleteDevice(g);                             // purge @ purgeAt; boards gone
+  assert.ok(!srv.boards.has(grk));
+
+  // A stale copy of the ghost's board REAPPEARS carrying a pre-purge record AND
+  // a post-purge one (it kept playing somewhere).
+  NOW += 60 * 1000;
+  const rk2 = await srv.plex.createBoard('pb_prog_ghost001');
+  await srv.plex.writeSummary(rk2, JSON.stringify({
+    v: 1, id: GID, name: 'Old iPhone',
+    books: {
+      2314: { bk: { t: 'tr3', o: 910191, cum: 910191, tot: 9999000, ts: oldTs } },       // pre-purge — deleted data
+      5005: { bk: { t: 'tr9', o: 4000, cum: 4000, tot: 9999000, ts: purgeAt + 30000 } }, // post-purge — real new listening
+    },
+  }));
+  await T.poll();
+  const g2 = Progress.devices().find((x) => x.id === GID);
+  const res = await Progress.adoptIdentity(g2);
+  assert.ok(res.ok, res.error || '');
+  assert.equal(T.mineBooks()['2314'], undefined, 'pre-purge record NOT resurrected into my authored store');
+  assert.equal(Progress.bookRecord('2314'), null, 'still deleted everywhere');
+  const kept = Progress.bookRecord('5005');
+  assert.ok(kept && Progress.isMine(kept) && kept.ts === purgeAt + 30000, 'post-purge record adopted normally');
+});
+
+test('a pre-.123 shard set (no writer id) associates by dev8 suffix; unmatched sets are flagged unresolved', async () => {
+  await fresh();
+  const oldTs = NOW - 3 * 24 * 3600 * 1000;
+  // Legacy board for the ghost identity…
+  const grk = await srv.plex.createBoard('pb_prog_ghost001');
+  await srv.plex.writeSummary(grk, JSON.stringify({
+    v: 1, id: GID, name: 'Old iPhone',
+    books: { 2314: { bk: { t: 'tr3', o: 1000, cum: 1000, tot: 2000, ts: oldTs } } },
+  }));
+  // …plus an OLD (.121-era) shard set whose dev8 equals the ghost id's sanitized
+  // suffix but whose payload has NO writer id field.
+  const gdev8 = GID.replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase();
+  const enc = await Fmt.encode({ v: 2, dev: gdev8, prefix: '', origins: [GID], names: ['Old iPhone'], bk: [['2314', 'tr3', 1000, 1000, 2000, oldTs, 0]], rst: [] });
+  const srk = await srv.plex.createBoard(`pb_prog2_${gdev8}_p`);
+  await srv.plex.writeSummary(srk, enc);
+  // And one truly unattributable old set.
+  const enc2 = await Fmt.encode({ v: 2, dev: 'zzzzzzzz', prefix: '', origins: ['pbpwa-mystery'], names: ['?'], bk: [], rst: [] });
+  const zrk = await srv.plex.createBoard('pb_prog2_zzzzzzzz_p');
+  await srv.plex.writeSummary(zrk, enc2);
+
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const list = Progress.devices();
+  const g = list.find((x) => x.id === GID);
+  assert.ok(g, 'one associated row for the ghost');
+  assert.equal(g.legacyRk, grk);
+  assert.ok(g.shardBoards.includes(srk), 'id-less shard set associated via the dev8 suffix');
+  assert.ok(!g.unresolved, 'associated set is fully actionable');
+  const z = list.find((x) => x.key === 'dev8:zzzzzzzz');
+  assert.ok(z && z.unresolved, 'unmatched old set flagged unresolved (UI must not claim Delete removes its records)');
+});
+
 test('SURFACE: a corrupted shard reads as degraded in syncState, never as empty', async () => {
   await fresh();
   Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 90000, tot: 3600000 });
