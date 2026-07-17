@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.121';
+  const BUILD = '2026-07-17.122';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -488,8 +488,11 @@
         if (!el || !P || !P.syncState) return;
         const s = P.syncState();
         const n = s.stats ? ` · ${s.stats.uniqueRecords} records` : '';
+        // `stuck`, not `unsynced`: a write momentarily in flight (or a <30s dirty
+        // flag between heartbeat publishes) is normal operation — showing it made
+        // this row flicker synced↔syncing every few seconds while playing.
         el.textContent = (s.degraded && s.degraded.length) ? `degraded (${s.degraded.length})` + n
-          : s.unsynced ? (s.lastError ? 'retrying: ' + s.lastError : 'syncing…') : 'synced' + n;
+          : s.stuck ? (s.lastError ? 'retrying: ' + s.lastError : 'syncing…') : 'synced' + n;
       };
       paint();
       setInterval(() => { if (!diag.classList.contains('hidden')) paint(); }, 3000);

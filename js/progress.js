@@ -34,7 +34,13 @@ const Progress = (() => {
   let peerBoards = [];
   let shardBoards = [];               // per-origin pseudo-boards from the last shard read (cached like peers)
   let pubTimer = null, pollTimer = null, active = false, dirty = false;
+  let dirtySince = 0;                 // wall-clock ms when dirty flipped true (UI "stuck" detection only)
   let shardStats = null;              // last read's {uniqueRecords, storedRecords, devices} for diagnostics
+  const SHARD_PUB_MS = 60000;         // shards are the ARCHIVE: publish at most once a minute
+                                      // (the legacy head + presence carry the live position;
+                                      // without this, every 4s legacy publish dragged a shard
+                                      // write+read-back along — pure churn while playing)
+  let shardPubTimer = null, lastShardPub = 0;
   let prunedSession = false;          // one-shot stale-board sweep per app launch
   let cbMerged = () => {};
 
@@ -230,17 +236,36 @@ const Progress = (() => {
   }
 
   // ---- publish (own board only, debounced) ----------------------------------
-  function schedulePublish() { dirty = true; if (pubTimer || !active) return; pubTimer = setTimeout(() => { pubTimer = null; publish(); }, PUB_DEBOUNCE); }
+  function schedulePublish() {
+    if (!dirty) dirtySince = Date.now();
+    dirty = true;
+    if (pubTimer || !active) return;
+    pubTimer = setTimeout(() => { pubTimer = null; publish(); }, PUB_DEBOUNCE);
+  }
+  // Shard publication, rate-limited: fire now if the window has passed (or on
+  // force — flush/reconnect/background), else arm ONE timer for the remainder.
+  function scheduleShardPublish(force) {
+    if (!shards) return;
+    const dueInMs = lastShardPub + SHARD_PUB_MS - Date.now();
+    if (force || dueInMs <= 0) {
+      if (shardPubTimer) { clearTimeout(shardPubTimer); shardPubTimer = null; }
+      lastShardPub = Date.now();
+      shards.ensurePublished(entriesForPublish());
+    } else if (!shardPubTimer) {
+      shardPubTimer = setTimeout(() => { shardPubTimer = null; scheduleShardPublish(true); }, dueInMs);
+    }
+  }
   async function publish() {
     if (!dirty || !board) return;
     // The shards get the FULL history (serialized, read-back-verified, splits as
-    // needed — all inside the shard store). The legacy board keeps publishing the
-    // bounded recent head so old clients see zero change.
-    if (shards) shards.ensurePublished(entriesForPublish());
+    // needed — all inside the shard store) at their own, slower cadence. The
+    // legacy board keeps publishing the bounded recent head so old clients see
+    // zero change.
+    scheduleShardPublish(false);
     // board.publish handles ensure/create, and 404 → recreate-next-time vs
     // transient → keep-board (no churn). 2xx = our records are on the server.
     const status = await board.publish(serialize(), () => seed);
-    if (status >= 200 && status < 300) dirty = false;
+    if (status >= 200 && status < 300) { dirty = false; dirtySince = 0; }
   }
   function packAll() {
     const o = { v: 1, id: myId(), name: myName(), books: {} };
@@ -418,12 +443,25 @@ const Progress = (() => {
     if (active) { if (!pollTimer) { poll(); pollTimer = setInterval(poll, POLL_MS); } if (dirty) schedulePublish(); }
     else if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
-  function flush() { if (dirty) publish(); if (shards) shards.flush(); }   // reconnect / backgrounding
+  // Reconnect / backgrounding: push everything out NOW (the rate-limit window
+  // doesn't apply when we may be about to lose the network or get suspended).
+  function flush() {
+    if (dirty) publish();
+    scheduleShardPublish(true);
+    if (shards) shards.flush();
+  }
   // SURFACE: the app-visible sync state — degraded shard subtrees and unverified
-  // writes are reported, never silently absorbed. `dirty` covers the legacy head.
+  // writes are reported, never silently absorbed. `stuck` is the DISPLAY signal:
+  // a write in flight or a <30s-old dirty flag is normal heartbeat, not a warning
+  // (the Diagnostics row flickered "syncing" on every publish without this).
   function syncState() {
-    const s = shards ? shards.syncState() : { unsynced: false, lastError: null, degraded: [] };
-    return { unsynced: dirty || s.unsynced, lastError: s.lastError, degraded: s.degraded, legacyDirty: dirty, stats: shardStats };
+    const s = shards ? shards.syncState() : { unsynced: false, lastError: null, degraded: [], pendingForMs: 0 };
+    const legacyStuck = dirty && dirtySince && (Date.now() - dirtySince > 30000);
+    return {
+      unsynced: dirty || s.unsynced,
+      stuck: legacyStuck || !!s.lastError || (s.pendingForMs || 0) > 30000,
+      lastError: s.lastError, degraded: s.degraded, legacyDirty: dirty, stats: shardStats,
+    };
   }
   // Piggyback an external read trigger. Returns the poll promise so callers that
   // NEED the merged data current (syncqueue's conflict decisions) can await it.
@@ -440,8 +478,9 @@ const Progress = (() => {
       reset() {
         mine = { v: 1, books: {} }; replica = { v: 1, books: {} };
         peerBoards = []; shardBoards = []; merged = { books: {} };
-        prunedSession = false; dirty = false;
+        prunedSession = false; dirty = false; dirtySince = 0; lastShardPub = 0;
         if (pubTimer) { clearTimeout(pubTimer); pubTimer = null; }
+        if (shardPubTimer) { clearTimeout(shardPubTimer); shardPubTimer = null; }
         if (shards) shards._test.reset();
       },
       setPeers(p) { peerBoards = p || []; },

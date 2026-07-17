@@ -129,6 +129,7 @@ const createShardStore = (opts) => {
   let tree = null;
   const verified = new Map();          // prefix → JSON of last read-back-verified payload
   let pending = null;                  // newest snapshot awaiting publication
+  let pendingSince = 0;                // wall-clock ms since work has been outstanding (UI stuck-detection)
   let lastSnap = null;                 // retained for retry after a failure
   let writing = false, retryTimer = null, backoffMs = 0;
   let lastError = null;
@@ -274,6 +275,7 @@ const createShardStore = (opts) => {
   // ---- public write API --------------------------------------------------------
   function ensurePublished(entries) {
     pending = entries.slice();
+    if (!pendingSince) pendingSince = Date.now();
     kick();
   }
   function kick() {
@@ -285,7 +287,7 @@ const createShardStore = (opts) => {
           const snap = pending; pending = null; lastSnap = snap;
           await publishSnapshot(snap);
         }
-        backoffMs = 0; lastError = null;
+        backoffMs = 0; lastError = null; pendingSince = 0;
       } catch (e) {
         lastError = String((e && e.message) || e);
         log('SHARD', 'publish failed: ' + lastError);
@@ -375,6 +377,7 @@ const createShardStore = (opts) => {
   function syncState() {
     return {
       unsynced: !!pending || !!retryTimer || writing,
+      pendingForMs: pendingSince ? Date.now() - pendingSince : 0,
       lastError,
       backoffMs: retryTimer ? backoffMs : 0,
       degraded: degradedRead,
@@ -387,7 +390,7 @@ const createShardStore = (opts) => {
       hashBits, buildDataPayload, payloadEntries, classify, title, parseTitle,
       tree: () => tree, verified: () => verified,
       reset() {
-        tree = null; verified.clear(); pending = null; lastSnap = null;
+        tree = null; verified.clear(); pending = null; lastSnap = null; pendingSince = 0;
         lastError = null; degradedRead = []; backoffMs = 0;
         if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
       },

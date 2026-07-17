@@ -211,6 +211,28 @@ test('a tombstone arriving via a foreign SHARD suppresses and replicates like a 
   assert.equal(T.mineBooks()['2314'].rst, rstAt, 'tombstone replicated onto our own store');
 });
 
+test('shard publication is RATE-LIMITED: a heartbeat publish inside the window writes nothing; flush forces', async () => {
+  await fresh();
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await publishAll();
+  const v1 = srv.byTitle(rootTitle).summary;
+
+  NOW += 5000;
+  Progress.recordBook('8913', { t: 'tr1', o: 99000, cum: 99000, tot: 3600000 });
+  await T.publish();                       // the 4s legacy heartbeat, inside the 60s shard window
+  await T.shards().flush();
+  assert.equal(srv.byTitle(rootTitle).summary, v1, 'no shard write inside the rate-limit window');
+  const legacy = JSON.parse(srv.byTitle('pb_prog_' + boardId()).summary);
+  assert.equal(legacy.books['8913'].bk.o, 99000, 'the legacy head still updated every heartbeat');
+
+  Progress.flush();                        // reconnect/backgrounding forces the snapshot out
+  await T.shards().flush();
+  const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
+  assert.equal(payload.bk.find((r) => r[0] === '8913')[2], 99000, 'flush pushed the fresh snapshot');
+  assert.equal(Progress.syncState().stuck, false, 'healthy heartbeat state never reads as stuck');
+  T.reset();                               // clears any armed window timer
+});
+
 test('SURFACE: a corrupted shard reads as degraded in syncState, never as empty', async () => {
   await fresh();
   Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 90000, tot: 3600000 });
