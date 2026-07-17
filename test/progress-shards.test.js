@@ -89,16 +89,18 @@ async function publishAll() { await T.publish(); await T.shards().flush(); }
 
 const rootTitle = `pb_prog2_${DEV}_p`;
 
-// A foreign device's shard board, hand-built through the real format.
+// A foreign device's shard board, hand-built through the real format (the writer
+// `id` field is what the device list attributes shard sets by).
 async function foreignShard(dev, origin, name, books) {
   const bk = [], rst = [];
   for (const b of books) {
     if (b.bk) bk.push([b.book, b.bk.t, b.bk.o, b.bk.cum || 0, b.bk.tot || 0, b.bk.ts, 0]);
     if (b.rst) rst.push([b.book, b.rst, 0]);
   }
-  const enc = await Fmt.encode({ v: 2, dev, prefix: '', origins: [origin], names: [name], bk, rst });
+  const enc = await Fmt.encode({ v: 2, dev, prefix: '', id: origin, origins: [origin], names: [name], bk, rst });
   const rk = await srv.plex.createBoard(`pb_prog2_${dev}_p`);
   await srv.plex.writeSummary(rk, enc);
+  return rk;
 }
 
 test('record → publish: full history lands in the shards, bounded head on the legacy board', async () => {
@@ -231,6 +233,107 @@ test('shard publication is RATE-LIMITED: a heartbeat publish inside the window w
   assert.equal(payload.bk.find((r) => r[0] === '8913')[2], 99000, 'flush pushed the fresh snapshot');
   assert.equal(Progress.syncState().stuck, false, 'healthy heartbeat state never reads as stuck');
   T.reset();                               // clears any armed window timer
+});
+
+// ---- device list: inventory, Adopt, Delete --------------------------------------
+const GID = 'pbpwa-ghost-777', GDEV = 'ghostdev1';
+async function plantGhost(recordTs) {
+  // A dead identity with all three board families: legacy progress, shards, presence.
+  const grk = await srv.plex.createBoard('pb_prog_ghost001');
+  await srv.plex.writeSummary(grk, JSON.stringify({
+    v: 1, id: GID, name: 'Old iPhone',
+    books: { 2314: { bk: { t: 'tr3', o: 910191, cum: 910191, tot: 9999000, ts: recordTs }, tr: { trX: [910191, 999000, recordTs] } } },
+  }));
+  const srk = await foreignShard(GDEV, GID, 'Old iPhone', [
+    { book: '2314', bk: { t: 'tr3', o: 910191, cum: 910191, tot: 9999000, ts: recordTs } },
+  ]);
+  const prk = await srv.plex.createBoard('pb_dev_ghost001');
+  await srv.plex.writeSummary(prk, JSON.stringify({ id: GID, name: 'Old iPhone', at: recordTs, state: 'paused', pos: 0, claim: 0 }));
+  return { grk, srk, prk };
+}
+
+test('devices(): a ghost identity is inventoried with name, last-seen, quiet, and all its boards', async () => {
+  await fresh();
+  const oldTs = NOW - 3 * 24 * 3600 * 1000;
+  const { grk, srk } = await plantGhost(oldTs);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+
+  const list = Progress.devices();
+  const g = list.find((x) => x.id === GID);
+  assert.ok(g, 'ghost identity listed');
+  assert.equal(g.name, 'Old iPhone');
+  assert.equal(g.quiet, true, '3 days silent → quiet (Adopt may be offered)');
+  assert.equal(g.legacyRk, grk);
+  assert.deepEqual(g.shardBoards, [srk], 'shard set attributed via the payload writer id');
+  assert.equal(g.lastSeen, oldTs);
+  assert.ok(!list.some((x) => x.id === ME), 'we never list ourselves');
+});
+
+test('devices(): a RECENTLY active identity is not quiet (Adopt withheld)', async () => {
+  await fresh();
+  await plantGhost(NOW - 60 * 1000);   // active an hour... a minute ago
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+  assert.equal(g.quiet, false, 'recent activity → not quiet → no Adopt offer');
+});
+
+test('ADOPT: records become MINE with their ORIGINAL timestamps; every ghost board is removed', async () => {
+  await fresh();
+  const oldTs = NOW - 3 * 24 * 3600 * 1000;
+  const { grk, srk, prk } = await plantGhost(oldTs);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  const res = await Progress.adoptIdentity(g);
+  assert.ok(res.ok, res.error || '');
+  assert.equal(res.adopted, 1);
+
+  const rec = Progress.bookRecord('2314');
+  assert.ok(Progress.isMine(rec), 'adopted position is attributed to me (orange)');
+  assert.equal(rec.ts, oldTs, 'ORIGINAL timestamp preserved — adoption never re-stamps');
+  assert.ok(Progress.trackRecord('2314', 'trX'), 'chapter records adopted too');
+  assert.deepEqual(Progress.myBookRecord('2314'), { track: 'tr3', pos: 910191, ts: oldTs }, 'lives in my own store');
+
+  assert.ok(!srv.boards.has(grk), 'ghost legacy board removed');
+  assert.ok(!srv.boards.has(srk), 'ghost shard removed');
+  assert.ok(!srv.boards.has(prk), 'ghost presence board removed');
+  assert.ok(!Progress.devices().some((x) => x.id === GID), 'gone from the list');
+
+  const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
+  const row = payload.bk.find((r) => r[0] === '2314');
+  assert.equal(payload.origins[row[6]], ME, 'republished in my shards as my own');
+  assert.equal(row[5], oldTs, 'still the original timestamp');
+});
+
+test('DELETE: absorbs into the replica (attribution KEPT), verifies sync, then removes boards — and refuses when sync fails', async () => {
+  await fresh();
+  const ts = NOW - 30 * 1000;                        // fresh record: Delete has no stability gate
+  const { grk, srk, prk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  // Sync broken (Plex's real failure mode: 200 but the write is discarded) →
+  // deletion must refuse rather than destroy the only copy.
+  const realWrite = srv.plex.writeSummary;
+  srv.plex.writeSummary = async () => 200;
+  const refused = await Progress.deleteDevice(g);
+  assert.equal(refused.ok, false, 'deletion refused while replication cannot be verified');
+  assert.ok(srv.boards.has(grk) && srv.boards.has(srk), 'boards kept');
+
+  srv.plex.writeSummary = realWrite;                  // heal
+  const res = await Progress.deleteDevice(g);
+  assert.ok(res.ok, res.error || '');
+  assert.ok(!srv.boards.has(grk) && !srv.boards.has(srk) && !srv.boards.has(prk), 'all three boards removed');
+
+  const rec = Progress.bookRecord('2314');
+  assert.ok(rec && rec.by === GID, 'record survives, still attributed to the deleted device');
+  assert.equal(rec.ts, ts, 'original timestamp intact');
+  const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
+  const row = payload.bk.find((r) => r[0] === '2314');
+  assert.equal(payload.origins[row[6]], GID, 'replicated into MY shards under ITS origin');
 });
 
 test('SURFACE: a corrupted shard reads as degraded in syncState, never as empty', async () => {

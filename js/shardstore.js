@@ -34,6 +34,7 @@
 //   { book, bk?: { t, o, cum, tot, ts, origin, name }, rst?: <ms>, rstOrigin? }
 const createShardStore = (opts) => {
   const dev = opts.deviceId;                          // 8-hex board id of THIS device
+  const clientId = opts.clientId || '';               // full client id of THIS device (writer identity, rides every payload)
   const titlePrefix = opts.titlePrefix || 'pb_prog2_';
   const maxRequestBytes = opts.maxRequestBytes || 8000;
   const requestOverhead = opts.requestOverhead || (() => 200);   // URL bytes beside the payload
@@ -91,6 +92,7 @@ const createShardStore = (opts) => {
       if (e.rst) rst.push([e.book, e.rst, oi(e.rstOrigin || '', '')]);
     }
     const p = { v: 2, dev, prefix };
+    if (clientId) p.id = clientId;                    // writer identity (the device list attributes shard sets by it)
     if (meta && meta.parent != null) { p.parent = meta.parent; p.splitId = meta.splitId; }
     p.origins = origins; p.names = names; p.bk = bk; p.rst = rst;
     return p;
@@ -119,6 +121,7 @@ const createShardStore = (opts) => {
   }
   function makeRedirect(prefix, birthMeta, redirectId) {
     const p = { v: 2, dev, prefix };
+    if (clientId) p.id = clientId;
     if (birthMeta && birthMeta.parent != null) { p.parent = birthMeta.parent; p.splitId = birthMeta.splitId; }
     p.redirect = [prefix + '0', prefix + '1']; p.redirectId = redirectId;
     return p;
@@ -313,13 +316,21 @@ const createShardStore = (opts) => {
   async function readAll() {
     const boards = await plex.listBoards();
     const byDev = new Map();   // dev → Map<prefix, {payload?, kind?, corrupt?}>
+    const inv = {};            // dev → { id, name, boards:[{rk,prefix}], newestTs } — the device-list inventory
     for (const b of boards) {
       const id = parseTitle(b.title || '');
       if (!id) continue;
+      const dv = inv[id.dev] || (inv[id.dev] = { id: '', name: '', boards: [], newestTs: 0 });
+      dv.boards.push({ rk: b.ratingKey, prefix: id.prefix });
       let m = byDev.get(id.dev); if (!m) { m = new Map(); byDev.set(id.dev, m); }
       try {
         const p = await decode(b.summary);
         m.set(id.prefix, { payload: p, kind: classify(p, id.dev, id.prefix) });
+        if (p.id && !dv.id) {
+          dv.id = p.id;
+          const oi = (p.origins || []).indexOf(p.id);
+          if (oi >= 0) dv.name = (p.names || [])[oi] || '';
+        }
       } catch (e) {
         // Before declaring corruption, retry once with a direct per-playlist read —
         // a stale or truncating LISTING must degrade to an extra fetch, not to a
@@ -357,7 +368,11 @@ const createShardStore = (opts) => {
         if (node.kind === 'data') {
           const es = payloadEntries(node.payload);
           storedRecords += es.length;
-          for (const e of es) entries.push(e);
+          for (const e of es) {
+            entries.push(e);
+            const ts = Math.max((e.bk && e.bk.ts) || 0, e.rst || 0);
+            if (inv[d] && ts > inv[d].newestTs) inv[d].newestTs = ts;
+          }
           return;
         }
         // redirect — all four reader checks, else NOBODY is authoritative here
@@ -371,7 +386,7 @@ const createShardStore = (opts) => {
     }
     degradedRead = degraded;
     const unique = new Set(entries.map((e) => e.bk ? `${e.book}|${e.bk.origin}|${e.bk.ts}` : `${e.book}|rst|${e.rst}`));
-    return { entries, degraded, stats: { devices: byDev.size, storedRecords, uniqueRecords: unique.size } };
+    return { entries, degraded, devices: inv, stats: { devices: byDev.size, storedRecords, uniqueRecords: unique.size } };
   }
 
   function syncState() {

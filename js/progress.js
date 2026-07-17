@@ -36,6 +36,8 @@ const Progress = (() => {
   let pubTimer = null, pollTimer = null, active = false, dirty = false;
   let dirtySince = 0;                 // wall-clock ms when dirty flipped true (UI "stuck" detection only)
   let shardStats = null;              // last read's {uniqueRecords, storedRecords, devices} for diagnostics
+  let legacyInv = [];                 // last poll's foreign LEGACY boards: [{id, name, rk, newestTs}] (device list + deletion)
+  let shardInv = {};                  // last poll's shard sets by dev8: {id, name, boards:[{rk,prefix}], newestTs}
   const SHARD_PUB_MS = 60000;         // shards are the ARCHIVE: publish at most once a minute
                                       // (the legacy head + presence carry the live position;
                                       // without this, every 4s legacy publish dragged a shard
@@ -55,9 +57,12 @@ const Progress = (() => {
   // The sharded FULL-history store (durable-progress plan: FORMAT + SHARD +
   // serialized read-back-verified writes). The legacy board above stays the
   // bounded "recent head" old clients read; the shards carry everything.
+  const myDev8 = (typeof Plex !== 'undefined' && Plex.getClientId)
+    ? (Plex.getClientId() || 'dev').replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase() : '';
   const shards = (board && typeof createShardStore !== 'undefined' && typeof ProgressFmt !== 'undefined')
     ? createShardStore({
-      deviceId: (Plex.getClientId() || 'dev').replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase(),
+      deviceId: myDev8,
+      clientId: Plex.getClientId() || '',
       encode: ProgressFmt.encode,
       decode: ProgressFmt.decode,
       plex: {
@@ -317,10 +322,16 @@ const Progress = (() => {
       const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
       peerBoards = parsed.filter((p) => p && p.id && p.id !== myId());
       cachePeerBoards();   // persist for next launch's first-frame paint (see restorePeerBoards)
+      legacyInv = [];
+      for (let i = 0; i < boards.length; i++) {
+        const p = parsed[i];
+        if (p && p.id && p.id !== myId()) legacyInv.push({ id: p.id, name: p.name || '', rk: boards[i].ratingKey, newestTs: newestTs(p) });
+      }
       if (shards) {
         try {
           const r = await shards.readAll();
           shardBoards = shardEntriesToBoards(r.entries);
+          shardInv = r.devices || {};
           cacheShardBoards();
           // Replication amplification stays a KNOWN cost, not a mystery: log
           // unique-vs-stored only when it changes (not every 20s poll).
@@ -443,6 +454,144 @@ const Progress = (() => {
     if (active) { if (!pollTimer) { poll(); pollTimer = setInterval(poll, POLL_MS); } if (dirty) schedulePublish(); }
     else if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
+  // ---- device list (Adopt / Delete / Ignore — Ignore is UI-level) -------------
+  // Every foreign identity that has written progress to this library: usually the
+  // user's other devices, or THIS device before a reinstall (a wipe mints a new
+  // clientId, so the old identity's boards render as a green ghost). No hardware
+  // id exists to resolve that automatically — only the human can. `quiet` gates
+  // Adopt in the UI: adopting a LIVE device would put two writers on one identity.
+  const QUIET_MS = 24 * 3600 * 1000;
+  function devices() {
+    const out = {};
+    for (const l of legacyInv) {
+      out[l.id] = { key: l.id, id: l.id, name: l.name, lastSeen: l.newestTs, legacyRk: l.rk, shardDev: null, shardBoards: [] };
+    }
+    for (const dev8 in shardInv) {
+      if (dev8 === myDev8) continue;
+      const s = shardInv[dev8];
+      const key = s.id || ('dev8:' + dev8);
+      const e = out[key] || (out[key] = { key, id: s.id || '', name: '', lastSeen: 0, legacyRk: null, shardDev: null, shardBoards: [] });
+      e.shardDev = dev8;
+      e.shardBoards = (s.boards || []).map((b) => b.rk);
+      if (!e.name && s.name) e.name = s.name;
+      if ((s.newestTs || 0) > e.lastSeen) e.lastSeen = s.newestTs;
+    }
+    delete out[myId()];
+    // Presence recency refines liveness (a device can be online without recording).
+    try {
+      if (typeof Presence !== 'undefined' && Presence.cachedPeers) {
+        for (const p of Presence.cachedPeers()) {
+          const e = out[p.id];
+          if (!e) continue;
+          if ((p.at || 0) > e.lastSeen) e.lastSeen = p.at;
+          if (!e.name && p.name) e.name = p.name;
+        }
+      }
+    } catch { /* presence optional */ }
+    return Object.values(out).map((e) => Object.assign(e, { quiet: now() - (e.lastSeen || 0) > QUIET_MS }));
+  }
+
+  // Remove every board belonging to a device descriptor (legacy + shards +
+  // presence). Best-effort per board; local views pruned so the list updates
+  // without waiting for the next poll. A LIVE device self-heals: it recreates
+  // its boards on its next publish.
+  async function removeDeviceBoards(desc) {
+    let n = 0;
+    const del = async (rk) => { try { await Plex.deletePlaylist(rk); n++; } catch { /* lingers to a retry */ } };
+    if (desc.legacyRk != null) await del(desc.legacyRk);
+    for (const rk of desc.shardBoards || []) await del(rk);
+    if (desc.id) {
+      try {
+        for (const b of await Plex.listBoards('pb_dev_')) {
+          try { const p = JSON.parse(b.summary); if (p && p.id === desc.id) await del(b.ratingKey); } catch { /* not ours to judge */ }
+        }
+      } catch { /* presence sweep is best-effort */ }
+    }
+    legacyInv = legacyInv.filter((l) => l.id !== desc.id || l.rk !== desc.legacyRk);
+    if (desc.shardDev) delete shardInv[desc.shardDev];
+    if (desc.id) peerBoards = peerBoards.filter((p) => p.id !== desc.id);
+    cachePeerBoards();
+    return n;
+  }
+
+  // ADOPT: "that dead identity was me." Its records become THIS device's own —
+  // copied into `mine` with their ORIGINAL timestamps (never re-stamped, so the
+  // LWW merge is unaffected; only the attribution/colour changes) — then its
+  // boards are removed. The UI offers this only for quiet identities.
+  async function adoptIdentity(desc) {
+    if (!desc || !desc.id || desc.id === myId()) return { ok: false, error: 'invalid identity' };
+    let adopted = 0;
+    for (const src of peerBoards.concat(shardBoards)) {
+      if (!src || src.id !== desc.id) continue;
+      for (const book in (src.books || {})) {
+        const s = src.books[book];
+        const slot = bookSlot(book);
+        if (s.bk && (!slot.bk || (s.bk.ts || 0) > (slot.bk.ts || 0))) {
+          slot.bk = { t: s.bk.t, o: s.bk.o || 0, cum: s.bk.cum || 0, tot: s.bk.tot || 0, ts: s.bk.ts || 0 };
+          adopted++;
+        }
+        for (const tr in (s.tr || {})) {
+          const r = s.tr[tr], cur = slot.tr[tr];
+          const ts = Array.isArray(r) ? (r[2] || 0) : (r.ts || 0);
+          if (!cur || ts > (cur[2] || 0)) slot.tr[tr] = Array.isArray(r) ? [r[0] || 0, r[1] || 0, ts] : [r.o || 0, r.d || 0, ts];
+        }
+        if (s.rst && (slot.rst || 0) < s.rst) slot.rst = s.rst;
+        slot._ts = now();
+      }
+    }
+    // Its records leave the replica — they are authored now.
+    for (const book in replica.books) {
+      const r = replica.books[book];
+      if (r.bk && r.bk.origin === desc.id) { delete r.bk; if (!r.rst) delete replica.books[book]; }
+    }
+    saveMine(); saveReplica(); rebuild(); schedulePublish(); scheduleShardPublish(true);
+    if (shards) {
+      await shards.flush();
+      const st = shards.syncState();
+      if (st.unsynced || st.lastError) return { ok: false, error: st.lastError || 'sync incomplete — boards kept', adopted };
+    }
+    const deleted = await removeDeviceBoards(desc);
+    rebuild(); cbMerged();
+    dbg('PROG', `adopted identity ${desc.name || desc.id}: ${adopted} record(s), ${deleted} board(s) removed`);
+    return { ok: true, adopted, deleted };
+  }
+
+  // DELETE: remove a device's boards WITHOUT taking its identity. Its records are
+  // first absorbed into the replica (original timestamp + origin preserved) and
+  // force-published into OUR shards — only a verified sync releases the deletion,
+  // so removing boards can never destroy the only copy.
+  async function deleteDevice(desc) {
+    if (!desc) return { ok: false, error: 'invalid' };
+    if (desc.id) {
+      for (const src of peerBoards.concat(shardBoards)) {
+        if (!src || src.id !== desc.id) continue;
+        for (const book in (src.books || {})) {
+          const s = src.books[book];
+          const cur = replica.books[book];
+          if (s.bk && (!cur || !cur.bk || (cur.bk.ts || 0) < (s.bk.ts || 0))) {
+            replica.books[book] = Object.assign({}, cur, {
+              bk: { t: s.bk.t, o: s.bk.o || 0, cum: s.bk.cum || 0, tot: s.bk.tot || 0, ts: s.bk.ts || 0, origin: desc.id, name: src.name || '' },
+            });
+          }
+          if (s.rst && (!replica.books[book] || (replica.books[book].rst || 0) < s.rst)) {
+            replica.books[book] = Object.assign({}, replica.books[book], { rst: s.rst, rstOrigin: desc.id });
+          }
+        }
+      }
+      saveReplica();
+    }
+    scheduleShardPublish(true);
+    if (shards) {
+      await shards.flush();
+      const st = shards.syncState();
+      if (st.unsynced || st.lastError) return { ok: false, error: st.lastError || 'sync incomplete — boards kept' };
+    }
+    const deleted = await removeDeviceBoards(desc);
+    rebuild(); cbMerged();
+    dbg('PROG', `deleted device ${desc.name || desc.key}: ${deleted} board(s) removed (records replicated)`);
+    return { ok: true, deleted };
+  }
+
   // Reconnect / backgrounding: push everything out NOW (the rate-limit window
   // doesn't apply when we may be about to lose the network or get suspended).
   function flush() {
@@ -469,6 +618,7 @@ const Progress = (() => {
 
   return {
     init, hydrate, setSeed, setActive, flush, refresh, syncState,
+    devices, adoptIdentity, deleteDevice,
     recordTrack, recordBook, clearBook, resetBook,
     bookRecord, myBookRecord, trackRecord, trackPct, isMine, myId,
     // Test-only hook (mirrors Plex._test): reach the pure merge/serialize/trim
@@ -478,6 +628,7 @@ const Progress = (() => {
       reset() {
         mine = { v: 1, books: {} }; replica = { v: 1, books: {} };
         peerBoards = []; shardBoards = []; merged = { books: {} };
+        legacyInv = []; shardInv = {};
         prunedSession = false; dirty = false; dirtySince = 0; lastShardPub = 0;
         if (pubTimer) { clearTimeout(pubTimer); pubTimer = null; }
         if (shardPubTimer) { clearTimeout(shardPubTimer); shardPubTimer = null; }

@@ -2381,7 +2381,7 @@
     // Options HUB + its settings sub-screens (each a filmstrip overlay). The hub just
     // routes to sub-screens via openSub; each sub owns its own controls + ‹ Back.
     OptionsScreen.init({ byId: $, openSub, Downloads: window.Downloads });
-    GeneralScreen.init({ byId: $, Settings, Presence, onSignOut: doSignOut, onBack: closeSub });
+    GeneralScreen.init({ byId: $, Settings, Presence, Progress, toast, onSignOut: doSignOut, onBack: closeSub });
     PlaybackScreen.init({ byId: $, Settings, updateSkipLabels, onBack: closeSub });
     BufferingScreen.init({ byId: $, Settings, Downloads: window.Downloads, pumpBank, modal, fmtGB, GB, onBack: closeSub });
     // Diagnostics has no module (rows self-inject from debug.js/logpipe.js) — just its ‹ Back.
