@@ -25,11 +25,12 @@ const Progress = (() => {
   const MAX_JSON = 7000;             // keep the published legacy summary comfortably under Plex's limit
   const STABLE_MS = 10 * 60 * 1000;  // a foreign record this old is "stable" → adopted into the replica
                                      // (guards write churn: a LIVE peer's moving position is not re-published)
-  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers', replica: 'pb_progReplica', shardCache: 'pb_progShardCache', shardKeys: 'pb_prog2Keys' };
+  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers', replica: 'pb_progReplica', shardCache: 'pb_progShardCache', shardKeys: 'pb_prog2Keys', purged: 'pb_progPurged' };
 
   let seed = null;
   let mine = load();                  // our OWN authored records (persisted, survives offline)
   let replica = loadReplica();        // ADOPTED foreign records (immutable: original ts + origin — never re-stamped)
+  let purged = loadPurged();          // PER-IDENTITY purge tombstones: { <identityId>: ts } — "Delete device" (see deleteDevice)
   let merged = { books: {} };         // merged view across mine + replica + peers + shards (the app's source of truth)
   let peerBoards = [];
   let shardBoards = [];               // per-origin pseudo-boards from the last shard read (cached like peers)
@@ -112,6 +113,46 @@ const Progress = (() => {
     return { v: 1, books: {} };
   }
   function saveReplica() { try { localStorage.setItem(LS.replica, JSON.stringify(replica)); } catch {} }
+
+  // ---- identity purge tombstones ("Delete device" that actually deletes) --------
+  // Same shape of idea as a book's reset tombstone, one level up: purged[id] = ts
+  // means "identity id's records at/before ts are DELETED, everywhere". The map
+  // rides the legacy board (`purged` field — old clients ignore it), replicates
+  // clear-on-contact like reset tombstones, suppresses at merge time (an offline
+  // peer's stale copies can't resurrect the identity), and gates adoption and
+  // republication. Records NEWER than the purge survive — deleting a live device
+  // is self-healing: it recreates its boards and plays on as itself.
+  function loadPurged() {
+    try { const o = JSON.parse(localStorage.getItem(LS.purged) || 'null'); if (o && typeof o === 'object') return o; } catch {}
+    return {};
+  }
+  function savePurged() { try { localStorage.setItem(LS.purged, JSON.stringify(purged)); } catch {} }
+  // Drop every replica copy a purge supersedes. Returns whether anything changed.
+  function purgeReplica() {
+    let changed = false;
+    for (const book in replica.books) {
+      const r = replica.books[book];
+      if (r.bk && (purged[r.bk.origin] || 0) >= (r.bk.ts || 0)) {
+        delete r.bk; if (!r.rst) delete replica.books[book];
+        changed = true;
+      }
+    }
+    if (changed) saveReplica();
+    return changed;
+  }
+  // Clear-on-contact replication: adopt any NEWER purge a peer's board carries,
+  // then apply it locally and republish (so the purge outlives its author's board).
+  function applyPeerPurges() {
+    let changed = false;
+    for (const p of peerBoards) {
+      for (const id in (p.purged || {})) {
+        if (id === myId()) continue;               // never adopt a purge of OURSELVES
+        if ((p.purged[id] || 0) > (purged[id] || 0)) { purged[id] = p.purged[id]; changed = true; }
+      }
+    }
+    if (!changed) return;
+    savePurged(); purgeReplica(); schedulePublish();
+  }
   // Group replica records into per-origin pseudo-boards so rebuild() attributes
   // them exactly like live peer boards (by/name ride the source).
   function groupByOrigin(recs) {
@@ -142,6 +183,7 @@ const Progress = (() => {
     const cutoff = now() - STABLE_MS;
     const consider = (book, bk, origin, name) => {
       if (!bk || origin === myId() || (bk.ts || 0) > cutoff) return;
+      if ((purged[origin] || 0) >= (bk.ts || 0)) return;   // purged identities are never re-adopted
       const cur = replica.books[book];
       if (cur && cur.bk && (cur.bk.ts || 0) >= (bk.ts || 0)) return;
       replica.books[book] = Object.assign({}, cur, { bk: { t: bk.t, o: bk.o || 0, cum: bk.cum || 0, tot: bk.tot || 0, ts: bk.ts || 0, origin, name: name || '' } });
@@ -180,10 +222,10 @@ const Progress = (() => {
     for (const book in replica.books) {
       const r = replica.books[book];
       const e = out[book] || (out[book] = {});
-      if (r.bk && (!e.bk || (r.bk.ts || 0) > (e.bk.ts || 0))) e.bk = r.bk;
+      if (r.bk && (purged[r.bk.origin] || 0) < (r.bk.ts || 0) && (!e.bk || (r.bk.ts || 0) > (e.bk.ts || 0))) e.bk = r.bk;
       if (r.rst && (!e.rst || r.rst > e.rst)) { e.rst = r.rst; e.rstOrigin = r.rstOrigin || ''; }
     }
-    return Object.keys(out).map((book) => Object.assign({ book }, out[book]));
+    return Object.keys(out).map((book) => Object.assign({ book }, out[book])).filter((e) => e.bk || e.rst);
   }
   // Shard entries (flat, per-book, origin-attributed) → per-origin pseudo-boards.
   function shardEntriesToBoards(entries) {
@@ -274,6 +316,7 @@ const Progress = (() => {
   }
   function packAll() {
     const o = { v: 1, id: myId(), name: myName(), books: {} };
+    if (Object.keys(purged).length) o.purged = purged;   // identity purges ride the legacy board (old clients ignore the field)
     for (const k in mine.books) {
       const b = mine.books[k]; const e = {};
       if (b.bk) e.bk = b.bk;
@@ -327,6 +370,7 @@ const Progress = (() => {
         const p = parsed[i];
         if (p && p.id && p.id !== myId()) legacyInv.push({ id: p.id, name: p.name || '', rk: boards[i].ratingKey, newestTs: newestTs(p) });
       }
+      applyPeerPurges();   // adopt newer identity purges BEFORE adopting any records
       if (shards) {
         try {
           const r = await shards.readAll();
@@ -415,14 +459,17 @@ const Progress = (() => {
     }
     for (const src of sources) {
       const by = src.id, name = src.name;
+      // A purged identity's records at/before its purge are DELETED — suppressed
+      // here so an offline peer's lingering copies can never resurrect them.
+      const pf = purged[by] || 0;
       for (const bk in (src.books || {})) {
         const f = floor[bk] || 0;
         const dst = m.books[bk] || (m.books[bk] = { bk: null, tr: {}, rst: f });
         const s = src.books[bk];
-        if (s.bk && (s.bk.ts || 0) > f && (!dst.bk || (s.bk.ts || 0) > (dst.bk.ts || 0))) dst.bk = Object.assign({}, s.bk, { by, name });
+        if (s.bk && (s.bk.ts || 0) > f && (s.bk.ts || 0) > pf && (!dst.bk || (s.bk.ts || 0) > (dst.bk.ts || 0))) dst.bk = Object.assign({}, s.bk, { by, name });
         if (s.tr) for (const tr in s.tr) {
           const r = s.tr[tr], ts = r[2] || 0;
-          if (ts > f && (!dst.tr[tr] || ts > (dst.tr[tr].ts || 0))) dst.tr[tr] = { o: r[0] || 0, d: r[1] || 0, ts, by, name };
+          if (ts > f && ts > pf && (!dst.tr[tr] || ts > (dst.tr[tr].ts || 0))) dst.tr[tr] = { o: r[0] || 0, d: r[1] || 0, ts, by, name };
         }
       }
     }
@@ -460,7 +507,12 @@ const Progress = (() => {
   // clientId, so the old identity's boards render as a green ghost). No hardware
   // id exists to resolve that automatically — only the human can. `quiet` gates
   // Adopt in the UI: adopting a LIVE device would put two writers on one identity.
-  const QUIET_MS = 24 * 3600 * 1000;
+  // Adopt copies records to OUR identity and never shares a writer with the old
+  // one, so the only thing this gate prevents is adopting a device that's being
+  // actively used (mis-colouring + a pointless board recreate). 10 minutes covers
+  // "reinstalled, reopened, adopt my old self NOW" — the reinstall case Adopt
+  // exists for. (Data/resume never waits on this: records merge on the first poll.)
+  const QUIET_MS = 10 * 60 * 1000;
   function devices() {
     const out = {};
     for (const l of legacyInv) {
@@ -556,39 +608,27 @@ const Progress = (() => {
     return { ok: true, adopted, deleted };
   }
 
-  // DELETE: remove a device's boards WITHOUT taking its identity. Its records are
-  // first absorbed into the replica (original timestamp + origin preserved) and
-  // force-published into OUR shards — only a verified sync releases the deletion,
-  // so removing boards can never destroy the only copy.
+  // DELETE: a real delete. Publishes a per-identity purge tombstone (purged[id] =
+  // now) so the identity's records at/before that instant are dropped from our
+  // replica, suppressed at merge on every device the tombstone reaches, never
+  // re-adopted, never republished — then removes its boards. Records NEWER than
+  // the purge survive: deleting a live device is self-healing (it recreates its
+  // boards and keeps playing as itself). Books also played elsewhere keep their
+  // newer progress; the identity's tombstoned resets are kept (a reset is a real
+  // action, not the identity's data).
   async function deleteDevice(desc) {
     if (!desc) return { ok: false, error: 'invalid' };
-    if (desc.id) {
-      for (const src of peerBoards.concat(shardBoards)) {
-        if (!src || src.id !== desc.id) continue;
-        for (const book in (src.books || {})) {
-          const s = src.books[book];
-          const cur = replica.books[book];
-          if (s.bk && (!cur || !cur.bk || (cur.bk.ts || 0) < (s.bk.ts || 0))) {
-            replica.books[book] = Object.assign({}, cur, {
-              bk: { t: s.bk.t, o: s.bk.o || 0, cum: s.bk.cum || 0, tot: s.bk.tot || 0, ts: s.bk.ts || 0, origin: desc.id, name: src.name || '' },
-            });
-          }
-          if (s.rst && (!replica.books[book] || (replica.books[book].rst || 0) < s.rst)) {
-            replica.books[book] = Object.assign({}, replica.books[book], { rst: s.rst, rstOrigin: desc.id });
-          }
-        }
-      }
-      saveReplica();
+    if (desc.id && desc.id !== myId()) {
+      purged[desc.id] = now();
+      savePurged();
+      purgeReplica();
     }
-    scheduleShardPublish(true);
-    if (shards) {
-      await shards.flush();
-      const st = shards.syncState();
-      if (st.unsynced || st.lastError) return { ok: false, error: st.lastError || 'sync incomplete — boards kept' };
-    }
+    schedulePublish();                 // the purge rides the legacy board to peers
+    scheduleShardPublish(true);        // and our shards drop its copies now
+    if (shards) await shards.flush();  // best-effort — deletion is deliberate destruction, nothing left to protect
     const deleted = await removeDeviceBoards(desc);
     rebuild(); cbMerged();
-    dbg('PROG', `deleted device ${desc.name || desc.key}: ${deleted} board(s) removed (records replicated)`);
+    dbg('PROG', `deleted device ${desc.name || desc.key}: purge @${purged[desc.id] || '-'}; ${deleted} board(s) removed`);
     return { ok: true, deleted };
   }
 
@@ -626,7 +666,7 @@ const Progress = (() => {
     // logic without a network or the poll() timer. Not used by the app.
     _test: {
       reset() {
-        mine = { v: 1, books: {} }; replica = { v: 1, books: {} };
+        mine = { v: 1, books: {} }; replica = { v: 1, books: {} }; purged = {};
         peerBoards = []; shardBoards = []; merged = { books: {} };
         legacyInv = []; shardInv = {};
         prunedSession = false; dirty = false; dirtySince = 0; lastShardPub = 0;
@@ -637,6 +677,7 @@ const Progress = (() => {
       setPeers(p) { peerBoards = p || []; },
       mineBooks: () => mine.books,
       replicaBooks: () => replica.books,
+      purgedMap: () => purged,
       rebuild() { rebuild(); return merged; },
       applyPeerResets, cachePeerBoards, restorePeerBoards, hydrate,
       serialize, packAll,

@@ -307,33 +307,70 @@ test('ADOPT: records become MINE with their ORIGINAL timestamps; every ghost boa
   assert.equal(row[5], oldTs, 'still the original timestamp');
 });
 
-test('DELETE: absorbs into the replica (attribution KEPT), verifies sync, then removes boards — and refuses when sync fails', async () => {
+test('DELETE really deletes: purge tombstone published, records gone from merge/replica/shards, boards removed', async () => {
   await fresh();
-  const ts = NOW - 30 * 1000;                        // fresh record: Delete has no stability gate
+  const ts = NOW - 30 * 60 * 1000;                    // stable → will have been auto-adopted into the replica
   const { grk, srk, prk } = await plantGhost(ts);
   Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
   await T.poll();
+  assert.ok(Progress.bookRecord('2314'), 'precondition: ghost record visible');
+  assert.ok(T.replicaBooks()['2314'], 'precondition: already auto-adopted into the replica');
   const g = Progress.devices().find((x) => x.id === GID);
 
-  // Sync broken (Plex's real failure mode: 200 but the write is discarded) →
-  // deletion must refuse rather than destroy the only copy.
-  const realWrite = srv.plex.writeSummary;
-  srv.plex.writeSummary = async () => 200;
-  const refused = await Progress.deleteDevice(g);
-  assert.equal(refused.ok, false, 'deletion refused while replication cannot be verified');
-  assert.ok(srv.boards.has(grk) && srv.boards.has(srk), 'boards kept');
-
-  srv.plex.writeSummary = realWrite;                  // heal
+  NOW += 1000;
   const res = await Progress.deleteDevice(g);
   assert.ok(res.ok, res.error || '');
-  assert.ok(!srv.boards.has(grk) && !srv.boards.has(srk) && !srv.boards.has(prk), 'all three boards removed');
+  assert.ok(!srv.boards.has(grk) && !srv.boards.has(srk) && !srv.boards.has(prk), 'all three board families removed');
+  assert.equal(Progress.bookRecord('2314'), null, 'the record is DELETED, not preserved');
+  assert.ok(!(T.replicaBooks()['2314'] || {}).bk, 'replica copy purged');
+  assert.ok(T.purgedMap()[GID] > 0, 'purge tombstone recorded');
 
-  const rec = Progress.bookRecord('2314');
-  assert.ok(rec && rec.by === GID, 'record survives, still attributed to the deleted device');
-  assert.equal(rec.ts, ts, 'original timestamp intact');
   const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
-  const row = payload.bk.find((r) => r[0] === '2314');
-  assert.equal(payload.origins[row[6]], GID, 'replicated into MY shards under ITS origin');
+  assert.ok(!payload.bk.some((r) => r[0] === '2314'), 'our shards no longer republish it');
+  // The purge rides the legacy board so peers adopt it.
+  await T.publish();
+  const legacy = JSON.parse(srv.byTitle('pb_prog_' + boardId()).summary);
+  assert.ok(legacy.purged && legacy.purged[GID] > 0, 'purge published for clear-on-contact replication');
+});
+
+test('DELETE is mesh-wide: a peer-published purge suppresses lingering copies here (offline-peer resurrection blocked)', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  assert.ok(Progress.bookRecord('2314'), 'ghost record adopted + visible here');
+
+  // ANOTHER device deleted the ghost — its legacy board carries the purge.
+  NOW += 1000;
+  const peerRk = await srv.plex.createBoard('pb_prog_livepeer1');
+  await srv.plex.writeSummary(peerRk, JSON.stringify({ v: 1, id: 'pbpwa-live-1', name: 'Pixel', books: {}, purged: { [GID]: NOW } }));
+  await T.poll();
+  assert.equal(Progress.bookRecord('2314'), null, 'peer purge adopted — our replica copy suppressed and dropped');
+  assert.ok(T.purgedMap()[GID] === NOW, 'tombstone replicated locally');
+});
+
+test('a record NEWER than the purge survives (deleting a live device is self-healing)', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  assert.equal(Progress.bookRecord('2314'), null, 'purged');
+
+  // The "deleted" device was alive: it republishes a NEWER position.
+  NOW += 60 * 1000;
+  const nrk = await srv.plex.createBoard('pb_prog_ghost001');
+  await srv.plex.writeSummary(nrk, JSON.stringify({
+    v: 1, id: GID, name: 'Old iPhone',
+    books: { 2314: { bk: { t: 'tr4', o: 5000, cum: 5000, tot: 9999000, ts: NOW } } },
+  }));
+  await T.poll();
+  const rec = Progress.bookRecord('2314');
+  assert.ok(rec && rec.o === 5000 && rec.by === GID, 'post-purge playback wins normally — nothing is bricked');
 });
 
 test('SURFACE: a corrupted shard reads as degraded in syncState, never as empty', async () => {

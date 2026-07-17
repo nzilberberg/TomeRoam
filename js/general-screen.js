@@ -79,9 +79,9 @@ const GeneralScreen = (() => {
         });
       }
       btn('Delete', async () => {
-        if (!confirm(`Delete "${dev.name || dev.key}"?\n\nIts boards are removed from Plex after its positions are safely replicated here. A live device recreates its boards automatically.`)) return;
+        if (!confirm(`Delete "${dev.name || dev.key}"?\n\nIts recorded positions are DELETED everywhere and its boards removed from Plex. Books you also played on other devices keep their newer progress. A live device you delete keeps playing and re-registers itself.`)) return;
         const r = await d.Progress.deleteDevice(dev);
-        d.toast(r.ok ? 'Device boards removed' : 'Delete refused: ' + r.error);
+        d.toast(r.ok ? 'Device deleted' : 'Delete failed: ' + r.error);
       });
       btn(ign[dev.key] ? 'Unignore' : 'Ignore', async () => { setIgnored(dev.key, !ign[dev.key]); });
       row.appendChild(label); row.appendChild(ctl);
