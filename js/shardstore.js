@@ -195,9 +195,19 @@ const createShardStore = (opts) => {
     if (!rk) {
       rk = await plex.createBoard(title(prefix));
       if (!rk) throw new Error('shard: board create failed for ' + (prefix || '(root)'));
+      // Persist ownership IMMEDIATELY — before the summary write. If the write or
+      // its verification fails and the next listing transiently omits this brand-
+      // new playlist, the persisted hint is the only thing standing between a
+      // retry and a duplicate board (Plex createPlaylist does NOT dedupe titles).
+      tree.set(prefix, { rk, kind: 'data', meta: null, corrupt: true });
+      saveKeyHints();
     }
     const st = await plex.writeSummary(rk, enc);
-    if (st === 404) { tree.delete(prefix); verified.delete(prefix); throw new Error('shard: board gone (404) — recreate next pass'); }
+    if (st === 404) {
+      tree.delete(prefix); verified.delete(prefix);
+      saveKeyHints();   // persist the removal, or the next pass reloads the same dead ratingKey forever
+      throw new Error('shard: board gone (404) — recreate next pass');
+    }
     // THE load-bearing step: content read-back, never status (Plex 200s discarded writes).
     const back = await plex.readSummary(rk);
     if (back == null) throw new Error('shard: verify read failed');
@@ -354,14 +364,15 @@ const createShardStore = (opts) => {
       (function walk(prefix) {
         const node = m.get(prefix);
         if (!node) {
-          // Defensive orphan-pair acceptance: parent gone but both children form a
-          // mutually consistent committed pair (same splitId, correct parent field).
-          const c0 = m.get(prefix + '0'), c1 = m.get(prefix + '1');
-          const pair = c0 && c1 && !c0.corrupt && !c1.corrupt &&
-            c0.payload.parent === prefix && c1.payload.parent === prefix &&
-            c0.payload.splitId && c0.payload.splitId === c1.payload.splitId;
-          if (pair) { walk(prefix + '0'); walk(prefix + '1'); return; }
-          degraded.push({ dev: d, prefix, reason: 'missing' });
+          // NO orphan-pair acceptance (an earlier version promoted a consistent
+          // child pair to authoritative — WRONG: children are verified BEFORE the
+          // commit, so a crash-before-redirect leaves exactly such a pair, stale;
+          // if the parent later vanished, every record it received after the
+          // failed split would silently disappear from the merge). A shared
+          // splitId proves the children belong to EACH OTHER — only the parent's
+          // permanent redirect proves the split COMMITTED. Missing parent =
+          // degraded; the owner self-heals it from local truth on its next pass.
+          degraded.push({ dev: d, prefix, reason: 'missing commit redirect' });
           return;
         }
         if (node.corrupt) { degraded.push({ dev: d, prefix, reason: node.reason || 'corrupt' }); return; }

@@ -19,11 +19,16 @@ function fakeServer() {
     discardWrites: false,            // §3.4: return 200, store nothing
     failCreate: false,
     crashWhen: null,                 // (title, text) => boolean — throw before applying
+    omitFromListing: new Set(),      // rks a transiently-incomplete listing drops
   };
   const plex = {
+    // PRODUCTION-FAITHFUL: Plex createPlaylist creates unconditionally — it does
+    // NOT dedupe by title. (An earlier fake did, which made the duplicate-board
+    // failure impossible to reproduce — the stub guaranteed behaviour the real
+    // dependency doesn't. The store's persisted rating-key hints are what must
+    // prevent duplicates.)
     createBoard: async (title) => {
       if (state.failCreate) return null;
-      for (const [rk, b] of boards) if (b.title === title) return rk;   // Plex titles are findable; never dup
       const rk = 'rk' + nextRk++;
       boards.set(rk, { title, summary: '' });
       return rk;
@@ -37,7 +42,8 @@ function fakeServer() {
       return 200;
     },
     readSummary: async (rk) => (boards.has(rk) ? boards.get(rk).summary : null),
-    listBoards: async () => Array.from(boards, ([ratingKey, b]) => ({ ratingKey, title: b.title, summary: b.summary })),
+    listBoards: async () => Array.from(boards, ([ratingKey, b]) => ({ ratingKey, title: b.title, summary: b.summary }))
+      .filter((b) => !state.omitFromListing.has(b.ratingKey)),
   };
   const byTitle = (title) => { for (const [rk, b] of boards) if (b.title === title) return { rk, ...b }; return null; };
   return { boards, state, plex, byTitle };
@@ -358,6 +364,78 @@ test('property: random records/resets/faults — server always converges to the 
   // Every book ever touched is represented (position or tombstone) — none lost.
   const final = await store.readAll();
   assert.equal(final.entries.length, model.size);
+});
+
+// ---- review findings (.122 external review) — the store must never guess ----------
+test('ORPHAN CHILDREN ARE NEVER AUTHORITATIVE: a matching pair without the parent redirect is degraded, not data', async () => {
+  const fake = fakeServer();
+  const store = makeStore(fake);
+  const small = BOOKS.slice(0, 3).map((b, i) => entry(b, T0 + i));
+  store.ensurePublished(small);
+  await store.flush();
+
+  // Split attempt: children written+verified, CRASH before the parent redirect.
+  fake.state.crashWhen = (title, text) => title === `pb_prog2_${DEV}_p` && textIsRedirect.cache.get(text);
+  const bulk = BOOKS.slice(0, 30).map((b, i) => entry(b, T0 + 100 + i));
+  store.ensurePublished(bulk);
+  await store.flush();
+  fake.state.crashWhen = null;
+
+  // The parent (still data) then receives NEWER records… and later VANISHES
+  // (manual deletion / listing loss). The stale-but-consistent orphan pair must
+  // NOT be promoted to authoritative — that silently loses the newer records.
+  let rootRk = null;
+  for (const [rk, b] of fake.boards) if (b.title === `pb_prog2_${DEV}_p`) rootRk = rk;
+  fake.boards.delete(rootRk);
+
+  const reader = makeStore(fake, { deviceId: 'devreader' });
+  const r = await reader.readAll();
+  assert.ok(r.degraded.some((d) => d.dev === DEV && d.prefix === ''), 'missing commit redirect → degraded');
+  assert.equal(r.entries.length, 0, 'the uncommitted children contributed NOTHING (a splitId proves pairing, not commit)');
+});
+
+test('CREATE-THEN-FAIL leaves ownership persisted: a retry under an incomplete listing reuses the board, never duplicates', async () => {
+  const fake = fakeServer();
+  const keyStore = {};
+  const store = makeStore(fake, {
+    maxRequestBytes: 8000,
+    keys: { load: () => keyStore.v || {}, save: (o) => { keyStore.v = o; } },
+  });
+
+  // First-ever publish: the create succeeds, the summary write fails.
+  let failNextWrite = true;
+  const realWrite = fake.plex.writeSummary;
+  fake.plex.writeSummary = async (rk, text) => { if (failNextWrite) { failNextWrite = false; throw new Error('relay blip'); } return realWrite(rk, text); };
+  store.ensurePublished([entry(BOOKS[0], T0)]);
+  await store.flush();
+  assert.equal(fake.boards.size, 1, 'the board WAS created before the failure');
+  const [origRk] = fake.boards.keys();
+
+  // Retry pass under a listing that transiently OMITS the new board.
+  fake.state.omitFromListing.add(origRk);
+  await store.flush();
+  fake.state.omitFromListing.clear();
+  await store.flush();
+
+  assert.equal(store.syncState().unsynced, false);
+  assert.equal(fake.boards.size, 1, 'no duplicate board — the persisted hint reused the original ratingKey');
+  assert.equal((await store.readAll()).entries.length, 1);
+});
+
+test('a STALE persisted ratingKey hint self-heals on 404 instead of looping forever', async () => {
+  const fake = fakeServer();
+  const keyStore = { v: { '': 'rkDEAD' } };            // hint points at a playlist that no longer exists
+  const store = makeStore(fake, {
+    maxRequestBytes: 8000,
+    keys: { load: () => keyStore.v || {}, save: (o) => { keyStore.v = o; } },
+  });
+  store.ensurePublished([entry(BOOKS[0], T0)]);
+  await store.flush();                                  // pass 1: 404 on the dead hint
+  await store.flush();                                  // pass 2: must NOT retry rkDEAD again
+  assert.equal(store.syncState().unsynced, false, store.syncState().lastError || '');
+  assert.equal(fake.boards.size, 1, 'a replacement board was created');
+  assert.notEqual(keyStore.v[''], 'rkDEAD', 'the stale hint was PERSISTENTLY dropped/replaced');
+  assert.equal((await store.readAll()).entries.length, 1);
 });
 
 // ---- routing hash -------------------------------------------------------------------

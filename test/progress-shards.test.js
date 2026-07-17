@@ -26,8 +26,9 @@ function fakeServer() {
     boards, deleted,
     byTitle(t) { for (const [rk, b] of boards) if (b.title === t) return { rk, ...b }; return null; },
     plex: {
+      // Production-faithful: Plex createPlaylist creates unconditionally, no title
+      // dedupe — the store's persisted hints are what must prevent duplicates.
       createBoard: async (title) => {
-        for (const [rk, b] of boards) if (b.title === title) return rk;
         const rk = 'rk' + nextRk++; boards.set(rk, { title, summary: '' }); return rk;
       },
       writeSummary: async (rk, text) => { if (!boards.has(rk)) return 404; boards.get(rk).summary = text; return 200; },
