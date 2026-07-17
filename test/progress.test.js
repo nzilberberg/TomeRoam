@@ -237,17 +237,45 @@ test('applyPeerResets keeps our records that are NEWER than the peer tombstone',
   assert.equal(slot.rst, resetAt, 'and the tombstone is recorded for further propagation');
 });
 
-// ---- LRU trim ---------------------------------------------------------------
-test('trim caps our own board at MAX_BOOKS, dropping the least-recently-touched', () => {
+// ---- STOP-DELETING: local retention is total; only the PUBLISHED clone is capped
+// This is the plan's proof case run against the real module: play 100 books →
+// every one must survive locally (the old trim() deleted books 1–84 forever).
+test('the local store is NEVER trimmed — 100 books recorded, 100 survive locally', () => {
   reset();
-  const N = T.MAX_BOOKS + 3;
+  const N = 100;
   for (let i = 0; i < N; i++) { NOW += 1000; Progress.recordBook('book' + i, { t: 't', o: i, cum: i, tot: 5000 }); }
 
   const keys = Object.keys(T.mineBooks());
-  assert.equal(keys.length, T.MAX_BOOKS, 'held book count is capped');
-  assert.equal(T.mineBooks()['book0'], undefined, 'oldest was evicted');
-  assert.equal(T.mineBooks()['book2'], undefined);
-  assert.ok(T.mineBooks()['book' + (N - 1)], 'newest survives');
+  assert.equal(keys.length, N, 'every recorded book is still held locally');
+  assert.ok(T.mineBooks()['book0'], 'the oldest book is NOT deleted');
+  // And the merged view (what resume reads) still serves the oldest book.
+  const bk = Progress.bookRecord('book0');
+  assert.ok(bk && bk.o === 0 && Progress.isMine(bk), 'book 1 of 100 is still resumable');
+});
+
+test('the PUBLISHED board stays bounded at MAX_BOOKS (a clone — today\'s exact behaviour)', () => {
+  reset();
+  const N = T.MAX_BOOKS + 10;
+  for (let i = 0; i < N; i++) { NOW += 1000; Progress.recordBook('book' + i, { t: 't', o: i, cum: i, tot: 5000 }); }
+
+  const pub = JSON.parse(T.serialize());
+  const pubKeys = Object.keys(pub.books);
+  assert.equal(pubKeys.length, T.MAX_BOOKS, 'published clone capped at MAX_BOOKS');
+  assert.ok(pub.books['book' + (N - 1)], 'newest book is published');
+  assert.equal(pub.books['book0'], undefined, 'oldest book is publication-trimmed only');
+  // Publication trimming must not have touched the local store.
+  assert.equal(Object.keys(T.mineBooks()).length, N, 'local store unaffected by publishing');
+  assert.ok(T.mineBooks()['book0'], 'local copy of the oldest book intact after serialize()');
+});
+
+test('a fresh reset tombstone rides the bounded publication (newest-by-touch)', () => {
+  reset();
+  const N = T.MAX_BOOKS + 5;
+  for (let i = 0; i < N; i++) { NOW += 1000; Progress.recordBook('book' + i, { t: 't', o: i, cum: i, tot: 5000 }); }
+  NOW += 1000;
+  Progress.resetBook('book0');                       // resetting the OLDEST book re-touches it
+  const pub = JSON.parse(T.serialize());
+  assert.ok(pub.books['book0'] && pub.books['book0'].rst, 'the tombstone is published despite the cap');
 });
 
 // ---- serialize size-bounding ------------------------------------------------

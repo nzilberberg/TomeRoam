@@ -16,7 +16,7 @@ const Progress = (() => {
   const PREFIX = 'pb_prog_';
   const POLL_MS = 20000;              // durable data changes slowly; presence carries the fast path
   const PUB_DEBOUNCE = 4000;          // coalesce a burst of records into one playlist PUT
-  const MAX_BOOKS = 16;              // cap books held on our own board (LRU by touch)
+  const MAX_BOOKS = 16;              // cap books on the PUBLISHED board only (LRU by touch) — never the local store
   const MAX_JSON = 7000;             // keep the published summary comfortably under Plex's limit
   const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers' };
 
@@ -55,13 +55,13 @@ const Progress = (() => {
   function hydrate() { restorePeerBoards(); rebuild(); }
   function saveMine() { try { localStorage.setItem(LS.mine, JSON.stringify(mine)); } catch {} }
   function bookSlot(book) { return mine.books[book] || (mine.books[book] = { bk: null, tr: {}, _ts: 0 }); }
-  function touch(book) { const b = mine.books[book]; if (b) b._ts = now(); trim(); }
-  function trim() {
-    const keys = Object.keys(mine.books);
-    if (keys.length <= MAX_BOOKS) return;
-    keys.map((k) => [k, mine.books[k]._ts || 0]).sort((a, b) => a[1] - b[1])
-      .slice(0, keys.length - MAX_BOOKS).forEach(([k]) => delete mine.books[k]);
-  }
+  function touch(book) { const b = mine.books[book]; if (b) b._ts = now(); }
+  // STOP-DELETING (the durable-progress plan's task 1): the local store is NEVER
+  // trimmed. The old trim() here ran on every write and deleted `mine.books` past
+  // MAX_BOOKS — permanently destroying the device's own listening positions (book 17
+  // was forgotten everywhere). The MAX_BOOKS cap now applies only to a cloned
+  // publication snapshot (below), so the published board keeps today's exact size
+  // and shape while local history is total.
 
   // ---- recording (app.js calls these on the existing save triggers) ---------
   function recordTrack(book, track, offsetMs, durMs) {
@@ -117,11 +117,24 @@ const Progress = (() => {
     }
     return o;
   }
+  // The bounded PUBLICATION clone: the newest MAX_BOOKS books by touch time. packAll's
+  // entries are fresh objects, so deleting here never touches `mine` (the local store).
+  // rebuild() deliberately does NOT use this — the merged/resume view reads the FULL
+  // local store; only the wire copy is capped.
+  function legacyProjection() {
+    const o = packAll();
+    const keys = Object.keys(o.books);
+    if (keys.length > MAX_BOOKS) {
+      keys.sort((a, b) => ((mine.books[a] || {})._ts || 0) - ((mine.books[b] || {})._ts || 0))
+        .slice(0, keys.length - MAX_BOOKS).forEach((k) => delete o.books[k]);
+    }
+    return o;
+  }
   // Size-bound the summary: drop the oldest books' per-chapter maps first, then whole
   // books, until it fits — book-level records (small) survive longest.
   function serialize() {
-    const o = packAll();
-    const order = Object.keys(mine.books).sort((a, b) => (mine.books[a]._ts || 0) - (mine.books[b]._ts || 0));
+    const o = legacyProjection();
+    const order = Object.keys(o.books).sort((a, b) => ((mine.books[a] || {})._ts || 0) - ((mine.books[b] || {})._ts || 0));
     let i = 0;
     while (JSON.stringify(o).length > MAX_JSON && i < order.length) {
       const k = order[i++]; const e = o.books[k]; if (!e) continue;
