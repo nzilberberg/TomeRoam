@@ -438,6 +438,40 @@ test('a STALE persisted ratingKey hint self-heals on 404 instead of looping fore
   assert.equal((await store.readAll()).entries.length, 1);
 });
 
+test('a purge in UNCOMMITTED split debris is never harvested — destructive authority follows the tree, not the scan', async () => {
+  const fake = fakeServer();
+  const store = makeStore(fake);
+  // Authoritative root WITHOUT any purge.
+  const small = BOOKS.slice(0, 3).map((b, i) => entry(b, T0 + i));
+  store.ensurePublished(small, {});
+  await store.flush();
+
+  // A delete triggers a purge; the grown snapshot overflows → split children are
+  // written (carrying the purge) and the redirect write CRASHES: the transaction
+  // never commits and the caller refuses the deletion.
+  fake.state.crashWhen = (title, text) => title === `pb_prog2_${DEV}_p` && textIsRedirect.cache.get(text);
+  const bulk = BOOKS.slice(0, 30).map((b, i) => entry(b, T0 + 100 + i));
+  store.ensurePublished(bulk, { 'pbpwa-victim-B': T0 + 999 });
+  await store.flush();
+  fake.state.crashWhen = null;
+  assert.equal(store.syncState().unsynced, true, 'the pass failed at the commit');
+
+  // Case 1: parent (pre-purge data) still present and authoritative.
+  const reader = makeStore(fake, { deviceId: 'devreader' });
+  const r1 = await reader.readAll();
+  assert.equal(r1.purges['pbpwa-victim-B'], undefined, 'debris children contribute NO purge while the parent holds data');
+  assertSameEntries(r1.entries, small, 'parent data still served');
+
+  // Case 2: parent later vanishes → subtree degraded; still no purge, no entries.
+  let rootRk = null;
+  for (const [rk, b] of fake.boards) if (b.title === `pb_prog2_${DEV}_p`) rootRk = rk;
+  fake.boards.delete(rootRk);
+  const r2 = await reader.readAll();
+  assert.ok(r2.degraded.some((d) => d.dev === DEV), 'degraded subtree');
+  assert.equal(r2.entries.length, 0);
+  assert.equal(r2.purges['pbpwa-victim-B'], undefined, 'an orphan pair contributes neither records NOR purges');
+});
+
 test('identity purges ride the verified payloads and round-trip through readAll (max-ts merge)', async () => {
   const fake = fakeServer();
   const store = makeStore(fake, { maxRequestBytes: 8000 });

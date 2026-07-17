@@ -88,7 +88,9 @@ const GeneralScreen = (() => {
           : `Delete "${dev.name || dev.key}"?\n\nIts recorded positions are DELETED everywhere and its boards removed from Plex. Books you also played on other devices keep their newer progress. A live device you delete keeps playing and re-registers itself.`;
         if (!confirm(msg)) return;
         const r = await d.Progress.deleteDevice(dev);
-        d.toast(r.ok ? (dev.unresolved ? 'Storage removed' : 'Device deleted') : 'Delete failed: ' + r.error);
+        d.toast(r.ok ? (dev.unresolved ? 'Storage removed' : 'Device deleted')
+          : r.pending ? 'Delete pending — its boards stay until the deletion is safely published'
+            : 'Delete failed: ' + r.error);
       });
       btn(ign[dev.key] ? 'Unignore' : 'Ignore', async () => { setIgnored(dev.key, !ign[dev.key]); });
       row.appendChild(label); row.appendChild(ctl);

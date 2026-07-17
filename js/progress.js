@@ -687,7 +687,13 @@ const Progress = (() => {
       // copies would resurrect the "deleted" identity.
       await shards.flush();
       const st = shards.syncState();
-      if (st.unsynced || st.lastError) return { ok: false, error: st.lastError || 'purge not durably published — boards kept' };
+      // Refusal ≠ rollback. The purge intent is durable locally and MUST stay
+      // armed: a partially-landed publish may already carry it on some verified
+      // payloads, so un-setting purged[id] here would let our own boards re-teach
+      // it to us later while the user believes nothing happened. The honest
+      // contract is: deletion is PENDING — boards stay until the purge verifies,
+      // and the purge completes on a later successful publish.
+      if (st.unsynced || st.lastError) return { ok: false, pending: true, error: st.lastError || 'purge not yet durably published' };
     } else if (shards) {
       await shards.flush();            // unresolved sets: board cleanup only, nothing destructive to gate
     }

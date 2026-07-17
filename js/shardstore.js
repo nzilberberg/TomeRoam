@@ -341,7 +341,13 @@ const createShardStore = (opts) => {
     const boards = await plex.listBoards();
     const byDev = new Map();   // dev → Map<prefix, {payload?, kind?, corrupt?}>
     const inv = {};            // dev → { id, name, boards:[{rk,prefix}], newestTs } — the device-list inventory
-    const purges = {};         // identityId → max purge ts across every readable payload (LWW-max: debris is harmless)
+    // identityId → max purge ts, collected ONLY from AUTHORITATIVE data nodes in
+    // the walk below. A purge is DESTRUCTIVE authority: uncommitted split debris
+    // must contribute neither records nor purges — otherwise a delete whose
+    // transaction failed before the commit (and was refused) could still destroy
+    // the identity's progress on every reader. ("Debris is harmless" is true for
+    // immutable position records under LWW-max; it is false for tombstones.)
+    const purges = {};
     for (const b of boards) {
       const id = parseTitle(b.title || '');
       if (!id) continue;
@@ -355,9 +361,6 @@ const createShardStore = (opts) => {
           dv.id = p.id;
           const oi = (p.origins || []).indexOf(p.id);
           if (oi >= 0) dv.name = (p.names || [])[oi] || '';
-        }
-        for (const row of p.purge || []) {
-          if (row && row[0] && (row[1] || 0) > (purges[row[0]] || 0)) purges[row[0]] = row[1];
         }
       } catch (e) {
         // Before declaring corruption, retry once with a direct per-playlist read —
@@ -395,6 +398,10 @@ const createShardStore = (opts) => {
         }
         if (node.corrupt) { degraded.push({ dev: d, prefix, reason: node.reason || 'corrupt' }); return; }
         if (node.kind === 'data') {
+          // Purges only from an AUTHORITATIVE node (see the declaration above).
+          for (const row of node.payload.purge || []) {
+            if (row && row[0] && (row[1] || 0) > (purges[row[0]] || 0)) purges[row[0]] = row[1];
+          }
           const es = payloadEntries(node.payload);
           storedRecords += es.length;
           for (const e of es) {
