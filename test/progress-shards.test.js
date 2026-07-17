@@ -646,6 +646,75 @@ test('repeated Delete through CLEANUP failure keeps the original timestamp; post
   assert.ok(rec && rec.ts === ts2 && rec.by === GID, 'records written after the original purge survive');
 });
 
+// ---- .131 review finding: cleanup must preserve FRESH post-purge records ----------
+test('cleanup preserves a post-purge record even INSIDE the 10-minute stability window (verified before boards die)', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  const { grk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.state.failDeletes = true;                        // purge publishes; cleanup stuck
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  const ts1 = T.purgedMap()[GID];
+
+  // The live target writes ONE MINUTE after the purge — its boards are the only
+  // copy, and the record is far too fresh for the ordinary replication gate.
+  const ts2 = ts1 + 60 * 1000;
+  await srv.plex.writeSummary(grk, JSON.stringify({
+    v: 1, id: GID, name: 'Old iPhone',
+    books: { 7007: { bk: { t: 'trN', o: 3000, cum: 3000, tot: 9000000, ts: ts2 } } },
+  }));
+  NOW = ts2 + 30 * 1000;                               // deliberately INSIDE STABLE_MS — do not dodge the race
+  srv.state.failDeletes = false;                       // cleanup heals immediately
+  await T.poll();                                      // must preserve-then-delete, not delete-then-lose
+
+  assert.ok(!srv.boards.has(grk), 'cleanup completed');
+  const rep = T.replicaBooks()['7007'];
+  assert.ok(rep && rep.bk && rep.bk.ts === ts2 && rep.bk.origin === GID, 'fresh post-purge record captured into the replica FIRST');
+  const payload = await Fmt.decode(srv.byTitle(rootTitle).summary);
+  const row = payload.bk.find((r) => r[0] === '7007');
+  assert.ok(row && row[5] === ts2, 'and verifiably published in OUR shards before the only other copy was destroyed');
+
+  await T.poll();                                      // a later poll (boards gone) must still see it
+  const rec = Progress.bookRecord('7007');
+  assert.ok(rec && rec.ts === ts2 && rec.by === GID, 'the record outlives the deleted boards');
+});
+
+test('cleanup REFUSES to delete boards while the post-purge preservation cannot be verified', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  const { grk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.state.failDeletes = true;
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  const ts1 = T.purgedMap()[GID];
+  const ts2 = ts1 + 60 * 1000;
+  await srv.plex.writeSummary(grk, JSON.stringify({
+    v: 1, id: GID, name: 'Old iPhone',
+    books: { 7007: { bk: { t: 'trN', o: 3000, cum: 3000, tot: 9000000, ts: ts2 } } },
+  }));
+  NOW = ts2 + 30 * 1000;
+  srv.state.failDeletes = false;                       // deletes work again…
+  const realWrite = srv.plex.writeSummary;
+  srv.plex.writeSummary = async () => 200;             // …but publication is silently discarded
+  await T.poll();
+  assert.ok(srv.boards.has(grk), 'boards KEPT — the fresh record cannot be verifiably preserved yet');
+  assert.ok(Progress.pendingDeletes()[g.key], 'transaction stays open');
+
+  srv.plex.writeSummary = realWrite;                   // publication heals
+  await T.poll();
+  assert.ok(!srv.boards.has(grk), 'now cleanup completes');
+  const rec = Progress.bookRecord('7007');
+  assert.ok(rec && rec.ts === ts2, 'record preserved through the whole ordeal');
+});
+
 test('SURFACE: a corrupted shard reads as degraded in syncState, never as empty', async () => {
   await fresh();
   Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 90000, tot: 3600000 });

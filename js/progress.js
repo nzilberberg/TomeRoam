@@ -741,6 +741,38 @@ const Progress = (() => {
     return r.failed.length ? { ok: false, deleted: r.deleted, error: 'some boards could not be removed — try again' } : { ok: true, deleted: r.deleted };
   }
 
+  // Before destroying a deleted identity's boards, capture every record it wrote
+  // AFTER the purge — IMMEDIATELY, bypassing the ordinary 10-minute replication
+  // stability gate. That gate exists to stop write churn from a live peer's
+  // moving position; it must never govern destructive cleanup, where the target's
+  // boards may hold the ONLY copy of legitimate post-purge listening. Returns
+  // true only when any captured record is verifiably published in OUR shards
+  // (read-back), or nothing needed capturing.
+  async function preservePostPurgeRecords(entry) {
+    if (!entry.id) return true;
+    let changed = false;
+    for (const src of peerBoards.concat(shardBoards)) {
+      if (!src || src.id !== entry.id) continue;
+      for (const book in (src.books || {})) {
+        const bk = src.books[book].bk;
+        if (!bk || (bk.ts || 0) <= entry.purgeTs) continue;    // at/before the purge = deleted data
+        const cur = replica.books[book];
+        if (cur && cur.bk && (cur.bk.ts || 0) >= (bk.ts || 0)) continue;
+        replica.books[book] = Object.assign({}, cur, {
+          bk: { t: bk.t, o: bk.o || 0, cum: bk.cum || 0, tot: bk.tot || 0, ts: bk.ts || 0, origin: entry.id, name: src.name || '' },
+        });
+        changed = true;
+      }
+    }
+    if (!changed) return true;
+    saveReplica();
+    scheduleShardPublish(true);
+    if (!shards) return true;
+    await shards.flush();
+    const st = shards.syncState();
+    return !st.unsynced && !st.lastError;
+  }
+
   // Finish a (possibly long-pending) deletion: remove the identity's boards using
   // the FRESHEST inventory we have (boards can change while pending). The queue
   // entry — and with it the ORIGINAL purge timestamp — is cleared ONLY when every
@@ -748,6 +780,10 @@ const Progress = (() => {
   // the remaining boards) so the next poll retries and a re-pressed Delete stays
   // an idempotent continuation, never a wider deletion.
   async function completeDelete(entry) {
+    if (!(await preservePostPurgeRecords(entry))) {
+      dbg('PROG', `delete of ${entry.name || entry.key}: post-purge records not yet verifiably preserved — boards kept`);
+      return { done: false, deleted: 0 };
+    }
     const cur = devices().find((x) => x.key === entry.key);
     const r = await removeDeviceBoards({
       key: entry.key, id: entry.id,
