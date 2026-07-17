@@ -40,6 +40,7 @@ const GeneralScreen = (() => {
     if (!list || !d.Progress || !d.Progress.devices) return;
     if (refresh) { try { await d.Progress.refresh(); } catch { /* offline — render what we know */ } }
     const ign = ignored();
+    const pending = d.Progress.pendingDeletes ? d.Progress.pendingDeletes() : {};
     const all = d.Progress.devices();
     const vis = all.filter((x) => showIgnored || !ign[x.key]);
     list.textContent = '';
@@ -55,7 +56,7 @@ const GeneralScreen = (() => {
       const label = document.createElement('span');
       label.className = 'opt-label';
       label.innerHTML = '<span></span><div class="opt-sub"></div>';
-      label.firstChild.textContent = (dev.name || (dev.unresolved ? 'Unlinked storage (old app version)' : '(unnamed device)')) + (ign[dev.key] ? ' · ignored' : '');
+      label.firstChild.textContent = (dev.name || (dev.unresolved ? 'Unlinked storage (old app version)' : '(unnamed device)')) + (ign[dev.key] ? ' · ignored' : '') + (pending[dev.key] ? ' · delete pending' : '');
       label.lastChild.textContent = agoStr(dev.lastSeen) + (dev.quiet ? '' : ' · active');
       const ctl = document.createElement('span');
       ctl.className = 'opt-ctl';
@@ -71,8 +72,9 @@ const GeneralScreen = (() => {
       };
       // Adopt: always offered when the identity is known — the reinstall case it
       // exists for happens MINUTES after the ghost's last activity, so no timer
-      // gates it. An apparently-active device just gets a louder warning.
-      if (dev.id) {
+      // gates it. An apparently-active device just gets a louder warning. (Not
+      // offered mid-deletion: adopting an identity you're deleting is a conflict.)
+      if (dev.id && !pending[dev.key]) {
         btn('Adopt', async () => {
           const activeWarn = dev.quiet ? '' : '\n\n⚠ This device looks ACTIVE right now — if it is another live device (not your old self), adopting it will mislabel its listening as yours.';
           if (!confirm(`Adopt "${dev.name || dev.key}"?\n\nIts listening positions become this device's own (green turns orange) and its old boards are removed. Only do this if that device was YOU — e.g. this phone, before it was reinstalled.${activeWarn}`)) return;

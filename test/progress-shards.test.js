@@ -506,6 +506,78 @@ test('a pre-.123 shard set (no writer id) associates by dev8 suffix; unmatched s
   assert.ok(z && z.unresolved, 'unmatched old set flagged unresolved (UI must not claim Delete removes its records)');
 });
 
+// ---- .129 review finding: pending deletions must COMPLETE, idempotently ----------
+test('a pending delete COMPLETES automatically once the purge publishes — no second user action', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  const { grk, srk, prk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  const realWrite = srv.plex.writeSummary;
+  srv.plex.writeSummary = async () => 200;             // silent discard
+  NOW += 1000;
+  const r1 = await Progress.deleteDevice(g);
+  assert.equal(r1.ok, false);
+  assert.equal(r1.pending, true);
+  assert.ok(srv.boards.has(grk) && srv.boards.has(srk) && srv.boards.has(prk), 'boards kept while pending');
+
+  srv.plex.writeSummary = realWrite;                   // connectivity heals
+  await T.poll();                                      // an ordinary later poll — NOT a second Delete
+  assert.ok(!srv.boards.has(grk) && !srv.boards.has(srk) && !srv.boards.has(prk), 'cleanup finished automatically');
+  assert.deepEqual(Progress.pendingDeletes(), {}, 'pending entry cleared');
+  assert.ok(!Progress.devices().some((x) => x.id === GID), 'gone from the device list');
+});
+
+test('re-pressing Delete while pending REUSES the original purge timestamp (idempotent retry, not a wider deletion)', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  srv.plex.writeSummary = async () => 200;             // stays broken throughout
+  NOW += 1000;
+  await Progress.deleteDevice(g);
+  const ts1 = T.purgedMap()[GID];
+  assert.ok(ts1 > 0);
+  NOW += 7777;
+  const again = await Progress.deleteDevice(Progress.devices().find((x) => x.id === GID) || g);
+  assert.equal(again.pending, true);
+  assert.equal(T.purgedMap()[GID], ts1, 'the purge floor did NOT advance — a retry is not a new deletion');
+});
+
+test('records the target created AFTER the original purge survive the delayed cleanup', async () => {
+  await fresh();
+  const ts = NOW - 30 * 60 * 1000;
+  const { grk } = await plantGhost(ts);
+  Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 12000, tot: 3600000 });
+  await T.poll();
+  const g = Progress.devices().find((x) => x.id === GID);
+
+  const realWrite = srv.plex.writeSummary;
+  srv.plex.writeSummary = async () => 200;
+  NOW += 1000;
+  await Progress.deleteDevice(g);                      // pending @ ts1
+  const ts1 = T.purgedMap()[GID];
+
+  // The ghost was actually a live device: it publishes a NEW position after ts1.
+  const ts2 = ts1 + 60 * 1000;
+  srv.plex.writeSummary = realWrite;                   // heal — and let the ghost republish first
+  await realWrite(grk, JSON.stringify({
+    v: 1, id: GID, name: 'Old iPhone',
+    books: { 7007: { bk: { t: 'trN', o: 3000, cum: 3000, tot: 9000000, ts: ts2 } } },
+  }));
+  NOW = ts2 + 11 * 60 * 1000;                          // stable → adoptable into our replica
+  await T.poll();                                      // adopts ts2, then completes the pending delete
+  assert.equal(T.purgedMap()[GID], ts1, 'floor unchanged by completion');
+  assert.ok(!srv.boards.has(grk), 'boards removed by the delayed cleanup');
+  const rec = Progress.bookRecord('7007');
+  assert.ok(rec && rec.ts === ts2 && rec.by === GID, 'post-purge listening survives the cleanup (preserved via the replica)');
+});
+
 test('SURFACE: a corrupted shard reads as degraded in syncState, never as empty', async () => {
   await fresh();
   Progress.recordBook('8913', { t: 'tr1', o: 12000, cum: 90000, tot: 3600000 });

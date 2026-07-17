@@ -25,12 +25,13 @@ const Progress = (() => {
   const MAX_JSON = 7000;             // keep the published legacy summary comfortably under Plex's limit
   const STABLE_MS = 10 * 60 * 1000;  // a foreign record this old is "stable" → adopted into the replica
                                      // (guards write churn: a LIVE peer's moving position is not re-published)
-  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers', replica: 'pb_progReplica', shardCache: 'pb_progShardCache', shardKeys: 'pb_prog2Keys', purged: 'pb_progPurged' };
+  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers', replica: 'pb_progReplica', shardCache: 'pb_progShardCache', shardKeys: 'pb_prog2Keys', purged: 'pb_progPurged', pendingDel: 'pb_progPendingDel' };
 
   let seed = null;
   let mine = load();                  // our OWN authored records (persisted, survives offline)
   let replica = loadReplica();        // ADOPTED foreign records (immutable: original ts + origin — never re-stamped)
   let purged = loadPurged();          // PER-IDENTITY purge tombstones: { <identityId>: ts } — "Delete device" (see deleteDevice)
+  let pendingDeletes = loadPendingDeletes();   // durable cleanup queue: deletions whose purge isn't verified-published yet
   let merged = { books: {} };         // merged view across mine + replica + peers + shards (the app's source of truth)
   let peerBoards = [];
   let shardBoards = [];               // per-origin pseudo-boards from the last shard read (cached like peers)
@@ -127,6 +128,16 @@ const Progress = (() => {
     return {};
   }
   function savePurged() { try { localStorage.setItem(LS.purged, JSON.stringify(purged)); } catch {} }
+  // The durable pending-cleanup queue: a Delete whose purge hasn't passed verified
+  // publication yet keeps its DESCRIPTOR here (identity, ORIGINAL purge timestamp,
+  // board ratingKeys) so the operation can finish later — automatically, and
+  // idempotently: a retry reuses the original timestamp instead of widening the
+  // deletion to records created since.
+  function loadPendingDeletes() {
+    try { const o = JSON.parse(localStorage.getItem(LS.pendingDel) || 'null'); if (o && typeof o === 'object') return o; } catch {}
+    return {};
+  }
+  function savePendingDeletes() { try { localStorage.setItem(LS.pendingDel, JSON.stringify(pendingDeletes)); } catch {} }
   // Drop every replica copy a purge supersedes. Returns whether anything changed.
   function purgeReplica() {
     let changed = false;
@@ -417,6 +428,7 @@ const Progress = (() => {
         adoptStableForeign();   // stable foreign winners → replica → our shards (reinstall/dead-device durability)
       }
       applyPeerResets();   // adopt any peer reset tombstones + drop our own superseded records
+      await completePendingDeletes();   // finish any delete whose purge has since verified
       rebuild(); cbMerged();
       // Once per launch, sweep boards from long-retired devices — presence prunes
       // its pb_dev_ ghosts, but pb_prog_ boards used to live forever, inflating
@@ -674,9 +686,20 @@ const Progress = (() => {
     if (!desc) return { ok: false, error: 'invalid' };
     const isPurge = !!(desc.id && desc.id !== myId());
     if (isPurge) {
-      purged[desc.id] = now();
-      savePurged();
+      // Idempotent: retrying a pending delete REUSES the original purge timestamp.
+      // Stamping now() again would silently widen the deletion to records the
+      // (possibly live) target created after the first attempt.
+      const prior = pendingDeletes[desc.key];
+      const ts = prior ? prior.purgeTs : now();
+      if ((purged[desc.id] || 0) < ts) { purged[desc.id] = ts; savePurged(); }
       applyPurgesLocally();
+      pendingDeletes[desc.key] = {
+        key: desc.key, id: desc.id, name: desc.name || '', purgeTs: ts,
+        legacyRk: desc.legacyRk != null ? desc.legacyRk : (prior ? prior.legacyRk : null),
+        shardDev: desc.shardDev || (prior && prior.shardDev) || null,
+        shardBoards: (desc.shardBoards && desc.shardBoards.length) ? desc.shardBoards : ((prior && prior.shardBoards) || []),
+      };
+      savePendingDeletes();
     }
     schedulePublish();                 // legacy dual-write (old clients) — best-effort
     scheduleShardPublish(true);        // the purge rides the VERIFIED shard payloads
@@ -691,16 +714,55 @@ const Progress = (() => {
       // armed: a partially-landed publish may already carry it on some verified
       // payloads, so un-setting purged[id] here would let our own boards re-teach
       // it to us later while the user believes nothing happened. The honest
-      // contract is: deletion is PENDING — boards stay until the purge verifies,
-      // and the purge completes on a later successful publish.
+      // contract is: deletion is PENDING — the entry above completes it (boards
+      // removed, queue cleared) from poll() once a publish verifies.
       if (st.unsynced || st.lastError) return { ok: false, pending: true, error: st.lastError || 'purge not yet durably published' };
+      const deleted = await completeDelete(pendingDeletes[desc.key]);
+      return { ok: true, deleted };
     } else if (shards) {
       await shards.flush();            // unresolved sets: board cleanup only, nothing destructive to gate
     }
     const deleted = await removeDeviceBoards(desc);
     rebuild(); cbMerged();
-    dbg('PROG', `deleted device ${desc.name || desc.key}: purge @${(desc.id && purged[desc.id]) || '-'}; ${deleted} board(s) removed`);
+    dbg('PROG', `deleted device ${desc.name || desc.key}: ${deleted} board(s) removed`);
     return { ok: true, deleted };
+  }
+
+  // Finish a (possibly long-pending) deletion: remove the identity's boards using
+  // the FRESHEST inventory we have (boards can change while pending), then clear
+  // the queue entry. The purge floor itself is already durable and published.
+  async function completeDelete(entry) {
+    const cur = devices().find((x) => x.key === entry.key);
+    const deleted = await removeDeviceBoards({
+      key: entry.key, id: entry.id,
+      legacyRk: cur && cur.legacyRk != null ? cur.legacyRk : entry.legacyRk,
+      shardDev: (cur && cur.shardDev) || entry.shardDev,
+      shardBoards: (cur && cur.shardBoards && cur.shardBoards.length) ? cur.shardBoards : (entry.shardBoards || []),
+    });
+    delete pendingDeletes[entry.key];
+    savePendingDeletes();
+    rebuild(); cbMerged();
+    dbg('PROG', `deleted device ${entry.name || entry.key}: purge @${entry.purgeTs}; ${deleted} board(s) removed`);
+    return deleted;
+  }
+
+  // Poll hook: once the shard writer is settled-and-clean AND a snapshot carrying
+  // the current purge map has been handed to it this session (lastShardPub > 0 —
+  // a clean state from a session that never published proves nothing), every
+  // pending deletion completes automatically. If the writer is still unsettled,
+  // nudge it (flush) so healing connectivity finishes the job without user action.
+  async function completePendingDeletes() {
+    if (!shards || !Object.keys(pendingDeletes).length) return;
+    if (!lastShardPub) { scheduleShardPublish(true); }
+    let st = shards.syncState();
+    if (st.unsynced || st.lastError) {
+      await shards.flush();
+      st = shards.syncState();
+      if (st.unsynced || st.lastError) return;   // still failing — next poll retries
+    }
+    for (const k of Object.keys(pendingDeletes)) {
+      try { await completeDelete(pendingDeletes[k]); } catch { /* next poll retries */ }
+    }
   }
 
   // Reconnect / backgrounding: push everything out NOW (the rate-limit window
@@ -730,6 +792,7 @@ const Progress = (() => {
   return {
     init, hydrate, setSeed, setActive, flush, refresh, syncState,
     devices, adoptIdentity, deleteDevice,
+    pendingDeletes: () => Object.assign({}, pendingDeletes),
     recordTrack, recordBook, clearBook, resetBook,
     bookRecord, myBookRecord, trackRecord, trackPct, isMine, myId,
     // Test-only hook (mirrors Plex._test): reach the pure merge/serialize/trim
@@ -737,7 +800,7 @@ const Progress = (() => {
     // logic without a network or the poll() timer. Not used by the app.
     _test: {
       reset() {
-        mine = { v: 1, books: {} }; replica = { v: 1, books: {} }; purged = {};
+        mine = { v: 1, books: {} }; replica = { v: 1, books: {} }; purged = {}; pendingDeletes = {};
         peerBoards = []; shardBoards = []; merged = { books: {} };
         legacyInv = []; shardInv = {};
         prunedSession = false; dirty = false; dirtySince = 0; lastShardPub = 0;
