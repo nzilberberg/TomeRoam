@@ -778,6 +778,17 @@ const Plex = (() => {
     try { const b = await connect(); await fetch(b + '/playlists/' + rk, { method: 'DELETE', headers: plexHeaders({ 'X-Plex-Token': token() }) }); } catch {}
   }
 
+  // Fresh read of ONE playlist's summary — the content read-back the durable
+  // progress shards verify every write with (Plex returns 200 for writes it
+  // silently discards, so status is never trusted). null = read failed.
+  async function readPlaylistSummary(rk) {
+    try {
+      const one = await api(`/playlists/${rk}`);
+      const m = one.Metadata && one.Metadata[0];
+      return m ? (m.summary || '') : null;
+    } catch { return null; }
+  }
+
   // Shared "hidden playlist board" primitive — presence.js, progress.js, and
   // logpipe.js each used to hand-roll the same ensure/publish/read trio. A board
   // is one hidden audio playlist (`<prefix><deviceId>`) whose SUMMARY carries a
@@ -836,7 +847,7 @@ const Plex = (() => {
     getAuthors, getBooks, getAuthorBooks, getAuthor,
     getTrackInfo, clearCaches, foregroundBusy,
     streamUrl, artUrl, writeTimeline, getServerName, getBase, getConnKind,
-    getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist, makeBoard,
+    getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist, makeBoard, readPlaylistSummary,
     resetBookProgress,
     notificationWsUrl,
     // Drop the cached base + any in-flight probe so the NEXT connect() re-resolves a

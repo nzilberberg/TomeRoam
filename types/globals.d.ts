@@ -57,6 +57,8 @@ declare var Store: any;
 declare var Net: any;
 declare var SyncQueue: any;
 declare var Progress: any;
+declare var ProgressFmt: any;
+declare var createShardStore: any;
 declare var Presence: any;
 declare var Warmer: any;
 declare var Browse: any;

@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.120';
+  const BUILD = '2026-07-17.121';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -473,6 +473,26 @@
       row.querySelector('#pbdbg-open').addEventListener('click', open);
       row.querySelector('#pbdbg-diag').addEventListener('click', openDiag);
       row.querySelector('#pbdbg-console').addEventListener('click', openConsole);
+    }
+    // SURFACE (durable-progress plan): sync state is visible, never silent — a
+    // degraded shard or an unverified write shows here instead of being absorbed.
+    if (diag && !document.getElementById('pbdbg-sync')) {
+      const row = document.createElement('div');
+      row.className = 'opt-row';
+      row.innerHTML = '<span class="opt-label">Progress sync</span>' +
+        '<span class="opt-ctl"><span id="pbdbg-sync" style="opacity:.8;font-size:13px">—</span></span>';
+      diag.appendChild(row);
+      const paint = () => {
+        const el = document.getElementById('pbdbg-sync');
+        const P = window.Progress;
+        if (!el || !P || !P.syncState) return;
+        const s = P.syncState();
+        const n = s.stats ? ` · ${s.stats.uniqueRecords} records` : '';
+        el.textContent = (s.degraded && s.degraded.length) ? `degraded (${s.degraded.length})` + n
+          : s.unsynced ? (s.lastError ? 'retrying: ' + s.lastError : 'syncing…') : 'synced' + n;
+      };
+      paint();
+      setInterval(() => { if (!diag.classList.contains('hidden')) paint(); }, 3000);
     }
     const opt = document.getElementById('options');
     if (opt && !opt.querySelector('.buildstamp')) {

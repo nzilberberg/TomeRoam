@@ -14,17 +14,27 @@
 //     tr: { <track>: [o, d, ts] } } } }         // per-chapter: offset, duration, ts (ms)
 const Progress = (() => {
   const PREFIX = 'pb_prog_';
+  const SHARD_PREFIX = 'pb_prog2_';  // NOT matched by a PREFIX scan ('pb_prog_' ≠ 'pb_prog2'
+                                     // at char 8) — but the legacy path still filters shard
+                                     // titles explicitly: if either prefix is ever renamed
+                                     // into overlap, the stale-board pruner would read TR2
+                                     // shards as dead JSON and DELETE them
   const POLL_MS = 20000;              // durable data changes slowly; presence carries the fast path
   const PUB_DEBOUNCE = 4000;          // coalesce a burst of records into one playlist PUT
-  const MAX_BOOKS = 16;              // cap books on the PUBLISHED board only (LRU by touch) — never the local store
-  const MAX_JSON = 7000;             // keep the published summary comfortably under Plex's limit
-  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers' };
+  const MAX_BOOKS = 16;              // cap books on the PUBLISHED legacy board only (LRU by touch) — never the local store
+  const MAX_JSON = 7000;             // keep the published legacy summary comfortably under Plex's limit
+  const STABLE_MS = 10 * 60 * 1000;  // a foreign record this old is "stable" → adopted into the replica
+                                     // (guards write churn: a LIVE peer's moving position is not re-published)
+  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers', replica: 'pb_progReplica', shardCache: 'pb_progShardCache', shardKeys: 'pb_prog2Keys' };
 
   let seed = null;
   let mine = load();                  // our OWN authored records (persisted, survives offline)
-  let merged = { books: {} };         // merged view across mine + peers (the app's source of truth)
+  let replica = loadReplica();        // ADOPTED foreign records (immutable: original ts + origin — never re-stamped)
+  let merged = { books: {} };         // merged view across mine + replica + peers + shards (the app's source of truth)
   let peerBoards = [];
+  let shardBoards = [];               // per-origin pseudo-boards from the last shard read (cached like peers)
   let pubTimer = null, pollTimer = null, active = false, dirty = false;
+  let shardStats = null;              // last read's {uniqueRecords, storedRecords, devices} for diagnostics
   let prunedSession = false;          // one-shot stale-board sweep per app launch
   let cbMerged = () => {};
 
@@ -35,6 +45,31 @@ const Progress = (() => {
   // Our own hidden-playlist board (shared primitive in plex.js). Guarded for the
   // Node unit tests, which load this module without plex.js.
   const board = (typeof Plex !== 'undefined' && Plex.makeBoard) ? Plex.makeBoard(PREFIX, LS.board) : null;
+
+  // The sharded FULL-history store (durable-progress plan: FORMAT + SHARD +
+  // serialized read-back-verified writes). The legacy board above stays the
+  // bounded "recent head" old clients read; the shards carry everything.
+  const shards = (board && typeof createShardStore !== 'undefined' && typeof ProgressFmt !== 'undefined')
+    ? createShardStore({
+      deviceId: (Plex.getClientId() || 'dev').replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase(),
+      encode: ProgressFmt.encode,
+      decode: ProgressFmt.decode,
+      plex: {
+        createBoard: (title) => (seed ? Plex.createPlaylist(title, seed) : Promise.resolve(null)),
+        writeSummary: (rk, text) => Plex.setPlaylistSummary(rk, text),
+        readSummary: (rk) => Plex.readPlaylistSummary(rk),
+        listBoards: () => Plex.listBoards(SHARD_PREFIX),
+      },
+      // Honest budget: the cap is on the whole request-target, so count the base
+      // URL + path beside the payload (measured cap ~32.7KB; 8KB default budget).
+      requestOverhead: () => (((Plex.getBase && Plex.getBase()) || '').length + 64),
+      keys: {
+        load: () => { try { return JSON.parse(localStorage.getItem(LS.shardKeys) || '{}'); } catch { return {}; } },
+        save: (o) => { try { localStorage.setItem(LS.shardKeys, JSON.stringify(o)); } catch {} },
+      },
+      log: (t, m) => dbg(t, m),
+    })
+    : null;
 
   function load() {
     try { const o = JSON.parse(localStorage.getItem(LS.mine) || 'null'); if (o && o.books) return o; } catch {}
@@ -52,8 +87,105 @@ const Progress = (() => {
   // paint, BEFORE init/polling — the app calls this pre-render so the tile resume/peer
   // line isn't empty on frame 1 (init/rebuild otherwise runs post-connect). The live
   // poll then reconciles any change in place (LWW).
-  function hydrate() { restorePeerBoards(); rebuild(); }
+  function hydrate() { restorePeerBoards(); restoreShardBoards(); rebuild(); }
   function saveMine() { try { localStorage.setItem(LS.mine, JSON.stringify(mine)); } catch {} }
+
+  // ---- replica: adopted foreign records (the [v5] replication kept from RECOVER) --
+  // { books: { <book>: { bk?: {t,o,cum,tot,ts,origin,name}, rst?: ms, rstOrigin? } } }
+  // Records are IMMUTABLE COPIES — original timestamp + origin device, never
+  // re-stamped (a re-stamped old record would look newly authored and win LWW,
+  // silently overwriting a newer position). This is what makes a reinstall cost
+  // identity, not data: every device's shards converge on the full merged history.
+  function loadReplica() {
+    try { const o = JSON.parse(localStorage.getItem(LS.replica) || 'null'); if (o && o.books) return o; } catch {}
+    return { v: 1, books: {} };
+  }
+  function saveReplica() { try { localStorage.setItem(LS.replica, JSON.stringify(replica)); } catch {} }
+  // Group replica records into per-origin pseudo-boards so rebuild() attributes
+  // them exactly like live peer boards (by/name ride the source).
+  function groupByOrigin(recs) {
+    const by = {};
+    for (const book in recs) {
+      const r = recs[book];
+      if (r.bk) {
+        const src = by[r.bk.origin] || (by[r.bk.origin] = { v: 1, id: r.bk.origin, name: r.bk.name || '', books: {} });
+        const slot = src.books[book] || (src.books[book] = { bk: null, tr: {} });
+        slot.bk = { t: r.bk.t, o: r.bk.o, cum: r.bk.cum, tot: r.bk.tot, ts: r.bk.ts };
+      }
+      if (r.rst) {
+        const oid = r.rstOrigin || (r.bk && r.bk.origin) || 'replica';
+        const src = by[oid] || (by[oid] = { v: 1, id: oid, name: '', books: {} });
+        const slot = src.books[book] || (src.books[book] = { bk: null, tr: {} });
+        if (!slot.rst || r.rst > slot.rst) slot.rst = r.rst;
+      }
+    }
+    return Object.values(by);
+  }
+  const replicaSources = () => groupByOrigin(replica.books);
+
+  // Adopt STABLE foreign winners into the replica. Stability (ts older than
+  // STABLE_MS) keeps a live peer's constantly-moving position out of our shards —
+  // we re-publish a peer's record once per listening session, not per heartbeat.
+  function adoptStableForeign() {
+    let changed = false;
+    const cutoff = now() - STABLE_MS;
+    const consider = (book, bk, origin, name) => {
+      if (!bk || origin === myId() || (bk.ts || 0) > cutoff) return;
+      const cur = replica.books[book];
+      if (cur && cur.bk && (cur.bk.ts || 0) >= (bk.ts || 0)) return;
+      replica.books[book] = Object.assign({}, cur, { bk: { t: bk.t, o: bk.o || 0, cum: bk.cum || 0, tot: bk.tot || 0, ts: bk.ts || 0, origin, name: name || '' } });
+      changed = true;
+    };
+    const considerRst = (book, rst, origin) => {
+      if (!rst) return;
+      const cur = replica.books[book];
+      if (cur && (cur.rst || 0) >= rst) return;
+      replica.books[book] = Object.assign({}, cur, { rst, rstOrigin: origin || '' });
+      changed = true;
+    };
+    for (const src of peerBoards.concat(shardBoards)) {
+      if (!src || src.id === myId()) continue;
+      for (const book in (src.books || {})) {
+        const s = src.books[book];
+        consider(book, s.bk, src.id, src.name);
+        considerRst(book, s.rst, src.id);
+      }
+    }
+    if (changed) { saveReplica(); schedulePublish(); }
+    return changed;
+  }
+
+  // The FULL publication snapshot for the shards: my authored records merged with
+  // the replica (newest per book), plus every tombstone floor. Never bounded —
+  // splitting is the shard store's job.
+  function entriesForPublish() {
+    const out = {};
+    for (const book in mine.books) {
+      const b = mine.books[book], e = {};
+      if (b.bk) e.bk = { t: b.bk.t, o: b.bk.o || 0, cum: b.bk.cum || 0, tot: b.bk.tot || 0, ts: b.bk.ts || 0, origin: myId(), name: myName() };
+      if (b.rst) { e.rst = b.rst; e.rstOrigin = myId(); }
+      if (e.bk || e.rst) out[book] = e;
+    }
+    for (const book in replica.books) {
+      const r = replica.books[book];
+      const e = out[book] || (out[book] = {});
+      if (r.bk && (!e.bk || (r.bk.ts || 0) > (e.bk.ts || 0))) e.bk = r.bk;
+      if (r.rst && (!e.rst || r.rst > e.rst)) { e.rst = r.rst; e.rstOrigin = r.rstOrigin || ''; }
+    }
+    return Object.keys(out).map((book) => Object.assign({ book }, out[book]));
+  }
+  // Shard entries (flat, per-book, origin-attributed) → per-origin pseudo-boards.
+  function shardEntriesToBoards(entries) {
+    const recs = {};
+    for (const e of entries) {
+      const cur = recs[e.book] || (recs[e.book] = {});
+      if (e.bk && (!cur.bk || (e.bk.ts || 0) > (cur.bk.ts || 0))) cur.bk = e.bk;
+      if (e.rst && (!cur.rst || e.rst > cur.rst)) { cur.rst = e.rst; cur.rstOrigin = e.rstOrigin || ''; }
+    }
+    return groupByOrigin(recs);
+  }
+  function cacheShardBoards() { try { localStorage.setItem(LS.shardCache, JSON.stringify(shardBoards || [])); } catch {} }
+  function restoreShardBoards() { try { const p = JSON.parse(localStorage.getItem(LS.shardCache) || 'null'); if (Array.isArray(p) && p.length) shardBoards = p; } catch {} }
   function bookSlot(book) { return mine.books[book] || (mine.books[book] = { bk: null, tr: {}, _ts: 0 }); }
   function touch(book) { const b = mine.books[book]; if (b) b._ts = now(); }
   // STOP-DELETING (the durable-progress plan's task 1): the local store is NEVER
@@ -101,6 +233,10 @@ const Progress = (() => {
   function schedulePublish() { dirty = true; if (pubTimer || !active) return; pubTimer = setTimeout(() => { pubTimer = null; publish(); }, PUB_DEBOUNCE); }
   async function publish() {
     if (!dirty || !board) return;
+    // The shards get the FULL history (serialized, read-back-verified, splits as
+    // needed — all inside the shard store). The legacy board keeps publishing the
+    // bounded recent head so old clients see zero change.
+    if (shards) shards.ensurePublished(entriesForPublish());
     // board.publish handles ensure/create, and 404 → recreate-next-time vs
     // transient → keep-board (no churn). 2xx = our records are on the server.
     const status = await board.publish(serialize(), () => seed);
@@ -146,10 +282,30 @@ const Progress = (() => {
   // ---- read + merge ---------------------------------------------------------
   async function poll() {
     try {
-      const boards = await board.readAll();
+      // ⚠ 'pb_prog_' is a string-prefix of 'pb_prog2_': the legacy path must EXCLUDE
+      // shard boards, or the pruner below reads TR2 payloads as unparseable-dead
+      // JSON and deletes the shard set.
+      // Explicit guard: shard boards must never enter the legacy parse/prune path
+      // (today the prefixes don't overlap; this keeps that a stated invariant
+      // rather than a character coincidence).
+      const boards = (await board.readAll()).filter((b) => !(b.title || '').startsWith(SHARD_PREFIX));
       const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
       peerBoards = parsed.filter((p) => p && p.id && p.id !== myId());
       cachePeerBoards();   // persist for next launch's first-frame paint (see restorePeerBoards)
+      if (shards) {
+        try {
+          const r = await shards.readAll();
+          shardBoards = shardEntriesToBoards(r.entries);
+          cacheShardBoards();
+          // Replication amplification stays a KNOWN cost, not a mystery: log
+          // unique-vs-stored only when it changes (not every 20s poll).
+          const sig = `${r.stats.uniqueRecords}/${r.stats.storedRecords}/${r.stats.devices}`;
+          if (sig !== (shardStats && shardStats.sig)) dbg('PROG', `shards: ${r.stats.uniqueRecords} unique records, ${r.stats.storedRecords} stored copies across ${r.stats.devices} device(s)`);
+          shardStats = Object.assign({ sig }, r.stats);
+          if (r.degraded.length) dbg('PROG', `shard read degraded: ${r.degraded.map((d) => `${d.dev}/${d.prefix || 'root'}(${d.reason})`).join(' ')}`);
+        } catch (e) { dbg('PROG', 'shard read failed (kept cache): ' + ((e && e.message) || e)); }
+        adoptStableForeign();   // stable foreign winners → replica → our shards (reinstall/dead-device durability)
+      }
       applyPeerResets();   // adopt any peer reset tombstones + drop our own superseded records
       rebuild(); cbMerged();
       // Once per launch, sweep boards from long-retired devices — presence prunes
@@ -182,7 +338,7 @@ const Progress = (() => {
   // reach one.) Returns nothing; flags a republish when it changed our board.
   function applyPeerResets() {
     const peerRst = {};
-    for (const p of peerBoards) for (const bk in (p.books || {})) {
+    for (const p of peerBoards.concat(shardBoards)) for (const bk in (p.books || {})) {
       const r = p.books[bk].rst || 0; if (r > (peerRst[bk] || 0)) peerRst[bk] = r;
     }
     let changed = false;
@@ -212,7 +368,9 @@ const Progress = (() => {
   }
   function rebuild() {
     const m = { books: {} };
-    const sources = [packAll()].concat(peerBoards);   // ours first (authored by myId), then peers
+    // Ours first (authored by myId, wins timestamp ties), then adopted replicas,
+    // live legacy peers, and every device's shard records — all merged LWW.
+    const sources = [packAll()].concat(replicaSources(), peerBoards, shardBoards);
     // Reset floor per book = the newest tombstone across ALL sources. Any bk/tr record
     // at/before its book's floor predates a reset and is suppressed (see resetBook).
     const floor = {};
@@ -260,26 +418,41 @@ const Progress = (() => {
     if (active) { if (!pollTimer) { poll(); pollTimer = setInterval(poll, POLL_MS); } if (dirty) schedulePublish(); }
     else if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
-  function flush() { if (dirty) publish(); }   // reconnect / backgrounding
+  function flush() { if (dirty) publish(); if (shards) shards.flush(); }   // reconnect / backgrounding
+  // SURFACE: the app-visible sync state — degraded shard subtrees and unverified
+  // writes are reported, never silently absorbed. `dirty` covers the legacy head.
+  function syncState() {
+    const s = shards ? shards.syncState() : { unsynced: false, lastError: null, degraded: [] };
+    return { unsynced: dirty || s.unsynced, lastError: s.lastError, degraded: s.degraded, legacyDirty: dirty, stats: shardStats };
+  }
   // Piggyback an external read trigger. Returns the poll promise so callers that
   // NEED the merged data current (syncqueue's conflict decisions) can await it.
   function refresh() { return active ? poll() : Promise.resolve(); }
 
   return {
-    init, hydrate, setSeed, setActive, flush, refresh,
+    init, hydrate, setSeed, setActive, flush, refresh, syncState,
     recordTrack, recordBook, clearBook, resetBook,
     bookRecord, myBookRecord, trackRecord, trackPct, isMine, myId,
     // Test-only hook (mirrors Plex._test): reach the pure merge/serialize/trim
     // internals + closure state so test/progress.test.js can exercise the LWW
     // logic without a network or the poll() timer. Not used by the app.
     _test: {
-      reset() { mine = { v: 1, books: {} }; peerBoards = []; merged = { books: {} }; },
+      reset() {
+        mine = { v: 1, books: {} }; replica = { v: 1, books: {} };
+        peerBoards = []; shardBoards = []; merged = { books: {} };
+        prunedSession = false; dirty = false;
+        if (pubTimer) { clearTimeout(pubTimer); pubTimer = null; }
+        if (shards) shards._test.reset();
+      },
       setPeers(p) { peerBoards = p || []; },
       mineBooks: () => mine.books,
+      replicaBooks: () => replica.books,
       rebuild() { rebuild(); return merged; },
       applyPeerResets, cachePeerBoards, restorePeerBoards, hydrate,
       serialize, packAll,
-      MAX_BOOKS, MAX_JSON,
+      poll, publish, entriesForPublish, adoptStableForeign, shardEntriesToBoards,
+      shards: () => shards,
+      MAX_BOOKS, MAX_JSON, STABLE_MS,
     },
   };
 })();
