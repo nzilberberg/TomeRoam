@@ -337,7 +337,12 @@ function boot(opts = {}) {
   (0, eval)(fs.readFileSync(path.join(ROOT, 'js', 'speed.js'), 'utf8'));
   global.SpeedControl = window.SpeedControl;
 
-  if (opts.lastPlayed) localStorage.setItem('pb_last', JSON.stringify(opts.lastPlayed));
+  // MUST match app.js's `const LAST = 'pb_lastPlayed'` (js/app.js:11). This read the
+  // wrong key ('pb_last') until .152, which made `opts.lastPlayed` silently INERT:
+  // restoreLastPlayed always saw a null snapshot and returned early, so the whole
+  // restore seam — including its supersession guard — was untestable while appearing
+  // available. A fake that is kinder than the real dependency hides the seam it fakes.
+  if (opts.lastPlayed) localStorage.setItem('pb_lastPlayed', JSON.stringify(opts.lastPlayed));
 
   // ---- boot the REAL app.js (a bare IIFE: no exports, self-runs init()) -----
   // Indirect eval so bare identifiers resolve against node's global scope, where

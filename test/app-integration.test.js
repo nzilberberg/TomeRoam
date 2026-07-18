@@ -343,3 +343,85 @@ test('a chapter auto-advancing does not cancel a newer book the user just tapped
     assert.match(h.audio.src, /bookB/, 'the explicit selection wins over the auto-advance');
   } finally { h.dispose(); }
 });
+
+// ── restore seam (.152) ────────────────────────────────────────────────────────
+// Until .152 the harness seeded the WRONG localStorage key, so `opts.lastPlayed` was
+// inert and restoreLastPlayed returned early in every test — the seam looked covered
+// and was not. This first test is the guard on the FIXTURE itself: it fails if the
+// key ever drifts from app.js's `LAST` again, which is what let the bug below hide.
+const LAST_SNAP = { book: 'bookA', track: 'bookA-t1', pos: 90000, ts: 1,
+  title: 'Book A', author: 'Author', chapter: 'Ch 2', thumb: '/a', dur: 600000 };
+
+test('a seeded last-played snapshot actually drives restore (fixture guard, .152)', async () => {
+  const h = boot({ lastPlayed: LAST_SNAP });
+  try {
+    await settle(h);
+    assert.ok(h.log.calls.some((c) => c.name === 'plex.getAlbumTracks' && c.args[0] === 'bookA'),
+      'restoreLastPlayed must fetch the snapshot book — if this fails, opts.lastPlayed is inert again');
+    // the fake's streamUrl is built from partKey (`/parts/<book>/<idx>`), so the
+    // chapter is asserted by INDEX: t1 is the second track, which is what was saved.
+    assert.match(h.audio.src, /\/parts\/bookA\/1/, 'the remembered CHAPTER is what gets restored');
+  } finally { h.dispose(); }
+});
+
+// The guard at js/app.js:1206 (PBLogic.restoreStillCurrent). enterApp() deliberately
+// re-fires while playback exists, so a slow restore metadata read can land after the
+// user has already started another book. Without the check, the restore reassigns ctx
+// and reloads the OLD book over the new one — the element plays B while ctx claims A,
+// and Presence/Progress then mis-attribute B's position to A.
+test('a slow restore must not reload the old book over one the user just tapped (.152)', async () => {
+  const h = boot({ lastPlayed: LAST_SNAP, deferTracks: true });
+  try {
+    await settle(h);                     // restore's getAlbumTracks(bookA) is now in flight
+    tapBook(h, 'bookB');                 // newer explicit selection
+    await settle(h);
+    pending(h, 'bookB').resolve();       // B starts and bumps loadGen
+    await settle(h);
+    assert.match(h.audio.src, /bookB/, 'precondition: B is what is playing');
+    const loadsAfterB = loads(h);
+
+    pending(h, 'bookA').resolve();       // …the SUPERSEDED restore finally lands
+    await settle(h);
+
+    assert.match(h.audio.src, /bookB/, 'the stale restore must NOT reload the remembered book');
+    assert.equal(loads(h), loadsAfterB, 'a superseded restore must not touch the element at all');
+  } finally { h.dispose(); }
+});
+
+// ── the noteIntent window (.152) ───────────────────────────────────────────────
+// beginPlayback calls Playback.noteIntent() BEFORE its await (js/app.js:984). The
+// comment above that line documents why: a retry/wedge timer armed against the OLD
+// book captured loadGen+intentGen, and beginPlayback bumps NEITHER until its own
+// startTrack runs AFTER the fetch. So during the fetch window a stale retry still
+// passes its own gen check and reloads the old book over a newer selection.
+// Deleting that one call left the whole suite green — this test is what makes that
+// mutation fail. It needs BOTH fake timers and a deferred fetch: with an immediate
+// fetch, startTrack bumps loadGen before the retry fires and the bug is masked.
+test('a stale retry must not reload the old book while a newer selection is still fetching (.152)', async () => {
+  const h = boot({ fakeTimers: true, deferTracks: true });
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    pending(h, 'bookA').resolve();
+    await settle(h);
+    h.audio.setBuffered(0, 600);
+    h.audio.reachPlaying(100);
+    await settle(h);
+
+    failAudio(h, 2);                    // retry armed against bookA (+1000ms)
+    await settle(h);
+    const before = loads(h);
+
+    tapBook(h, 'bookB');                // newer intent — B's track list stays IN FLIGHT
+    await settle(h);
+    await h.clock.advance(3000);        // the stale retry's moment passes mid-fetch
+
+    assert.equal(loads(h) - before, 0,
+      'the superseded retry must not reload the old book during a newer selection');
+
+    pending(h, 'bookB').resolve();
+    await settle(h);
+    assert.match(h.audio.src, /\/parts\/bookB\//, 'the newer selection still owns playback');
+  } finally { h.dispose(); }
+});
