@@ -71,13 +71,18 @@ test('modules assign themselves to window (const is not window.X)', () => {
   }
 });
 
-// debug.js's "Clear cached data" deletes the cover cache by its literal name —
+// debug.js's "Clear cached data" clears the cover cache by its literal name —
 // a name OWNED by sw.js (IMG_CACHE). A typo or a future sw.js rename that
-// forgets debug.js makes the delete silently no-op (caches.delete of an unknown
+// forgets debug.js makes the clear silently no-op (caches.delete of an unknown
 // name resolves false, no error), so pin the two shipped files to each other.
+// debug.js binds it once (`const IMG = '<name>'`) and clears via that const, so
+// assert the exact quoted name is present rather than a specific call shape.
 test('debug.js clearCachedData targets the exact IMG_CACHE name sw.js owns', () => {
   const imgCache = grab(read('sw.js'), /const IMG_CACHE = '([^']+)'/);
   assert.ok(imgCache, 'sw.js declares IMG_CACHE');
-  assert.ok(read('js/debug.js').includes(`caches.delete('${imgCache}')`),
-    `debug.js must delete '${imgCache}' (the name sw.js owns)`);
+  const dbg = read('js/debug.js');
+  assert.ok(dbg.includes(`'${imgCache}'`),
+    `debug.js must reference the cover-cache name '${imgCache}' (the name sw.js owns)`);
+  assert.ok(/caches\.delete\(IMG\)/.test(dbg),
+    'debug.js must clear the cover cache (caches.delete(IMG))');
 });

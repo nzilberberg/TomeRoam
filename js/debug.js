@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.143';
+  const BUILD = '2026-07-17.144';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -67,6 +67,15 @@
         localStorage.setItem(SEQ_KEY, String(seq));
       } catch {}
     }, 400);
+  }
+  // Force the ring to localStorage NOW. persist() is debounced 400ms; an action that
+  // reloads sooner (e.g. Clear + reload) would lose its just-logged summary lines.
+  function flushLog() {
+    try {
+      if (persistT) { clearTimeout(persistT); persistT = null; }
+      localStorage.setItem(KEY, JSON.stringify(buf.slice(-CAP)));
+      localStorage.setItem(SEQ_KEY, String(seq));
+    } catch {}
   }
 
   function log(tag, msg) {
@@ -468,8 +477,31 @@
   async function clearCachedData() {
     const btn = document.getElementById('pbdbg-clearcache');
     if (btn) { btn.disabled = true; btn.textContent = 'Clearing…'; }
-    try { if (window.Store) await Store.clearCache(); } catch {}
-    try { if (window.caches) await caches.delete('tomeroam-img-v1'); } catch {}
+    const IMG = 'tomeroam-img-v1';   // KEEP IN SYNC WITH sw.js IMG_CACHE (build.test pins it)
+    // Instrument + verify what actually leaves disk — the ring survives the reload,
+    // so the next bug report is the VERDICT on whether cover data really cleared (a
+    // "books popped back with covers instantly" report reads as a surviving cache).
+    try {
+      const names = window.caches ? await caches.keys() : [];
+      let imgBefore = -1, imgAfter = -1, deleted = null;
+      if (window.caches) { try { imgBefore = (await (await caches.open(IMG)).keys()).length; } catch {} }
+      if (window.Store) await Store.clearCache();
+      if (window.caches) {
+        try { deleted = await caches.delete(IMG); } catch (e) { deleted = 'err:' + (e && e.name); }
+        // caches.delete() can silently no-op on some WebKit builds while the cache is
+        // still referenced. Verify by re-opening; if anything survived, delete the
+        // entries individually (the robust path) so covers actually leave disk.
+        try {
+          const c = await caches.open(IMG);
+          let left = await c.keys();
+          if (left.length) { await Promise.all(left.map((rq) => c.delete(rq).catch(() => {}))); left = await c.keys(); }
+          imgAfter = left.length;
+        } catch {}
+      }
+      const booksLeft = window.Store ? (await Store.cachedBooks()).length : -1;
+      log('CACHE', `CLEAR caches=[${names.join('|')}] cover-entries ${imgBefore}→${imgAfter} deleted=${deleted} booksLeft=${booksLeft}`);
+    } catch (e) { log('CACHE', 'CLEAR error ' + (e && e.message)); }
+    flushLog();
     location.reload();
   }
 
