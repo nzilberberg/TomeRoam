@@ -55,7 +55,13 @@ const Nav = (() => {
     // (home/browse) swap the in-flow views.
     if (!npOpen && !optOpen && !subOpen) {
       $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
-      $('browse').classList.toggle('hidden', v !== 'browse');
+      const browseEl = $('browse');
+      // On the shown→hidden edge, deactivate Browse's virtual controller BEFORE
+      // display:none lands — a hidden box measures zero, so the anchor must be
+      // captured now (from real geometry). Re-entry activation is owned by
+      // Browse.showPage(), not here. See Browse.deactivate() for the full rationale.
+      if (v !== 'browse' && !browseEl.classList.contains('hidden') && d.browseWillHide) d.browseWillHide();
+      browseEl.classList.toggle('hidden', v !== 'browse');
     }
     // Leave the settings overlays' hidden state untouched when going TO NowPlaying so
     // whichever one was underneath stays for the NP-back reveal. A sub-screen is a

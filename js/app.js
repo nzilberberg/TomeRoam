@@ -1980,7 +1980,7 @@
     Nav.init({
       byId: $, isSignedIn: () => Plex.isSignedIn(), updatePlayerUI,
       renderScreen, renderNowPlaying, renderBrowse: (desc) => Browse.render(desc),
-      currentDesc,
+      currentDesc, browseWillHide: () => Browse.deactivate(),
     });
     Browse.init({
       mount: $('browse'), fmt,

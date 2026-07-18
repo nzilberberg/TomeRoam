@@ -31,6 +31,28 @@ test('truncation: complete cases — incl. the hostile exactly-20000-with-totalS
   assert.equal(truncationState(undefined, REQUEST_CAP - 1, REQUEST_CAP), 'complete', 'below the cap without totalSize is complete');
 });
 
+// ---- truncationDisplay: a PERSISTED verdict is not commit-bound to the displayed
+// listing, so it must not mask a fresh truncation at exactly the cap (review finding 3)
+test('truncationDisplay: persisted complete at EXACTLY the cap falls back to possible (grown-past-cap + lost write)', () => {
+  const t = { state: 'complete', total: 0, returned: REQUEST_CAP, persisted: true };
+  assert.equal(Plex.truncationDisplay(t, REQUEST_CAP).state, 'possible', 'a stale prior-session complete cannot be trusted at the cap');
+});
+test('truncationDisplay: persisted complete BELOW the cap is trusted (a sub-cap listing cannot be truncated)', () => {
+  const t = { state: 'complete', total: 0, returned: 145, persisted: true };
+  assert.equal(Plex.truncationDisplay(t, 145).state, 'complete');
+});
+test('truncationDisplay: a persisted WARNING is always surfaced', () => {
+  assert.equal(Plex.truncationDisplay({ state: 'truncated', persisted: true }, REQUEST_CAP).state, 'truncated');
+  assert.equal(Plex.truncationDisplay({ state: 'possible', persisted: true }, REQUEST_CAP).state, 'possible');
+});
+test('truncationDisplay: a LIVE (noted) verdict stands as-is even at the cap', () => {
+  assert.equal(Plex.truncationDisplay({ state: 'complete', noted: true }, REQUEST_CAP).state, 'complete', 'this-session verdict describes the listing on screen');
+});
+test('truncationDisplay: no metadata → count heuristic (cap → possible, under → complete)', () => {
+  assert.equal(Plex.truncationDisplay(null, REQUEST_CAP).state, 'possible');
+  assert.equal(Plex.truncationDisplay(null, 145).state, 'complete');
+});
+
 // ---- WS2a: warmer request budget --------------------------------------------------
 const mkAuthors = (n) => Array.from({ length: n }, (_, i) => ({ ratingKey: 'a' + i }));
 const mkBooks = (n, authorOf) => Array.from({ length: n }, (_, i) => ({

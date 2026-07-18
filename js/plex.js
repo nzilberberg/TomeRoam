@@ -614,7 +614,21 @@ const Plex = (() => {
   // with no metadata anywhere falls back to the count — exactly the request cap
   // may be truncated (we can't tell), anything under it is provably complete.
   function truncationDisplay(t, count) {
-    if (t && (t.noted || t.persisted)) return t;
+    // A LIVE (this-session) verdict describes the listing on screen → stands as-is.
+    if (t && t.noted) return t;
+    // A PERSISTED verdict describes a PRIOR session's listing and is NOT commit-bound
+    // to the one being displayed (the trunc write and the listing write share no
+    // transaction/revision). Trust it only where it cannot mask a fresh truncation:
+    //   - a warning ('truncated'/'possible') is always safe to surface;
+    //   - 'complete' is provable only BELOW the cap (a truncation always sits AT it).
+    // A persisted 'complete' at exactly the cap is the ambiguous case — a library
+    // grown past the cap whose first `cap` rows are unchanged looks identical, and if
+    // the fresh 'truncated' write was lost/uncommitted the stale 'complete' would
+    // silently suppress the warning. Fall back to the count heuristic ('possible').
+    if (t && t.persisted) {
+      if (t.state === 'complete' && count >= REQUEST_CAP) return { state: 'possible', total: 0, returned: count };
+      return t;
+    }
     if (count >= REQUEST_CAP) return { state: 'possible', total: 0, returned: count };
     return { state: 'complete', total: 0, returned: count };
   }

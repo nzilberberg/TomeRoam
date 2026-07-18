@@ -19,6 +19,8 @@ const Nav = require('../js/nav.js');
 const $ = (id) => document.getElementById(id);
 const hidden = (id) => $(id).classList.contains('hidden');
 const rendered = [];                        // what Nav asked to be re-rendered
+let browseHides = 0;                         // Browse.deactivate() calls
+let browseHiddenAtDeactivate = null;         // was #browse already display:none when it fired?
 
 Nav.init({
   byId: $,
@@ -28,6 +30,7 @@ Nav.init({
   renderNowPlaying: () => rendered.push('np'),
   renderBrowse: (d) => rendered.push('browse:' + d.v),
   currentDesc: () => ({ v: 'options' }),
+  browseWillHide: () => { browseHides++; browseHiddenAtDeactivate = hidden('browse'); },
 });
 
 test('a sub-screen keeps the Options hub MOUNTED underneath it (build .106)', () => {
@@ -103,4 +106,18 @@ test('element resolvers agree with the real DOM', () => {
   assert.equal(Nav.viewElFor('nowplaying'), null, 'NP does not slide via viewElFor');
   assert.equal(Nav.viewElFor('books'), $('browse'));
   assert.equal(Nav.viewElFor('home'), $('home'));
+});
+
+test('leaving Browse for Home deactivates the Browse controller BEFORE hiding it (finding: hidden-page SWR corrupts the anchor)', () => {
+  Nav.applyScreen({ v: 'books' });          // Browse shown
+  assert.equal(hidden('browse'), false);
+  browseHides = 0; browseHiddenAtDeactivate = null;
+  Nav.applyScreen({ v: 'home' });           // leave to Home → #browse gets .hidden
+  assert.equal(hidden('browse'), true);
+  assert.equal(browseHides, 1, 'Browse.deactivate must fire on the shown→hidden edge');
+  assert.equal(browseHiddenAtDeactivate, false, 'it must fire BEFORE display:none lands, so the anchor captures real geometry');
+  // Idempotent: Home→Home (already hidden) must not re-deactivate.
+  browseHides = 0;
+  Nav.applyScreen({ v: 'home' });
+  assert.equal(browseHides, 0, 'no deactivate when Browse was already hidden');
 });

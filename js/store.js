@@ -205,7 +205,19 @@ const Store = (() => {
   // caches + their freshness stamps.
   async function clearCache() {
     try { await Promise.all(['books', 'authors', 'tracks', 'albums'].map((s) => clear(s))); } catch {}
-    try { await Promise.all(['sync:books', 'sync:authors'].map((k) => del('kv', k))); } catch {}
+    // The kv store holds ONLY cache-owned rows — sync:/trunc:/author:/authorBooks:
+    // (verified: device identity + user settings live in localStorage, and nothing
+    // else writes kv). The per-author drill-down (author:/authorBooks:) and the .141
+    // truncation verdict (trunc:) live here too, so a metadata-store-only clear left
+    // author pages AND the truncation state intact — the listing could re-populate
+    // from kv and inherit a stale "complete". Delete by PREFIX rather than clearing
+    // the whole store, so a future durable kv row is never collateral.
+    try {
+      const pfx = ['sync:', 'trunc:', 'author:', 'authorBooks:'];
+      const recs = await getAll('kv');
+      const kill = (recs || []).map((r) => r && r.k).filter((k) => typeof k === 'string' && pfx.some((p) => k.indexOf(p) === 0));
+      await Promise.all(kill.map((k) => del('kv', k)));
+    } catch {}
     // Known singleton mirrors are removed unconditionally; per-book tr/alb keys need
     // an enumeration pass (guarded — the known removes must land even if key/length
     // are unavailable). rm is built OUTSIDE the try so a scan failure can't skip them.

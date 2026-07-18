@@ -9,7 +9,11 @@ const assert = require('node:assert');
 
 function memLS() {
   const m = new Map();
-  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), clear: () => m.clear() };
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k), clear: () => m.clear(),
+    get length() { return m.size; }, key: (i) => Array.from(m.keys())[i] ?? null,
+  };
 }
 global.localStorage = memLS();
 global.navigator = {};
@@ -72,4 +76,27 @@ test('audioKeys reflects stored blobs and powers orphan detection', async () => 
   const dlRefs = new Set((await Store.allDl()).flatMap((r) => r.tracks.map(String)));
   const notInDl = keys.filter((k) => !dlRefs.has(k));
   assert.deepEqual(notInDl, ['t2'], 'audioKeys minus the dl index = candidates needing a buf ref');
+});
+
+test('clearCache wipes cache-owned kv rows (author/authorBooks/trunc/sync) + IDB + ls, keeping non-cache kv', async () => {
+  // The .142 fix cleared the IDB collection stores + ls mirrors, but the per-author
+  // drill-down (author:/authorBooks:) and the .141 truncation verdict (trunc:) live
+  // in the generic kv store — an IDB-store-only clear left them intact, so author
+  // pages reloaded from cache and a stale "complete" could be inherited (review #1).
+  await Store.kvSet('author:42', { title: 'King' });
+  await Store.kvSet('authorBooks:42', [{ ratingKey: 'b1' }]);
+  await Store.kvSet('trunc:books', { state: 'complete', total: 0, returned: 5 });
+  await Store.kvSet('sync:authors', 999);
+  await Store.kvSet('device_identity', 'keep-me');          // a hypothetical durable kv row — must survive
+  await Store.cacheBooks([{ ratingKey: '1', title: 'A' }]); // IDB + ls mirror
+
+  await Store.clearCache();
+
+  assert.equal(await Store.kvGet('author:42', null), null, 'author drill-down cleared');
+  assert.equal(await Store.kvGet('authorBooks:42', null), null, 'authorBooks cleared');
+  assert.equal(await Store.kvGet('trunc:books', null), null, 'truncation verdict cleared');
+  assert.equal(await Store.kvGet('sync:authors', null), null, 'sync stamp cleared');
+  assert.equal(await Store.kvGet('device_identity', null), 'keep-me', 'a non-cache kv row must be preserved');
+  assert.equal(await Store.count('books'), 0, 'books gone from IDB');
+  assert.deepEqual(await Store.cachedBooks(), [], 'books gone from IDB AND the ls mirror');
 });

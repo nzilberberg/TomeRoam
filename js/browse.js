@@ -196,6 +196,21 @@ const Browse = (() => {
     const shown = pageCache.get(key);
     if (shown && shown.el._vctl) shown.el._vctl.activate();
   }
+  // Top-level virtual-list lifecycle for the WHOLE Browse view. showPage() owns the
+  // page-to-page handoff, but leaving Browse entirely (→ Home) hides the #browse
+  // CONTAINER via Nav.setView WITHOUT touching the active controller — so a background
+  // SWR repaint (repaint→patchInPlace→ctl.update, whose guard only checks the node is
+  // still connected) ran against a display:none page: zero geometry + Home's scrollY →
+  // the captured anchor collapsed and the raw scrollY went stale after an above-view
+  // insert, landing the return near row 0. Nav calls deactivate() BEFORE `.hidden`
+  // lands so the controller captures its anchor from REAL geometry (a hidden box
+  // measures zero). Re-entry activation is deliberately NOT driven from here — it is
+  // owned by showPage(), which activates the exact page being rendered; activating
+  // from here would re-activate whatever stale page is still non-hidden and, when
+  // showPage then deactivates it, overwrite its good anchor with the wrong scroll.
+  function deactivate() { const cur = activeEntry(); if (cur && cur.el._vctl) cur.el._vctl.deactivate(); }
+  function activate() { const cur = activeEntry(); if (cur && cur.el._vctl) cur.el._vctl.activate(); }
+
   function evictLRU(keepKey) {
     while (pageCache.size > MAX_PAGES) {
       let oldK = null, oldO = Infinity;
@@ -667,7 +682,7 @@ const Browse = (() => {
     return idx;
   }
 
-  return { init, reset, render, clearCache, patchRows, bookSig,
+  return { init, reset, render, clearCache, patchRows, bookSig, deactivate, activate,
     // internals exposed for unit tests only (no runtime behaviour change)
     _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY,
       applyScrollY, showPage, positionOnEnter, updateTruncNote, isRestoring: () => restoring,
