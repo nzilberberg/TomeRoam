@@ -47,6 +47,14 @@ const Progress = (() => {
                                       // without this, every 4s legacy publish dragged a shard
                                       // write+read-back along — pure churn while playing)
   let shardPubTimer = null, lastShardPub = 0;
+  let shardHandoffSeq = 0;            // dirtySeq at the last handoff to the archive — records written
+                                      // since are authored locally but not yet IN the verified channel
+                                      // (this is the "correct record exists but is unpublished" signal)
+  // What the last LEGACY head write actually established. Deliberately NOT folded
+  // into one flag with the archive: that write trusts the HTTP status, and Plex is
+  // measured to return 200 for writes it discards — so its best possible state is
+  // ACCEPTED, never verified. Only the archive is read-back verified.
+  let legacyPub = { state: 'idle', at: 0, status: 0 };   // idle|accepted-unverified|failed
   let prunedSession = false;          // one-shot stale-board sweep per app launch
   let cbMerged = () => {};
 
@@ -316,8 +324,12 @@ const Progress = (() => {
   // synchronously (single-writer boards), so they drop their own records via
   // applyPeerResets when they next read our board, and merge-time suppression hides
   // their stale data until then. rst is compact and rides in the book entry, so it
-  // outlives the per-chapter maps under the size cap. (Compaction of old tombstones is
-  // deferred — the existing LRU/size trim bounds them for now.) See the reset plan.
+  // outlives the per-chapter maps in the bounded LEGACY projection. Note what is and
+  // is not bounded: MAX_BOOKS/MAX_JSON trim only that compatibility wire copy, and
+  // never remove a tombstone from the authoritative local store or the shard archive
+  // (entriesForPublish emits every rst unconditionally). So tombstones are durable —
+  // and currently unbounded there. Compaction is still deferred; nothing trims them
+  // today. See the reset plan.
   function resetBook(book) {
     if (book == null) return;
     mine.books[book] = { bk: null, tr: {}, rst: now(), _ts: now() };
@@ -340,6 +352,7 @@ const Progress = (() => {
     if (force || dueInMs <= 0) {
       if (shardPubTimer) { clearTimeout(shardPubTimer); shardPubTimer = null; }
       lastShardPub = Date.now();
+      shardHandoffSeq = dirtySeq;                            // everything authored so far is now the archive's problem
       shards.ensurePublished(entriesForPublish(), purged);   // purges ride the verified payloads
     } else if (!shardPubTimer) {
       shardPubTimer = setTimeout(() => { shardPubTimer = null; scheduleShardPublish(true); }, dueInMs);
@@ -362,8 +375,22 @@ const Progress = (() => {
     // That is a SILENT lost update of durable listening progress. Capture the dirty
     // generation alongside the snapshot and only settle clean if nothing moved.
     const seqAtSnapshot = dirtySeq;
-    const status = await board.publish(serialize(), () => seed);
-    if (status >= 200 && status < 300 && dirtySeq === seqAtSnapshot) { dirty = false; dirtySince = 0; }
+    let status = 0;
+    try {
+      status = await board.publish(serialize(), () => seed);
+    } catch (e) {
+      legacyPub = { state: 'failed', at: Date.now(), status: 0, code: 'legacy-write-failed', message: (e && e.message) || String(e) };
+      return;
+    }
+    if (status >= 200 && status < 300) {
+      // ACCEPTED, not verified — see legacyPub's declaration. The dirty flag still
+      // clears on this (unchanged behaviour: the head is disposable and old clients
+      // need it fresh); what changes is that we no longer CALL that synchronized.
+      legacyPub = { state: 'accepted-unverified', at: Date.now(), status };
+      if (dirtySeq === seqAtSnapshot) { dirty = false; dirtySince = 0; }
+    } else {
+      legacyPub = { state: 'failed', at: Date.now(), status, code: 'legacy-write-failed', message: `legacy head write rejected (HTTP ${status})` };
+    }
   }
   function packAll() {
     const o = { v: 1, id: myId(), name: myName(), books: {} };
@@ -935,21 +962,156 @@ const Progress = (() => {
   // writes are reported, never silently absorbed. `stuck` is the DISPLAY signal:
   // a write in flight or a <30s-old dirty flag is normal heartbeat, not a warning
   // (the Diagnostics row flickered "syncing" on every publish without this).
+  // ARCHIVE vs LEGACY HEAD. These are two different promises and used to be one
+  // word. The archive is read-back verified; the legacy head is a bounded
+  // compatibility projection whose write is judged by HTTP status alone. So:
+  //   * `durable` reads ONLY the archive — a legacy 200 can never make progress
+  //     look safe while the archive is pending, failed, or behind.
+  //   * a legacy failure alongside a verified archive is a COMPATIBILITY problem
+  //     (old clients see a stale head), not lost progress — named as such.
+  function archiveState(s) {
+    if (!shards) return 'unavailable';
+    if (s.degraded && s.degraded.length) return 'degraded';
+    if (s.lastFailure || s.lastError) return 'failed';
+    // "Behind" = records authored since the last handoff. The store is idle and
+    // reports itself clean, but our newest positions are not in it yet.
+    if (s.unsynced || dirtySeq !== shardHandoffSeq) return 'pending';
+    return lastShardPub ? 'verified' : 'idle';
+  }
   function syncState() {
-    const s = shards ? shards.syncState() : { unsynced: false, lastError: null, degraded: [], pendingForMs: 0 };
+    const s = shards ? shards.syncState() : { unsynced: false, lastError: null, lastFailure: null, degraded: [], pendingForMs: 0 };
     const legacyStuck = dirty && dirtySince && (Date.now() - dirtySince > 30000);
+    const arch = archiveState(s);
     return {
+      // --- unchanged surface (existing gates + UI read these) ---
       unsynced: dirty || s.unsynced,
       stuck: legacyStuck || !!s.lastError || (s.pendingForMs || 0) > 30000,
       lastError: s.lastError, degraded: s.degraded, legacyDirty: dirty, stats: shardStats,
+      // --- the honest split ---
+      archive: {
+        state: arch,
+        behind: dirtySeq !== shardHandoffSeq,
+        pendingForMs: s.pendingForMs || 0,
+        backoffMs: s.backoffMs || 0,
+        lastFailure: s.lastFailure || null,
+        degradedCount: (s.degraded || []).length,
+      },
+      legacy: {
+        // A failed write outranks `dirty`. Failure leaves the dirty flag SET (we
+        // still owe the head a write), so keying on dirty first would report a
+        // rejected write as "pending" — the same kind of hiding this change exists
+        // to remove, one level down.
+        state: legacyPub.state === 'failed' ? 'failed' : (dirty ? 'pending' : legacyPub.state),
+        dirty,
+        dirtyForMs: dirtySince ? Date.now() - dirtySince : 0,
+        lastStatus: legacyPub.status || 0,
+        lastAt: legacyPub.at || 0,
+        code: legacyPub.code || null,
+      },
+      // The user-facing verdict: durable progress is safe iff the ARCHIVE verified.
+      durable: arch === 'verified',
+      // A verified archive with a broken head is a publication-compatibility issue.
+      compatOnlyProblem: arch === 'verified' && legacyPub.state === 'failed',
     };
   }
+  // ---- support diagnostics: the RECORD-LEVEL snapshot -------------------------
+  // Why this shape: every recent progress defect was LOGICAL, not structural —
+  // the writes succeeded and the wrong state was stored or chosen. Shard health
+  // cannot see that. This shows, per book, what each SOURCE holds beside what
+  // actually WON, which is what separates the failure classes a "my progress went
+  // backwards" report collapses into one symptom:
+  //   wrong value authored ........ `mine` itself is wrong            → recording path
+  //   authored, not published ..... `mine` newest + archive behind     → publication
+  //   authored then lost .......... `mine` missing what peers show     → ownership/mutation
+  //   replica stale ............... a shard copy newer than `replica`  → polling/read
+  //   wrong winner ................ `won` is not the newest survivor   → merge/order
+  //   reset defeated .............. `rst` set yet an older record wins → tombstone compare
+  //   "synced" while pending ...... archive.state ≠ verified           → status model
+  // `won` is READ FROM `merged` — the arbitration's real output. Recomputing it
+  // here would build a second implementation that agrees with my model of the
+  // merge instead of with the code the player actually reads.
+  const DIAG_BOOKS = 12;               // newest-first; the count of everything else is reported
+  function diagnostics() {
+    const st = syncState();
+    const pos = (bk) => (bk ? { t: bk.t, o: bk.o || 0, ts: bk.ts || 0 } : null);
+    const rows = {};
+    const row = (b) => rows[b] || (rows[b] = { book: b, mine: null, mineTracks: 0, replica: null, peers: [], shards: [], rst: 0, rstFrom: '', won: null, newest: 0 });
+    let authored = 0, replicated = 0, tombstones = 0;
+    for (const b in mine.books) {
+      const m = mine.books[b], r = row(b);
+      r.mine = pos(m.bk); r.mineTracks = Object.keys(m.tr || {}).length;
+      if (m.bk) authored++;
+      if (m.rst) { tombstones++; if (m.rst > r.rst) { r.rst = m.rst; r.rstFrom = myId(); } }
+    }
+    for (const b in replica.books) {
+      const rep = replica.books[b], r = row(b);
+      if (rep.bk) { replicated++; r.replica = Object.assign(pos(rep.bk), { origin: rep.bk.origin || '' }); }
+      if (rep.rst) { tombstones++; if (rep.rst > r.rst) { r.rst = rep.rst; r.rstFrom = rep.rstOrigin || 'replica'; } }
+    }
+    const addSrc = (key, src) => {
+      for (const b in (src.books || {})) {
+        const s = src.books[b], r = row(b);
+        if (s.bk) r[key].push(Object.assign(pos(s.bk), { from: src.id || '' }));
+        if (s.rst && s.rst > r.rst) { r.rst = s.rst; r.rstFrom = src.id || ''; }
+      }
+    };
+    for (const p of peerBoards) addSrc('peers', p);
+    for (const p of shardBoards) addSrc('shards', p);
+    for (const b in merged.books) {
+      const w = merged.books[b].bk;
+      if (w) row(b).won = { t: w.t, o: w.o || 0, ts: w.ts || 0, by: w.by || '', mine: w.by === myId() };
+    }
+    const all = Object.values(rows);
+    for (const r of all) {
+      let n = r.rst || 0;
+      for (const c of [r.mine, r.replica, r.won].concat(r.peers, r.shards)) if (c && (c.ts || 0) > n) n = c.ts;
+      r.newest = n;
+    }
+    all.sort((a, b) => b.newest - a.newest);
+    return {
+      v: 1,
+      device: { id: myId(), dev8: myDev8, name: myName() },
+      counts: {
+        authoredBooks: authored, replicatedBooks: replicated, tombstones,
+        pendingDeletes: Object.keys(pendingDeletes).length,
+        purgedIdentities: Object.keys(purged).length,
+        peerBoards: peerBoards.length, shardBoards: shardBoards.length,
+        booksTotal: all.length, booksShown: Math.min(all.length, DIAG_BOOKS),
+      },
+      // Replication amplification (unique authored events vs stored copies) — the
+      // number that says whether replication is doing what it thinks it is.
+      replication: shardStats ? { unique: shardStats.uniqueRecords, stored: shardStats.storedRecords, devices: shardStats.devices } : null,
+      sync: { durable: st.durable, archive: st.archive, legacy: st.legacy, compatOnlyProblem: st.compatOnlyProblem },
+      shards: shards && shards.diagnostics ? shards.diagnostics() : null,
+      books: all.slice(0, DIAG_BOOKS),
+    };
+  }
+
+  // The COMPACT companion to diagnostics(). collectDiagnostics() is only reached by
+  // "Copy diagnostics"; the BUG REPORT the user actually posts carries snapshot()
+  // instead — so without this, a posted log would still say nothing about durable
+  // progress. Small enough to ride the log heartbeat: verdict + counts, no per-book
+  // list. The full record history stays in the diagnostics export.
+  function diagSummary() {
+    const st = syncState();
+    let authored = 0, tombstones = 0;
+    for (const b in mine.books) { if (mine.books[b].bk) authored++; if (mine.books[b].rst) tombstones++; }
+    return {
+      durable: st.durable,
+      archive: st.archive.state, behind: st.archive.behind,
+      legacy: st.legacy.state,
+      authored, tombstones, replicas: Object.keys(replica.books).length,
+      failCode: (st.archive.lastFailure && st.archive.lastFailure.code) || null,
+      degraded: st.archive.degradedCount,
+    };
+  }
+
   // Piggyback an external read trigger. Returns the poll promise so callers that
   // NEED the merged data current (syncqueue's conflict decisions) can await it.
   function refresh() { return active ? poll() : Promise.resolve(); }
 
   return {
-    init, hydrate, setSeed, setActive, flush, refresh, syncState,
+    init, hydrate, setSeed, setActive, flush, refresh, syncState, diagnostics, diagSummary,
     devices, adoptIdentity, deleteDevice,
     pendingDeletes: () => Object.assign({}, pendingDeletes),
     recordTrack, recordBook, clearBook, resetBook,
@@ -963,11 +1125,13 @@ const Progress = (() => {
         peerBoards = []; shardBoards = []; merged = { books: {} };
         legacyInv = []; shardInv = {};
         prunedSession = false; dirty = false; dirtySince = 0; dirtySeq = 0; lastShardPub = 0;
+        shardHandoffSeq = 0; legacyPub = { state: 'idle', at: 0, status: 0 };
         if (pubTimer) { clearTimeout(pubTimer); pubTimer = null; }
         if (shardPubTimer) { clearTimeout(shardPubTimer); shardPubTimer = null; }
         if (shards) shards._test.reset();
       },
       setPeers(p) { peerBoards = p || []; },
+      setShards(s) { shardBoards = s || []; },
       mineBooks: () => mine.books,
       replicaBooks: () => replica.books,
       purgedMap: () => purged,

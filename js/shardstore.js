@@ -141,8 +141,39 @@ const createShardStore = (opts) => {
   let pendingSince = 0;                // wall-clock ms since work has been outstanding (UI stuck-detection)
   let lastSnap = null;                 // retained for retry after a failure
   let writing = false, retryTimer = null, backoffMs = 0;
-  let lastError = null;
-  let degradedRead = [];               // [{dev, prefix, reason}] from the last readAll
+  let lastError = null;                // human-readable text (kept: existing gates test it for truthiness)
+  let lastFailure = null;              // the STRUCTURED companion — see WRITE_FAIL below
+  let failureHistory = [];             // bounded recent-failure log, survives recovery
+  let failAttempt = 0;                 // consecutive failed passes (reset by a clean pass)
+  let degradedRead = [];               // [{dev, prefix, reason, code}] from the last readAll
+
+  // ---- structured write-side failure -------------------------------------------
+  // The read side has always carried {dev, prefix, reason} objects; the write side
+  // collapsed every fault into one free-text string, so no caller could tell a
+  // payload the server silently discarded from an expired token without matching
+  // on message text. Each throw now carries a stable CODE plus the coordinates
+  // needed to act on it. Codes name states that differ in RETRY, DURABILITY, or
+  // what a human should go look at — deliberately not one per exception string.
+  const WRITE_FAIL = {
+    BOARD_CREATE_FAILED: 'board-create-failed',       // no ratingKey came back — nothing was written
+    BOARD_GONE: 'board-gone',                         // 404: board deleted under us; recreate next pass
+    WRITE_REJECTED: 'write-rejected',                 // Plex refused the write (non-2xx, non-404)
+    WRITE_TRANSPORT_FAILED: 'write-transport-failed', // never reached Plex (throw): offline/DNS/timeout
+    VERIFY_READ_FAILED: 'verify-read-failed',         // read-back returned nothing
+    VERIFY_TRANSPORT_FAILED: 'verify-transport-failed', // read-back itself threw — write status unknown
+    VERIFY_DECODE_FAILED: 'verify-decode-failed',     // read-back undecodable
+    VERIFY_MISMATCH: 'verify-mismatch',               // 200 but the server kept different bytes (§3.4)
+  };
+  const FAILURE_HISTORY_MAX = 8;
+  const errText = (e) => String((e && e.message) || e);
+  // `stage` distinguishes the three write roles the SAME function performs, so a
+  // failure names which step of the split transaction broke: a failed child write
+  // is disposable preparation, a failed redirect write is a lost COMMIT.
+  function writeFail(code, message, where, extra) {
+    const e = new Error(message);
+    e.failure = Object.assign({ code, message }, where, extra || {});
+    return e;
+  }
 
   async function loadMine() {
     const boards = await plex.listBoards();
@@ -194,13 +225,15 @@ const createShardStore = (opts) => {
     return leaves;
   }
 
-  async function writeAndVerify(prefix, payload) {
+  async function writeAndVerify(prefix, payload, stage, splitId) {
+    const where = { dev, prefix, stage: stage || 'data', splitId: splitId || null };
     const enc = await encode(payload);
     let node = tree.get(prefix);
     let rk = node && node.rk;
     if (!rk) {
-      rk = await plex.createBoard(title(prefix));
-      if (!rk) throw new Error('shard: board create failed for ' + (prefix || '(root)'));
+      try { rk = await plex.createBoard(title(prefix)); }
+      catch (e) { throw writeFail(WRITE_FAIL.WRITE_TRANSPORT_FAILED, 'shard: board create threw — ' + errText(e), where); }
+      if (!rk) throw writeFail(WRITE_FAIL.BOARD_CREATE_FAILED, 'shard: board create failed for ' + (prefix || '(root)'), where);
       // Persist ownership IMMEDIATELY — before the summary write. If the write or
       // its verification fails and the next listing transiently omits this brand-
       // new playlist, the persisted hint is the only thing standing between a
@@ -208,19 +241,35 @@ const createShardStore = (opts) => {
       tree.set(prefix, { rk, kind: 'data', meta: null, corrupt: true });
       saveKeyHints();
     }
-    const st = await plex.writeSummary(rk, enc);
+    let st;
+    try { st = await plex.writeSummary(rk, enc); }
+    catch (e) { throw writeFail(WRITE_FAIL.WRITE_TRANSPORT_FAILED, 'shard: write threw — ' + errText(e), where, { encodedBytes: enc.length }); }
     if (st === 404) {
       tree.delete(prefix); verified.delete(prefix);
       saveKeyHints();   // persist the removal, or the next pass reloads the same dead ratingKey forever
-      throw new Error('shard: board gone (404) — recreate next pass');
+      throw writeFail(WRITE_FAIL.BOARD_GONE, 'shard: board gone (404) — recreate next pass', where);
+    }
+    // A non-2xx used to fall THROUGH to the read-back and surface as a mismatch —
+    // true (the bytes aren't there) but misattributed, which matters now that the
+    // reason code is what callers act on. Only classify a real status: a fake or a
+    // transport that returns nothing must not be read as a rejection.
+    if (typeof st === 'number' && (st < 200 || st >= 300)) {
+      throw writeFail(WRITE_FAIL.WRITE_REJECTED, `shard: write rejected (HTTP ${st})`, where, { status: st, encodedBytes: enc.length });
     }
     // THE load-bearing step: content read-back, never status (Plex 200s discarded writes).
-    const back = await plex.readSummary(rk);
-    if (back == null) throw new Error('shard: verify read failed');
+    let back;
+    try { back = await plex.readSummary(rk); }
+    catch (e) { throw writeFail(WRITE_FAIL.VERIFY_TRANSPORT_FAILED, 'shard: verify read threw — ' + errText(e), where); }
+    if (back == null) throw writeFail(WRITE_FAIL.VERIFY_READ_FAILED, 'shard: verify read failed', where);
+    // An EMPTY read-back is the discarded-write signature, not corruption: we just
+    // wrote a non-empty payload, so a board that reads back empty kept nothing.
+    // Classifying it as a decode failure would point triage at "corrupt remote
+    // data" — the one bucket that must NOT trigger a size-related response.
+    if (back === '') throw writeFail(WRITE_FAIL.VERIFY_MISMATCH, 'shard: verify MISMATCH — board empty after write (discarded)', where, { encodedBytes: enc.length });
     let decoded;
-    try { decoded = await decode(back); } catch { throw new Error('shard: verify decode failed'); }
+    try { decoded = await decode(back); } catch { throw writeFail(WRITE_FAIL.VERIFY_DECODE_FAILED, 'shard: verify decode failed', where); }
     const want = JSON.stringify(payload);
-    if (JSON.stringify(decoded) !== want) throw new Error('shard: verify MISMATCH — write discarded by server');
+    if (JSON.stringify(decoded) !== want) throw writeFail(WRITE_FAIL.VERIFY_MISMATCH, 'shard: verify MISMATCH — write discarded by server', where, { encodedBytes: enc.length });
     const isRedirect = Array.isArray(payload.redirect);
     tree.set(prefix, {
       rk, kind: isRedirect ? 'redirect' : 'data',
@@ -259,20 +308,20 @@ const createShardStore = (opts) => {
     const enc = await encode(payload);
     if (fits(enc) || prefix.length >= MAX_DEPTH) {
       if (prefix.length >= MAX_DEPTH && !fits(enc)) log('SHARD', `depth-${MAX_DEPTH} shard over budget — publishing anyway (hash exhausted)`);
-      if (verified.get(prefix) !== want) await writeAndVerify(prefix, payload);
+      if (verified.get(prefix) !== want) await writeAndVerify(prefix, payload, 'data');
       return;
     }
     // Overflow → split transaction, then recurse (a child may itself overflow).
     const splitId = randomId();
     const [e0, e1] = partition(entries, prefix.length);
     log('SHARD', `splitting ${prefix || '(root)'} (${entries.length} books) id=${splitId}`);
-    await writeAndVerify(prefix + '0', buildDataPayload(prefix + '0', e0, { parent: prefix, splitId }));
-    await writeAndVerify(prefix + '1', buildDataPayload(prefix + '1', e1, { parent: prefix, splitId }));
+    await writeAndVerify(prefix + '0', buildDataPayload(prefix + '0', e0, { parent: prefix, splitId }), 'child', splitId);
+    await writeAndVerify(prefix + '1', buildDataPayload(prefix + '1', e1, { parent: prefix, splitId }), 'child', splitId);
     // The COMMIT: replace the parent's payload with the redirect (keeping the
     // parent's own birth identity). Crash before this line → parent still holds
     // records, children are ignored debris, split retries under a new id. Crash
     // after → children are live. No empty-shard window.
-    await writeAndVerify(prefix, makeRedirect(prefix, birthMeta(prefix), splitId));
+    await writeAndVerify(prefix, makeRedirect(prefix, birthMeta(prefix), splitId), 'redirect', splitId);
     await ensureLeaf(prefix + '0', e0);
     await ensureLeaf(prefix + '1', e1);
   }
@@ -314,13 +363,25 @@ const createShardStore = (opts) => {
           const snap = pending; pending = null; lastSnap = snap;
           await publishSnapshot(snap);
         }
-        backoffMs = 0; lastError = null; pendingSince = 0;
+        // A verified pass CLEARS the active write-side fault — the history keeps the
+        // incident inspectable after recovery, but the current state is honest.
+        backoffMs = 0; lastError = null; lastFailure = null; failAttempt = 0; pendingSince = 0;
       } catch (e) {
-        lastError = String((e && e.message) || e);
-        log('SHARD', 'publish failed: ' + lastError);
+        const f = (e && e.failure) || { code: 'unknown', message: errText(e), dev, prefix: null, stage: null, splitId: null };
+        lastError = f.message;
+        backoffMs = Math.min(backoffMs ? backoffMs * 3 : (retryBaseMs || 0), 90000);
+        lastFailure = Object.assign({}, f, {
+          at: Date.now(),
+          attempt: ++failAttempt,
+          willRetry: retryBaseMs > 0,
+          backoffMs,
+          configuredMaxRequestBytes: maxRequestBytes,
+        });
+        failureHistory.push(lastFailure);
+        if (failureHistory.length > FAILURE_HISTORY_MAX) failureHistory = failureHistory.slice(-FAILURE_HISTORY_MAX);
+        log('SHARD', `publish failed [${f.code}] ${f.stage || 'data'}@${f.prefix == null ? '?' : (f.prefix || '(root)')}: ${f.message}`);
         if (!pending) pending = lastSnap;              // never lose the snapshot on failure
         tree = null;                                    // rediscover server state next pass (crash-safe restart)
-        backoffMs = Math.min(backoffMs ? backoffMs * 3 : (retryBaseMs || 0), 90000);
         if (retryBaseMs > 0) retryTimer = setTimeout(() => { retryTimer = null; kick(); }, backoffMs);
       } finally { writing = false; }
     })();
@@ -337,6 +398,28 @@ const createShardStore = (opts) => {
   // → { entries, degraded, stats } where entries carry their origin/name/ts
   // untouched (immutable replication) and degraded lists every subtree whose data
   // could not be trusted (reported, never read as empty).
+  // Which of the redirect's four checks failed, or null when the subtree is sound.
+  // Order matters only for reporting: a missing child is reported as missing even
+  // if the surviving sibling also mismatches.
+  const READ_FAIL = {
+    CHILD_MISSING: 'redirect-child-missing',
+    CHILD_CORRUPT: 'redirect-child-corrupt',
+    CHILD_WRONG_PARENT: 'redirect-child-wrong-parent',
+    CHILD_WRONG_SPLIT_ID: 'redirect-child-wrong-split-id',
+  };
+  function redirectFault(node, c0, c1, prefix) {
+    const missing = [!c0 && (prefix + '0'), !c1 && (prefix + '1')].filter(Boolean);
+    if (missing.length) return { code: READ_FAIL.CHILD_MISSING, reason: `redirect child missing: ${missing.join(', ')}` };
+    const corrupt = [c0.corrupt && (prefix + '0'), c1.corrupt && (prefix + '1')].filter(Boolean);
+    if (corrupt.length) return { code: READ_FAIL.CHILD_CORRUPT, reason: `redirect child corrupt: ${corrupt.join(', ')}` };
+    const wrongParent = [c0.payload.parent !== prefix && (prefix + '0'), c1.payload.parent !== prefix && (prefix + '1')].filter(Boolean);
+    if (wrongParent.length) return { code: READ_FAIL.CHILD_WRONG_PARENT, reason: `redirect child names another parent: ${wrongParent.join(', ')}` };
+    const want = node.payload.redirectId;
+    const wrongSplit = [c0.payload.splitId !== want && (prefix + '0'), c1.payload.splitId !== want && (prefix + '1')].filter(Boolean);
+    if (wrongSplit.length) return { code: READ_FAIL.CHILD_WRONG_SPLIT_ID, reason: `redirect child from another split (want ${want}): ${wrongSplit.join(', ')}` };
+    return null;
+  }
+
   async function readAll() {
     const boards = await plex.listBoards();
     const byDev = new Map();   // dev → Map<prefix, {payload?, kind?, corrupt?}>
@@ -393,10 +476,10 @@ const createShardStore = (opts) => {
           // splitId proves the children belong to EACH OTHER — only the parent's
           // permanent redirect proves the split COMMITTED. Missing parent =
           // degraded; the owner self-heals it from local truth on its next pass.
-          degraded.push({ dev: d, prefix, reason: 'missing commit redirect' });
+          degraded.push({ dev: d, prefix, reason: 'missing commit redirect', code: 'missing-commit-redirect' });
           return;
         }
-        if (node.corrupt) { degraded.push({ dev: d, prefix, reason: node.reason || 'corrupt' }); return; }
+        if (node.corrupt) { degraded.push({ dev: d, prefix, reason: node.reason || 'corrupt', code: 'node-corrupt' }); return; }
         if (node.kind === 'data') {
           // Purges only from an AUTHORITATIVE node (see the declaration above).
           for (const row of node.payload.purge || []) {
@@ -411,12 +494,13 @@ const createShardStore = (opts) => {
           }
           return;
         }
-        // redirect — all four reader checks, else NOBODY is authoritative here
+        // redirect — all four reader checks, else NOBODY is authoritative here.
+        // The checks were already computed individually and then collapsed into one
+        // message; naming WHICH one failed costs nothing and is the difference
+        // between "a child never landed" and "two split attempts interleaved".
         const c0 = m.get(prefix + '0'), c1 = m.get(prefix + '1');
-        const ok = c0 && c1 && !c0.corrupt && !c1.corrupt &&
-          c0.payload.parent === prefix && c1.payload.parent === prefix &&
-          c0.payload.splitId === node.payload.redirectId && c1.payload.splitId === node.payload.redirectId;
-        if (!ok) { degraded.push({ dev: d, prefix, reason: 'redirect checks failed' }); return; }
+        const fault = redirectFault(node, c0, c1, prefix);
+        if (fault) { degraded.push({ dev: d, prefix, reason: fault.reason, code: fault.code }); return; }
         walk(prefix + '0'); walk(prefix + '1');
       })('');
     }
@@ -429,20 +513,47 @@ const createShardStore = (opts) => {
     return {
       unsynced: !!pending || !!retryTimer || writing,
       pendingForMs: pendingSince ? Date.now() - pendingSince : 0,
-      lastError,
+      lastError,                       // human-readable (unchanged surface)
+      lastFailure,                     // …and its structured companion (null once a pass verifies)
       backoffMs: retryTimer ? backoffMs : 0,
       degraded: degradedRead,
     };
   }
 
+  // COARSE health only — deliberately not the full shard tree. The split/redirect
+  // machinery has not produced a field failure; the bugs that keep appearing are
+  // logical (which record won), so the record-level snapshot in progress.js is
+  // where the detail belongs. Counts + a degraded flag + the last fault are enough
+  // to tell "the archive is structurally fine" from "go look at the tree".
+  function diagnostics() {
+    let shardCount = 0, redirects = 0;
+    if (tree) for (const [, node] of tree) { shardCount++; if (node.kind === 'redirect') redirects++; }
+    return {
+      dev,
+      shardCount, redirects,
+      verifiedShards: verified.size,
+      treeLoaded: !!tree,
+      writing,
+      queued: !!pending,
+      pendingForMs: pendingSince ? Date.now() - pendingSince : 0,
+      backoffMs: retryTimer ? backoffMs : 0,
+      failAttempt,
+      maxRequestBytes,
+      lastFailure,
+      recentFailures: failureHistory.slice(),
+      degradedRead: degradedRead.slice(),
+    };
+  }
+
   return {
-    ensurePublished, flush, readAll, syncState,
+    ensurePublished, flush, readAll, syncState, diagnostics,
     _test: {
       hashBits, buildDataPayload, payloadEntries, classify, title, parseTitle,
       tree: () => tree, verified: () => verified,
       reset() {
         tree = null; verified.clear(); pending = null; lastSnap = null; pendingSince = 0;
-        lastError = null; degradedRead = []; backoffMs = 0;
+        lastError = null; lastFailure = null; failureHistory = []; failAttempt = 0;
+        degradedRead = []; backoffMs = 0;
         if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
       },
     },

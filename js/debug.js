@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-18.162';
+  const BUILD = '2026-07-18.163';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -179,6 +179,9 @@
       conn: (window.Plex && Plex.getConnKind && Plex.getConnKind()) || null,
       sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
       net: (window.Net && Net.sanitizedState) ? Net.sanitizedState() : null,
+      // Compact durable-progress verdict — rides EVERY bug report, so a posted log
+      // says whether the archive was verified without needing a separate export.
+      prog: (window.Progress && Progress.diagSummary) ? (() => { try { return Progress.diagSummary(); } catch { return null; } })() : null,
     };
     try { if (stateFn) Object.assign(o, stateFn()); } catch (e) { o.stateErr = e && e.message; }
     return o;
@@ -274,6 +277,14 @@
     d.pendingSync = (window.SyncQueue) ? await SyncQueue.count() : 0;
     // Connectivity model
     if (window.Net && Net.sanitizedState) Object.assign(d, { net: Net.sanitizedState() });
+    // Durable progress — the RECORD-level snapshot (see Progress.diagnostics).
+    // Consumed as a public snapshot; debug.js never reaches into progress/shard
+    // internals. Rendered through diagText below so it passes the same sanitizer
+    // as everything else (sanitize() is a whole-TEXT pass — an unrendered field
+    // would ship unsanitized).
+    if (window.Progress && Progress.diagnostics) {
+      try { d.progress = Progress.diagnostics(); } catch (e) { d.progressErr = e && e.message; }
+    }
     return d;
   }
 
@@ -332,7 +343,58 @@
     L.push('— Sync queue —');
     L.push(`pending=${d.pendingSync}  lastSyncAttempt=${fmtTs(d.lastSyncAt)}`);
     if (d.lastSyncResult) L.push(`last result: ${JSON.stringify(d.lastSyncResult)}`);
+    L.push('');
+    progressText(d, L);
     return L.join('\n');
+  }
+
+  const fmtPos = (ms) => {
+    const s = Math.max(0, Math.round((ms || 0) / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(ss).padStart(2, '0');
+  };
+  // One record, one line: position, when, and who. `ts` is the LWW key, so it is
+  // printed raw as well as friendly — a comparison is the whole point of this view.
+  const fmtRec = (r) => (r ? `${r.t == null ? '?' : r.t}@${fmtPos(r.o)} ts=${r.ts}${r.ts ? ' (' + fmtTs(r.ts) + ')' : ''}` : '—');
+
+  function progressText(d, L) {
+    L.push('— Durable progress (record-level) —');
+    if (d.progressErr) { L.push(`snapshot failed: ${d.progressErr}`); return; }
+    const p = d.progress;
+    if (!p) { L.push('(Progress not loaded)'); return; }
+    const c = p.counts, s = p.sync, a = s.archive, lg = s.legacy;
+    L.push(`device: ${p.device.name} [${p.device.id}] dev8=${p.device.dev8}`);
+    L.push(`DURABLE PROGRESS: ${s.durable ? 'SAFE — archive read-back verified' : 'NOT verified — archive ' + a.state}`);
+    L.push(`  archive: state=${a.state} behind=${a.behind} pendingFor=${Math.round(a.pendingForMs / 1000)}s backoff=${a.backoffMs}ms degradedSubtrees=${a.degradedCount}`);
+    // Spelled out because a bare HTTP 200 from this write used to be reported as
+    // "synced": the head is disposable and status-trusted, so accepted ≠ stored.
+    L.push(`  legacy head (compat only, status-trusted — NEVER read-back verified):`);
+    L.push(`     state=${lg.state} dirty=${lg.dirty} dirtyFor=${Math.round(lg.dirtyForMs / 1000)}s lastStatus=${lg.lastStatus} at=${fmtTs(lg.lastAt)}`);
+    if (s.compatOnlyProblem) L.push(`     ⚠️ head write FAILED while the archive verified → old clients see a stale head; durable progress is intact`);
+    L.push(`counts: authored=${c.authoredBooks} replicas=${c.replicatedBooks} tombstones=${c.tombstones} pendingDeletes=${c.pendingDeletes} purgedIdentities=${c.purgedIdentities} peerBoards=${c.peerBoards} shardSets=${c.shardBoards}`);
+    if (p.replication) L.push(`replication: ${p.replication.unique} unique authored events / ${p.replication.stored} stored copies across ${p.replication.devices} device(s)`);
+    const sh = p.shards;
+    if (sh) {
+      L.push(`shards: ${sh.shardCount} (${sh.redirects} redirect) verified=${sh.verifiedShards} treeLoaded=${sh.treeLoaded} writing=${sh.writing} queued=${sh.queued} failAttempt=${sh.failAttempt} budget=${sh.maxRequestBytes}B`);
+      const f = sh.lastFailure;
+      if (f) L.push(`  ACTIVE write failure: [${f.code}] ${f.stage || 'data'}@${f.prefix === '' ? '(root)' : f.prefix}${f.splitId ? ' split=' + f.splitId : ''} attempt=${f.attempt} willRetry=${f.willRetry} — ${f.message}`);
+      for (const h of (sh.recentFailures || []).slice(-4)) {
+        L.push(`  past failure @${fmtTs(h.at)}: [${h.code}] ${h.stage || 'data'}@${h.prefix === '' ? '(root)' : h.prefix} — ${h.message}`);
+      }
+      for (const g2 of (sh.degradedRead || []).slice(0, 6)) {
+        L.push(`  degraded subtree: ${g2.dev}/${g2.prefix === '' ? '(root)' : g2.prefix} [${g2.code || '?'}] ${g2.reason}`);
+      }
+    }
+    L.push(`books (newest ${c.booksShown} of ${c.booksTotal}):`);
+    for (const b of p.books) {
+      const w = b.won;
+      L.push(`  • ${b.book}  WON: ${w ? fmtRec(w) + ` by=${w.by}${w.mine ? ' (this device)' : ''}` : '— none (unplayed or fully suppressed)'}`);
+      L.push(`      mine:    ${fmtRec(b.mine)}${b.mineTracks ? `  (+${b.mineTracks} chapter records)` : ''}`);
+      L.push(`      replica: ${fmtRec(b.replica)}${b.replica ? ` origin=${b.replica.origin}` : ''}`);
+      for (const pr of b.peers) L.push(`      peer ${pr.from}: ${fmtRec(pr)}`);
+      for (const sr of b.shards) L.push(`      shard ${sr.from}: ${fmtRec(sr)}`);
+      if (b.rst) L.push(`      RESET floor: ts=${b.rst} (${fmtTs(b.rst)}) from ${b.rstFrom}${w && w.ts <= b.rst ? '  ⚠️ winner is at/below the floor' : ''}`);
+    }
   }
 
   // Sanitize a diagnostics string for sharing: strip tokens, full URLs, and (in
@@ -598,11 +660,17 @@
         if (!el || !P || !P.syncState) return;
         const s = P.syncState();
         const n = s.stats ? ` · ${s.stats.uniqueRecords} records` : '';
+        const f = s.archive && s.archive.lastFailure;
         // `stuck`, not `unsynced`: a write momentarily in flight (or a <30s dirty
         // flag between heartbeat publishes) is normal operation — showing it made
-        // this row flicker synced↔syncing every few seconds while playing.
+        // this row flicker synced↔syncing every few seconds while playing. That is
+        // also why this row does NOT show archive.state: `behind` is true for most
+        // of any listening session (records land every few seconds, the archive
+        // publishes once a minute), so surfacing it here would restore exactly that
+        // flicker. The archive/legacy distinction belongs in the report, which is
+        // read deliberately — see progressText() in the diagnostics export.
         el.textContent = (s.degraded && s.degraded.length) ? `degraded (${s.degraded.length})` + n
-          : s.stuck ? (s.lastError ? 'retrying: ' + s.lastError : 'syncing…') : 'synced' + n;
+          : s.stuck ? (f ? `retrying: ${f.code}` : s.lastError ? 'retrying: ' + s.lastError : 'syncing…') : 'synced' + n;
       };
       paint();
       setInterval(() => { if (!diag.classList.contains('hidden')) paint(); }, 3000);
