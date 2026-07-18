@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-17.148';
+const BUILD = '2026-07-17.149';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -163,6 +163,12 @@ self.addEventListener('message', (e) => {
   const d = e.data || {};
   if (d.type === 'SKIP_WAITING') { self.skipWaiting(); return; }
   if (d.type === 'GET_CACHE_STATUS') { cacheStatus().then((s) => { try { e.ports[0] && e.ports[0].postMessage(s); } catch {} }); return; }
+  // SW-OWNED cover clear: entries + FIFO bookkeeping + counters reset together.
+  if (d.type === 'CLEAR_IMG_CACHE') {
+    const work = imgClear().then((r) => { try { e.ports[0] && e.ports[0].postMessage(r); } catch {} });
+    if (e.waitUntil) e.waitUntil(work);
+    return;
+  }
   // artloader reports a cover whose <img> fired `error`. An opaque no-cors
   // response hides its HTTP status, so a Plex error page can get cached as an
   // "image" — the <img> decode failure is the only place that's observable.
@@ -197,7 +203,9 @@ async function cacheStatus() {
     for (const u of ASSETS) { const hit = await c.match(u); if (hit) out.present++; else out.missing.push(u); }
     const ic = await caches.open(IMG_CACHE);
     out.imgCount = (await ic.keys()).length;
-    out.imgStats = { seen: imgStats.seen, hit: imgStats.hit, put: imgStats.put };
+    out.imgStats = { seen: imgS.stats.seen, hit: imgS.stats.hit, put: imgS.stats.put };
+    out.statsEpoch = imgS.epoch;
+    out.workerId = WORKER_ID;
     out.cacheNames = await caches.keys();
   } catch (e) { out.error = (e && e.message) || 'status failed'; }
   return out;
@@ -338,36 +346,42 @@ const COVER_CACHE_HIGH = 4000;
 const COVER_CACHE_LOW = 3600;
 const IMG_INDEX_KEY = './__img-index';
 const IMG_INDEX_FLUSH_EVERY = 20;       // amortize index writes during scroll bursts
-let imgOrder = null;                    // authoritative in-memory order (loaded lazily)
-let imgKnown = null;                    // Set mirror for O(1) membership
-let imgUnflushed = 0;
-let imgChain = Promise.resolve();       // serializes every index/trim operation
+// ALL cover-cache bookkeeping lives in ONE state object (SWKit owns its shape +
+// reset semantics, so they're unit-testable): { order, known, unflushed, stats,
+// epoch }. `stats` is the imageFirst interception tally — if iOS serves a cover
+// from its own HTTP cache the SW never runs imageFirst, so `seen` does not climb.
+// A reading is only interpretable together with `epoch` (bumped on every clear)
+// and WORKER_ID (new per worker instance): a bare `seen` can't distinguish
+// "bypassed" from "counters reset by a worker restart / an earlier clear".
+const WORKER_ID = Math.random().toString(36).slice(2, 10);
+let imgS = SWKit.imgStateFresh();
+let imgChain = Promise.resolve();       // serializes every index/trim/clear operation
 
 async function imgEnsureOrder(cache) {
-  if (imgOrder) return;
+  if (imgS.order) return;
   let stored = [];
   try { const idx = await cache.match(IMG_INDEX_KEY); if (idx) stored = await idx.json(); } catch { stored = []; }
   const actual = (await cache.keys()).map((r) => r.url).filter((u) => !u.endsWith('__img-index'));
-  imgOrder = SWKit.imgReconcileOrder(Array.isArray(stored) ? stored : [], actual);
-  imgKnown = new Set(imgOrder);
+  imgS.order = SWKit.imgReconcileOrder(Array.isArray(stored) ? stored : [], actual);
+  imgS.known = new Set(imgS.order);
 }
-const imgFlushIndex = (cache) => cache.put(IMG_INDEX_KEY, new Response(JSON.stringify(imgOrder))).catch(() => {});
+const imgFlushIndex = (cache) => cache.put(IMG_INDEX_KEY, new Response(JSON.stringify(imgS.order))).catch(() => {});
 // Note a newly cached cover; trim past the high-water mark. Returns the chained
 // promise so the caller can waitUntil it.
 function imgNote(key) {
   imgChain = imgChain.then(async () => {
     const cache = await caches.open(IMG_CACHE);
     await imgEnsureOrder(cache);
-    if (!imgKnown.has(key)) { imgOrder.push(key); imgKnown.add(key); imgUnflushed++; }
-    if (imgOrder.length > COVER_CACHE_HIGH) {
-      const plan = SWKit.imgTrimPlan(imgOrder, COVER_CACHE_HIGH, COVER_CACHE_LOW);
-      for (const k of plan.drop) { await cache.delete(k).catch(() => {}); imgKnown.delete(k); }
-      imgOrder = plan.keep;
-      imgUnflushed = 0;
+    SWKit.imgStateNote(imgS, key);
+    if (imgS.order.length > COVER_CACHE_HIGH) {
+      const plan = SWKit.imgTrimPlan(imgS.order, COVER_CACHE_HIGH, COVER_CACHE_LOW);
+      for (const k of plan.drop) { await cache.delete(k).catch(() => {}); imgS.known.delete(k); }
+      imgS.order = plan.keep;
+      imgS.unflushed = 0;
       await imgFlushIndex(cache);
-      console.log('[sw] cover cache trimmed to', imgOrder.length);
-    } else if (imgUnflushed >= IMG_INDEX_FLUSH_EVERY) {
-      imgUnflushed = 0;
+      console.log('[sw] cover cache trimmed to', imgS.order.length);
+    } else if (imgS.unflushed >= IMG_INDEX_FLUSH_EVERY) {
+      imgS.unflushed = 0;
       await imgFlushIndex(cache);
     }
   }).catch(() => {});
@@ -378,31 +392,41 @@ function imgForget(key) {
   imgChain = imgChain.then(async () => {
     const cache = await caches.open(IMG_CACHE);
     await imgEnsureOrder(cache);
-    if (imgKnown.has(key)) {
-      imgKnown.delete(key);
-      imgOrder = imgOrder.filter((k) => k !== key);
+    if (imgS.known.has(key)) {
+      imgS.known.delete(key);
+      imgS.order = imgS.order.filter((k) => k !== key);
       await imgFlushIndex(cache);
     }
   }).catch(() => {});
   return imgChain;
 }
 
-// Diagnostic tally (read via GET_CACHE_STATUS). If a cover is served from iOS
-// WKWebView's own HTTP cache (NSURLCache, which sits in FRONT of the SW), the SW
-// never runs imageFirst → `seen` does NOT climb even as covers paint on screen.
-// That's the fingerprint of an OS-cache hit our caches.delete can't reach. Resets
-// to 0 if the worker is torn down between requests (interpret a NON-zero as proof
-// the SW saw traffic; a stuck 0 while covers load = the SW was bypassed).
-let imgStats = { seen: 0, hit: 0, put: 0 };
+// SW-OWNED cover-cache clear. The page used to delete the cache itself, which left
+// this worker's order/known/stats stale: a re-downloaded cover looked "already
+// known" (never re-indexed) and a stale order length could trim freshly re-fetched
+// covers. Serialized behind imgChain so it can't interleave with a note/trim, and
+// it resets ENTRIES + BOOKKEEPING + COUNTERS as one operation. The epoch it
+// returns delimits the measurement window that follows.
+function imgClear() {
+  imgChain = imgChain.then(async () => {
+    await caches.delete(IMG_CACHE);
+    const cache = await caches.open(IMG_CACHE);      // recreate empty
+    imgS = SWKit.imgStateReset(imgS);                // order=[] known=∅ stats=0 epoch++
+    let remaining = -1;
+    try { remaining = (await cache.keys()).length; } catch {}
+    return { cleared: true, remaining, statsEpoch: imgS.epoch, workerId: WORKER_ID };
+  }).catch((err) => ({ cleared: false, error: (err && err.message) || 'clear failed', statsEpoch: imgS.epoch, workerId: WORKER_ID }));
+  return imgChain;
+}
 
 // Cover art: cache-first on a TOKEN-STRIPPED key (so the same cover is found even
 // after Plex rotates the token, and no token is ever written into a cache key).
 async function imageFirst(evt, req, url) {
-  imgStats.seen++;
+  imgS.stats.seen++;
   const cache = await caches.open(IMG_CACHE);
   const key = imageKey(url);
   const hit = await cache.match(key);
-  if (hit) { imgStats.hit++; return hit; }
+  if (hit) { imgS.stats.hit++; return hit; }
   try {
     const res = await fetch(req);          // as issued by <img> (usually no-cors → opaque)
     // Cache real successes and opaque cross-origin responses (can't inspect status
@@ -411,7 +435,7 @@ async function imageFirst(evt, req, url) {
     if (res && (res.ok || res.type === 'opaque')) {
       // Tied to waitUntil: the write + FIFO accounting must survive the worker
       // being terminated right after the response returns.
-      const work = cache.put(key, res.clone()).then(() => { imgStats.put++; return imgNote(key); }).catch(() => {});
+      const work = cache.put(key, res.clone()).then(() => { imgS.stats.put++; return imgNote(key); }).catch(() => {});
       if (evt && evt.waitUntil) evt.waitUntil(work);
     }
     return res;

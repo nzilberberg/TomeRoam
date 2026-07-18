@@ -86,7 +86,35 @@
     return { drop: order.slice(0, n), keep: order.slice(n) };
   }
 
-  const api = { parseRange, isImageRoute, routeFor, imgReconcileOrder, imgTrimPlan };
+  // ---- cover-cache bookkeeping state (owned by the SW) ------------------------
+  // Kept here, not inline in sw.js, so the RESET semantics are unit-testable. The
+  // bug this exists for: "Clear cached data" deleted the cache from the PAGE via
+  // caches.delete(), leaving the still-running worker's order/known/stats stale.
+  // A re-downloaded cover then looked "already known" (never re-indexed, so the
+  // rebuilt index could go wrong and a stale order length could trim freshly
+  // re-fetched covers), and the CUMULATIVE counters made any post-clear reading
+  // unreadable — `seen>0` might be pre-clear traffic, `seen==0` might be a worker
+  // restart. Clearing must therefore be ONE owned operation: entries + FIFO
+  // bookkeeping + counters reset together, with an epoch to delimit the window.
+  function imgStateFresh() {
+    return { order: null, known: null, unflushed: 0, stats: { seen: 0, hit: 0, put: 0 }, epoch: 0 };
+  }
+  // Atomic reset. `order`/`known` become EMPTY (not null) — the cache was just
+  // recreated empty, so there is nothing to reconcile against and a lazy reload
+  // must not resurrect the old key set. epoch++ delimits the measurement window.
+  function imgStateReset(s) {
+    return { order: [], known: new Set(), unflushed: 0, stats: { seen: 0, hit: 0, put: 0 }, epoch: ((s && s.epoch) || 0) + 1 };
+  }
+  // Record a newly cached cover. Returns true only when it is genuinely NEW —
+  // after a reset a previously-known key must count as new again.
+  function imgStateNote(s, key) {
+    if (!s || !s.known || s.known.has(key)) return false;
+    s.order.push(key); s.known.add(key); s.unflushed++;
+    return true;
+  }
+
+  const api = { parseRange, isImageRoute, routeFor, imgReconcileOrder, imgTrimPlan,
+    imgStateFresh, imgStateReset, imgStateNote };
   if (typeof self !== 'undefined') self.SWKit = api;                         // service worker (importScripts)
   else if (typeof globalThis !== 'undefined') globalThis.SWKit = api;
   if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = api;   // Node tests

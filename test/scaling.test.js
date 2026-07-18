@@ -164,3 +164,47 @@ test('warmer: 20k books / 100 authors / budget 1500 → authors STILL warm (the 
   const played = books.filter((b) => b.lastViewedAt).sort((a, b) => b.lastViewedAt - a.lastViewedAt);
   assert.deepEqual(work[0], { t: 'tracks', rk: played[0].ratingKey });
 });
+
+// ---- review finding (.148): the cover-cache clear must reset ENTRIES, FIFO
+// bookkeeping and the measurement counters as ONE owned operation. A page-side
+// caches.delete() left the still-running worker's state stale, so a re-downloaded
+// cover looked "already known" and a cumulative counter made any post-clear
+// reading uninterpretable.
+const { imgStateFresh, imgStateReset, imgStateNote } = SWKit;
+
+test('imgState: reset clears the known-key set — a previously known key counts as NEW again', () => {
+  let s = imgStateFresh();
+  s.order = []; s.known = new Set();                 // as imgEnsureOrder would leave it
+  assert.equal(imgStateNote(s, 'coverA'), true, 'first insert is new');
+  assert.equal(imgStateNote(s, 'coverA'), false, 'already known → not re-recorded');
+
+  s = imgStateReset(s);                              // the clear
+
+  assert.equal(imgStateNote(s, 'coverA'), true, 'after a clear the SAME key must re-record as new');
+  assert.deepEqual(s.order, ['coverA'], 'and it takes a fresh slot in the FIFO order');
+});
+
+test('imgState: reset zeroes the interception counters so a post-clear delta starts at 0', () => {
+  let s = imgStateFresh();
+  s.stats.seen = 20; s.stats.hit = 12; s.stats.put = 8;   // pre-clear traffic
+  s = imgStateReset(s);
+  assert.deepEqual(s.stats, { seen: 0, hit: 0, put: 0 }, 'pre-clear traffic cannot leak into the new window');
+});
+
+test('imgState: reset bumps the epoch so two readings from different windows are distinguishable', () => {
+  let s = imgStateFresh();
+  assert.equal(s.epoch, 0);
+  s = imgStateReset(s);
+  assert.equal(s.epoch, 1, 'epoch delimits the measurement window');
+  s = imgStateReset(s);
+  assert.equal(s.epoch, 2);
+});
+
+test('imgState: reset empties order/known rather than nulling them (no lazy reload of the OLD key set)', () => {
+  let s = imgStateFresh();
+  s.order = ['old1', 'old2']; s.known = new Set(s.order);
+  s = imgStateReset(s);
+  assert.deepEqual(s.order, [], 'order is empty, not null — the cache was recreated empty');
+  assert.equal(s.known.size, 0);
+  assert.equal(s.known.has('old1'), false, 'stale keys must not survive the clear');
+});

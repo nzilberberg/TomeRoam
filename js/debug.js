@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.148';
+  const BUILD = '2026-07-17.149';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -250,6 +250,8 @@
       d.shellMissing = cs.missing || [];
       d.coverCacheCount = cs.imgCount;
       d.imgStats = cs.imgStats;             // SW cover-request interception tally
+      d.statsEpoch = cs.statsEpoch;         // bumped per clear — delimits a measurement window
+      d.workerId = cs.workerId;             // per worker INSTANCE — a change means the counters restarted
       d.shellBuild = cs.build;              // the BUILD the active SW reports
     }
     // IndexedDB structured data
@@ -288,9 +290,12 @@
     L.push('▶ LIVE cache + data — LOCAL reads, no network (auto-refreshing) ◀');
     L.push(`   cover cache entries: ${d.coverCacheCount == null ? '?' : d.coverCacheCount}`);
     const is = d.imgStats || {};
-    L.push(`   SW cover requests SEEN: ${is.seen == null ? '?' : is.seen}  (fromSWcache=${is.hit || 0} written=${is.put || 0})`);
-    L.push(`      ↑ if covers paint but SEEN stays 0, iOS served them from its OWN`);
-    L.push(`        HTTP cache (in front of the SW) — not clearable from JS.`);
+    const q = (v) => (v == null ? '?' : v);   // NEVER coerce "unavailable" to 0
+    L.push(`   SW cover requests SEEN: ${q(is.seen)}  (fromSWcache=${q(is.hit)} written=${q(is.put)})`);
+    L.push(`   measurement window: epoch=${q(d.statsEpoch)}  worker=${d.workerId || '?'}`);
+    L.push(`      ↑ SEEN is cumulative for ONE worker instance and resets on clear.`);
+    L.push(`        Only compare readings with the SAME epoch AND worker; if either`);
+    L.push(`        changed, the counter restarted and a 0 proves nothing.`);
     L.push(`   IndexedDB:  books=${d.cachedBooks || 0}  authors=${d.cachedAuthors || 0}  tracks=${d.cachedTracks || 0}`);
     L.push(`   caches present: ${(d.cacheNames || []).join(', ') || '(none)'}`);
     L.push('');
@@ -404,8 +409,13 @@
       // the panel display alone is NOT captured in a bug report. This makes the
       // SEEN-counter verdict durable: a report then shows whether the SW ever saw a
       // cover load (SWseen climbs) or was bypassed by iOS (stays 0) while covers painted.
+      // `?` for anything UNAVAILABLE — coercing a missing measurement to 0 (the old
+      // `is.seen || 0`) would record a hard "the SW saw nothing" when in fact
+      // GET_CACHE_STATUS failed to answer at all.
       const is = d.imgStats || {};
-      const snap = `cover-entries=${d.coverCacheCount == null ? '?' : d.coverCacheCount} SWseen=${is.seen || 0} hit=${is.hit || 0} put=${is.put || 0} idb-books=${d.cachedBooks || 0}`;
+      const q = (v) => (v == null ? '?' : v);
+      const snap = `cover-entries=${q(d.coverCacheCount)} SWseen=${q(is.seen)} hit=${q(is.hit)} put=${q(is.put)}`
+        + ` epoch=${q(d.statsEpoch)} sw=${d.workerId || '?'} idb-books=${d.cachedBooks || 0}`;
       if (snap !== lastCacheSnap) { lastCacheSnap = snap; log('SWCACHE', snap); }
     }
     catch (e) { body.textContent = 'diag error: ' + ((e && e.message) || 'err'); }
@@ -519,20 +529,28 @@
       let imgBefore = -1, imgAfter = -1, deleted = null;
       if (window.caches) { try { imgBefore = (await (await caches.open(IMG)).keys()).length; } catch {} }
       if (window.Store) await Store.clearCache();
-      if (window.caches) {
+      // The SERVICE WORKER owns the cover cache — not just its entries but the FIFO
+      // bookkeeping (order/known) and the interception counters. Deleting it from
+      // the PAGE left all of that stale in the still-running worker: a re-downloaded
+      // cover looked "already known" (never re-indexed, and a stale order length
+      // could trim freshly re-fetched covers), and the cumulative counters kept
+      // pre-clear traffic, making any post-clear reading uninterpretable. So hand the
+      // clear to the SW as ONE owned operation; a direct delete is only the fallback
+      // for when there is no controller to ask.
+      const ack = await askSw({ type: 'CLEAR_IMG_CACHE' });
+      if (!ack && window.caches) {
         try { deleted = await caches.delete(IMG); } catch (e) { deleted = 'err:' + (e && e.name); }
-        // caches.delete() can silently no-op on some WebKit builds while the cache is
-        // still referenced. Verify by re-opening; if anything survived, delete the
-        // entries individually (the robust path) so covers actually leave disk.
         try {
           const c = await caches.open(IMG);
           let left = await c.keys();
-          if (left.length) { await Promise.all(left.map((rq) => c.delete(rq).catch(() => {}))); left = await c.keys(); }
-          imgAfter = left.length;
+          if (left.length) { await Promise.all(left.map((rq) => c.delete(rq).catch(() => {}))); }
         } catch {}
       }
+      if (window.caches) { try { imgAfter = (await (await caches.open(IMG)).keys()).length; } catch {} }
       const booksLeft = window.Store ? (await Store.cachedBooks()).length : -1;
-      log('CACHE', `CLEAR caches=[${names.join('|')}] cover-entries ${imgBefore}→${imgAfter} deleted=${deleted} booksLeft=${booksLeft}`);
+      log('CACHE', `CLEAR caches=[${names.join('|')}] cover-entries ${imgBefore}→${imgAfter}`
+        + ` via=${ack ? 'sw' : 'page'} epoch=${ack ? ack.statsEpoch : '?'} sw=${(ack && ack.workerId) || '?'}`
+        + ` deleted=${ack ? ack.cleared : deleted} booksLeft=${booksLeft}`);
     } catch (e) { log('CACHE', 'CLEAR error ' + (e && e.message)); }
     flushLog();
     location.reload();
