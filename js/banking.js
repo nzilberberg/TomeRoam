@@ -256,6 +256,16 @@ const Banking = (() => {
       // stays under the RAM ceiling; RAM blobs were the old jetsam hazard.
       const persisted = window.Downloads && Downloads.bufferTrack
         ? await Downloads.bufferTrack(bankBook, t.ratingKey, blob) : false;
+      // OWNERSHIP: clearBanks() (a book change, via ensureBook) aborts bankCtl and
+      // wipes `banks` — but that abort only rejects the FETCH. A bank already PAST the
+      // fetch, sitting in this bufferTrack await, never sees it. Everything below
+      // writes idx-keyed state belonging to whatever book is current NOW, so without
+      // this check `banks.set(idx, …)` publishes the OLD book's blob as the new book's
+      // chapter and app.js:1048's bankedUrl(idx) serves it — wrong-book audio. The
+      // `finally` makes the same comparison, but only to suppress the pump restart;
+      // by then the poisoned entry is already in the map. (The disk write above is
+      // fine: it was keyed by the book that was current when it was issued.)
+      if (bankCtl !== ctl) return;
       const swServes = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
       if (!(persisted && swServes) && usedBytes() + bytes <= MAX_TOTAL_BANK_BYTES) banks.set(idx, { url: URL.createObjectURL(blob), bytes });
       if (ctx && ctx.idx === idx) paintMeter();   // locallyStored/banks now true → meterPct() = 100

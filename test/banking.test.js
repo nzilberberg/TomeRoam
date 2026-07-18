@@ -122,3 +122,46 @@ test('a book change clears all retry state', () => {
   Banking.ensureBook('bookB');
   assert.equal(Banking._test.retry.size, 0, 'idx-keyed backoff is irrelevant after a book change');
 });
+
+// ---- ownership of `banks` across the bufferTrack await ----------------------
+// clearBanks() (via ensureBook on a book change) aborts bankCtl and revokes every
+// bank — but an in-flight bankOne that is already PAST its fetch, awaiting
+// Downloads.bufferTrack, never sees that abort: the signal only rejects the fetch.
+// Its `banks.set(idx, …)` afterwards therefore lands in the map that now belongs to
+// the NEW book, and app.js:1048's bankedUrl(idx) will serve it — the OLD book's audio
+// for the new book's chapter. The `finally` block's `bankCtl === ctl` guard correctly
+// suppresses the pump restart, but by then the poisoned entry is already in.
+test('a book change during bufferTrack does not put the old book\'s blob in the new book\'s banks', async () => {
+  setup(AHEAD);
+  let releaseBuffer;
+  global.window.Downloads.bufferTrack = () => new Promise((r) => { releaseBuffer = r; });
+  fetchImpl = async () => ({ blob: { size: 10 }, bytes: 10 });
+
+  Banking.pump();                       // bankOne(1) → fetch resolves → awaits bufferTrack
+  await flush();
+  assert.equal(fetchCalls.length, 1, 'precondition: a bank is in flight for the OLD book');
+
+  Banking.ensureBook('bookB');          // the user opens another book → clearBanks()
+  releaseBuffer(false);                 // persist reports failure → the RAM-bank path runs
+  await flush();
+
+  assert.equal(Banking.bankedUrl(1), null,
+    'a bank completed for the previous book must not be readable as the new book\'s chapter');
+  assert.equal(Banking.count(), 0, 'and it must not be counted against the new book\'s budget');
+});
+
+// Control: without a book change the same sequence MUST still bank, or "never write"
+// would pass the test above.
+test('the same sequence with no book change does bank the chapter', async () => {
+  setup(AHEAD);
+  let releaseBuffer;
+  global.window.Downloads.bufferTrack = () => new Promise((r) => { releaseBuffer = r; });
+  fetchImpl = async () => ({ blob: { size: 10 }, bytes: 10 });
+
+  Banking.pump();
+  await flush();
+  releaseBuffer(false);
+  await flush();
+
+  assert.ok(Banking.bankedUrl(1), 'the chapter is banked and readable');
+});

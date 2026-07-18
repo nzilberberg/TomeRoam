@@ -45,6 +45,10 @@ const SyncQueue = (() => {
   // Record a local progress change. `explicit` marks a user-chosen near-zero
   // position (start-from-beginning / restart chapter / reset) so the zero-guard
   // lets it through. `source` is a free tag (e.g. 'timer','pause','manual-seek').
+  // Every enqueue stamps a fresh rev. flush() captures the row BEFORE its network
+  // write and must not delete/overwrite a row that changed underneath it — and
+  // updatedAt cannot tell them apart, because serverNow() can return the same ms.
+  let rev = 0;
   async function enqueue(item) {
     if (!storeReady()) return null;
     const rec = {
@@ -58,6 +62,7 @@ const SyncQueue = (() => {
       explicit: !!item.explicit,
       createdAt: item.createdAt || now(),
       updatedAt: now(),
+      rev: ++rev,
       source: item.source || 'app',
       attemptCount: 0,
       lastAttemptAt: 0,
@@ -207,14 +212,23 @@ const SyncQueue = (() => {
             timeMs: it.positionMs, durationMs: it.durationMs || 0,
           });
           if (ok === false) throw new Error('writeTimeline failed');
-          await Store.del(STORE, it.id);
+          // enqueue() COALESCES onto this same id (see enqueue), so the user listening
+          // during the write leaves a NEWER position here. Deleting on the strength of
+          // our pre-write snapshot would drop it unwritten.
+          const live = (await Store.getAll(STORE)).find((q) => q.id === it.id);
+          if (!live || live.rev === it.rev) await Store.del(STORE, it.id);
+          else dbg('SYNCQ', `superseded during write book=${it.bookKey} — keeping newer pos=${(live.positionMs/1000)|0}s`);
           res.written++;
           dbg('SYNCQ', `synced book=${it.bookKey} pos=${(it.positionMs/1000)|0}s`);
         } catch (e) {
-          it.attemptCount = (it.attemptCount || 0) + 1;
-          it.lastAttemptAt = now();
-          it.lastError = (e && e.message) || 'write failed';
-          await Store.put(STORE, it);
+          // Same hazard on the retry path: putting our snapshot back would stamp the
+          // stale position over whatever was queued while the write was in flight.
+          const live = (await Store.getAll(STORE)).find((q) => q.id === it.id);
+          const row = (live && live.rev !== it.rev) ? live : it;
+          row.attemptCount = (it.attemptCount || 0) + 1;
+          row.lastAttemptAt = now();
+          row.lastError = (e && e.message) || 'write failed';
+          await Store.put(STORE, row);
           res.failed++;
         }
       }
