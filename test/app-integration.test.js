@@ -118,7 +118,7 @@ test('a background/foreground round trip does not reload or pause live playback 
 // Several bugs (.92/.93) were "the right calls happened in the wrong ORDER". Pin the
 // sequence a selection must produce: the track list is fetched BEFORE the element is
 // pointed at a source, and ownership is claimed only once a source exists.
-test('a selection fetches tracks before loading the element, and claims ownership after (.92/.93 ordering)', async () => {
+test('a selection fetches, then sources, then loads, then claims — one ordered stream (.92/.93)', async () => {
   const h = boot();
   try {
     await settle(h);
@@ -126,12 +126,20 @@ test('a selection fetches tracks before loading the element, and claims ownershi
     tapBook(h, 'bookA');
     await settle(h);
 
-    const after = h.log.calls.slice(before).map((c) => c.name);
-    const iFetch = after.indexOf('plex.getAlbumTracks');
-    const iClaim = after.indexOf('presence.claimPlaying');
-    assert.ok(iFetch >= 0, 'tracks were fetched');
-    assert.ok(iClaim > iFetch, 'ownership is claimed only after the track list resolved');
-    assert.ok(h.audio.calls.includes('load'), 'and the element was loaded');
+    // Audio effects and the outside-world fakes now share ONE ordered recorder, so
+    // this is a genuine cross-dependency ordering claim. The previous version asserted
+    // "fetch before claim" (both in the fakes log) plus "load happened at some point"
+    // (a separate array) — which could NOT see a claim that moved ahead of the load,
+    // and that is exactly the .93 corruption shape.
+    const seq = h.log.calls.slice(before).map((c) => c.name);
+    const at = (n) => seq.indexOf(n);
+    assert.ok(at('plex.getAlbumTracks') >= 0, 'tracks were fetched');
+    assert.ok(at('audio.src') > at('plex.getAlbumTracks'),
+      'the source is assigned only after the track list resolved: ' + seq.join(' → '));
+    assert.ok(at('audio.load') > at('audio.src'),
+      'load() follows the source assignment: ' + seq.join(' → '));
+    assert.ok(at('presence.claimPlaying') > at('audio.load'),
+      'ownership is claimed only once the element is loading: ' + seq.join(' → '));
   } finally { h.dispose(); }
 });
 
@@ -856,11 +864,9 @@ test('Media Session previoustrack matches the Now-Playing previous button (.158)
 // bug (enterApp re-running mid-flight). The requirement: a visibility transition must
 // never authorize an obsolete startup, and must not double-load a legitimate one.
 
-// HONEST STATUS: no mutation I could construct makes this one fail — nothing in the
-// visibility handler re-drives an in-flight selection today, so it is a guard against
-// a FUTURE handler that does, not proof of a current invariant. Kept deliberately and
-// labelled, rather than left to imply coverage it does not have. The superseded and
-// resume-kill cases below ARE mutation-verified.
+// STATUS (updated .162): this WAS unverified — no mutation made it fail. Once audio
+// effects joined the shared ordered recorder, moving Presence.claimPlaying ahead of
+// the load DOES fail it, so it is now mutation-verified like its neighbours.
 test('backgrounding during a pending startup still starts the book exactly once (.158)', async () => {
   const h = boot({ deferTracks: true });
   try {
@@ -968,5 +974,85 @@ test('foregrounding must not restore the remembered book over live playback (.15
     assert.match(h.audio.src, /bookB/, 'the remembered book must NOT be restored over live playback');
     assert.equal(loads(h), before, 'and the live element must not be reloaded');
     assert.equal(h.audio.paused, false, 'nor left paused — that is the resume-kill symptom');
+  } finally { h.dispose(); }
+});
+
+// ══ the no-service-worker downloaded-blob path (.162) ══════════════════════════
+// External review, HIGH. useSrc() revokes whatever curObjUrl holds and nulls it —
+// and arguments evaluate BEFORE the call. So `curObjUrl = URL.createObjectURL(blob);
+// useSrc(curObjUrl, …)` revoked the URL it was about to install (audio.src got a
+// REVOKED blob url) AND leaked the previous one, which the assignment had just
+// overwritten before useSrc could revoke it. Both halves are asserted here.
+// This is the desktop-with-SW-disabled fallback — the only reason the branch exists.
+test('the downloaded-blob path installs a LIVE object URL, never a revoked one (.162)', async () => {
+  const h = boot({ downloadedTracks: ['bookA-t0'] });
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+
+    assert.match(h.audio.src, /^blob:/, 'precondition: the no-SW path served the blob directly');
+    assert.ok(!h.objectUrls.revoked.includes(h.audio.src),
+      'the URL handed to <audio> must still be valid — revoking it first makes playback fail');
+  } finally { h.dispose(); }
+});
+
+test('a second downloaded track revokes the FIRST url exactly once and keeps the new one live (.162)', async () => {
+  const h = boot({ downloadedTracks: ['bookA-t0', 'bookA-t1'] });
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    const first = h.audio.src;
+    assert.match(first, /^blob:/);
+
+    h.audio.reachPlaying(10);
+    await settle(h);
+    h.tap('#player');                     // open Now Playing
+    await settle(h);
+    h.tap('#npNext');                     // → chapter 2, also downloaded
+    await settle(h);
+
+    const second = h.audio.src;
+    assert.match(second, /^blob:/);
+    assert.notEqual(second, first, 'a fresh url for the new chapter');
+    assert.equal(h.objectUrls.revoked.filter((u) => u === first).length, 1,
+      'the previous url is revoked exactly once — not leaked, not double-revoked');
+    assert.ok(!h.objectUrls.revoked.includes(second), 'and the live one is not revoked');
+  } finally { h.dispose(); }
+});
+
+// ══ delayed publication vs a newer selection (.162) ════════════════════════════
+// External review asked for Progress/Presence failure-isolation coverage. Checking
+// the REAL signatures first changed the answer: every Presence method and every
+// Progress method except one is SYNCHRONOUS (returns undefined), so "the publication
+// is still in flight" is not a state those APIs can be in, and rejecting them would
+// test an interface that does not exist. `Progress.refresh()` is the single genuinely
+// async surface — and it cannot reject, because poll() swallows in an outer catch.
+// So this is the one honest scenario at this seam.
+test('a Progress.refresh still in flight cannot disturb a newer selection (.162)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    h.publications.deferNext('progress.refresh');
+    tapBook(h, 'bookA');
+    await settle(h);
+    h.audio.reachPlaying(100);
+    await settle(h, 30);                    // the render tick drives Progress.refresh()
+
+    const inflight = h.publications.find('progress.refresh');
+    if (!inflight) return;                  // refresh not driven in this window — nothing to assert
+
+    tapBook(h, 'bookB');                    // newer selection while the read is pending
+    await settle(h);
+    const srcAfterB = h.audio.src;
+    const loadsAfterB = loads(h);
+
+    h.publications.settle('progress.refresh');   // the stale read finally completes
+    await settle(h, 20);
+
+    assert.equal(h.audio.src, srcAfterB, 'a completing peer read must not change the source');
+    assert.equal(loads(h), loadsAfterB, 'nor reload the element');
+    assert.match(h.audio.src, /bookB/, 'the newer selection still owns playback');
   } finally { h.dispose(); }
 });

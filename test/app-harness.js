@@ -18,7 +18,11 @@
 //     Net/Store/screens) and for <audio>. Every fake records calls in order, so a
 //     test can assert not just THAT something happened but in WHAT SEQUENCE — which
 //     is the actual invariant in an ownership bug.
-//   * DEFERRED promises everywhere a real request would be in flight, so a test can
+//   * DEFERRED promises for the requests the app OBSERVES — Plex.getAlbumTracks and
+//     audio.play(). (Progress/Presence are deliberately NOT deferrable: app.js calls
+//     them fire-and-forget at ~50 sites, never awaiting or catching, so a deferred
+//     completion has nothing to race against there. See progress-publish.test.js for
+//     where those publication races actually live.) So a test can
 //     interleave: "start playing book A, and WHILE its track list is still pending,
 //     tap book B". That interleaving is the bug class; it cannot be expressed
 //     against auto-resolving stubs.
@@ -53,8 +57,12 @@ function deferred() {
  */
 class FakeAudio {
   constructor() {
-    this.src = '';
-    this.currentTime = 0;
+    // src and currentTime are ACCESSORS so their assignment lands in the SHARED
+    // ordered log. Without that, audio events lived only in this.calls while Plex/
+    // Presence/Progress/MediaSession lived in log.calls, and no test could prove an
+    // ordering ACROSS the two — e.g. that presence is claimed only after load().
+    this._src = '';
+    this._currentTime = 0;
     this.duration = 0;
     this.paused = true;
     this.playbackRate = 1;
@@ -66,9 +74,21 @@ class FakeAudio {
     this._listeners = new Map();
     this.calls = [];                 // ordered log: ['play', 'pause', 'load', …]
     this.playAttempts = [];          // one record per play() call: {n, src, state, promise}
+    Object.defineProperty(this, 'src', {
+      get: () => this._src,
+      set: (v) => { this._src = v; FakeAudio.note('audio.src', v); },
+      configurable: true, enumerable: true,
+    });
+    Object.defineProperty(this, 'currentTime', {
+      get: () => this._currentTime,
+      set: (v) => { this._currentTime = v; FakeAudio.note('audio.currentTime', v); },
+      configurable: true, enumerable: true,
+    });
     this._deferPlays = 0;            // how many upcoming play() calls stay pending
     FakeAudio.last = this;
   }
+  /** Mirror an audio effect into the shared ordered recorder (set by boot()). */
+  static note(name, ...args) { if (FakeAudio.sharedLog) FakeAudio.sharedLog.calls.push({ name, args }); }
   addEventListener(type, fn) {
     if (!this._listeners.has(type)) this._listeners.set(type, []);
     this._listeners.get(type).push(fn);
@@ -98,7 +118,7 @@ class FakeAudio {
   play() {
     const n = this.playAttempts.length;
     const att = { n, src: this.src, state: 'resolved' };
-    this.calls.push('play');
+    this.calls.push('play'); FakeAudio.note('audio.play');
     this.paused = false;
     this.playAttempts.push(att);
     if (this._deferPlays > 0) {
@@ -117,7 +137,7 @@ class FakeAudio {
     const a = this.playAttempts[i];
     if (!a) throw new Error('no play attempt #' + i);
     if (a.state !== 'pending') throw new Error(`play attempt #${i} is already ${a.state}`);
-    a.state = 'resolved'; this.calls.push('play:resolve#' + i); a._settle();
+    a.state = 'resolved'; this.calls.push('play:resolve#' + i); FakeAudio.note('audio.play:resolved', i); a._settle();
   }
   rejectPlay(i = 0, err) {
     const a = this.playAttempts[i];
@@ -127,12 +147,12 @@ class FakeAudio {
     // when they reject with NotAllowedError. Modelling that matters: without it the
     // fake reports paused=false after a refusal and the app looks like it is claiming
     // playback it never got, which is a defect of the FAKE, not of app.js.
-    a.state = 'rejected'; this.calls.push('play:reject#' + i); this.paused = true;
+    a.state = 'rejected'; this.calls.push('play:reject#' + i); FakeAudio.note('audio.play:rejected', i); this.paused = true;
     a._fail(err || Object.assign(new Error('play() refused'), { name: 'NotAllowedError' }));
   }
   getPlayAttempt(i = 0) { return this.playAttempts[i]; }
-  pause() { this.calls.push('pause'); this.paused = true; }
-  load() { this.calls.push('load'); }
+  pause() { this.calls.push('pause'); FakeAudio.note('audio.pause'); this.paused = true; }
+  load() { this.calls.push('load'); FakeAudio.note('audio.load'); }
   /**
    * Report a buffered range. The wedge watchdog deliberately ignores a frozen clock
    * with NO forward data (that's real starvation, not the iOS audio-session wedge),
@@ -216,6 +236,15 @@ function boot(opts = {}) {
     configurable: true,
   });
   Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+  // Object URLs are TRACKED, not stubbed away: the no-service-worker download path
+  // creates one and hands ownership to curObjUrl, and getting that order wrong means
+  // audio.src receives a REVOKED url. A test can only see that if we record both.
+  const objectUrls = { created: [], revoked: [] };
+  let objUrlSeq = 0;
+  window.URL = window.URL || {};
+  window.URL.createObjectURL = (blob) => { const u = 'blob:test/' + (++objUrlSeq); objectUrls.created.push(u); return u; };
+  window.URL.revokeObjectURL = (u) => { objectUrls.revoked.push(u); };
+  global.URL = window.URL;
   window.MediaMetadata = function MediaMetadata(o) { Object.assign(this, o); };
   global.MediaMetadata = window.MediaMetadata;
   // Service worker / cache APIs: present but inert (SW behaviour is tested in swkit).
@@ -279,6 +308,41 @@ function boot(opts = {}) {
 
   // ---- fakes: the outside world -------------------------------------------
   const log = recorder();
+  FakeAudio.sharedLog = log;   // audio effects join the SAME ordered stream as the fakes
+
+  /**
+   * A recorder that ALSO returns a controllable promise.
+   *
+   * app.js calls Progress/Presence fire-and-forget — ~50 call sites, none of which
+   * await, .then or .catch — so delaying or rejecting one cannot reorder app.js state
+   * by itself. That is a claim worth MECHANISING rather than asserting in prose, which
+   * is what these controls are for: a test can reject a publication and prove playback
+   * is undisturbed and that nothing escapes as an unhandled rejection. (The publication
+   * ORDERING races are real, but they live inside progress.js/presence.js — see
+   * test/progress-publish.test.js.)
+   */
+  const pubs = { pending: [], deferred: new Set() };
+  const recCtl = (name) => (...args) => {
+    log.calls.push({ name, args });
+    if (!pubs.deferred.has(name)) return Promise.resolve();
+    pubs.deferred.delete(name);
+    const d = deferred();
+    pubs.pending.push({ name, args, ...d, n: pubs.pending.length });
+    return d.promise;
+  };
+  const publications = {
+    /** Make the NEXT call to `name` return a promise that stays pending. */
+    deferNext: (name) => pubs.deferred.add(name),
+    pending: () => pubs.pending.filter((p) => !p.done),
+    find: (name) => pubs.pending.find((p) => p.name === name && !p.done),
+    settle(name) { const p = this.find(name); if (!p) throw new Error('no pending ' + name); p.done = true; p.resolve(); },
+    fail(name, err) {
+      const p = this.find(name);
+      if (!p) throw new Error('no pending ' + name);
+      p.done = true;
+      p.reject(err || new Error(name + ' failed'));
+    },
+  };
   const books = opts.books || [
     { ratingKey: 'bookA', title: 'Book A', parentTitle: 'Author', thumb: '/a', leafCount: 3, viewedLeafCount: 0, lastViewedAt: 2000, addedAt: 2000 },
     { ratingKey: 'bookB', title: 'Book B', parentTitle: 'Author', thumb: '/b', leafCount: 3, viewedLeafCount: 0, lastViewedAt: 1000, addedAt: 1000 },
@@ -341,14 +405,24 @@ function boot(opts = {}) {
     recordBook: log.rec('progress.recordBook'),
     recordTrack: log.rec('progress.recordTrack'),
     resetBook: log.rec('progress.resetBook'),
-    refresh: async () => {}, flush: async () => {},
+    // FIDELITY: every other Progress/Presence method is SYNCHRONOUS in the real module
+    // (presence.js:214-246, progress.js:294-929 all return undefined), so they stay
+    // plain recorders — handing a test a promise to defer or reject there would model
+    // an interface that does not exist, and a fake harsher than reality manufactures
+    // phantom bugs. `refresh()` (progress.js:949) is the ONE genuinely async surface,
+    // and it cannot reject: poll() swallows everything in an outer catch.
+    refresh: recCtl('progress.refresh'), flush: log.rec('progress.flush'),
   };
 
   const downloads = {
     init: () => {}, subscribe: () => {}, available: () => true, suspend: () => {},
-    isDownloaded: () => false, trackLocal: () => false, trackBuffered: () => false,
+    isDownloaded: () => false,
+    // opts.downloadedTracks: rks served from a local blob. With no SW controller (the
+    // harness default) app.js takes the object-URL branch — the desktop fallback.
+    trackLocal: (rk) => !!(opts.downloadedTracks || []).includes(String(rk)),
+    trackBuffered: () => false,
     trackProgress: () => 0, progress: () => 0, stateOf: () => 'none',
-    getBlob: async () => null, listDownloaded: async () => [], remove: async () => {}, bufMaxBytes: () => 1e9,
+    getBlob: async (rk) => ((opts.downloadedTracks || []).includes(String(rk)) ? { size: 123, _rk: rk } : null), listDownloaded: async () => [], remove: async () => {}, bufMaxBytes: () => 1e9,
   };
 
   const banking = {
@@ -438,6 +512,8 @@ function boot(opts = {}) {
     plex, presence, progress, downloads, banking, browse, net, screens,
     log,
     pendingTracks,
+    objectUrls,
+    publications,
     /**
      * The REAL Media Session handlers app.js registered. `invoke` calls the exact
      * callback the browser would — the lock-screen entry point — so a test can prove

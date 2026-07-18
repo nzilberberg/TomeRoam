@@ -68,3 +68,36 @@ test('an ordinary cache-miss render does position its own page', async () => {
 
   assert.equal(scrolls.length, 1, 'the visible page still takes its entry position');
 });
+
+// External review, MED: the page-level `.hidden` check alone is not enough. Leaving
+// Browse entirely hides the #browse CONTAINER and leaves the active page node without
+// `.hidden` — documented in browse.js's own showPage comment — so a late fetch still
+// scrolled the window while Home/Options was on screen.
+test('a slow page whose fetch lands after leaving Browse entirely must not scroll', async () => {
+  Browse.reset();
+  const mount = document.getElementById('mount');
+  mount.classList.remove('hidden');
+  let release;
+  global.Plex.getBooks = () => new Promise((r) => { release = r; });
+
+  const slow = Browse.render({ v: 'books' });
+  await tick();
+  mount.classList.add('hidden');          // the user navigates to Home: #browse hides,
+                                          // but the page node inside keeps no .hidden
+  scrolls = [];
+  release([{ ratingKey: 'b3', title: 'B3', parentTitle: 'A', thumb: '/t' }]);
+  await slow;
+  await tick(20);
+
+  assert.deepEqual(scrolls, [], 'nothing may scroll while Browse is not on screen');
+
+  // …and the page must still have been FILLED, so re-entering Browse shows content
+  // rather than the placeholder, and positions normally.
+  mount.classList.remove('hidden');
+  scrolls = [];
+  await Browse.render({ v: 'books' });     // cache HIT now
+  await tick(20);
+  const page = mount.querySelector('.browsepage');
+  assert.ok(page && !/Could not load/.test(page.innerHTML), 'the page was built while hidden');
+  assert.equal(scrolls.length, 1, 're-entry positions the page as usual');
+});

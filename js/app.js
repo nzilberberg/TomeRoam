@@ -1062,12 +1062,16 @@
     // OFFLINE DOWNLOAD (plays with no network), or the live stream. Downloaded
     // blobs resolve async from IndexedDB, so set src in a small helper guarded by
     // the load generation.
+    // Returns TRUE if it actually took the source. The blob path below needs that:
+    // it must not hand ownership of a fresh object URL to curObjUrl unless the source
+    // was accepted, or the URL leaks with nothing tracking it.
     const useSrc = (src, kind) => {
-      if (gen !== loadGen) return;
+      if (gen !== loadGen) return false;
       if (window.PBDebug) PBDebug.log('PLAY', `startTrack idx=${idx} seek=${(seekSec || 0).toFixed(1)}s src=${kind} autoplay=${autoplay}`);
       if (curObjUrl) { try { URL.revokeObjectURL(curObjUrl); } catch {} curObjUrl = null; }
       audio.src = src; audio.load();
       pumpBank();   // no-ops for a fully-downloaded book (see pumpBank guard)
+      return true;
     };
     if (banked) useSrc(banked, 'banked');
     else if (window.Downloads && Downloads.trackLocal && Downloads.trackLocal(t.ratingKey)) {
@@ -1080,11 +1084,18 @@
         useSrc('./__dl/' + encodeURIComponent(t.ratingKey), 'download');
       } else {
         Downloads.getBlob(t.ratingKey).then((blob) => {
-          // useSrc re-checks the generation, but curObjUrl is assigned BEFORE that —
-          // a superseded blob load would overwrite the URL currently in use, so the
-          // live one is never revoked (leak) and the next load revokes an orphan.
           if (gen !== loadGen) return;
-          if (blob) { curObjUrl = URL.createObjectURL(blob); useSrc(curObjUrl, 'download'); }
+          // ORDER MATTERS. useSrc() revokes whatever curObjUrl holds and nulls it, and
+          // arguments evaluate BEFORE the call — so assigning curObjUrl first meant
+          // useSrc revoked the URL it was about to install (audio.src got a REVOKED
+          // blob URL) while the PREVIOUS url leaked, having just been overwritten.
+          // Keep the new URL local, let useSrc revoke the old one, and adopt only if
+          // the source was accepted; otherwise revoke it here so it cannot leak.
+          if (blob) {
+            const nextUrl = URL.createObjectURL(blob);
+            if (useSrc(nextUrl, 'download')) curObjUrl = nextUrl;
+            else { try { URL.revokeObjectURL(nextUrl); } catch {} }
+          }
           else useSrc(Plex.streamUrl(t.partKey), 'stream');
         }).catch(() => useSrc(Plex.streamUrl(t.partKey), 'stream'));
       }

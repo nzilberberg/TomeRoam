@@ -409,7 +409,12 @@ const Browse = (() => {
     // node. showPage() marks the shown page by REMOVING .hidden. The cache-identity
     // check above is not enough here — the superseded page is still cached and still
     // connected, just hidden, which is exactly how this got through the first time.
-    if (!page.classList.contains('hidden')) positionOnEnter(desc, page, 0);
+    // BOTH conditions. Page-level .hidden covers Browse page A -> Browse page B, but
+    // leaving Browse entirely (-> Home / Options) hides the #browse CONTAINER and
+    // leaves the active page node WITHOUT .hidden — so the page check alone still let
+    // a late fetch scroll the window while Home was on screen. showPage()/the virtual
+    // controllers already combine these two the same way (see line ~258).
+    if (browseVisible() && !page.classList.contains('hidden')) positionOnEnter(desc, page, 0);
   }
 
   // ---- grouping by first sort-letter --------------------------------------
