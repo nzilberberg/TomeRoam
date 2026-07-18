@@ -89,6 +89,13 @@ test('poll: a slow poll cannot reinstate an older peer set over a newer one', as
   assert.equal(after[0].pos, 275900, 'the NEWER read owns the peer set regardless of resolve order');
 });
 
+// NOTE: the "can a RETAINED peer spuriously supersede us" safety property is
+// tested in test/logic.test.js as pure mergePeers→findSuperseder composition.
+// It was drafted here first and driven through Presence.claimPlaying — which
+// leaves a timer this module cannot fully tear down (setActive(false) is not
+// enough), hanging the whole `node --test` run. The property is pure; it does not
+// need the module's lifecycle. Keep lifecycle-touching calls out of this file.
+
 // MUTATION: cache `parsed` instead of the merged set → RED. A retained peer that
 // does not survive a reload leaves the degraded device back where it started on
 // the next launch, which is when resume is most likely to be tapped.

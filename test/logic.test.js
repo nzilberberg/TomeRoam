@@ -113,6 +113,34 @@ test('mergePeers: a peer present in the read uses the FRESH data, never the cach
   assert.ok(!out[0].stale, 'and it is not marked stale — this read confirmed it');
 });
 
+// Retention means findSuperseder() now also runs against RETAINED peers, so it is
+// fair to ask whether a phantom can pause you. It cannot, and this pins why:
+// supersede requires the peer's claim to be NEWER than ours, so once we have
+// claimed (pressed play) a retained peer can never win. The only state retention
+// prolongs is one we were already in — superseded and paused — which pressing play
+// clears by re-claiming. Composed here as pure logic on purpose: driving it through
+// Presence.claimPlaying leaves a timer that hangs the whole test run.
+//
+// MUTATION: have mergePeers re-stamp a retained peer's claim, or drop the claim
+// comparison in findSuperseder → RED.
+test('a RETAINED peer cannot supersede a device that has claimed more recently', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [{ id: 'phone', state: 'playing', book: '8913', pos: 1000, at: now - 5000, claim: now - 20000 }];
+  const peers = L.mergePeers(prev, [], 'me', now, GHOST);        // board absent → retained
+  assert.equal(peers.length, 1, 'the peer IS retained (else this proves nothing)');
+  assert.equal(peers[0].stale, true);
+  // Our claim is newer than the peer's but STRICTLY BELOW `now`, so a mutation
+  // that re-stamps retained peers with the current clock actually beats it. With
+  // `claim: now` the two would tie, `>` would stay false, and this test would
+  // pass under the very bug it exists to catch.
+  const st = { playState: 'playing', book: '8913', claim: now - 1000 };
+  assert.equal(L.findSuperseder(peers, st), null, 'an older claim never supersedes us');
+  // …and retention does not weaken a legitimate supersede: a peer that really did
+  // claim later still wins, exactly as before.
+  const newer = L.mergePeers([Object.assign({}, prev[0], { claim: now })], [], 'me', now, GHOST);
+  assert.ok(L.findSuperseder(newer, { playState: 'playing', book: '8913', claim: now - 1000 }), 'a newer claim still wins');
+});
+
 // ---- findSuperseder (claim-based handoff) -------------------------------------------
 test('supersede: newer claim on the same book wins', () => {
   const st = { playState: 'playing', book: 42, claim: 100 };
