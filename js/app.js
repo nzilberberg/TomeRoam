@@ -1310,7 +1310,14 @@
     // No live peer: reload our local target if the element errored, else plain play.
     ctx.updatedAt = Plex.serverNow();
     if (errored) startTrack(ctx.idx, audio.currentTime || (curLoad && curLoad.seekSec) || 0, true);
-    else audio.play();
+    // play() REJECTS when the browser refuses (iOS NotAllowedError when the audio
+    // session can't activate — i.e. the lock-screen resume-from-pause case). This was
+    // the one call site without a handler (the other two swallow), so a refusal became
+    // an unhandledrejection, which debug.js:117 logs as a stray `PROMISE …` line — noise
+    // in the exact ring buffer used to diagnose that bug. Log it deliberately instead:
+    // same information, correctly attributed, and it no longer reads as a crash. The
+    // element pauses itself on refusal, so there is no state to unwind here.
+    else audio.play().catch((e) => { if (window.PBDebug) PBDebug.log('PLAY', 'resume play() refused: ' + ((e && e.name) || e)); });
   }
 
   // User changed playback speed on THIS device. Apply it locally AND publish a

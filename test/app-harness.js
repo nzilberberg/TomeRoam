@@ -65,6 +65,8 @@ class FakeAudio {
     this.buffered = { length: 0, start: () => 0, end: () => 0 };
     this._listeners = new Map();
     this.calls = [];                 // ordered log: ['play', 'pause', 'load', …]
+    this.playAttempts = [];          // one record per play() call: {n, src, state, promise}
+    this._deferPlays = 0;            // how many upcoming play() calls stay pending
     FakeAudio.last = this;
   }
   addEventListener(type, fn) {
@@ -81,7 +83,54 @@ class FakeAudio {
     if (patch) Object.assign(this, patch);
     for (const fn of (this._listeners.get(type) || []).slice()) fn({ type, target: this });
   }
-  play() { this.calls.push('play'); this.paused = false; return Promise.resolve(); }
+  /**
+   * A real play() returns a promise that settles when playback actually STARTS — it
+   * can stay pending for a long time, or reject (iOS NotAllowedError when the audio
+   * session can't activate, which is the lock-screen resume case). The old fake always
+   * returned Promise.resolve(), so "pause arrives while play is pending" and "play was
+   * refused" were both unrepresentable.
+   *
+   * `paused` is still cleared SYNCHRONOUSLY here, deliberately: that is what the HTML
+   * spec requires of play(), and the requested-but-not-yet-playing state is expressed
+   * by withholding the `playing` event, not by lying about `paused`. Promise settlement
+   * and media events stay independent — resolvePlay() does NOT emit anything.
+   */
+  play() {
+    const n = this.playAttempts.length;
+    const att = { n, src: this.src, state: 'resolved' };
+    this.calls.push('play');
+    this.paused = false;
+    this.playAttempts.push(att);
+    if (this._deferPlays > 0) {
+      this._deferPlays--;
+      att.state = 'pending';
+      att.promise = new Promise((res, rej) => { att._settle = res; att._fail = rej; });
+    } else {
+      att.promise = Promise.resolve();
+    }
+    return att.promise;
+  }
+  /** Make the next N play() calls return a promise that stays PENDING. */
+  deferNextPlay(n = 1) { this._deferPlays += n; }
+  /** Settle a specific attempt — out of order is fine, that's the point. */
+  resolvePlay(i = 0) {
+    const a = this.playAttempts[i];
+    if (!a) throw new Error('no play attempt #' + i);
+    if (a.state !== 'pending') throw new Error(`play attempt #${i} is already ${a.state}`);
+    a.state = 'resolved'; this.calls.push('play:resolve#' + i); a._settle();
+  }
+  rejectPlay(i = 0, err) {
+    const a = this.playAttempts[i];
+    if (!a) throw new Error('no play attempt #' + i);
+    if (a.state !== 'pending') throw new Error(`play attempt #${i} is already ${a.state}`);
+    // A REAL refused play() leaves the element PAUSED — browsers run the pause steps
+    // when they reject with NotAllowedError. Modelling that matters: without it the
+    // fake reports paused=false after a refusal and the app looks like it is claiming
+    // playback it never got, which is a defect of the FAKE, not of app.js.
+    a.state = 'rejected'; this.calls.push('play:reject#' + i); this.paused = true;
+    a._fail(err || Object.assign(new Error('play() refused'), { name: 'NotAllowedError' }));
+  }
+  getPlayAttempt(i = 0) { return this.playAttempts[i]; }
   pause() { this.calls.push('pause'); this.paused = true; }
   load() { this.calls.push('load'); }
   /**

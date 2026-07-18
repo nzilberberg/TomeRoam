@@ -543,3 +543,78 @@ test('Media Session nexttrack matches the Now-Playing next button (.154)', async
   assert.match(viaUi.src, /bookA\/1/, 'the UI button advanced a chapter');
   assert.deepEqual(viaMs, viaUi, 'the lock-screen action must produce the same core state as the button');
 });
+
+// ══ refused / pending play() (.155) ════════════════════════════════════════════
+// A real play() settles when playback actually STARTS: it can stay pending, and it
+// REJECTS when the browser refuses (iOS NotAllowedError — the lock-screen resume
+// case). The fake resolved instantly until .155, so none of this was representable.
+// NOTE the fake pauses the element on refusal because real browsers do; without that
+// the app looks like it is claiming playback it never got, which would be a defect of
+// the FAKE. Assertions here are about app.js, not about that.
+
+test('a REFUSED resume play() is handled, not left as an unhandled rejection (.155)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    h.audio.setBuffered(0, 600);
+    h.audio.reachPlaying(100);
+    await settle(h);
+    h.tap('#pPlay');                          // real UI pause
+    h.audio.emit('pause', { paused: true });
+    await settle(h);
+
+    h.audio.deferNextPlay();
+    h.tap('#pPlay');                          // resumePlay → the plain-resume path
+    await settle(h);
+    const i = h.audio.playAttempts.length - 1;
+    assert.equal(h.audio.getPlayAttempt(i).state, 'pending', 'the resume play() is in flight');
+
+    h.audio.rejectPlay(i);                    // the browser refuses
+    await settle(h, 20);
+    // If app.js does not handle this, node:test reports an unhandled rejection and the
+    // RUN fails — that is the mutation signal for removing the .catch at app.js:1313.
+    assert.equal(h.audio.paused, true, 'the element is paused after a refusal');
+    assert.ok(h.log.calls.some((c) => c.name === 'debug' && /refused/.test(String(c.args[1]))),
+      'the refusal is logged deliberately, so it is not mistaken for a crash');
+  } finally { h.dispose(); }
+});
+
+// Scenario 2/3: the final explicit intent must win over a stale play completion,
+// and it must do so across MIXED entry points — UI pause over a lock-screen play.
+test('a pause during a PENDING play wins, even when the stale play resolves later (.155)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    h.audio.setBuffered(0, 600);
+    h.audio.reachPlaying(100);
+    await settle(h);
+    h.tap('#pPlay');
+    h.audio.emit('pause', { paused: true });
+    await settle(h);
+
+    h.audio.deferNextPlay();
+    h.mediaSession.invoke('play');            // lock-screen play — stays pending
+    await settle(h);
+    const i = h.audio.playAttempts.length - 1;
+
+    h.tap('#pPlay');                          // UI pause, before the play settles
+    h.audio.emit('pause', { paused: true });
+    await settle(h);
+
+    // The stale play's PROMISE settles. Deliberately no late `playing` event: a browser
+    // does not fire `playing` after an explicit pause(), so asserting on that sequence
+    // would be testing the fake's imagination rather than the app.
+    h.audio.resolvePlay(i);
+    await settle(h, 20);
+
+    assert.equal(h.audio.paused, true,
+      'the resolved-but-superseded play must not resurrect playback over the newer pause');
+    assert.equal(h.mediaSession.state.playbackState, 'paused', 'and the lock screen agrees');
+    assert.match(h.audio.src, /bookA\/0/, 'no reload or chapter change occurred');
+    assert.equal(loads(h), 1, 'exactly one load across the whole sequence');
+  } finally { h.dispose(); }
+});
