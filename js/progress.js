@@ -515,9 +515,24 @@ const Progress = (() => {
     for (const p of peerBoards.concat(shardBoards)) for (const bk in (p.books || {})) {
       const r = p.books[bk].rst || 0; if (r > (peerRst[bk] || 0)) peerRst[bk] = r;
     }
-    let changed = false;
+    let changed = false, repChanged = false;
     for (const bk in peerRst) {
       const floor = peerRst[bk];
+      // The REPLICA half. entriesForPublish() emits replica records too, so an
+      // adopted copy of a peer's pre-reset position is republished into our shards
+      // on every pass — i.e. we stay a resurrection source, which is the exact
+      // thing clear-on-contact exists to stop. Read-time suppression hides it
+      // while the tombstone is reachable; the moment one is compacted or a board
+      // pruned, that copy brings the book back. applyPurgesLocally() has always
+      // cleaned BOTH stores — this is the same duty for resets.
+      // Runs independently of the `mine` short-circuit below: knowing the reset
+      // already does not mean the replica was ever cleaned of it.
+      const rep = replica.books[bk];
+      if (rep && rep.bk && (rep.bk.ts || 0) <= floor) {
+        delete rep.bk;
+        if (!rep.rst) delete replica.books[bk];
+        repChanged = true;
+      }
       const slot = mine.books[bk];
       if (slot && (slot.rst || 0) >= floor) continue;   // already know this reset (or a newer one)
       const keepBk = slot && slot.bk && (slot.bk.ts || 0) > floor ? slot.bk : null;
@@ -526,7 +541,8 @@ const Progress = (() => {
       mine.books[bk] = { bk: keepBk, tr: keepTr, rst: floor, _ts: now() };
       changed = true;
     }
-    if (changed) { saveMine(); schedulePublish(); }
+    if (repChanged) saveReplica();
+    if (changed || repChanged) { if (changed) saveMine(); schedulePublish(); }
   }
   async function pruneStaleBoards(boards, parsed) {
     for (let i = 0; i < boards.length; i++) {

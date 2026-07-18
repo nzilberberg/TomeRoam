@@ -43,6 +43,33 @@ const PBLogic = (() => {
       && !(p.state === 'playing' && (nowMs - (p.at || 0)) > ghostMs));
   }
 
+  // A poll that returns FEWER boards than we already knew about must NOT silently
+  // drop a peer. On a degraded connection the `/playlists` listing comes back late
+  // or incomplete — a 200 with a partial body (the same hazard shardstore already
+  // guards on its read side). ASSIGNING that result erases a peer that is very
+  // much alive, and the cost is specific and measured: with no live peer, resume
+  // stops extrapolating and falls back to the raw durable record, landing ~10s
+  // behind on the device with the WORSE connection. This is the same
+  // assign-not-merge shape fixed in progress.js poll() at .157/.159.
+  //
+  // Rules, so this cannot hide a peer that genuinely left:
+  //   * a peer PRESENT in this read always uses the fresh data — including an
+  //     explicit `idle`, which still removes it (an intentional stop must win);
+  //   * only a peer whose board was ABSENT from the read is retained, and only
+  //     while it still passes the SAME aging rules, so a deleted board ages out
+  //     within ghostMs exactly as before — retention widens no existing window;
+  //   * retained entries are marked `stale` so a caller can tell "extrapolated
+  //     from the last read I got" from "confirmed by this read".
+  function mergePeers(prev, parsed, meId, nowMs, ghostMs) {
+    const out = filterPeers(parsed, meId, nowMs, ghostMs);
+    const seen = new Set((parsed || []).filter((p) => p && p.id).map((p) => String(p.id)));
+    for (const p of (prev || [])) {
+      if (!p || !p.id || seen.has(String(p.id))) continue;
+      if (filterPeers([p], meId, nowMs, ghostMs).length) out.push(Object.assign({}, p, { stale: true }));
+    }
+    return out;
+  }
+
   // Claim-based supersede: while WE are playing a book, a peer playing the SAME
   // book with a NEWER claim wins and we should pause. Returns the winner or null.
   function findSuperseder(peers, st) {
@@ -250,7 +277,7 @@ const PBLogic = (() => {
 
   // bankBackoffMs stays private (used only by bankNoteFailure) — every exported
   // kernel must be referenced by shipped code (guarded by test/meta.test.js).
-  return { fmt, fmtBytes, livePos, recency, filterPeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, resumeAdoptPlan, shouldReloadOnRestore, restoreStillCurrent, bankNoteFailure, bankRetryReady };
+  return { fmt, fmtBytes, livePos, recency, filterPeers, mergePeers, findSuperseder, pickResume, handoffTarget, fitLines, chunkText, homeFeeds, displaySpeed, positionRecordable, retryStillCurrent, resumeAdoptPlan, shouldReloadOnRestore, restoreStillCurrent, bankNoteFailure, bankRetryReady };
 })();
 
 if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = PBLogic;

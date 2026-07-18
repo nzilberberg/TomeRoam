@@ -64,6 +64,55 @@ test('filterPeers drops self, idle, unparsed, and playing ghosts', () => {
   assert.deepEqual(out.map((p) => p.id), ['c', 'd']);
 });
 
+// ---- mergePeers (incomplete-listing resilience) -------------------------------------
+// These cover the OPEN cross-device stale-sync bug: on the relay-degraded device
+// the /playlists listing returns late or partial, and assigning it erased a LIVE
+// peer — which is what made resume fall back to a ~10s-old durable position.
+
+// MUTATION: revert presence.js to `peers = filterPeers(...)` (i.e. make mergePeers
+// return only the fresh set) → RED. This is the bug itself.
+test('mergePeers: an incomplete listing does NOT erase a live peer (the ~10s stale-resume bug)', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [{ id: 'phone', state: 'playing', book: '8913', pos: 275900, at: now - 10000, speed: 1 }];
+  const out = L.mergePeers(prev, [], 'me', now, GHOST);          // the listing came back empty
+  assert.equal(out.length, 1, 'the peer survives a listing that simply failed to include it');
+  assert.equal(out[0].stale, true, 'and is marked as unconfirmed by this read');
+  // The retained anchor is what lets resume EXTRAPOLATE instead of falling back.
+  assert.equal(L.livePos(out[0], now), 285900, 'extrapolated forward ~10s, not the raw 275900 anchor');
+  assert.equal(L.recency(out[0], now), now, 'a retained playing peer still reads as live');
+});
+
+// MUTATION: drop the `seen` check (retain by absence from the FILTERED set rather
+// than the RAW read) → an explicit idle would be resurrected from prev and this
+// goes RED. An intentional stop must always win.
+test('mergePeers: an explicit idle in the read REMOVES the peer, never resurrected from cache', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [{ id: 'phone', state: 'playing', book: '8913', pos: 1000, at: now - 1000 }];
+  const out = L.mergePeers(prev, [{ id: 'phone', state: 'idle', at: now }], 'me', now, GHOST);
+  assert.deepEqual(out, [], 'the peer said idle — it is gone, not retained');
+});
+
+// MUTATION: skip the aging re-check on retained peers → a long-dead peer is kept
+// forever and this goes RED. Retention must not widen the existing ghost window.
+test('mergePeers: retention does not outlive the ghost window', () => {
+  const now = 200000, GHOST = 90000;
+  const dead = [{ id: 'phone', state: 'playing', book: '1', pos: 0, at: now - GHOST - 1 }];
+  assert.deepEqual(L.mergePeers(dead, [], 'me', now, GHOST), [], 'a ghost ages out exactly as before');
+});
+
+// MUTATION: push retained peers BEFORE the fresh set / prefer prev on conflict →
+// RED. A peer present in the read must always use the read's data.
+test('mergePeers: a peer present in the read uses the FRESH data, never the cached copy', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [{ id: 'phone', state: 'playing', book: '1', pos: 1000, at: now - 5000 }];
+  const fresh = { id: 'phone', state: 'paused', book: '1', pos: 60000, at: now - 100 };
+  const out = L.mergePeers(prev, [fresh], 'me', now, GHOST);
+  assert.equal(out.length, 1, 'no duplicate');
+  assert.equal(out[0].pos, 60000, 'the fresh position wins');
+  assert.equal(out[0].state, 'paused');
+  assert.ok(!out[0].stale, 'and it is not marked stale — this read confirmed it');
+});
+
 // ---- findSuperseder (claim-based handoff) -------------------------------------------
 test('supersede: newer claim on the same book wins', () => {
   const st = { playState: 'playing', book: 42, claim: 100 };

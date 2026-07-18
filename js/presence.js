@@ -92,14 +92,25 @@ const Presence = (() => {
   }
   function restoreCachedPeers() { const p = cachedPeers(); if (p.length) { peers = p; cbPeers(p); } }
 
+  // OWNERSHIP: `peers` is shared state read by resume/handoff/supersede, and this
+  // poll has no natural serialization — a read slower than the tick overlaps the
+  // next one, and whichever RESOLVES last would win regardless of which was
+  // ISSUED last. Same shape as progress.js poll() (.157/.159); own it by
+  // generation and re-check after the await.
+  let pollSeq = 0;
   async function poll() {
+    const myPoll = ++pollSeq;
     try {
       const boards = await board.readAll();
+      if (myPoll !== pollSeq) return;   // a newer poll owns the peer set — drop this read
       const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
-      // Drop ourselves, idle boards, and "playing" ghosts (crashed mid-play).
-      // The filter + supersede rules live in PBLogic so the unit tests run them.
-      peers = PBLogic.filterPeers(parsed, Plex.getClientId(), now(), GHOST_MS);
-      cachePeers(parsed);   // persist for next launch's first-frame paint (below)
+      // Drop ourselves, idle boards, and "playing" ghosts (crashed mid-play), then
+      // RETAIN any known peer this listing simply failed to include — see
+      // PBLogic.mergePeers for why assigning the read erased live peers on a
+      // degraded connection. The filter/merge/supersede rules live in PBLogic so
+      // the unit tests run exactly this code.
+      peers = PBLogic.mergePeers(peers, parsed, Plex.getClientId(), now(), GHOST_MS);
+      cachePeers(peers);    // persist for next launch's first-frame paint (below)
       cbPeers(peers);
 
       // Once per launch, sweep clearly-dead boards so they stop piling up (a
@@ -248,7 +259,10 @@ const Presence = (() => {
   return {
     init, setActive, claimPlaying, setPlaying, grab, setPaused, setTrack, setIdle, flush, setSpeed,
     resetClaim, livePos, getClaim: () => st.claim, name, setName, cachedPeers,
-    _test: { cachePeers, restoreCachedPeers, cachedPeers },
+    // Test-only (mirrors Progress._test): drive one poll pass directly so the
+    // WIRING — not just PBLogic's arithmetic — is covered. Every stale-peer bug
+    // this module has had lived in the poll body, not in the pure helpers.
+    _test: { cachePeers, restoreCachedPeers, cachedPeers, poll, peers: () => peers },
   };
 })();
 

@@ -224,6 +224,62 @@ test('applyPeerResets adopts a peer tombstone: drops our stale records + replica
   assert.equal(Progress.bookRecord('bk'), null, 'book now reads as unplayed');
 });
 
+// Clear-on-contact exists to stop us BEING a resurrection source. It cleaned only
+// `mine` — but entriesForPublish() also emits REPLICA records, so an adopted copy
+// of a peer's pre-reset position kept getting republished into our shards forever.
+// Read-time suppression hides it today, which is why nothing visibly broke; the
+// moment a tombstone is compacted or a board is pruned, that copy resurrects the
+// book. Its sibling applyPurgesLocally() has always cleaned BOTH stores.
+//
+// MUTATION: drop the replica half of applyPeerResets → the record survives and is
+// republished, and this goes RED.
+test('applyPeerResets also clears the REPLICA, so we stop republishing pre-reset data', () => {
+  reset();
+  const stale = NOW;
+  // A peer's older position we adopted into our replica at some point.
+  T.replicaBooks()['bk'] = { bk: { t: 't', o: 5000, cum: 5000, tot: 60000, ts: stale, origin: 'peer-2', name: 'Tablet' } };
+  const resetAt = NOW + 1000;
+  T.setPeers([peerBoard('peer-1', 'Kitchen', { bk: { rst: resetAt } })]);
+  T.applyPeerResets();
+  const rep = T.replicaBooks()['bk'];
+  assert.ok(!rep || !rep.bk, 'the pre-reset replica copy is dropped');
+  const published = T.entriesForPublish().find((e) => e.book === 'bk');
+  assert.ok(!published || !published.bk, 'and it is no longer republished to the archive');
+  assert.ok(published && published.rst === resetAt, 'while the tombstone itself IS published (it must propagate)');
+});
+
+// The `mine` half short-circuits once we already know a reset. The replica half
+// must NOT ride that short-circuit: a stale copy can be adopted into the replica
+// AFTER we learned the tombstone (adoptStableForeign runs on every poll and only
+// checks the replica's own timestamps), and an install that predates this fix has
+// them sitting there already. Both cases leave us republishing pre-reset data.
+//
+// MUTATION: gate the replica clean on the same "already known" condition → RED.
+test('applyPeerResets cleans the replica even when the tombstone is ALREADY known', () => {
+  reset();
+  const stale = NOW;
+  const resetAt = NOW + 1000;
+  T.mineBooks()['bk'] = { bk: null, tr: {}, rst: resetAt, _ts: NOW };        // we already adopted it
+  T.replicaBooks()['bk'] = { bk: { t: 't', o: 5000, cum: 5000, tot: 60000, ts: stale, origin: 'peer-2', name: 'Tablet' } };
+  T.setPeers([peerBoard('peer-1', 'Kitchen', { bk: { rst: resetAt } })]);
+  T.applyPeerResets();
+  const rep = T.replicaBooks()['bk'];
+  assert.ok(!rep || !rep.bk, 'the replica is still cleaned on a pass that short-circuits `mine`');
+});
+
+// MUTATION: clear the replica unconditionally instead of only at/below the floor →
+// RED. A position played AFTER the reset is live data, not a resurrection source.
+test('applyPeerResets keeps a REPLICA record newer than the tombstone', () => {
+  reset();
+  const resetAt = NOW;
+  const newer = NOW + 5000;
+  T.replicaBooks()['bk'] = { bk: { t: 't', o: 700, cum: 700, tot: 60000, ts: newer, origin: 'peer-2', name: 'Tablet' } };
+  T.setPeers([peerBoard('peer-1', 'Kitchen', { bk: { rst: resetAt } })]);
+  T.applyPeerResets();
+  const rep = T.replicaBooks()['bk'];
+  assert.ok(rep && rep.bk && rep.bk.o === 700, 'a post-reset replica position survives');
+});
+
 test('applyPeerResets keeps our records that are NEWER than the peer tombstone', () => {
   reset();
   const resetAt = NOW;
