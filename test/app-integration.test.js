@@ -730,3 +730,243 @@ test('a spurious second ended after an advance does not skip another chapter (.1
     assert.match(h.audio.src, /bookA\/1/, 'the spurious ended must NOT advance again');
   } finally { h.dispose(); }
 });
+
+// ══ Media Session parity for the remaining actions (.158) ══════════════════════
+// nexttrack was covered at .154. These are the rest. Each compares the lock-screen
+// handler against its visible-control equivalent by running the SAME setup twice in
+// separate boots (shared globals mean only one harness can be alive at a time).
+//
+// The snapshot includes the PUBLICATION names, which is what makes a bypass visible:
+// the seek/skip actions route through onManualSeek → notePlaybackIntent + Presence
+// publication, so an MS handler wired straight to audio.currentTime would land on the
+// same position with a different publication trail.
+const publications = (h) => h.log.names().filter((n) => n.startsWith('presence.') || n.startsWith('progress.'));
+const snapshot = (h) => ({
+  src: h.audio.src,
+  t: Math.round(h.audio.currentTime),
+  paused: h.audio.paused,
+  loads: loads(h),
+  ms: h.mediaSession.state.playbackState,
+  publications: publications(h).join(','),
+});
+
+/** Same starting position for both runs: playing chapter 2 at 100s, Now-Playing open. */
+async function playingChapterTwo(h) {
+  await settle(h);
+  tapBook(h, 'bookA');
+  await settle(h);
+  h.audio.setBuffered(0, 600);
+  h.audio.reachPlaying(100);
+  await settle(h);
+  h.tap('#player');
+  await settle(h);
+  h.tap('#npNext');
+  await settle(h);
+  h.audio.reachPlaying(100);
+  await settle(h);
+}
+
+/** Boot, run the shared setup, drive ONE entry point, snapshot, dispose. */
+async function drivenBy(action) {
+  const h = boot();
+  try {
+    await playingChapterTwo(h);
+    await action(h);
+    await settle(h);
+    return snapshot(h);
+  } finally { h.dispose(); }
+}
+
+async function assertParity(name, uiAction, msAction, extra) {
+  const viaUi = await drivenBy(uiAction);
+  const viaMs = await drivenBy(msAction);
+  if (extra) extra(viaUi);
+  assert.deepEqual(viaMs, viaUi, `${name}: the lock-screen action must match the visible control`);
+}
+
+// `userPause()` is literally `notePlaybackIntent(); audio.pause();` (app.js:1359), so
+// the ONLY thing distinguishing it from a bare audio.pause() is the intent bump that
+// kills a pending retry. A plain state comparison CANNOT see that — the `pause` event
+// handler does the publishing either way, so both routes converge and the test passes
+// under the mutation. (It did: the first version of this test was inert.) Arm a retry
+// so there is something for the intent bump to cancel.
+test('Media Session pause supersedes a pending retry, exactly like the UI pause (.158)', async () => {
+  const run = async (pauseVia) => {
+    const h = boot({ fakeTimers: true });
+    try {
+      await settle(h);
+      tapBook(h, 'bookA');
+      await settle(h);
+      h.audio.setBuffered(0, 600);
+      h.audio.reachPlaying(100);
+      await settle(h);
+
+      failAudio(h, 2);                       // retry armed (+1000ms)
+      await settle(h);
+      const before = loads(h);
+
+      pauseVia(h);
+      h.audio.emit('pause', { paused: true });
+      await settle(h);
+      await h.clock.advance(3000);           // the retry's moment passes
+
+      return {
+        extraLoads: loads(h) - before,
+        resetConns: h.log.names().filter((n) => n === 'plex.resetConn').length,
+        paused: h.audio.paused,
+      };
+    } finally { h.dispose(); }
+  };
+
+  const viaUi = await run((h) => h.tap('#pPlay'));
+  const viaMs = await run((h) => h.mediaSession.invoke('pause'));
+
+  assert.equal(viaUi.extraLoads, 0, 'precondition: the UI pause cancelled the pending retry');
+  assert.equal(viaUi.paused, true, 'precondition: and it really did pause');
+  assert.deepEqual(viaMs, viaUi, 'the lock-screen pause must cancel the retry too');
+});
+
+test('Media Session seekbackward matches the skip-back button (.158)', async () => {
+  await assertParity('seekbackward',
+    (h) => h.tap('#pBack'),
+    // NOTE: the handler ignores details.seekOffset and uses the app's OWN configured
+    // skip amount (app.js:1967). Passing an offset here proves that is still true.
+    (h) => h.mediaSession.invoke('seekbackward', { seekOffset: 30 }),
+    (ui) => assert.ok(ui.t < 100, 'precondition: the button really did seek backward'));
+});
+
+test('Media Session seekforward matches the skip-forward button (.158)', async () => {
+  await assertParity('seekforward',
+    (h) => h.tap('#pFwd'),
+    (h) => h.mediaSession.invoke('seekforward', { seekOffset: 30 }),
+    (ui) => assert.ok(ui.t > 100, 'precondition: the button really did seek forward'));
+});
+
+test('Media Session previoustrack matches the Now-Playing previous button (.158)', async () => {
+  await assertParity('previoustrack',
+    (h) => { h.audio.currentTime = 4; h.tap('#npPrev'); },      // below the 10s threshold → step back
+    (h) => { h.audio.currentTime = 4; h.mediaSession.invoke('previoustrack'); },
+    (ui) => assert.match(ui.src, /bookA\/0/, 'precondition: the button really did step back'));
+});
+
+// ══ visibility DURING a pending startup (.158) ════════════════════════════════
+// The suite already covers a background/foreground round trip on LIVE playback
+// (.95). The gap was the round trip landing while startup is still in flight — the
+// case the .95-class teardown bug came from, and the shape of the open resume-kill
+// bug (enterApp re-running mid-flight). The requirement: a visibility transition must
+// never authorize an obsolete startup, and must not double-load a legitimate one.
+
+// HONEST STATUS: no mutation I could construct makes this one fail — nothing in the
+// visibility handler re-drives an in-flight selection today, so it is a guard against
+// a FUTURE handler that does, not proof of a current invariant. Kept deliberately and
+// labelled, rather than left to imply coverage it does not have. The superseded and
+// resume-kill cases below ARE mutation-verified.
+test('backgrounding during a pending startup still starts the book exactly once (.158)', async () => {
+  const h = boot({ deferTracks: true });
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');                 // track list in flight
+    await settle(h);
+    h.setHidden(true);                   // screen locks mid-startup
+    await settle(h);
+    h.setHidden(false);                  // and comes back
+    await settle(h);
+
+    pending(h, 'bookA').resolve();       // the startup finally completes
+    await settle(h);
+
+    assert.match(h.audio.src, /bookA\/0/, 'the selection completed normally');
+    assert.equal(loads(h), 1, 'exactly one load — the round trip must not re-drive startup');
+    assert.equal(h.log.names().filter((n) => n === 'presence.claimPlaying').length, 1,
+      'and ownership is claimed exactly once');
+  } finally { h.dispose(); }
+});
+
+test('a visibility round trip does not authorize a SUPERSEDED startup (.158)', async () => {
+  const h = boot({ deferTracks: true });
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');                 // A: in flight
+    await settle(h);
+    tapBook(h, 'bookB');                 // B: newer intent, also in flight
+    await settle(h);
+
+    h.setHidden(true);
+    await settle(h);
+    h.setHidden(false);
+    await settle(h);
+
+    pending(h, 'bookB').resolve();       // the CURRENT selection lands
+    await settle(h);
+    pending(h, 'bookA').resolve();       // …then the superseded one completes
+    await settle(h);
+
+    assert.match(h.audio.src, /bookB/, 'the stale selection must not be revived by the round trip');
+    const claimed = h.log.calls.filter((c) => c.name === 'presence.setTrack').map((c) => c.args[0]);
+    for (const rk of claimed) assert.ok(!String(rk).includes('bookA'), 'nor published: ' + rk);
+  } finally { h.dispose(); }
+});
+
+test('backgrounding while a play() is still pending leaves a coherent state (.158)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    h.audio.setBuffered(0, 600);
+    h.audio.reachPlaying(100);
+    await settle(h);
+    h.tap('#pPlay');                     // pause
+    h.audio.emit('pause', { paused: true });
+    await settle(h);
+
+    h.audio.deferNextPlay();
+    h.tap('#pPlay');                     // resume — play() stays in flight
+    await settle(h);
+    const i = h.audio.playAttempts.length - 1;
+    const before = loads(h);
+
+    h.setHidden(true);
+    await settle(h);
+    h.setHidden(false);
+    await settle(h);
+
+    h.audio.resolvePlay(i);              // the play finally succeeds
+    h.audio.emit('playing', { paused: false });
+    await settle(h);
+
+    assert.equal(loads(h), before, 'the pending resume must not be turned into a reload');
+    assert.match(h.audio.src, /bookA\/0/, 'still the same chapter');
+    assert.equal(h.audio.paused, false, 'and it ends up playing');
+  } finally { h.dispose(); }
+});
+
+// The one that guards the OPEN resume-kill bug's shape directly: enterApp /
+// restoreLastPlayed re-running while playback is live, reloading the REMEMBERED book
+// over what the user is actually listening to. This needs opts.lastPlayed seeded —
+// without it restoreLastPlayed returns early and a foreground-restore mutation is a
+// no-op, which is exactly why the two tests above could not catch it.
+test('foregrounding must not restore the remembered book over live playback (.158)', async () => {
+  const h = boot({ lastPlayed: LAST_SNAP });     // remembered: bookA, chapter 2
+  try {
+    await settle(h);
+    assert.match(h.audio.src, /bookA/, 'precondition: the remembered book was restored at launch');
+
+    tapBook(h, 'bookB');                         // the user then picks something else
+    await settle(h);
+    h.audio.setBuffered(0, 600);
+    h.audio.reachPlaying(50);
+    await settle(h);
+    assert.match(h.audio.src, /bookB/, 'precondition: bookB is live');
+    const before = loads(h);
+
+    h.setHidden(true);                           // lock…
+    await settle(h);
+    h.setHidden(false);                          // …unlock
+    await settle(h);
+
+    assert.match(h.audio.src, /bookB/, 'the remembered book must NOT be restored over live playback');
+    assert.equal(loads(h), before, 'and the live element must not be reloaded');
+    assert.equal(h.audio.paused, false, 'nor left paused — that is the resume-kill symptom');
+  } finally { h.dispose(); }
+});
