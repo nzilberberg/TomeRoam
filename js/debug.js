@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.139';
+  const BUILD = '2026-07-17.140';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -455,26 +455,20 @@
     setTimeout(() => t.classList.remove('show'), 2500);
   }
 
-  // Fresh-install wipe (the Diagnostics "Clear all data" button). localStorage
-  // first (sync, can't fail us), then the IDB database — the delete can sit
-  // BLOCKED while our own Store/SW connection closes (store.js closes on
-  // versionchange), so it races an 8s cap and proceeds regardless: the reload
-  // PBHardReset() ends with kills every holder, letting a pending delete finish.
-  async function wipeAllData() {
-    const btn = document.getElementById('pbdbg-wipe');
+  // Cached-data clear (the Diagnostics "Cached data → Clear + reload" button).
+  // Empties the metadata stores (NOT audio/dl/buf/sync/kv — downloads, the
+  // buffer index, and pending progress writes stay) and deletes the cover
+  // cache ('tomeroam-img-v1' — KEEP IN SYNC WITH sw.js; the FIFO index lives
+  // inside it, so deleting the whole cache leaves a clean consistent slate),
+  // then reloads. The SW shell cache is untouched — the app still boots
+  // instantly, it just has no data until the fetches land.
+  async function clearCachedData() {
+    const btn = document.getElementById('pbdbg-clearcache');
     if (btn) { btn.disabled = true; btn.textContent = 'Clearing…'; }
-    try { localStorage.clear(); } catch {}
     try {
-      await Promise.race([
-        new Promise((res) => {
-          let req;
-          try { req = indexedDB.deleteDatabase('tomeroam'); } catch { return res(); }
-          req.onsuccess = req.onerror = req.onblocked = () => res();
-        }),
-        new Promise((res) => setTimeout(res, 8000)),
-      ]);
+      if (window.Store) await Promise.all(['books', 'authors', 'tracks', 'albums'].map((s) => Store.clear(s)));
     } catch {}
-    if (window.PBHardReset) return window.PBHardReset();   // SW unregister + Cache Storage + cache-busted reload
+    try { if (window.caches) await caches.delete('tomeroam-img-v1'); } catch {}
     location.reload();
   }
 
@@ -542,23 +536,22 @@
         toast(on ? 'Every browse list now renders windowed' : 'Browse back to normal thresholds');
       });
     }
-    // Test lever: wipe to fresh-install state. Everything a new install lacks:
-    // localStorage (token, settings, device identity), IndexedDB (downloads,
-    // buffered audio, library cache), then PBHardReset's SW-unregister + Cache
-    // Storage delete + cache-busted reload. The OLD identity's server-side
-    // boards survive by design — the Devices list can re-adopt them after.
-    if (diag && !document.getElementById('pbdbg-wipe')) {
+    // Test lever: clear the CACHED data only — the IDB library records
+    // (books/authors/tracks/albums) + the cover-image cache — so a reload must
+    // refetch everything from Plex, like a first launch. Deliberately KEEPS
+    // sign-in, settings, device identity, downloads/buffered audio, and the
+    // pending-sync queue; this tests cold-fetch, it is not an uninstall.
+    if (diag && !document.getElementById('pbdbg-clearcache')) {
       const row = document.createElement('div');
       row.className = 'opt-row';
-      row.innerHTML = '<span class="opt-label">Fresh-install state</span>' +
-        '<span class="opt-ctl"><button id="pbdbg-wipe" class="textbtn">Clear all data</button></span>';
+      row.innerHTML = '<span class="opt-label">Cached data</span>' +
+        '<span class="opt-ctl"><button id="pbdbg-clearcache" class="textbtn">Clear + reload</button></span>';
       diag.appendChild(row);
-      row.querySelector('#pbdbg-wipe').addEventListener('click', () => {
-        if (!confirm('Erase ALL local data and reload as a fresh install?\n\n' +
-          'This signs you out, deletes every download and buffered chapter, all settings, ' +
-          'and this device’s identity — the old identity will show up under Devices ' +
-          '(adoptable) on your next sign-in. Progress already synced to Plex survives.')) return;
-        wipeAllData();
+      row.querySelector('#pbdbg-clearcache').addEventListener('click', () => {
+        if (!confirm('Clear cached library data and cover images?\n\n' +
+          'The app reloads and refetches everything fresh from Plex. Sign-in, settings, ' +
+          'downloads, and progress are all kept.')) return;
+        clearCachedData();
       });
     }
     const opt = document.getElementById('options');

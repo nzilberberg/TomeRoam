@@ -70,3 +70,14 @@ test('modules assign themselves to window (const is not window.X)', () => {
     assert.ok(read(file).includes(`window.${name} = ${name}`), `${file} must assign window.${name} = ${name}`);
   }
 });
+
+// debug.js's "Clear cached data" deletes the cover cache by its literal name —
+// a name OWNED by sw.js (IMG_CACHE). A typo or a future sw.js rename that
+// forgets debug.js makes the delete silently no-op (caches.delete of an unknown
+// name resolves false, no error), so pin the two shipped files to each other.
+test('debug.js clearCachedData targets the exact IMG_CACHE name sw.js owns', () => {
+  const imgCache = grab(read('sw.js'), /const IMG_CACHE = '([^']+)'/);
+  assert.ok(imgCache, 'sw.js declares IMG_CACHE');
+  assert.ok(read('js/debug.js').includes(`caches.delete('${imgCache}')`),
+    `debug.js must delete '${imgCache}' (the name sw.js owns)`);
+});
