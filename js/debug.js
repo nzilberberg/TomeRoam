@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.144';
+  const BUILD = '2026-07-17.145';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -284,6 +284,11 @@
     L.push(`App build: ${d.build}   Mode: ${d.mode}`);
     if (n.hostedBuild) L.push(`Hosted build (build.json): ${n.hostedBuild}${n.hostedBuild !== d.build ? '  ← update available' : ''}`);
     L.push('');
+    L.push('▶ LIVE cache + data — LOCAL reads, no network (auto-refreshing) ◀');
+    L.push(`   cover cache entries: ${d.coverCacheCount == null ? '?' : d.coverCacheCount}`);
+    L.push(`   IndexedDB:  books=${d.cachedBooks || 0}  authors=${d.cachedAuthors || 0}  tracks=${d.cachedTracks || 0}`);
+    L.push(`   caches present: ${(d.cacheNames || []).join(', ') || '(none)'}`);
+    L.push('');
     L.push('— Build coherence (mixed-build check) —');
     L.push(`HTML build: ${d.htmlBuild || '?'}   JS build: ${d.appBuild || '?'}   SW build: ${d.shellBuild || '?'}`);
     L.push(`active shell cache: ${d.shellCache || '(none)'}`);
@@ -363,20 +368,32 @@
       document.body.appendChild(diagEl);
       diagEl.addEventListener('click', (e) => {
         const a = e.target && e.target.dataset && e.target.dataset.a;
-        if (a === 'closediag') { diagEl.style.display = 'none'; }
+        if (a === 'closediag') { diagEl.style.display = 'none'; stopDiagAuto(); }
         else if (a === 'copysan') copyDiagnostics();
         else if (a === 'refresh') fillDiag();
       });
     }
     diagEl.style.display = 'flex';
     fillDiag();
+    // Live monitor: the cover-cache count + IDB counts are LOCAL reads (no network,
+    // so bandwidth can't skew them). Poll while the panel is open → you can watch the
+    // cover cache drop to 0 on Clear and refill as you browse, no one-shot to trust.
+    stopDiagAuto();
+    diagTimer = setInterval(() => {
+      if (diagEl && diagEl.style.display !== 'none') fillDiag(true);
+      else stopDiagAuto();
+    }, 1500);
   }
-  async function fillDiag() {
-    if (!diagEl) return;
+  let diagTimer = null, filling = false;
+  function stopDiagAuto() { if (diagTimer) { clearInterval(diagTimer); diagTimer = null; } }
+  async function fillDiag(quiet) {
+    if (!diagEl || filling) return;                 // no overlapping polls
+    filling = true;
     const body = diagEl.querySelector('.body');
-    body.textContent = 'Collecting…';
-    const d = await collectDiagnostics();
-    body.textContent = diagText(d);
+    if (!quiet) body.textContent = 'Collecting…';   // auto-refresh ticks quietly (no flash)
+    try { const d = await collectDiagnostics(); body.textContent = diagText(d); }
+    catch (e) { body.textContent = 'diag error: ' + ((e && e.message) || 'err'); }
+    finally { filling = false; }
   }
 
   // ---- on-screen panel ------------------------------------------------------
