@@ -390,6 +390,11 @@ const Browse = (() => {
         o.onRender();
       };
       const data = await fetchFor(desc, repaint);
+      // The node may have been evicted/replaced while we fetched — then there is
+      // nothing to fill. (Being merely HIDDEN is different: still fill it, or a later
+      // cache hit would show an empty placeholder.)
+      const still = pageCache.get(key);
+      if (!still || still.el !== page || !page.isConnected) return;
       page.innerHTML = '';
       buildFor(desc, data, page);
     } catch (e) { page.innerHTML = `<div class="empty">⚠️ ${e.message || 'Could not load.'}</div>`; }
@@ -398,7 +403,13 @@ const Browse = (() => {
     // A fresh page has no saved position → top; a files page for the book playing
     // here opens at its current track. Positioned AFTER onRender so the rows are
     // built and laid out (the files case measures a row).
-    positionOnEnter(desc, page, 0);
+    // ONLY if this page is actually on screen: positionOnEnter → applyScrollY →
+    // window.scrollTo, so a slow fetch for page A resolving after the user moved to
+    // page B would otherwise yank B's scroll to a Y measured from a display:none
+    // node. showPage() marks the shown page by REMOVING .hidden. The cache-identity
+    // check above is not enough here — the superseded page is still cached and still
+    // connected, just hidden, which is exactly how this got through the first time.
+    if (!page.classList.contains('hidden')) positionOnEnter(desc, page, 0);
   }
 
   // ---- grouping by first sort-letter --------------------------------------

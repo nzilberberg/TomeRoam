@@ -214,3 +214,4 @@ test('init drops a buf index whose audio blob is missing (dangling buffer index)
   assert.equal(Downloads.trackBuffered('danglB'), false, 'a dangling buffer index is not claimed local');
   await assertNoOrphans();
 });
+

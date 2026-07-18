@@ -1080,6 +1080,10 @@
         useSrc('./__dl/' + encodeURIComponent(t.ratingKey), 'download');
       } else {
         Downloads.getBlob(t.ratingKey).then((blob) => {
+          // useSrc re-checks the generation, but curObjUrl is assigned BEFORE that —
+          // a superseded blob load would overwrite the URL currently in use, so the
+          // live one is never revoked (leak) and the next load revokes an orphan.
+          if (gen !== loadGen) return;
           if (blob) { curObjUrl = URL.createObjectURL(blob); useSrc(curObjUrl, 'download'); }
           else useSrc(Plex.streamUrl(t.partKey), 'stream');
         }).catch(() => useSrc(Plex.streamUrl(t.partKey), 'stream'));
