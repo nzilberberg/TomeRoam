@@ -259,3 +259,63 @@ test('truncation notice appears on an already-built page when the live listing r
   assert.equal(m.querySelector('.truncnote'), null, 'a verified complete listing clears the warning');
   T.pageCache.clear();
 });
+
+// ---- review finding (.143): a STRUCTURAL virtual SWR must refresh the page CHROME,
+// not just the controller's row model. The controller owns rows + shells only; the
+// header count, _truncCount and the A–Z index live outside it.
+const lettered = (titles) => titles.map((t, i) => ({
+  ratingKey: 'k' + t + i, title: t, titleSort: t, parentTitle: 'A',
+  thumb: '/t/' + i, leafCount: 10, viewedLeafCount: 0,
+}));
+const idxLetters = (m) => [...m.querySelectorAll('.alphaindex .alpha')].map((s) => s.dataset.letter);
+
+test('virtual SWR that ADDS a new letter updates the header count, _truncCount and the A–Z index', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    const m = page();
+    const before = lettered(['Apple', 'Banana']);
+    T.listView(m, 'Books', before, T.bookRow, false);
+    assert.equal(m.querySelector('.browsetitle').textContent, 'Books · 2');
+    assert.deepEqual(idxLetters(m), ['A', 'B']);
+    assert.equal(m._truncCount, 2);
+
+    const after = lettered(['Apple', 'Banana', 'Zebra']);   // +1 item, NEW letter Z
+    assert.equal(T.patchInPlace({ v: 'books' }, m, after), true);
+
+    assert.equal(m.querySelector('.browsetitle').textContent, 'Books · 3', 'header count follows the model');
+    assert.deepEqual(idxLetters(m), ['A', 'B', 'Z'], 'A–Z index gains the new letter');
+    assert.equal(m._truncCount, 3, '_truncCount follows the model (truncation note reads it)');
+    m._vctl.destroy();
+  } finally { global.VirtualList.setForceVirtual(false); }
+});
+
+test('virtual SWR that REMOVES a letter\'s last item drops that letter from the A–Z index (no dead jump target)', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    const m = page();
+    T.listView(m, 'Books', lettered(['Apple', 'Banana', 'Zebra']), T.bookRow, false);
+    assert.deepEqual(idxLetters(m), ['A', 'B', 'Z']);
+
+    assert.equal(T.patchInPlace({ v: 'books' }, m, lettered(['Apple', 'Banana'])), true);
+
+    assert.deepEqual(idxLetters(m), ['A', 'B'], 'the emptied letter is gone');
+    assert.equal(m.querySelector('.browsetitle').textContent, 'Books · 2');
+    assert.equal(m._truncCount, 2);
+    m._vctl.destroy();
+  } finally { global.VirtualList.setForceVirtual(false); }
+});
+
+test('virtual author page: a changed BOOK SET with unchanged author metadata updates the "N books" count', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    const m = page();
+    const author = { ratingKey: 'a1', title: 'King', thumb: null, childCount: 2 };
+    T.authorView(m, author, lettered(['Apple', 'Banana']));
+    assert.match(m.querySelector('.authorcount').textContent, /^2 books/);
+
+    const ok = T.patchInPlace({ v: 'authorBooks' }, m, { author, books: lettered(['Apple', 'Banana', 'Zebra']) });
+    assert.equal(ok, true, 'unchanged author metadata still patches in place');
+    assert.match(m.querySelector('.authorcount').textContent, /^3 books/, 'count follows the book set');
+    m._vctl.destroy();
+  } finally { global.VirtualList.setForceVirtual(false); }
+});

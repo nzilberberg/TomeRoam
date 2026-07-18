@@ -302,6 +302,27 @@ const Browse = (() => {
     }
     return true;
   }
+  // A virtual page's controller owns ONLY the rows + group shells. The header
+  // count, `_truncCount` and the A–Z index are built OUTSIDE it (listView), so a
+  // STRUCTURAL SWR update through ctl.update() left them stale: the header kept the
+  // old count, the index kept a letter whose group no longer exists (a dead jump
+  // target — buildIndex's scrollTo finds no `.lettergroup`) or missed a newly-added
+  // one, and a later independent updateTruncNote repaint used a stale count. The
+  // CLASSIC path can't hit this: patchRows returns false on a key-set change, which
+  // forces a full rebuild. The virtual path deliberately accepts structural change
+  // in place, so it must refresh the chrome in the SAME operation as the model.
+  function syncVirtualChrome(kind, page, items, letters) {
+    page._truncCount = items.length;                       // updateTruncNote's input
+    const title = page.querySelector('.browsetitle');
+    if (title) title.textContent = `${kind === 'authors' ? 'Authors' : 'Books'} · ${items.length}`;
+    // buildIndex returns a self-contained element (its own listeners), so replacing
+    // it wholesale drops the stale letters and their handlers together.
+    const fresh = buildIndex(page, letters);
+    const old = page.querySelector('.alphaindex');
+    if (old) old.replaceWith(fresh); else page.appendChild(fresh);
+    updateTruncNote(kind);                                 // repaint against the NEW count
+  }
+
   // Try an in-place patch for this screen; false → the caller does a full rebuild.
   function patchInPlace(desc, page, data) {
     // A VIRTUAL page never goes through patchRows (it counts rows — realized ≠
@@ -309,10 +330,20 @@ const Browse = (() => {
     // the model and keeps the viewport anchored (SWR never jumps the view).
     const ctl = page._vctl;
     if (ctl) {
-      if (desc.v === 'authors' || desc.v === 'books') { ctl.update(groupedFor(data)); return true; }
+      if (desc.v === 'authors' || desc.v === 'books') {
+        const grouped = groupedFor(data);
+        ctl.update(grouped);
+        syncVirtualChrome(desc.v, page, data, grouped.map((g) => g.letter));
+        return true;
+      }
       if (desc.v === 'authorBooks') {
         if (JSON.stringify(data.author) !== page._authorSig) return false;   // header changed → full rebuild
         ctl.update([{ letter: '', items: data.books.slice().sort(bySort) }]);
+        // The author header's "N books" is built by authorHeader(), OUTSIDE the
+        // controller — an unchanged author with a CHANGED book set would keep the
+        // old number (the author-page half of the same staleness bug).
+        const c = page.querySelector('.authorcount');
+        if (c) c.textContent = `${data.books.length} ${data.books.length === 1 ? 'book' : 'books'}`;
         return true;
       }
       return false;
