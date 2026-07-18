@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.146';
+  const BUILD = '2026-07-17.147';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -379,6 +379,7 @@
       });
     }
     diagEl.style.display = 'flex';
+    lastCacheSnap = '';        // force a fresh SWCACHE log line on every (re)open
     fillDiag();
     // Live monitor: the cover-cache count + IDB counts are LOCAL reads (no network,
     // so bandwidth can't skew them). Poll while the panel is open → you can watch the
@@ -389,14 +390,24 @@
       else stopDiagAuto();
     }, 1500);
   }
-  let diagTimer = null, filling = false;
+  let diagTimer = null, filling = false, lastCacheSnap = '';
   function stopDiagAuto() { if (diagTimer) { clearInterval(diagTimer); diagTimer = null; } }
   async function fillDiag(quiet) {
     if (!diagEl || filling) return;                 // no overlapping polls
     filling = true;
     const body = diagEl.querySelector('.body');
     if (!quiet) body.textContent = 'Collecting…';   // auto-refresh ticks quietly (no flash)
-    try { const d = await collectDiagnostics(); body.textContent = diagText(d); }
+    try {
+      const d = await collectDiagnostics();
+      body.textContent = diagText(d);
+      // Persist the cover-cache + SW-interception numbers to the log ring on CHANGE —
+      // the panel display alone is NOT captured in a bug report. This makes the
+      // SEEN-counter verdict durable: a report then shows whether the SW ever saw a
+      // cover load (SWseen climbs) or was bypassed by iOS (stays 0) while covers painted.
+      const is = d.imgStats || {};
+      const snap = `cover-entries=${d.coverCacheCount == null ? '?' : d.coverCacheCount} SWseen=${is.seen || 0} hit=${is.hit || 0} put=${is.put || 0} idb-books=${d.cachedBooks || 0}`;
+      if (snap !== lastCacheSnap) { lastCacheSnap = snap; log('SWCACHE', snap); }
+    }
     catch (e) { body.textContent = 'diag error: ' + ((e && e.message) || 'err'); }
     finally { filling = false; }
   }
