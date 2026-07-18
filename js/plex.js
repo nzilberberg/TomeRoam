@@ -873,14 +873,24 @@ const Plex = (() => {
   }
 
   // Fresh read of ONE playlist's summary — the content read-back the durable
-  // progress shards verify every write with (Plex returns 200 for writes it
-  // silently discards, so status is never trusted). null = read failed.
+  // The progress shards verify every write by reading it back (Plex returns 200
+  // for writes it silently discards, so status is never trusted).
+  //
+  // CONTRACT — two distinguishable outcomes, because the shard store's failure
+  // taxonomy acts on them differently:
+  //   * THROWS  → the read could not be completed (network/HTTP). The caller
+  //     reports verify-transport-failed: we do not know what the server holds.
+  //   * null    → the read COMPLETED and there is no summary to compare against.
+  //     The caller reports verify-read-failed.
+  // Swallowing the throw into `null` conflated the two and made the transport
+  // category unreachable in production, so a network drop mid-verify was filed as
+  // "read failed" — false precision in the one place support looks first. The
+  // sole consumer (progress.js → shardstore readSummary) already wraps this in
+  // try/catch, in both the verify and the corrupt-retry paths.
   async function readPlaylistSummary(rk) {
-    try {
-      const one = await api(`/playlists/${rk}`);
-      const m = one.Metadata && one.Metadata[0];
-      return m ? (m.summary || '') : null;
-    } catch { return null; }
+    const one = await api(`/playlists/${rk}`);
+    const m = one.Metadata && one.Metadata[0];
+    return m ? (m.summary || '') : null;
   }
 
   // Shared "hidden playlist board" primitive — presence.js, progress.js, and

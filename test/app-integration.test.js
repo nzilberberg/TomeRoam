@@ -1029,7 +1029,6 @@ test('a downloaded blob resolving AFTER sign-out cannot start playback (.166)', 
     tapBook(h, 'bookA');
     await settle(h);
     assert.equal(h.blob.pendingCount(), 1, 'precondition: a load really is in flight');
-    const srcBefore = h.audio.src;
     const loadsBefore = loads(h);
     const playsBefore = h.audio.playAttempts.length;
     const claimsBefore = h.log.names().filter((n) => n === 'presence.claimPlaying').length;
@@ -1037,13 +1036,22 @@ test('a downloaded blob resolving AFTER sign-out cannot start playback (.166)', 
     h.screenDeps.GeneralScreen.onSignOut();  // the REAL doSignOut app.js injected
     await settle(h);
 
+    // Sign-out ITSELF tears the element down: drop the source, then reload it.
+    // Asserted explicitly because FakeAudio used to throw on removeAttribute, and
+    // since both calls share one try/catch that silently skipped the teardown
+    // load — the test passed while proving less than it claimed.
+    assert.ok(h.audio.calls.includes('removeAttribute:src'), 'sign-out removes the active source');
+    assert.equal(h.audio.src, '', 'the element is left with no source');
+    const loadsAfterSignOut = loads(h);
+    assert.equal(loadsAfterSignOut, loadsBefore + 1, 'and performs exactly one teardown reload');
+
     h.blob.resolve();                        // the stale load finally lands
     await settle(h);
     h.audio.emit('loadedmetadata');          // and its handler would fire here
     await settle(h);
 
-    assert.equal(h.audio.src, srcBefore, 'no source may be installed after sign-out');
-    assert.equal(loads(h), loadsBefore, 'nor the element reloaded');
+    assert.equal(h.audio.src, '', 'no source may be installed after sign-out');
+    assert.equal(loads(h), loadsAfterSignOut, 'nor the element reloaded again');
     assert.equal(h.audio.playAttempts.length, playsBefore, 'and above all: NO play() after sign-out');
     assert.equal(h.log.names().filter((n) => n === 'presence.claimPlaying').length, claimsBefore,
       'no presence claim either');

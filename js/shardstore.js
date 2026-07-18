@@ -249,6 +249,14 @@ const createShardStore = (opts) => {
       saveKeyHints();   // persist the removal, or the next pass reloads the same dead ratingKey forever
       throw writeFail(WRITE_FAIL.BOARD_GONE, 'shard: board gone (404) — recreate next pass', where);
     }
+    // Status 0 is NOT a rejection: the production adapter swallows transport
+    // errors and returns 0 (plex.js setPlaylistSummary catch). Reporting that as
+    // `write-rejected (HTTP 0)` was false precision — it made WRITE_TRANSPORT_FAILED
+    // unreachable outside tests and told support "the server refused" when the
+    // request never arrived. Map it to the category it actually is.
+    if (st === 0) {
+      throw writeFail(WRITE_FAIL.WRITE_TRANSPORT_FAILED, 'shard: write never reached Plex (transport failure)', where, { encodedBytes: enc.length });
+    }
     // A non-2xx used to fall THROUGH to the read-back and surface as a mismatch —
     // true (the bytes aren't there) but misattributed, which matters now that the
     // reason code is what callers act on. Only classify a real status: a fake or a

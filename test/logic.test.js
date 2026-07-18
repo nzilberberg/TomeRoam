@@ -82,15 +82,63 @@ test('mergePeers: an incomplete listing does NOT erase a live peer (the ~10s sta
   assert.equal(L.recency(out[0], now), now, 'a retained playing peer still reads as live');
 });
 
-// MUTATION: drop the `seen` check (retain by absence from the FILTERED set rather
-// than the RAW read) → an explicit idle would be resurrected from prev and this
-// goes RED. An intentional stop must always win.
-test('mergePeers: an explicit idle in the read REMOVES the peer, never resurrected from cache', () => {
+// MUTATION: collapse by identity presence instead of recency (the original bug) →
+// a NEWER idle stops removing the peer and this goes RED. An intentional stop wins.
+test('mergePeers: a NEWER explicit idle REMOVES the peer, never resurrected from cache', () => {
   const now = 200000, GHOST = 90000;
   const prev = [{ id: 'phone', state: 'playing', book: '8913', pos: 1000, at: now - 1000 }];
   const out = L.mergePeers(prev, [{ id: 'phone', state: 'idle', at: now }], 'me', now, GHOST);
   assert.deepEqual(out, [], 'the peer said idle — it is gone, not retained');
 });
+
+// Plex keeps historical boards for a device (both presence and progress ship
+// pruners for exactly that). The first version of mergePeers keyed retention on
+// "did this id appear in the read", so an OLDER duplicate idle board both blocked
+// retention AND was filtered out — erasing a live peer completely and sending
+// resume back to the stale durable position. Reproduced against .166 before fixing.
+//
+// MUTATION: restore the identity-presence `seen` check → RED.
+test('mergePeers: a STALE duplicate idle board cannot erase a newer live peer', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [{ id: 'phone', state: 'playing', book: '8913', pos: 275900, at: now - 5000, speed: 1 }];
+  const parsed = [{ id: 'phone', state: 'idle', at: now - 100000 }];   // older duplicate board
+  const out = L.mergePeers(prev, parsed, 'me', now, GHOST);
+  assert.equal(out.length, 1, 'the live peer survives an older duplicate idle board');
+  assert.equal(out[0].state, 'playing');
+  assert.equal(out[0].stale, true);
+  assert.equal(L.livePos(out[0], now), 280900, 'and still extrapolates from the newer anchor');
+});
+
+// MUTATION: drop the recency comparison for peers PRESENT in the read → an older
+// copy of the same board overwrites fresher knowledge and this goes RED.
+test('mergePeers: an OLDER copy of a present board cannot overwrite fresher knowledge', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [{ id: 'phone', state: 'playing', book: '8913', pos: 275900, at: now - 1000 }];
+  const parsed = [{ id: 'phone', state: 'playing', book: '8913', pos: 100000, at: now - 60000 }];
+  const out = L.mergePeers(prev, parsed, 'me', now, GHOST);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].pos, 275900, 'the newer event wins regardless of which source it came from');
+});
+
+// Duplicate active+idle boards, BOTH array orders — listing order must not decide.
+for (const [label, order] of [['active first', 0], ['idle first', 1]]) {
+  test(`mergePeers: duplicate active+idle boards resolve by recency (${label})`, () => {
+    const now = 200000, GHOST = 90000;
+    const active = { id: 'phone', state: 'playing', book: '8913', pos: 5000, at: now - 1000 };
+    const idle = { id: 'phone', state: 'idle', at: now - 50000 };       // older
+    const parsed = order ? [idle, active] : [active, idle];
+    const out = L.mergePeers([], parsed, 'me', now, GHOST);
+    assert.equal(out.length, 1, 'one event per device');
+    assert.equal(out[0].state, 'playing', 'the NEWER board wins whatever the listing order');
+  });
+  test(`mergePeers: a NEWER idle beside an older active still removes the peer (${label})`, () => {
+    const now = 200000, GHOST = 90000;
+    const active = { id: 'phone', state: 'playing', book: '8913', pos: 5000, at: now - 50000 };
+    const idle = { id: 'phone', state: 'idle', at: now - 1000 };        // newer
+    const parsed = order ? [idle, active] : [active, idle];
+    assert.deepEqual(L.mergePeers([], parsed, 'me', now, GHOST), [], 'the newest event is an intentional stop');
+  });
+}
 
 // MUTATION: skip the aging re-check on retained peers → a long-dead peer is kept
 // forever and this goes RED. Retention must not widen the existing ghost window.

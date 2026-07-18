@@ -35,12 +35,18 @@ function fakePlex() {
   // whole legacy/archive split exists for: head broken, archive fine.
   // ('pb_prog2_' does not start with 'pb_prog_' — the same prefix invariant the
   // production code depends on.)
-  const state = { discardWrites: false, rejectStatus: 0, rejectLegacy: 0, throwOnWrite: false, throwOnRead: false };
+  // `transportFailWrite` returns 0 — the shape the REAL adapter produces, because
+  // plex.js setPlaylistSummary catches transport errors and returns 0 rather than
+  // throwing. A throwing fake alone made the transport category look covered while
+  // being unreachable in production, and filed real network drops as "the server
+  // refused (HTTP 0)". Model the contract that actually ships.
+  const state = { discardWrites: false, rejectStatus: 0, rejectLegacy: 0, throwOnWrite: false, throwOnRead: false, transportFailWrite: false };
   return {
     state, boards,
     createPlaylist: async (title) => { const rk = 'rk' + nextRk++; boards.set(rk, { title, summary: '' }); return rk; },
     setPlaylistSummary: async (rk, text) => {
       if (state.throwOnWrite) throw new Error('ECONNRESET (injected)');
+      if (state.transportFailWrite) return 0;          // production shape: catch → 0
       if (state.rejectStatus) return state.rejectStatus;
       const b = boards.get(rk); if (!b) return 404;
       if (state.rejectLegacy && (b.title || '').startsWith('pb_prog_')) return state.rejectLegacy;
@@ -314,6 +320,26 @@ test('each write failure class produces its own stable reason code, with coordin
   store.ensurePublished([rec('b1', T0)], {});
   await store.flush();
   assert.equal(store.syncState().lastFailure.code, 'verify-transport-failed');
+});
+
+// The PRODUCTION shape of a transport failure, which is not a throw: plex.js
+// setPlaylistSummary catches and returns 0. That used to be classified as
+// `write-rejected (HTTP 0)` — telling support the server refused a request that
+// never arrived, while making write-transport-failed unreachable outside tests.
+//
+// MUTATION: drop the `st === 0` branch in writeAndVerify → RED.
+test('a transport failure reported as status 0 is NOT a rejection', async () => {
+  const px = fakePlex();
+  const store = makeStore(px);
+  px.state.transportFailWrite = true;
+  store.ensurePublished([rec('b1', T0)], {});
+  await store.flush();
+  const f = store.syncState().lastFailure;
+  assert.equal(f.code, 'write-transport-failed', 'status 0 means it never reached Plex');
+  assert.notEqual(f.code, 'write-rejected', 'the server did not refuse anything');
+  assert.equal(f.status, undefined, 'and no bogus HTTP status is reported');
+  // Size-related triage must not fire on a request that never landed.
+  assert.ok(f.encodedBytes > 0, 'the payload size is still recorded for context');
 });
 
 // MUTATION: stop passing `stage`/`splitId` through writeAndVerify (drop the extra

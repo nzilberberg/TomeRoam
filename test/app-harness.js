@@ -154,6 +154,19 @@ class FakeAudio {
   pause() { this.calls.push('pause'); FakeAudio.note('audio.pause'); this.paused = true; }
   load() { this.calls.push('load'); FakeAudio.note('audio.load'); }
   /**
+   * Sign-out teardown calls removeAttribute('src') then load(). Without this the
+   * fake THREW on the first call — and because both sit in one try/catch, the
+   * teardown load() was skipped and the source removal was never exercised. The
+   * generation-invalidation regression still passed, so the gap was invisible: a
+   * fake that throws where the real element works silently narrows what a test
+   * proves. Mirrors the element: dropping src leaves it empty.
+   */
+  removeAttribute(name) {
+    this.calls.push('removeAttribute:' + name);
+    FakeAudio.note('audio.removeAttribute');
+    if (name === 'src') this.src = '';
+  }
+  /**
    * Report a buffered range. The wedge watchdog deliberately ignores a frozen clock
    * with NO forward data (that's real starvation, not the iOS audio-session wedge),
    * so a wedge test must supply forward buffer or the watchdog correctly does nothing.

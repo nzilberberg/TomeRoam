@@ -60,12 +60,37 @@ const PBLogic = (() => {
   //     within ghostMs exactly as before — retention widens no existing window;
   //   * retained entries are marked `stale` so a caller can tell "extrapolated
   //     from the last read I got" from "confirmed by this read".
+  // IMPLEMENTATION NOTE — recency, not identity presence. The first version of
+  // this keyed retention on "did this device id appear in the read at all", which
+  // is wrong whenever Plex holds MORE THAN ONE board for a device (it does; both
+  // presence and progress prune historical boards, which is why the pruners
+  // exist). An older duplicate idle board then put the id in the `seen` set, was
+  // itself dropped by the idle rule, and the newer known PLAYING event was never
+  // retained — the peer vanished entirely and resume fell back to the old durable
+  // position: the exact bug this function was written to prevent, reintroduced
+  // through the back door. It also silently let a stale copy of the same board
+  // overwrite fresher knowledge, since nothing compared timestamps.
+  //
+  // So: collapse to ONE event per device by newest `at` — across every board in
+  // the listing AND what we already knew — and only THEN apply the idle/ghost
+  // rules to the winner. That keeps the invariant that matters ("an intentional
+  // stop wins") while scoping it correctly: a genuinely NEWER idle removes the
+  // peer, an older one cannot. Ties go to the read, which is the fresher source.
   function mergePeers(prev, parsed, meId, nowMs, ghostMs) {
-    const out = filterPeers(parsed, meId, nowMs, ghostMs);
-    const seen = new Set((parsed || []).filter((p) => p && p.id).map((p) => String(p.id)));
-    for (const p of (prev || [])) {
-      if (!p || !p.id || seen.has(String(p.id))) continue;
-      if (filterPeers([p], meId, nowMs, ghostMs).length) out.push(Object.assign({}, p, { stale: true }));
+    const best = new Map();                      // id → { p, stale }
+    const consider = (p, stale) => {
+      if (!p || !p.id) return;
+      const id = String(p.id);
+      const cur = best.get(id);
+      if (cur && (cur.p.at || 0) >= (p.at || 0)) return;
+      best.set(id, { p, stale });
+    };
+    for (const p of (parsed || [])) consider(p, false);   // read first → it wins ties
+    for (const p of (prev || [])) consider(p, true);
+    const out = [];
+    for (const { p, stale } of best.values()) {
+      if (!filterPeers([p], meId, nowMs, ghostMs).length) continue;
+      out.push(stale ? Object.assign({}, p, { stale: true }) : p);
     }
     return out;
   }
