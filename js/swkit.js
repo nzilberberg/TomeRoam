@@ -113,8 +113,37 @@
     return true;
   }
 
+  // Clear the cover cache FOR REAL and report the TRUE remaining count.
+  // caches.delete() can resolve while leaving the named cache intact on some
+  // WebKit builds, so verify by reopening and, if anything survived, delete the
+  // entries individually and re-check. The caller must NOT claim success — or
+  // reset the FIFO state / advance the epoch — unless `remaining` is 0, else it
+  // opens a "clean" measurement window over stale entries. cachesApi is injected
+  // so the silently-failing-delete case is testable.
+  async function imgClearCache(cachesApi, name) {
+    try { await cachesApi.delete(name); } catch { /* fall through to the per-entry sweep */ }
+    const cache = await cachesApi.open(name);
+    let left = await cache.keys();
+    if (left.length) {
+      await Promise.all(left.map((rq) => Promise.resolve(cache.delete(rq)).catch(() => false)));
+      left = await cache.keys();
+    }
+    return { cache, remaining: left.length };
+  }
+
+  // Commit a fetched cover, GATED on the measurement epoch. A request that began
+  // before a clear must not repopulate the cache afterwards, nor bump the new
+  // window's `put` (which would otherwise be able to show put > seen). Returns
+  // false when the write was dropped because a clear landed mid-flight.
+  async function imgCommit(s, requestEpoch, cache, key, response) {
+    if (!s || requestEpoch !== s.epoch) return false;
+    await cache.put(key, response);
+    s.stats.put++;
+    return true;
+  }
+
   const api = { parseRange, isImageRoute, routeFor, imgReconcileOrder, imgTrimPlan,
-    imgStateFresh, imgStateReset, imgStateNote };
+    imgStateFresh, imgStateReset, imgStateNote, imgClearCache, imgCommit };
   if (typeof self !== 'undefined') self.SWKit = api;                         // service worker (importScripts)
   else if (typeof globalThis !== 'undefined') globalThis.SWKit = api;
   if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = api;   // Node tests

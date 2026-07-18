@@ -208,3 +208,72 @@ test('imgState: reset empties order/known rather than nulling them (no lazy relo
   assert.equal(s.known.size, 0);
   assert.equal(s.known.has('old1'), false, 'stale keys must not survive the clear');
 });
+
+// ---- review finding (.149): "atomic" must cover the CACHE, not just the state
+// object. Two gaps: the clear reported success without verifying the cache was
+// actually empty, and a cover fetch in flight could commit across a clear boundary.
+const { imgClearCache, imgCommit } = SWKit;
+
+// A CacheStorage fake whose whole-cache delete can silently no-op (the WebKit
+// behaviour the page-side sweep used to defend against, dropped in .149).
+function fakeCaches({ deleteWorks = true } = {}) {
+  const store = new Map();                       // name -> Map(key -> value)
+  const mk = (name) => {
+    if (!store.has(name)) store.set(name, new Map());
+    const m = store.get(name);
+    return {
+      keys: async () => [...m.keys()],
+      delete: async (k) => m.delete(k),
+      put: async (k, v) => { m.set(k, v); return true; },
+      match: async (k) => m.get(k),
+    };
+  };
+  return {
+    _store: store,
+    delete: async (name) => { if (deleteWorks) store.delete(name); return deleteWorks; },
+    open: async (name) => mk(name),
+  };
+}
+
+test('imgClearCache: a whole-cache delete that SILENTLY no-ops still ends empty (per-entry sweep)', async () => {
+  const c = fakeCaches({ deleteWorks: false });
+  const cache = await c.open('img');
+  await cache.put('a', 1); await cache.put('b', 2); await cache.put('c', 3);
+  const { remaining } = await imgClearCache(c, 'img');
+  assert.equal(remaining, 0, 'survivors are deleted individually — never reported as cleared while present');
+  assert.deepEqual(await (await c.open('img')).keys(), []);
+});
+
+test('imgClearCache: reports the TRUE remaining count when entries cannot be removed', async () => {
+  const c = fakeCaches({ deleteWorks: false });
+  const cache = await c.open('img');
+  await cache.put('stuck', 1);
+  cache.delete = async () => false;                       // per-entry delete fails too
+  c.open = async () => cache;                             // always hand back this stubborn cache
+  const { remaining } = await imgClearCache(c, 'img');
+  assert.equal(remaining, 1, 'an unclearable cache must report remaining>0 so the caller can refuse success');
+});
+
+test('imgCommit: a fetch that started BEFORE a clear does not repopulate the cache or bump the new epoch', async () => {
+  let s = imgStateFresh(); s.order = []; s.known = new Set();
+  const c = fakeCaches(); const cache = await c.open('img');
+  const requestEpoch = s.epoch;                           // request starts in epoch 0
+  s.stats.seen++;
+  s = imgStateReset(s);                                   // clear commits mid-flight → epoch 1
+
+  const committed = await imgCommit(s, requestEpoch, cache, 'coverA', 'bytes');
+
+  assert.equal(committed, false, 'the stale write is dropped');
+  assert.deepEqual(await cache.keys(), [], 'the just-cleared cache is NOT repopulated');
+  assert.equal(s.stats.put, 0, 'and the new window\'s put is untouched');
+  assert.ok(s.stats.put <= s.stats.seen, 'a clean window can never show put > seen');
+});
+
+test('imgCommit: a fetch within the SAME epoch commits normally', async () => {
+  const s = imgStateFresh(); s.order = []; s.known = new Set();
+  const c = fakeCaches(); const cache = await c.open('img');
+  const committed = await imgCommit(s, s.epoch, cache, 'coverA', 'bytes');
+  assert.equal(committed, true);
+  assert.deepEqual(await cache.keys(), ['coverA']);
+  assert.equal(s.stats.put, 1);
+});

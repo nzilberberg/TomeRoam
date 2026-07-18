@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.149';
+  const BUILD = '2026-07-17.150';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -537,20 +537,29 @@
       // pre-clear traffic, making any post-clear reading uninterpretable. So hand the
       // clear to the SW as ONE owned operation; a direct delete is only the fallback
       // for when there is no controller to ask.
-      const ack = await askSw({ type: 'CLEAR_IMG_CACHE' });
-      if (!ack && window.caches) {
+      // askSw() resolves null for BOTH "no controller" AND "timed out" — treating
+      // those the same would start a page-side delete while the worker's clear is
+      // still running, racing it. So decide on the CONTROLLER, not the reply, and
+      // give the clear a generous window (delete + verify + per-entry sweep).
+      const controlled = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+      const ack = controlled ? await askSw({ type: 'CLEAR_IMG_CACHE' }, 10000) : null;
+      // Mere acknowledgement is NOT success: the worker reports `remaining` and a
+      // `{cleared:true, remaining:47}` would otherwise pass as a clean clear.
+      const swOk = !!(ack && ack.cleared === true && ack.remaining === 0);
+      if (!controlled && window.caches) {          // no worker to own it → page fallback
         try { deleted = await caches.delete(IMG); } catch (e) { deleted = 'err:' + (e && e.name); }
         try {
           const c = await caches.open(IMG);
-          let left = await c.keys();
+          const left = await c.keys();
           if (left.length) { await Promise.all(left.map((rq) => c.delete(rq).catch(() => {}))); }
         } catch {}
       }
       if (window.caches) { try { imgAfter = (await (await caches.open(IMG)).keys()).length; } catch {} }
       const booksLeft = window.Store ? (await Store.cachedBooks()).length : -1;
       log('CACHE', `CLEAR caches=[${names.join('|')}] cover-entries ${imgBefore}→${imgAfter}`
-        + ` via=${ack ? 'sw' : 'page'} epoch=${ack ? ack.statsEpoch : '?'} sw=${(ack && ack.workerId) || '?'}`
-        + ` deleted=${ack ? ack.cleared : deleted} booksLeft=${booksLeft}`);
+        + ` via=${controlled ? 'sw' : 'page'} ok=${controlled ? swOk : deleted}`
+        + ` remaining=${ack ? ack.remaining : '?'} epoch=${ack ? ack.statsEpoch : '?'} sw=${(ack && ack.workerId) || '?'}`
+        + `${ack && ack.error ? ' err=' + ack.error : ''}${controlled && !ack ? ' err=timeout' : ''} booksLeft=${booksLeft}`);
     } catch (e) { log('CACHE', 'CLEAR error ' + (e && e.message)); }
     flushLog();
     location.reload();

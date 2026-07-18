@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-17.149';
+const BUILD = '2026-07-17.150';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -366,26 +366,25 @@ async function imgEnsureOrder(cache) {
   imgS.known = new Set(imgS.order);
 }
 const imgFlushIndex = (cache) => cache.put(IMG_INDEX_KEY, new Response(JSON.stringify(imgS.order))).catch(() => {});
-// Note a newly cached cover; trim past the high-water mark. Returns the chained
-// promise so the caller can waitUntil it.
-function imgNote(key) {
-  imgChain = imgChain.then(async () => {
-    const cache = await caches.open(IMG_CACHE);
-    await imgEnsureOrder(cache);
-    SWKit.imgStateNote(imgS, key);
-    if (imgS.order.length > COVER_CACHE_HIGH) {
-      const plan = SWKit.imgTrimPlan(imgS.order, COVER_CACHE_HIGH, COVER_CACHE_LOW);
-      for (const k of plan.drop) { await cache.delete(k).catch(() => {}); imgS.known.delete(k); }
-      imgS.order = plan.keep;
-      imgS.unflushed = 0;
-      await imgFlushIndex(cache);
-      console.log('[sw] cover cache trimmed to', imgS.order.length);
-    } else if (imgS.unflushed >= IMG_INDEX_FLUSH_EVERY) {
-      imgS.unflushed = 0;
-      await imgFlushIndex(cache);
-    }
-  }).catch(() => {});
-  return imgChain;
+// Bookkeeping for a newly cached cover; trims past the high-water mark.
+// ⚠️ INLINE — deliberately does NOT touch imgChain. Callers already running inside
+// the chain must use this: a chained imgNote() would append to imgChain and then
+// awaiting it would wait on a promise that depends on the very callback doing the
+// awaiting (self-deadlock).
+async function imgNoteInline(cache, key) {
+  await imgEnsureOrder(cache);
+  SWKit.imgStateNote(imgS, key);
+  if (imgS.order.length > COVER_CACHE_HIGH) {
+    const plan = SWKit.imgTrimPlan(imgS.order, COVER_CACHE_HIGH, COVER_CACHE_LOW);
+    for (const k of plan.drop) { await cache.delete(k).catch(() => {}); imgS.known.delete(k); }
+    imgS.order = plan.keep;
+    imgS.unflushed = 0;
+    await imgFlushIndex(cache);
+    console.log('[sw] cover cache trimmed to', imgS.order.length);
+  } else if (imgS.unflushed >= IMG_INDEX_FLUSH_EVERY) {
+    imgS.unflushed = 0;
+    await imgFlushIndex(cache);
+  }
 }
 // A poisoned entry was evicted — forget its slot too (serialized like the rest).
 function imgForget(key) {
@@ -409,19 +408,29 @@ function imgForget(key) {
 // returns delimits the measurement window that follows.
 function imgClear() {
   imgChain = imgChain.then(async () => {
-    await caches.delete(IMG_CACHE);
-    const cache = await caches.open(IMG_CACHE);      // recreate empty
+    // Delete, then VERIFY (per-entry sweep if the whole-cache delete silently
+    // no-op'd). Reporting success without checking would let a `{cleared:true,
+    // remaining:47}` ack suppress the page's fallback AND open a "clean" epoch
+    // over stale entries.
+    const { remaining } = await SWKit.imgClearCache(caches, IMG_CACHE);
+    if (remaining > 0) {
+      // State + epoch stay PUT — the old window is still the truthful one.
+      return { cleared: false, remaining, error: 'cover cache still contains entries', statsEpoch: imgS.epoch, workerId: WORKER_ID };
+    }
     imgS = SWKit.imgStateReset(imgS);                // order=[] known=∅ stats=0 epoch++
-    let remaining = -1;
-    try { remaining = (await cache.keys()).length; } catch {}
-    return { cleared: true, remaining, statsEpoch: imgS.epoch, workerId: WORKER_ID };
-  }).catch((err) => ({ cleared: false, error: (err && err.message) || 'clear failed', statsEpoch: imgS.epoch, workerId: WORKER_ID }));
+    return { cleared: true, remaining: 0, statsEpoch: imgS.epoch, workerId: WORKER_ID };
+  }).catch((err) => ({ cleared: false, remaining: -1, error: (err && err.message) || 'clear failed', statsEpoch: imgS.epoch, workerId: WORKER_ID }));
   return imgChain;
 }
 
 // Cover art: cache-first on a TOKEN-STRIPPED key (so the same cover is found even
 // after Plex rotates the token, and no token is ever written into a cache key).
 async function imageFirst(evt, req, url) {
+  // Which measurement window this request belongs to. A fetch can outlive a clear,
+  // so the commit below is gated on this still being current — otherwise a pre-clear
+  // request would repopulate the just-emptied cache and bump the NEW epoch's `put`
+  // (which could even show put > seen in a supposedly clean window).
+  const requestEpoch = imgS.epoch;
   imgS.stats.seen++;
   const cache = await caches.open(IMG_CACHE);
   const key = imageKey(url);
@@ -433,10 +442,17 @@ async function imageFirst(evt, req, url) {
     // on opaque, but a genuine relay RESET REJECTS the fetch and lands in catch —
     // so we don't cache connection failures, only completed responses).
     if (res && (res.ok || res.type === 'opaque')) {
-      // Tied to waitUntil: the write + FIFO accounting must survive the worker
-      // being terminated right after the response returns.
-      const work = cache.put(key, res.clone()).then(() => { imgS.stats.put++; return imgNote(key); }).catch(() => {});
-      if (evt && evt.waitUntil) evt.waitUntil(work);
+      const copy = res.clone();
+      // The WHOLE commit — put + counter + FIFO note — goes behind imgChain, so it
+      // is ORDERED against a clear instead of racing it. Commit-then-clear: the
+      // clear waits and then deletes it. Clear-then-commit: the epoch check drops
+      // the write. Tied to waitUntil so it survives worker teardown. Re-opens the
+      // cache inside the chain — the handle above may refer to a deleted cache.
+      imgChain = imgChain.then(async () => {
+        const cur = await caches.open(IMG_CACHE);
+        if (await SWKit.imgCommit(imgS, requestEpoch, cur, key, copy)) await imgNoteInline(cur, key);
+      }).catch(() => {});
+      if (evt && evt.waitUntil) evt.waitUntil(imgChain);
     }
     return res;
   } catch {
