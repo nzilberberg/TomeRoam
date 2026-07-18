@@ -127,3 +127,18 @@ test('img trim: an already-far-over-budget cache (first write after reconcile) t
   assert.equal(plan.keep.length, 3600);
   assert.equal(plan.drop.length, 5400);
 });
+
+test('warmer: 20k books / 100 authors / budget 1500 → authors STILL warm (the recent phase is bounded — .138 review, finding 3)', () => {
+  const authors = mkAuthors(100);
+  const books = mkBooks(20000, (i) => 'a' + (i % 100));
+  const { work } = buildWork(authors, books, 1500);
+  assert.equal(work.length, 1500, 'budget respected');
+  const byType = {};
+  for (const w of work) byType[w.t] = (byType[w.t] || 0) + 1;
+  assert.equal(byType.authorBooks, 100, 'EVERY author\'s drill-down warms — was zero before the bound');
+  assert.equal(byType.author, 100, 'every author\'s bio too');
+  assert.ok(byType.tracks >= 750, `recent chapter lists still dominate the spend (${byType.tracks})`);
+  // Recency still leads: the very first request is the most recently played book.
+  const played = books.filter((b) => b.lastViewedAt).sort((a, b) => b.lastViewedAt - a.lastViewedAt);
+  assert.deepEqual(work[0], { t: 'tracks', rk: played[0].ratingKey });
+});

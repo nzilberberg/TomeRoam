@@ -62,12 +62,25 @@ const Warmer = (() => {
     };
     const played = (books || []).filter((b) => b.lastViewedAt).sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
     const added = (books || []).slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
-    for (const b of played) push('tracks', b.ratingKey);
+    // The recent-books phase is BOUNDED to half the budget. `added` spans EVERY
+    // book (the whole library sorted by addedAt), so an unbounded walk here
+    // exhausts the entire budget on chapter lists before a single pushAuthor
+    // runs — ≥budget books meant ZERO author warming. Later priority classes
+    // must stay reachable at any cardinality.
+    const recentTrackBudget = Math.floor(budget / 2);
+    const recent = [];
+    const seenBook = new Set();
+    for (const b of [...played, ...added]) {
+      if (recent.length >= recentTrackBudget) break;
+      const k = String(b.ratingKey);
+      if (seenBook.has(k)) continue;
+      seenBook.add(k); recent.push(b);
+    }
+    for (const b of recent) push('tracks', b.ratingKey);
+    for (const b of recent) pushAuthor(b.parentRatingKey);     // the recent books' own authors…
+    for (const a of (authors || [])) pushAuthor(a.ratingKey);  // …then every other author
+    for (const b of played) push('tracks', b.ratingKey);       // leftovers fill whatever budget remains
     for (const b of added) push('tracks', b.ratingKey);
-    for (const b of played) pushAuthor(b.parentRatingKey);
-    for (const b of added) pushAuthor(b.parentRatingKey);
-    for (const a of (authors || [])) pushAuthor(a.ratingKey);
-    for (const b of (books || [])) push('tracks', b.ratingKey);
     return { work: w, skipped: full.length - w.length };
   }
 

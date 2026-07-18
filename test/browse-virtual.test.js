@@ -13,8 +13,24 @@ global.window = dom.window;
 global.document = dom.window.document;
 global.window.requestAnimationFrame = (fn) => fn();
 global.requestAnimationFrame = global.window.requestAnimationFrame;
-global.Plex = { artUrl: (t) => (t ? 'art:' + t : null), libraryTruncation: () => ({ authors: { state: 'complete' }, books: { state: 'complete' } }) };
+// Mutable truncation state + a captured change listener, so tests can play the
+// exact live-reveal sequence. truncationDisplay mirrors the REAL fn's
+// precedence (verified state stands; else count heuristic) — the real fn's
+// full behaviour incl. the at-cap heuristic is pinned in plex.test.js.
+const truncState = { authors: { state: 'complete', total: 0, returned: 0 }, books: { state: 'complete', total: 0, returned: 0 } };
+let truncCb = null;
+global.Plex = {
+  artUrl: (t) => (t ? 'art:' + t : null),
+  libraryTruncation: () => truncState,
+  truncationDisplay: (t, count) => ((t && (t.noted || t.persisted)) ? t : { state: 'complete', total: 0, returned: count }),
+  onTruncationChange: (fn) => { truncCb = fn; },
+};
 global.window.Plex = global.Plex;
+// Real scroll plumbing for entry-restore tests: window.scrollTo drives the same
+// `view` the injected vl metrics read, and the document reports enough height
+// that applyScrollY's clamp doesn't flatten every restore to 0 (jsdom has no layout).
+global.window.scrollTo = (x, y) => { view.scrollY = y; };
+Object.defineProperty(dom.window.document.documentElement, 'scrollHeight', { get: () => 10e6, configurable: true });
 const released = [];
 global.window.ArtLoader = { release: (img) => released.push(img.getAttribute('data-art')), scan: () => {}, observe: () => {} };
 global.ArtLoader = global.window.ArtLoader;
@@ -167,4 +183,79 @@ test('materialization pings onRender (rAF-debounced) so new rows get live number
   m._vctl.activate();
   assert.ok(renders.n > before, 'onRender fired for the newly materialized window');
   m._vctl.destroy();
+});
+
+// ---- .138-review fixes: anchor across hidden SWR updates + truncation repaint ----
+
+test('showPage: outgoing controller deactivates BEFORE .hidden, incoming activates AFTER unhide (geometry is live at both captures)', () => {
+  T.pageCache.clear();
+  const a = page(), b = page();
+  T.listView(a, 'Books', books(MAXN + 1), T.bookRow, false);
+  T.listView(b, 'Authors', books(MAXN + 1), T.bookRow, false);
+  T.pageCache.set('books', { el: a, order: 1 });
+  T.pageCache.set('authors', { el: b, order: 2 });
+  T.showPage('books');
+  let hiddenAtDeactivate = null, hiddenAtActivate = null;
+  const origD = a._vctl.deactivate, origA = b._vctl.activate;
+  a._vctl.deactivate = () => { hiddenAtDeactivate = a.classList.contains('hidden'); return origD(); };
+  b._vctl.activate = () => { hiddenAtActivate = b.classList.contains('hidden'); return origA(); };
+  T.showPage('authors');
+  assert.equal(hiddenAtDeactivate, false, 'anchor captured while the box still measures');
+  assert.equal(hiddenAtActivate, false, 'realization happens on a visible box');
+  a._vctl.destroy(); b._vctl.destroy(); T.pageCache.clear();
+});
+
+test('hidden SWR insert above the anchor: returning restores the ROW at its offset, not the stale scrollY (review finding 2)', () => {
+  T.pageCache.clear();
+  const orig = books(MAXN + 1);
+  const a = page(), b = page();
+  T.listView(a, 'Books', orig, T.bookRow, false);
+  T.listView(b, 'Authors', books(MAXN + 1), T.bookRow, false);
+  T.pageCache.set('books', { el: a, order: 1, sy: 0 });
+  T.pageCache.set('authors', { el: b, order: 2 });
+  T.showPage('books');
+  // The user scrolls 11px into row b500.
+  const m1 = a._vctl.model();
+  const p1 = m1.keyIndex.get('b500');
+  const oldY = m1.groups[p1.gi].rowsTop + p1.li * vlOpts.strides.row + 11;
+  view.scrollY = oldY;
+  T.pageCache.get('books').sy = oldY;              // what the passive listener records
+  T.showPage('authors');                           // anchor captured on the way out
+  // Revalidation lands while Books is hidden: 10 new titles sort ABOVE b500.
+  const fresh = [
+    ...Array.from({ length: 10 }, (_, i) => ({ ratingKey: 'x' + i, title: 'X' + i, titleSort: '0000', parentTitle: 'A', thumb: '/t/x' + i, leafCount: 10, viewedLeafCount: 0 })),
+    ...orig,
+  ];
+  assert.equal(T.patchInPlace({ v: 'books' }, a, fresh), true, 'virtual page routes to controller.update');
+  T.showPage('books');
+  T.positionOnEnter({ v: 'books' }, a, T.pageCache.get('books').sy);
+  const m2 = a._vctl.model();
+  const p2 = m2.keyIndex.get('b500');
+  const wantY = m2.groups[p2.gi].rowsTop + p2.li * vlOpts.strides.row + 11;
+  assert.notEqual(wantY, oldY, 'fixture sanity: the insert really moved the row');
+  assert.equal(view.scrollY, wantY, 'viewport follows row b500 to its NEW position');
+  a._vctl.destroy(); b._vctl.destroy(); T.pageCache.clear();
+});
+
+test('truncation notice appears on an already-built page when the live listing reveals it — identical rows, no repaint (review finding 1)', () => {
+  T.pageCache.clear();
+  const m = page();
+  T.listView(m, 'Books', books(50), T.bookRow, false);   // classic path, complete → no note
+  T.pageCache.set('books', { el: m, order: 1 });
+  assert.equal(m.querySelector('.truncnote'), null);
+  assert.ok(truncCb, 'browse subscribed to truncation changes at load');
+  // The live fetch returns the SAME 50 rows but reveals totalSize > returned:
+  // onFresh never fires (arrays identical) — the note must still appear.
+  truncState.books = { state: 'truncated', total: 24731, returned: 20000, noted: true };
+  truncCb('books');
+  const note = m.querySelector('.truncnote');
+  assert.ok(note, 'warning surfaced with zero row churn');
+  assert.match(note.textContent, /24,731/);
+  truncState.books = { state: 'possible', total: 0, returned: 20000, noted: true };
+  truncCb('books');
+  assert.match(m.querySelector('.truncnote').textContent, /may be truncated/, 'note text updates in place');
+  truncState.books = { state: 'complete', total: 0, returned: 0, noted: true };
+  truncCb('books');
+  assert.equal(m.querySelector('.truncnote'), null, 'a verified complete listing clears the warning');
+  T.pageCache.clear();
 });

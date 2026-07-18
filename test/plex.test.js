@@ -70,3 +70,49 @@ test('mapBook falls back to parentThumb and titleSort to title', () => {
   assert.equal(b.thumb, '/p');
   assert.equal(b.titleSort, 'T');
 });
+
+// ---- truncation: persistence, change events, display precedence (.138 review, finding 1)
+// The side channel alone reset to 'complete' every session and the cache-first
+// path never repainted it — these pin the three additions that closed that.
+
+test('hydrateTruncation: a PRIOR session\'s persisted truncated state surfaces before any live listing', async () => {
+  const fired = [];
+  Plex.onTruncationChange((kind) => fired.push(kind));
+  // browser: `const Store` is a lexical global AND window.Store — mirror both
+  global.Store = global.window.Store = {
+    kvGet: async (k, d) => (k === 'trunc:books' ? { state: 'truncated', total: 24731, returned: 20000 } : d),
+    kvSet: () => Promise.resolve(true),
+  };
+  await Plex._test.hydrateTruncation();
+  const t = Plex.libraryTruncation().books;
+  assert.equal(t.state, 'truncated');
+  assert.equal(t.persisted, true, 'marked persisted, not live-noted');
+  assert.ok(fired.includes('books'), 'listeners hear about the hydrated state');
+  delete global.window.Store; delete global.Store;
+});
+
+test('truncationDisplay: verified state stands; NO metadata at exactly the cap → possible; under → complete', () => {
+  const CAP = Plex._test.REQUEST_CAP;
+  assert.equal(Plex.truncationDisplay(null, CAP).state, 'possible', 'legacy cache of exactly the cap may be truncated');
+  assert.equal(Plex.truncationDisplay(null, CAP - 1).state, 'complete', 'under the cap is provably complete');
+  assert.equal(Plex.truncationDisplay({ state: 'complete', noted: true }, CAP).state, 'complete',
+    'a VERIFIED exactly-cap library shows no warning');
+  assert.equal(Plex.truncationDisplay({ state: 'truncated', persisted: true, total: 24731, returned: 20000 }, 100).state,
+    'truncated', 'persisted metadata beats the count heuristic');
+});
+
+test('noteTruncation: persists to Store.kv + fires change listeners once per signature; identical re-note stays quiet', () => {
+  const saved = {}; const fired = [];
+  global.Store = global.window.Store = { kvSet: (k, v) => { saved[k] = v; return Promise.resolve(true); }, kvGet: async (k, d) => d };
+  Plex.onTruncationChange((kind) => fired.push(kind));
+  Plex._test.noteTruncation('books', { totalSize: 24731 }, 20000);
+  assert.equal(Plex.libraryTruncation().books.state, 'truncated');
+  assert.deepEqual(saved['trunc:books'], { state: 'truncated', total: 24731, returned: 20000 }, 'metadata persisted for the next session');
+  assert.equal(fired.filter((k) => k === 'books').length, 1);
+  Plex._test.noteTruncation('books', { totalSize: 24731 }, 20000);   // same signature → no repaint storm
+  assert.equal(fired.filter((k) => k === 'books').length, 1, 'identical re-note is quiet');
+  Plex._test.noteTruncation('books', { totalSize: 24731 }, 24731);   // now complete → fires again
+  assert.equal(Plex.libraryTruncation().books.state, 'complete');
+  assert.equal(fired.filter((k) => k === 'books').length, 2);
+  delete global.window.Store; delete global.Store;
+});

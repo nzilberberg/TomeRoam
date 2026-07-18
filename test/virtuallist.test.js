@@ -246,3 +246,52 @@ test('rows are NEVER rebound: scrolling back re-creates a row rather than reusin
   assert.equal(again.textContent, 'a0');
   ctl.destroy();
 });
+
+// ---- anchors across hidden SWR updates (.138 review, finding 2) ---------------
+// Deactivate must record the logical row anchor and an inactive update() must
+// keep it meaningful; browse's entry restore reads it back via anchorEntryY().
+
+test('deactivate records {key, offsetPx}; anchorEntryY re-resolves it against the CURRENT model', () => {
+  const { ctl, view } = makeCtl(oneGroup('A', 50, 'a'));
+  ctl.activate();
+  view.scrollY = 30 + 10 * 80 + 5;                     // 5px into row a10
+  ctl.deactivate();
+  assert.deepEqual(ctl.anchor(), { key: 'a10', offsetPx: 5 });
+  assert.equal(ctl.anchorEntryY(), 30 + 10 * 80 + 5, 'unchanged model → same Y back');
+});
+
+test('inactive update() with rows INSERTED above the anchor: anchorEntryY moves with the row (the stale-scrollY bug)', () => {
+  const { ctl, view } = makeCtl(oneGroup('A', 50, 'a'));
+  ctl.activate();
+  view.scrollY = 30 + 20 * 80 + 7;                     // row a20 + 7px
+  ctl.deactivate();
+  // 5 new rows land at the head of the group while the page is hidden.
+  const grown = [{ letter: 'A', items: [...items(5, 'new'), ...items(50, 'a')] }];
+  ctl.update(grown);
+  assert.equal(ctl.anchor().key, 'a20', 'anchor still names the row, not a scroll number');
+  assert.equal(ctl.anchorEntryY(), 30 + 25 * 80 + 7, 'a20 sits 5 rows lower now — the restore Y follows it');
+});
+
+test('inactive update() that REMOVES the anchor row resolves to the nearest survivor IMMEDIATELY (old order still known)', () => {
+  const { ctl, view } = makeCtl(oneGroup('A', 50, 'a'));
+  ctl.activate();
+  view.scrollY = 30 + 10 * 80 + 5;                     // row a10
+  ctl.deactivate();
+  const survivors = items(50, 'a').filter((it) => it.ratingKey !== 'a10');
+  ctl.update([{ letter: 'A', items: survivors }]);
+  const a = ctl.anchor();
+  assert.ok(a, 'anchor not dropped');
+  assert.equal(a.key, 'a11', 'nearest survivor in the OLD display order');
+  assert.equal(ctl.anchorEntryY(), 30 + 10 * 80 + 5, 'a11 occupies the old slot — viewport lands where the user was');
+});
+
+test('deactivate ABOVE the list start (page top / header region) records NO anchor — raw scrollY is correct there', () => {
+  const view = { scrollY: 120, viewportH: 600 };
+  const { ctl } = makeCtl(oneGroup('A', 50, 'a'), {
+    metrics: { scrollY: () => view.scrollY, viewportH: () => view.viewportH, listTop: () => 200 },
+  });
+  ctl.activate();
+  ctl.deactivate();                                    // viewport is 80px above the list
+  assert.equal(ctl.anchor(), null);
+  assert.equal(ctl.anchorEntryY(), null, 'null → browse falls back to the recorded sy');
+});

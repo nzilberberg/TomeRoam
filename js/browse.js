@@ -159,7 +159,14 @@ const Browse = (() => {
   // Where a page sits when you arrive at it (see entryScrollY for the rule).
   function positionOnEnter(desc, page, savedY) {
     const trackY = desc.v === 'files' ? playingTrackY(desc.book, page) : null;
-    applyScrollY(entryScrollY(desc.v, savedY, trackY));
+    // A virtual page's logical anchor {row, offsetPx} beats the raw recorded
+    // scrollY: an SWR update that landed while the page was hidden may have
+    // moved rows above the anchor, making the number point at a different
+    // book. The anchor re-resolves against the CURRENT model (null = never
+    // scrolled into the list / anchor row gone → the raw Y is the right call).
+    const ctl = page._vctl;
+    const anchorY = ctl && ctl.anchorEntryY ? ctl.anchorEntryY() : null;
+    applyScrollY(anchorY != null ? anchorY : entryScrollY(desc.v, savedY, trackY));
   }
 
   function showPage(key) {
@@ -176,14 +183,18 @@ const Browse = (() => {
     // Takes ownership too, so a previous restore's in-flight finalizer can't end
     // ours; the applyScrollY that follows (immediately on a cache hit, or after the
     // fetch on a fresh page) owns it from there and clears it.
-    for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
-    // Virtual controllers follow visibility: the shown page's controller realizes;
-    // hidden ones dematerialize to ~0 rows (keep data + anchor).
+    // Virtual controllers follow visibility — but the OUTGOING controller must
+    // deactivate BEFORE `.hidden` (display:none) lands: deactivate() captures
+    // the scroll anchor from the container's geometry, and a hidden box
+    // measures zero, collapsing the anchor to row 0. Activate the incoming one
+    // AFTER it's visible again, for the same reason.
     for (const [k, v] of pageCache) {
       const c = v.el._vctl;
-      if (!c) continue;
-      if (k === key) c.activate(); else c.deactivate();
+      if (c && k !== key) c.deactivate();
     }
+    for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
+    const shown = pageCache.get(key);
+    if (shown && shown.el._vctl) shown.el._vctl.activate();
   }
   function evictLRU(keepKey) {
     while (pageCache.size > MAX_PAGES) {
@@ -387,8 +398,11 @@ const Browse = (() => {
   // (render()) job. Letter-group ids are page-scoped to stay unique across pages.
   // WS4.1: a truncated listing is surfaced ON THE AFFECTED LIST, not only in a
   // debug line — no silent caps. (kind: 'authors' | 'books'.)
-  function truncationNote(kind) {
-    const t = (typeof Plex !== 'undefined' && Plex.libraryTruncation) ? Plex.libraryTruncation()[kind] : null;
+  function truncationNote(kind, count) {
+    const raw = (typeof Plex !== 'undefined' && Plex.libraryTruncation) ? Plex.libraryTruncation()[kind] : null;
+    // truncationDisplay merges the live/persisted state with the legacy-cache
+    // count heuristic (no metadata + exactly the request cap → 'possible').
+    const t = (typeof Plex !== 'undefined' && Plex.truncationDisplay) ? Plex.truncationDisplay(raw, count) : raw;
     if (!t || t.state === 'complete') return null;
     const el = document.createElement('div');
     el.className = 'statusline truncnote';
@@ -397,6 +411,27 @@ const Browse = (() => {
       : `⚠️ Showing ${t.returned.toLocaleString()} — the list may be truncated.`;
     return el;
   }
+
+  // The notice repaints INDEPENDENTLY of the row diff (review of `.138`,
+  // finding 1): a revalidation whose item arrays are IDENTICAL to the cache
+  // never fires onFresh/patchInPlace, but the live listing may still have just
+  // revealed truncation — the note must appear/update/clear the moment the
+  // side channel changes, on the already-built page.
+  function updateTruncNote(kind) {
+    const entry = pageCache.get(kind);        // page keys: 'books' / 'authors' (keyOf = desc.v)
+    if (!entry) return;
+    const m = entry.el;
+    if (m._truncKind !== kind) return;        // still a placeholder/spinner page
+    const fresh = truncationNote(kind, m._truncCount || 0);
+    const cur = m.querySelector('.truncnote');
+    if (cur && fresh) cur.textContent = fresh.textContent;
+    else if (cur && !fresh) cur.remove();
+    else if (!cur && fresh) {
+      const head = m.querySelector('.browsehead');
+      if (head) head.insertAdjacentElement('afterend', fresh);
+    }
+  }
+  if (typeof Plex !== 'undefined' && Plex.onTruncationChange) Plex.onTruncationChange(updateTruncNote);
 
   // groupByLetter's Map → the [{letter, items}] shape the virtualizer consumes.
   function groupedFor(items) {
@@ -428,7 +463,9 @@ const Browse = (() => {
     const { groups, letters } = groupByLetter(items);
     m.innerHTML = '';
     m.appendChild(header(`${title} · ${items.length}`, drill));
-    const note = truncationNote(title === 'Authors' ? 'authors' : 'books');
+    const kind = title === 'Authors' ? 'authors' : 'books';
+    m._truncKind = kind; m._truncCount = items.length;   // updateTruncNote's inputs
+    const note = truncationNote(kind, items.length);
     if (note) m.appendChild(note);
     const list = document.createElement('div');
     list.className = 'browselist';
@@ -633,7 +670,7 @@ const Browse = (() => {
   return { init, reset, render, clearCache, patchRows, bookSig,
     // internals exposed for unit tests only (no runtime behaviour change)
     _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY,
-      applyScrollY, showPage, isRestoring: () => restoring,
+      applyScrollY, showPage, positionOnEnter, updateTruncNote, isRestoring: () => restoring,
       listView, authorView, patchInPlace, groupedFor, pageCache,
       setVlOpts: (v) => { vlOpts = v; } } };
 })();

@@ -215,9 +215,18 @@ const VirtualList = (() => {
       activeCtl = api;
       _realize();
     }
+    // Anchor capture guard: a viewport sitting ABOVE the list (page top, in the
+    // header region) has no row anchor — clamping it to row 0 would make every
+    // restore land at the first row instead of the true top. null → the caller
+    // falls back to the raw scrollY, which IS correct there (row churn below
+    // can't move a position above the list).
+    function captureAnchor() {
+      const top = metrics.scrollY() - metrics.listTop();
+      return top > 0 ? anchorAt(model, top) : null;
+    }
     function deactivate() {
       if (state !== 'active') return;
-      savedAnchor = anchorAt(model, Math.max(0, metrics.scrollY() - metrics.listTop()));
+      savedAnchor = captureAnchor();
       state = 'inactive';
       if (activeCtl === api) activeCtl = null;
       dematerialize();                          // hidden pages hold ~0 realized rows
@@ -235,9 +244,7 @@ const VirtualList = (() => {
     function update(groupedItems) {
       if (state === 'destroyed') return;
       const oldOrder = model.order;
-      const anchor = state === 'active'
-        ? anchorAt(model, Math.max(0, metrics.scrollY() - metrics.listTop()))
-        : savedAnchor;
+      const anchor = state === 'active' ? captureAnchor() : savedAnchor;
       dematerialize();
       model = buildModel(groupedItems, opts.strides);
       buildShells();
@@ -246,13 +253,28 @@ const VirtualList = (() => {
         if (y != null && opts.scrollTo) opts.scrollTo(y + metrics.listTop() - (0));
         _realize();
       } else {
-        savedAnchor = anchor;
+        // Resolve NOW, while the old display order is still in hand: if this
+        // update removed the anchor's row, re-anchor to the nearest survivor
+        // (yForAnchor's outward walk) so reactivation restores a real position.
+        // Waiting until reactivation would lose oldOrder and leave a dead key.
+        const y = yForAnchor(model, anchor, oldOrder);
+        savedAnchor = y == null ? null : anchorAt(model, y);
       }
+    }
+    // Document Y that puts the saved anchor back at its recorded offset in the
+    // CURRENT model — the entry-restore value for a page coming back on screen
+    // (browse prefers it over the raw recorded scrollY, which goes stale when
+    // an SWR update moved rows above the anchor while the page was hidden).
+    // Call only while the container is visible again: listTop needs geometry.
+    function anchorEntryY() {
+      if (!savedAnchor) return null;
+      const y = yForAnchor(model, savedAnchor, null);
+      return y == null ? null : Math.max(0, y + metrics.listTop());
     }
 
     buildShells();
     const api = {
-      activate, deactivate, destroy, update, _realize,
+      activate, deactivate, destroy, update, _realize, anchorEntryY,
       // Visible = the container actually renders (an ancestor display:none —
       // browse hidden behind Home — means document scrolls are not ours).
       isVisible: opts.isVisible || (() => {

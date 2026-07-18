@@ -565,13 +565,59 @@ const Plex = (() => {
     if (!Number.isFinite(total) && returnedCount === cap) return 'possible';
     return 'complete';
   }
+  // The side channel alone is NOT enough (review of `.138`, finding 1): it
+  // resets to 'complete' every session, the live fetch that corrects it fires
+  // AFTER the cache-first page built, and `onFresh` never repaints when the
+  // item arrays are identical — so a truncated library stayed silent for the
+  // whole session. Three additions close that:
+  //   1. metadata PERSISTS (Store.kv 'trunc:<kind>') and hydrates at load, so
+  //      a cache-first/offline session shows the last VERIFIED state;
+  //   2. a change LISTENER lets Browse repaint the notice in place, decoupled
+  //      from the row-diff repaint (identical rows, changed truncation → the
+  //      note still updates);
+  //   3. truncationDisplay() adds the legacy-cache heuristic: a listing with
+  //      no metadata at all that is exactly the request cap MAY be truncated.
   const truncation = { authors: { state: 'complete', total: 0, returned: 0 }, books: { state: 'complete', total: 0, returned: 0 } };
+  const truncListeners = new Set();
+  const truncSig = (t) => `${t.state}:${t.total}:${t.returned}`;
+  function fireTruncation(kind) {
+    for (const fn of truncListeners) { try { fn(kind, truncation[kind]); } catch {} }
+  }
+  const onTruncationChange = (fn) => { truncListeners.add(fn); };
   function noteTruncation(kind, mc, returned) {
     const state = truncationState(mc && mc.totalSize, returned, REQUEST_CAP);
-    truncation[kind] = { state, total: Number((mc && mc.totalSize)) || 0, returned };
-    if (state !== 'complete') dbg('TRUNC', `${kind} listing ${state}: returned ${returned}${truncation[kind].total ? ' of ' + truncation[kind].total : ''}`);
+    const next = { state, total: Number((mc && mc.totalSize)) || 0, returned, noted: true };
+    const changed = truncSig(next) !== truncSig(truncation[kind]) || !truncation[kind].noted;
+    truncation[kind] = next;
+    if (state !== 'complete') dbg('TRUNC', `${kind} listing ${state}: returned ${returned}${next.total ? ' of ' + next.total : ''}`);
+    if (typeof window !== 'undefined' && window.Store && Store.kvSet) Store.kvSet('trunc:' + kind, { state: next.state, total: next.total, returned: next.returned });
+    if (changed) fireTruncation(kind);
+  }
+  // Last verified state from a prior session — applied only until a LIVE
+  // listing speaks (noted wins over persisted, persisted over nothing).
+  async function hydrateTruncation() {
+    if (typeof window === 'undefined' || !window.Store || !Store.kvGet) return;
+    for (const kind of ['authors', 'books']) {
+      try {
+        const t = await Store.kvGet('trunc:' + kind, null);
+        if (t && t.state && !truncation[kind].noted) {
+          truncation[kind] = { state: t.state, total: t.total || 0, returned: t.returned || 0, persisted: true };
+          fireTruncation(kind);
+        }
+      } catch {}
+    }
   }
   const libraryTruncation = () => truncation;
+  hydrateTruncation();   // store.js loads first; guarded no-op when Store is absent
+  // What a rendered listing of `count` items should DISPLAY: a verified state
+  // (live this session, or persisted from a prior one) stands as-is; a listing
+  // with no metadata anywhere falls back to the count — exactly the request cap
+  // may be truncated (we can't tell), anything under it is provably complete.
+  function truncationDisplay(t, count) {
+    if (t && (t.noted || t.persisted)) return t;
+    if (count >= REQUEST_CAP) return { state: 'possible', total: 0, returned: count };
+    return { state: 'complete', total: 0, returned: count };
+  }
 
   // Authors (artists). Lightweight: title + thumb + album count only — NO
   // per-book progress/time work (this screen never shows times).
@@ -878,7 +924,7 @@ const Plex = (() => {
   return {
     isSignedIn, signOut, startPin, pollPin, connect, ping, getClientId: clientId, serverNow,
     getResumeMap, getAlbum, getAlbumTracks,
-    getAuthors, getBooks, getAuthorBooks, getAuthor, libraryTruncation,
+    getAuthors, getBooks, getAuthorBooks, getAuthor, libraryTruncation, truncationDisplay, onTruncationChange,
     getTrackInfo, clearCaches, foregroundBusy,
     streamUrl, artUrl, writeTimeline, getServerName, getBase, getConnKind,
     getMachineId, createPlaylist, setPlaylistSummary, listBoards, deletePlaylist, makeBoard, readPlaylistSummary,
@@ -895,7 +941,7 @@ const Plex = (() => {
     // internals exposed for the unit tests only (no runtime behaviour change)
     _test: {
       kindOf, orderByLastKind, mapBook, mapTracks, curBase, changed, withCache,
-      truncationState, noteTruncation, REQUEST_CAP,
+      truncationState, noteTruncation, REQUEST_CAP, hydrateTruncation,
       setBase: (b) => { base = b; },
       resetConn: () => { base = null; connecting = null; connGen++; },
       isConnecting: () => !!connecting,
