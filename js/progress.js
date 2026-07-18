@@ -37,6 +37,7 @@ const Progress = (() => {
   let shardBoards = [];               // per-origin pseudo-boards from the last shard read (cached like peers)
   let pubTimer = null, pollTimer = null, active = false, dirty = false;
   let dirtySince = 0;                 // wall-clock ms when dirty flipped true (UI "stuck" detection only)
+  let dirtySeq = 0;                   // bumped by every mark-dirty; lets publish() tell whether a write landed DURING its round-trip
   let shardStats = null;              // last read's {uniqueRecords, storedRecords, devices} for diagnostics
   let legacyInv = [];                 // last poll's foreign LEGACY boards: [{id, name, rk, newestTs}] (device list + deletion)
   let shardInv = {};                  // last poll's shard sets by dev8: {id, name, boards:[{rk,prefix}], newestTs}
@@ -326,6 +327,7 @@ const Progress = (() => {
   function schedulePublish() {
     if (!dirty) dirtySince = Date.now();
     dirty = true;
+    dirtySeq++;   // the ONLY mark-dirty site — publish() compares against this to detect a mid-flight write
     if (pubTimer || !active) return;
     pubTimer = setTimeout(() => { pubTimer = null; publish(); }, PUB_DEBOUNCE);
   }
@@ -351,8 +353,16 @@ const Progress = (() => {
     scheduleShardPublish(false);
     // board.publish handles ensure/create, and 404 → recreate-next-time vs
     // transient → keep-board (no churn). 2xx = our records are on the server.
+    // OWNERSHIP: serialize() is evaluated HERE, before the await — so the payload is a
+    // snapshot. A record written during the round-trip (recordTrack fires on the write
+    // timer throughout ordinary playback, and this is a full network round-trip) is NOT
+    // in that payload, yet an unconditional `dirty = false` on 2xx would mark it clean —
+    // and the next publish returns early at `if (!dirty)`, so it would never be sent.
+    // That is a SILENT lost update of durable listening progress. Capture the dirty
+    // generation alongside the snapshot and only settle clean if nothing moved.
+    const seqAtSnapshot = dirtySeq;
     const status = await board.publish(serialize(), () => seed);
-    if (status >= 200 && status < 300) { dirty = false; dirtySince = 0; }
+    if (status >= 200 && status < 300 && dirtySeq === seqAtSnapshot) { dirty = false; dirtySince = 0; }
   }
   function packAll() {
     const o = { v: 1, id: myId(), name: myName(), books: {} };
@@ -940,7 +950,7 @@ const Progress = (() => {
         mine = { v: 1, books: {} }; replica = { v: 1, books: {} }; purged = {}; pendingDeletes = {};
         peerBoards = []; shardBoards = []; merged = { books: {} };
         legacyInv = []; shardInv = {};
-        prunedSession = false; dirty = false; dirtySince = 0; lastShardPub = 0;
+        prunedSession = false; dirty = false; dirtySince = 0; dirtySeq = 0; lastShardPub = 0;
         if (pubTimer) { clearTimeout(pubTimer); pubTimer = null; }
         if (shardPubTimer) { clearTimeout(shardPubTimer); shardPubTimer = null; }
         if (shards) shards._test.reset();
