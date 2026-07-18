@@ -245,3 +245,101 @@ test('a wedge while HIDDEN defers instead of reloading, then recovers on foregro
     assert.equal(loads(h) - before, 1, 'recovery happens the instant we are foreground again');
   } finally { h.dispose(); }
 });
+
+// ══ session boundary, peer adoption, auto-advance (.104, .92/.93, .105) ════════
+
+// ── .104 ───────────────────────────────────────────────────────────────────────
+// "a pending book selection could start AFTER sign-out": beginPlayback(B) resolving
+// post-sign-out recreated ctx, called startTrack and claimed presence — a banked
+// track could even start playing audio for a signed-out user. doSignOut routes
+// through userPause() -> notePlaybackIntent() -> cancelPlayRequest() precisely so the
+// not-yet-started selection is invalidated. Driven through the REAL onSignOut app.js
+// wired into the General settings screen.
+test('a book selection still in flight must not start after sign-out (.104)', async () => {
+  const h = boot({ deferTracks: true });
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');                       // track list in flight
+    await settle(h);
+    const claimsBefore = h.log.names().filter((n) => n === 'presence.claimPlaying').length;
+
+    h.screenDeps.GeneralScreen.onSignOut();    // the real doSignOut app.js injected
+    await settle(h);
+    pending(h, 'bookA').resolve();             // the superseded selection completes AFTER
+    await settle(h);
+
+    assert.ok(h.log.names().includes('plex.signOut'), 'we really signed out');
+    assert.equal(h.audio.src, '', 'nothing may start playing for a signed-out user');
+    assert.equal(h.log.names().filter((n) => n === 'presence.claimPlaying').length, claimsBefore,
+      'and no ownership may be claimed after the session ended');
+  } finally { h.dispose(); }
+});
+
+// ── .92 / .93 ─────────────────────────────────────────────────────────────────
+// The reason this app exists: if a peer owns and is PLAYING this book, an explicit
+// Play must adopt the peer's live chapter/position rather than resume our own stale
+// local spot. .92 shipped the inverse (an errored element short-circuited to a local
+// reload); .93 shipped a cross-chapter adopt that never published the new presence
+// track, so peers saw the wrong chapter and handoff corrupted.
+test('an explicit Play adopts a live peer\'s chapter instead of resuming the local spot (.92)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');                       // we are on chapter 0, paused
+    await settle(h);
+    assert.match(h.audio.src, /bookA\/0/);
+
+    h.pushPeers([{ id: 'peer1', name: 'iPhone', book: 'bookA', track: 'bookA-t2',
+      state: 'playing', claim: 999, at: Date.now(), pos: 300000 }]);
+    await settle(h);
+    h.tap('.player .play');
+    await settle(h);
+
+    assert.match(h.audio.src, /bookA\/2/, 'adopted the PEER\'s chapter, not our local one');
+  } finally { h.dispose(); }
+});
+
+test('a cross-chapter adopt publishes the peer\'s track to presence (.93 handoff corruption)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    h.pushPeers([{ id: 'peer1', name: 'iPhone', book: 'bookA', track: 'bookA-t2',
+      state: 'playing', claim: 999, at: Date.now(), pos: 300000 }]);
+    await settle(h);
+    h.tap('.player .play');
+    await settle(h);
+
+    const published = h.log.calls.filter((c) => c.name === 'presence.setTrack').map((c) => c.args[0]);
+    assert.ok(published.includes('bookA-t2'),
+      'the ADOPTED chapter must be published — publishing the old track with the new position is what corrupted handoff');
+  } finally { h.dispose(); }
+});
+
+// ── .105, from the other direction ────────────────────────────────────────────
+// .105: cancelPlayRequest() sat inside startTrack(), which is ALSO the auto-advance
+// path — so an old chapter ending cancelled a NEWER book the user had just tapped.
+// Internal recovery must never outrank an explicit user choice.
+test('a chapter auto-advancing does not cancel a newer book the user just tapped (.105)', async () => {
+  const h = boot({ deferTracks: true });
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    pending(h, 'bookA').resolve();
+    await settle(h);
+    h.audio.reachPlaying(590);                 // near the end of a 600s chapter
+    await settle(h);
+
+    tapBook(h, 'bookB');                       // user picks another book; tracks in flight
+    await settle(h);
+    h.audio.currentTime = 600;                 // …and meanwhile chapter A genuinely ends
+    h.audio.emit('ended');
+    await settle(h);
+
+    pending(h, 'bookB').resolve();
+    await settle(h);
+
+    assert.match(h.audio.src, /bookB/, 'the explicit selection wins over the auto-advance');
+  } finally { h.dispose(); }
+});

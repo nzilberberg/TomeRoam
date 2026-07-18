@@ -241,9 +241,13 @@ function boot(opts = {}) {
     foregroundBusy: () => false,
   };
 
+  // app.js registers its peer callbacks here (Presence.init({onPeers,onSupersede})).
+  // Capturing them lets a test push a live peer through the REAL code path instead of
+  // reaching into app.js internals.
+  const cb = {};
   const presence = {
-    init: () => {}, setActive: () => {}, cachedPeers: () => [],
-    livePos: () => 0, getClaim: () => 0,
+    init: (deps) => { Object.assign(cb, deps || {}); }, setActive: () => {}, cachedPeers: () => [],
+    livePos: (p) => (p && p.pos) || 0, getClaim: () => 0,
     claimPlaying: log.rec('presence.claimPlaying'),
     setTrack: log.rec('presence.setTrack'),
     setPlaying: log.rec('presence.setPlaying'),
@@ -281,12 +285,14 @@ function boot(opts = {}) {
   };
 
   const noop = () => {};
+  const screenDeps = {};
+  const capture = (name) => (deps) => { screenDeps[name] = deps || {}; };
   const screens = {
-    NowPlayingScreen: { init: noop, render: noop, update: noop, updateDl: noop, updatePlayIcon: noop, buildControls: noop },
+    NowPlayingScreen: { init: capture('NowPlayingScreen'), render: noop, update: noop, updateDl: noop, updatePlayIcon: noop, buildControls: noop },
     SignInScreen: { init: noop, reset: noop },
     DownloadsScreen: { init: noop, render: noop },
     OptionsScreen: { init: noop, render: noop },
-    GeneralScreen: { init: noop, render: noop, renderDeviceName: noop },
+    GeneralScreen: { init: capture('GeneralScreen'), render: noop, renderDeviceName: noop },
     PlaybackScreen: { init: noop, render: noop },
     BufferingScreen: { init: noop, render: noop },
   };
@@ -341,7 +347,7 @@ function boot(opts = {}) {
 
   const $ = (id) => document.getElementById(id);
   return {
-    dom, window, document, $,
+    dom, window, document, $, screenDeps,
     audio: FakeAudio.last,
     plex, presence, progress, downloads, banking, browse, net, screens,
     log,
@@ -359,6 +365,14 @@ function boot(opts = {}) {
      * Playback.noteIntent(). Deliberately not a direct call — the thing under test is
      * whether the real control reaches the invalidation at all (.90/.91).
      */
+    /**
+     * Push a live peer list through the REAL Presence.onPeers callback app.js
+     * registered (Presence.init({onPeers,onSupersede})) — not by poking app internals.
+     * Peer shape the app expects: {id,name,book,track,state:'playing',claim,at,pos}.
+     */
+    pushPeers(list) { if (cb.onPeers) cb.onPeers(list); },
+    /** Drive a cross-device supersede through the REAL callback. */
+    supersede(by) { if (cb.onSupersede) cb.onSupersede(by); },
     seek(sec, which = 'pSeek') {
       const s = $(which);
       if (!s) throw new Error('no such slider: ' + which);
