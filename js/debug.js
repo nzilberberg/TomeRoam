@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.145';
+  const BUILD = '2026-07-17.146';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -249,6 +249,7 @@
       d.shellComplete = cs.expected != null && cs.present === cs.expected;
       d.shellMissing = cs.missing || [];
       d.coverCacheCount = cs.imgCount;
+      d.imgStats = cs.imgStats;             // SW cover-request interception tally
       d.shellBuild = cs.build;              // the BUILD the active SW reports
     }
     // IndexedDB structured data
@@ -286,6 +287,10 @@
     L.push('');
     L.push('▶ LIVE cache + data — LOCAL reads, no network (auto-refreshing) ◀');
     L.push(`   cover cache entries: ${d.coverCacheCount == null ? '?' : d.coverCacheCount}`);
+    const is = d.imgStats || {};
+    L.push(`   SW cover requests SEEN: ${is.seen == null ? '?' : is.seen}  (fromSWcache=${is.hit || 0} written=${is.put || 0})`);
+    L.push(`      ↑ if covers paint but SEEN stays 0, iOS served them from its OWN`);
+    L.push(`        HTTP cache (in front of the SW) — not clearable from JS.`);
     L.push(`   IndexedDB:  books=${d.cachedBooks || 0}  authors=${d.cachedAuthors || 0}  tracks=${d.cachedTracks || 0}`);
     L.push(`   caches present: ${(d.cacheNames || []).join(', ') || '(none)'}`);
     L.push('');

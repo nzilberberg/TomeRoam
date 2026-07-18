@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-17.145';
+const BUILD = '2026-07-17.146';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -197,6 +197,7 @@ async function cacheStatus() {
     for (const u of ASSETS) { const hit = await c.match(u); if (hit) out.present++; else out.missing.push(u); }
     const ic = await caches.open(IMG_CACHE);
     out.imgCount = (await ic.keys()).length;
+    out.imgStats = { seen: imgStats.seen, hit: imgStats.hit, put: imgStats.put };
     out.cacheNames = await caches.keys();
   } catch (e) { out.error = (e && e.message) || 'status failed'; }
   return out;
@@ -386,13 +387,22 @@ function imgForget(key) {
   return imgChain;
 }
 
+// Diagnostic tally (read via GET_CACHE_STATUS). If a cover is served from iOS
+// WKWebView's own HTTP cache (NSURLCache, which sits in FRONT of the SW), the SW
+// never runs imageFirst → `seen` does NOT climb even as covers paint on screen.
+// That's the fingerprint of an OS-cache hit our caches.delete can't reach. Resets
+// to 0 if the worker is torn down between requests (interpret a NON-zero as proof
+// the SW saw traffic; a stuck 0 while covers load = the SW was bypassed).
+let imgStats = { seen: 0, hit: 0, put: 0 };
+
 // Cover art: cache-first on a TOKEN-STRIPPED key (so the same cover is found even
 // after Plex rotates the token, and no token is ever written into a cache key).
 async function imageFirst(evt, req, url) {
+  imgStats.seen++;
   const cache = await caches.open(IMG_CACHE);
   const key = imageKey(url);
   const hit = await cache.match(key);
-  if (hit) return hit;
+  if (hit) { imgStats.hit++; return hit; }
   try {
     const res = await fetch(req);          // as issued by <img> (usually no-cors → opaque)
     // Cache real successes and opaque cross-origin responses (can't inspect status
@@ -401,7 +411,7 @@ async function imageFirst(evt, req, url) {
     if (res && (res.ok || res.type === 'opaque')) {
       // Tied to waitUntil: the write + FIFO accounting must survive the worker
       // being terminated right after the response returns.
-      const work = cache.put(key, res.clone()).then(() => imgNote(key)).catch(() => {});
+      const work = cache.put(key, res.clone()).then(() => { imgStats.put++; return imgNote(key); }).catch(() => {});
       if (evt && evt.waitUntil) evt.waitUntil(work);
     }
     return res;
