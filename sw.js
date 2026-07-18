@@ -27,7 +27,7 @@
 // BUILD must be bumped every deploy IN LOCKSTEP with js/debug.js (a test guards
 // this) and build.json. Changing these bytes is what makes the browser install a
 // new SW.
-const BUILD = '2026-07-18.151';
+const BUILD = '2026-07-18.152';
 const SHELL_CACHE = 'tomeroam-shell-' + BUILD;   // versioned: dropped when BUILD changes
 const IMG_CACHE = 'tomeroam-img-v1';             // build-independent: covers don't change per build
 const KEEP = [SHELL_CACHE, IMG_CACHE];           // caches to preserve on activate
@@ -430,12 +430,19 @@ async function imageFirst(evt, req, url) {
   // so the commit below is gated on this still being current — otherwise a pre-clear
   // request would repopulate the just-emptied cache and bump the NEW epoch's `put`
   // (which could even show put > seen in a supposedly clean window).
-  const requestEpoch = imgS.epoch;
-  imgS.stats.seen++;
+  // Bind BOTH counters to the state object this request started under. imgClear()
+  // REPLACES imgS, and there are two awaits before the hit is recorded — so reading
+  // the live imgS at that point would credit a pre-clear hit to the NEW window,
+  // reporting {seen:0, hit:1, put:0} in a supposedly clean measurement. A superseded
+  // request now updates only the detached old stats, which diagnostics never expose.
+  // (No clear in flight → requestState === imgS and nothing changes.)
+  const requestState = imgS;
+  const requestEpoch = requestState.epoch;
+  requestState.stats.seen++;
   const cache = await caches.open(IMG_CACHE);
   const key = imageKey(url);
-  const hit = await cache.match(key);
-  if (hit) { imgS.stats.hit++; return hit; }
+  const hit = await SWKit.imgLookup(requestState, cache, key);
+  if (hit) return hit;
   try {
     const res = await fetch(req);          // as issued by <img> (usually no-cors → opaque)
     // Cache real successes and opaque cross-origin responses (can't inspect status

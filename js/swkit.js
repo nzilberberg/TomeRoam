@@ -131,6 +131,20 @@
     return { cache, remaining: left.length };
   }
 
+  // Look a cover up, recording a hit against the request's OWN state object.
+  // `requestState` is captured when the request STARTS; imgClear() REPLACES the
+  // live state object, so a lookup that resolves after a clear must not land on the
+  // new one — otherwise a supposedly clean window reports {seen:0, hit:1, put:0},
+  // the same cross-epoch contamination the commit path is gated against, arriving
+  // through the hit branch instead. Binding to the object (rather than re-reading
+  // the live one) means a superseded request updates only the detached old stats,
+  // which diagnostics no longer expose.
+  async function imgLookup(requestState, cache, key) {
+    const hit = await cache.match(key);
+    if (hit && requestState && requestState.stats) requestState.stats.hit++;
+    return hit;
+  }
+
   // Commit a fetched cover, GATED on the measurement epoch. A request that began
   // before a clear must not repopulate the cache afterwards, nor bump the new
   // window's `put` (which would otherwise be able to show put > seen). Returns
@@ -143,7 +157,7 @@
   }
 
   const api = { parseRange, isImageRoute, routeFor, imgReconcileOrder, imgTrimPlan,
-    imgStateFresh, imgStateReset, imgStateNote, imgClearCache, imgCommit };
+    imgStateFresh, imgStateReset, imgStateNote, imgClearCache, imgCommit, imgLookup };
   if (typeof self !== 'undefined') self.SWKit = api;                         // service worker (importScripts)
   else if (typeof globalThis !== 'undefined') globalThis.SWKit = api;
   if (typeof module !== 'undefined' && module.exports !== undefined) module.exports = api;   // Node tests

@@ -277,3 +277,48 @@ test('imgCommit: a fetch within the SAME epoch commits normally', async () => {
   assert.deepEqual(await cache.keys(), ['coverA']);
   assert.equal(s.stats.put, 1);
 });
+
+// ---- review finding (.150): the COMMIT path was epoch-gated but the cache-HIT path
+// was not. imgClear() REPLACES the state object, and two awaits sit between capturing
+// the epoch and recording the hit — so a lookup that resolved after a clear credited
+// the NEW window, reporting {seen:0, hit:1, put:0}: the same cross-epoch contamination,
+// arriving through the hit branch. Accounting is now bound to the request's OWN state.
+const { imgLookup } = SWKit;
+
+test('imgLookup: a cache HIT resolving AFTER a clear does not contaminate the new epoch', async () => {
+  let s = imgStateFresh(); s.order = []; s.known = new Set();
+
+  // A lookup whose match() we resolve by hand, so the clear can land mid-flight.
+  let release;
+  const cache = { match: () => new Promise((r) => { release = () => r('cover-bytes'); }) };
+
+  const requestState = s;                    // request starts in epoch 0…
+  requestState.stats.seen++;
+  const inFlight = imgLookup(requestState, cache, 'coverA');
+
+  s = imgStateReset(s);                      // …clear commits: NEW state object, epoch 1
+  release();
+  const hit = await inFlight;                // the stale lookup now resolves
+
+  assert.equal(hit, 'cover-bytes', 'the request still gets its response');
+  assert.deepEqual(s.stats, { seen: 0, hit: 0, put: 0 },
+    'the post-clear window must stay pristine — no seen:0/hit:1 verdict');
+  assert.equal(s.epoch, 1);
+  assert.equal(requestState.stats.hit, 1,
+    'the hit is recorded against the window it actually belonged to (detached, not exposed)');
+});
+
+test('imgLookup: with no clear in flight, a hit lands on the CURRENT window as normal', async () => {
+  const s = imgStateFresh(); s.order = []; s.known = new Set();
+  const cache = { match: async () => 'cover-bytes' };
+  s.stats.seen++;
+  await imgLookup(s, cache, 'coverA');
+  assert.deepEqual(s.stats, { seen: 1, hit: 1, put: 0 }, 'ordinary accounting is unchanged');
+});
+
+test('imgLookup: a MISS records no hit (the commit path owns that outcome)', async () => {
+  const s = imgStateFresh(); s.order = []; s.known = new Set();
+  const cache = { match: async () => undefined };
+  assert.equal(await imgLookup(s, cache, 'coverA'), undefined);
+  assert.equal(s.stats.hit, 0);
+});
