@@ -161,7 +161,14 @@ const Presence = (() => {
     let sock;
     try { sock = new WebSocket(url); } catch { return; }
     ws = sock;
-    sock.onopen = () => { wsBackoff = 1000; dbg('WS', 'notification socket open'); };
+    // The `ws === sock` identity check here is DEFENSIVE, not a bug fix: no reachable
+    // sequence today lets a superseded socket fire onopen. wsConnect() early-returns
+    // while ws is CONNECTING or OPEN, so a live socket is never superseded; and
+    // wsDisconnect() calls close() — which, per spec, aborts a CONNECTING socket
+    // WITHOUT ever firing open. It is here because onclose already guards this way and
+    // the asymmetry reads as an oversight: without it, a future change that permits two
+    // live sockets would silently let a stale one reset the live socket's backoff.
+    sock.onopen = () => { if (ws !== sock) return; wsBackoff = 1000; dbg('WS', 'notification socket open'); };
     sock.onmessage = (ev) => { try { handleNotification(JSON.parse(ev.data)); } catch {} };
     sock.onclose = (ev) => {
       if (ws === sock) ws = null;

@@ -19,6 +19,7 @@ const HomeScreen = (() => {
   // Injected by app.js: { byId, renderTile, renderPresence, status, bookEntries }
   let d = null;
   let dlCarouselKey = null;
+  let loadGen = 0;              // only the NEWEST load() may rewrite the shared bookEntries map
 
   // Paint the SHAPE of a carousel (shimmering tile placeholders) before any data
   // exists — a cold or offline first load then shows the home layout instead of a
@@ -83,6 +84,16 @@ const HomeScreen = (() => {
   // Fetch + render the two home carousels (shared by initial load + pull-to-refresh).
   async function load(opts = {}) {
     const $ = d.byId, bookEntries = d.bookEntries;
+    // OWNERSHIP: `resume` below is captured BEFORE both awaits, and paint() WIPES the
+    // shared bookEntries map and refills it from that snapshot. bookEntries is owned by
+    // app.js and read by the live playback path (bestSource), so a load finishing late
+    // undoes whatever happened to the map while it was in flight. Four call sites reach
+    // load() — enterApp, pull-to-refresh, onReconnect and doResetProgress — so overlap
+    // is ordinary, not exotic. Concretely: Reset Progress deletes bookEntries[book] and
+    // reloads (app.js:1757-1758); an older in-flight load then paints the book straight
+    // back from its pre-reset snapshot. Own the paint by generation so only the NEWEST
+    // load may rewrite the shared map.
+    const myGen = ++loadGen;
     // The whole-library fetch (cached) powers both carousels + browse. The LMS
     // plugin's resume playlist is OPTIONAL — a best-effort ADDITIVE layer: when
     // it's absent (app-only user) getResumeMap returns [], and a fetch error is
@@ -100,6 +111,7 @@ const HomeScreen = (() => {
     // are pure derivations of the library list, so we derive them here rather than
     // re-fetch (which would also re-trigger revalidation).
     const paint = (books) => {
+      if (myGen !== loadGen) return;   // a newer load owns bookEntries now — this snapshot is stale
       for (const k in bookEntries) delete bookEntries[k];
       for (const b of resume) bookEntries[b.book] = b;
       const { cont, recentlyAdded } = PBLogic.homeFeeds(books, bookEntries);

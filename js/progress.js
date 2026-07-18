@@ -37,6 +37,7 @@ const Progress = (() => {
   let shardBoards = [];               // per-origin pseudo-boards from the last shard read (cached like peers)
   let pubTimer = null, pollTimer = null, active = false, dirty = false;
   let dirtySince = 0;                 // wall-clock ms when dirty flipped true (UI "stuck" detection only)
+  let pollSeq = 0;                    // only the NEWEST poll may publish a peer set (see poll)
   let dirtySeq = 0;                   // bumped by every mark-dirty; lets publish() tell whether a write landed DURING its round-trip
   let shardStats = null;              // last read's {uniqueRecords, storedRecords, devices} for diagnostics
   let legacyInv = [];                 // last poll's foreign LEGACY boards: [{id, name, rk, newestTs}] (device list + deletion)
@@ -403,7 +404,15 @@ const Progress = (() => {
   }
 
   // ---- read + merge ---------------------------------------------------------
+  // OWNERSHIP: peerBoards/shardBoards are ASSIGNED, not merged, so whichever read
+  // resolves LAST wins regardless of which was ISSUED last — and there is no in-flight
+  // flag. setInterval(poll, 20000) and refresh() (app render tick, ~8s — app.js:880 —
+  // plus the online handler) overlap whenever a read is slower than the gap, which is
+  // ordinary on a degraded connection. A slow read then reinstates a STALE peer set and
+  // rebuild() runs on it. Own the publication by generation; re-checked after every
+  // await, since a check only protects state written AFTER it.
   async function poll() {
+    const myPoll = ++pollSeq;
     try {
       // ⚠ 'pb_prog_' is a string-prefix of 'pb_prog2_': the legacy path must EXCLUDE
       // shard boards, or the pruner below reads TR2 payloads as unparseable-dead
@@ -412,6 +421,7 @@ const Progress = (() => {
       // (today the prefixes don't overlap; this keeps that a stated invariant
       // rather than a character coincidence).
       const boards = (await board.readAll()).filter((b) => !(b.title || '').startsWith(SHARD_PREFIX));
+      if (myPoll !== pollSeq) return;   // a newer poll owns the peer set — drop this read entirely
       const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
       peerBoards = parsed.filter((p) => p && p.id && p.id !== myId());
       cachePeerBoards();   // persist for next launch's first-frame paint (see restorePeerBoards)
@@ -424,6 +434,7 @@ const Progress = (() => {
       if (shards) {
         try {
           const r = await shards.readAll();
+          if (myPoll !== pollSeq) return;   // superseded mid shard-read
           shardBoards = shardEntriesToBoards(r.entries);
           shardInv = r.devices || {};
           cacheShardBoards();
@@ -439,6 +450,7 @@ const Progress = (() => {
       }
       applyPeerResets();   // adopt any peer reset tombstones + drop our own superseded records
       await completePendingDeletes();   // finish any delete whose purge has since verified
+      if (myPoll !== pollSeq) return;   // superseded before we publish the merged view
       rebuild(); cbMerged();
       // Once per launch, sweep boards from long-retired devices — presence prunes
       // its pb_dev_ ghosts, but pb_prog_ boards used to live forever, inflating
