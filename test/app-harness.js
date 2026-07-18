@@ -84,6 +84,14 @@ class FakeAudio {
   play() { this.calls.push('play'); this.paused = false; return Promise.resolve(); }
   pause() { this.calls.push('pause'); this.paused = true; }
   load() { this.calls.push('load'); }
+  /**
+   * Report a buffered range. The wedge watchdog deliberately ignores a frozen clock
+   * with NO forward data (that's real starvation, not the iOS audio-session wedge),
+   * so a wedge test must supply forward buffer or the watchdog correctly does nothing.
+   */
+  setBuffered(start, end) {
+    this.buffered = { length: 1, start: () => start, end: () => end };
+  }
   /** Convenience: the full "a track loaded and is playing" event sequence. */
   reachPlaying(at = 0) {
     this.emit('loadedmetadata', { readyState: 1, duration: this.duration || 3600 });
@@ -167,10 +175,31 @@ function boot(opts = {}) {
     return id;
   };
   const trackedClearTimeout = (id) => { timeouts.delete(id); return realClearTimeout(id); };
+
+  // opts.fakeTimers — VIRTUAL time. Required for anything delay-driven: the
+  // stream-error retry backoff (1s, 2s, 4s…) and the wedge watchdog (1400ms) are
+  // setTimeout-based, so without it a test would have to sleep on wall-clock and
+  // could never deterministically interleave "a newer action arrives DURING the
+  // retry delay" — which is the whole .89/.90/.101 bug shape.
+  let vnow = 0, nextTid = 1;
+  const tq = [];                                     // {id, fn, due}
+  const fakeSetTimeout = (fn, ms, ...a) => {
+    const id = nextTid++;
+    tq.push({ id, fn: () => fn(...a), due: vnow + (Number(ms) || 0) });
+    return id;
+  };
+  const fakeClearTimeout = (id) => {
+    const i = tq.findIndex((t) => t.id === id);
+    if (i >= 0) tq.splice(i, 1);
+  };
+
   global.setInterval = fakeSetInterval; window.setInterval = fakeSetInterval;
   global.clearInterval = fakeClearInterval; window.clearInterval = fakeClearInterval;
-  global.setTimeout = trackedSetTimeout; window.setTimeout = trackedSetTimeout;
-  global.clearTimeout = trackedClearTimeout; window.clearTimeout = trackedClearTimeout;
+  const useFake = !!opts.fakeTimers;
+  const st = useFake ? fakeSetTimeout : trackedSetTimeout;
+  const ct = useFake ? fakeClearTimeout : trackedClearTimeout;
+  global.setTimeout = st; window.setTimeout = st;
+  global.clearTimeout = ct; window.clearTimeout = ct;
 
   // ---- fakes: the outside world -------------------------------------------
   const log = recorder();
@@ -324,6 +353,20 @@ function boot(opts = {}) {
       el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
       return el;
     },
+    /**
+     * A REAL user seek: drives the SHIPPED scrub slider's `change` path, which is
+     * what app.js binds (bindScrub) → onManualSeek() → notePlaybackIntent() →
+     * Playback.noteIntent(). Deliberately not a direct call — the thing under test is
+     * whether the real control reaches the invalidation at all (.90/.91).
+     */
+    seek(sec, which = 'pSeek') {
+      const s = $(which);
+      if (!s) throw new Error('no such slider: ' + which);
+      const a = FakeAudio.last;
+      const dur = a.duration || 0;
+      s.value = dur ? String((sec / dur) * 1000) : '0';
+      s.dispatchEvent(new window.Event('change', { bubbles: true }));
+    },
     /** Drive a background/foreground transition through the real listener. */
     setHidden(v) {
       hidden = !!v;
@@ -336,11 +379,33 @@ function boot(opts = {}) {
       intervals,
       /** Run every registered interval callback `n` times (the transport tick etc.). */
       tick(n = 1) { for (let i = 0; i < n; i++) for (const t of intervals.slice()) t.fn(); },
+      now: () => vnow,
+      pending: () => tq.length,
+      /**
+       * Advance VIRTUAL time, firing due timeouts in chronological order and letting
+       * each one's promise chain settle before the next (a retry awaits a reprobe,
+       * so the continuation must run before later timers fire).
+       * Requires boot({ fakeTimers: true }).
+       */
+      async advance(ms) {
+        const target = vnow + ms;
+        for (;;) {
+          let next = null;
+          for (const t of tq) if (t.due <= target && (!next || t.due < next.due)) next = t;
+          if (!next) break;
+          tq.splice(tq.indexOf(next), 1);
+          vnow = next.due;
+          try { next.fn(); } catch { /* a timer callback throwing is the app's business */ }
+          for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
+        }
+        vnow = target;
+      },
     },
     /** Cancel anything still pending so node:test can exit. ALWAYS call in a finally. */
     dispose() {
       for (const id of [...timeouts]) trackedClearTimeout(id);
       intervals.length = 0;
+      tq.length = 0;
       global.setTimeout = realSetTimeout; global.clearTimeout = realClearTimeout;
       try { window.close(); } catch { /* jsdom already torn down */ }
     },
