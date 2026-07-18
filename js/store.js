@@ -195,6 +195,31 @@ const Store = (() => {
   async function cacheAlbum(alb) { if (!alb || alb.ratingKey == null) return; lsSet(albKey(alb.ratingKey), alb); put('albums', alb); }
   async function cachedAlbum(rk) { const r = await get('albums', rk); if (r) return r; return lsGet(albKey(rk)); }
 
+  // Clear ALL cached library metadata — the IDB stores AND their localStorage
+  // mirrors. Reads (cachedBooks/cachedAuthors/…) FALL BACK to localStorage when
+  // IDB is empty, so clearing only IDB leaves the app fully populated offline —
+  // the exact "Clear + reload didn't clear" bug. Owns every cache key name here so
+  // callers never re-hardcode them (the drift that silently broke the .140 image-
+  // cache clear). Deliberately does NOT touch audio/dl/buf (downloads), the `sync`
+  // store (pending progress writes), or kv identity/settings — only the metadata
+  // caches + their freshness stamps.
+  async function clearCache() {
+    try { await Promise.all(['books', 'authors', 'tracks', 'albums'].map((s) => clear(s))); } catch {}
+    try { await Promise.all(['sync:books', 'sync:authors'].map((k) => del('kv', k))); } catch {}
+    // Known singleton mirrors are removed unconditionally; per-book tr/alb keys need
+    // an enumeration pass (guarded — the known removes must land even if key/length
+    // are unavailable). rm is built OUTSIDE the try so a scan failure can't skip them.
+    const rm = [LSK.books, LSK.authors, LSK.sync];
+    try {
+      const trPfx = trKey(''), albPfx = albKey('');
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && (k.indexOf(trPfx) === 0 || k.indexOf(albPfx) === 0)) rm.push(k);
+      }
+    } catch {}
+    rm.forEach((k) => { try { localStorage.removeItem(k); } catch {} });
+  }
+
   // ---- persistent storage ---------------------------------------------------
   // Ask the browser not to evict our origin's storage under pressure. Best-effort;
   // may be denied (or unsupported), so we record the result for diagnostics and
@@ -247,7 +272,7 @@ const Store = (() => {
     kvGet, kvSet, diagGet, diagSet,
     stampSync, syncedAt,
     cacheBooks, cachedBooks, cacheAuthors, cachedAuthors,
-    cacheTracks, cachedTracks, cacheAlbum, cachedAlbum,
+    cacheTracks, cachedTracks, cacheAlbum, cachedAlbum, clearCache,
     persist, estimate,
     putAudio, getAudio, getAudioRec, hasAudio, delAudio, audioKeys, putDl, getDl, allDl, delDl, putBuf, allBuf, delBuf,
   };

@@ -12,6 +12,10 @@ function memLS() {
     setItem: (k, v) => m.set(k, String(v)),
     removeItem: (k) => m.delete(k),
     clear: () => m.clear(),
+    // Real Web Storage exposes length + key(i); clearCache enumerates them to find
+    // the per-book pb_cache_tr_*/pb_cache_alb_* mirrors, so the shim must too.
+    get length() { return m.size; },
+    key: (i) => Array.from(m.keys())[i] ?? null,
   };
 }
 global.localStorage = memLS();
@@ -66,4 +70,28 @@ test('syncedAt falls back to the mirror stamp when IDB has none', async () => {
   await Store.cacheBooks([{ ratingKey: '1' }]);
   const ts = await Store.syncedAt('books');
   assert.ok(ts >= before, 'a fresh sync timestamp was recorded in the mirror');
+});
+
+// The "Clear + reload didn't clear" bug: clearing only IDB left the localStorage
+// mirror, so offline reads (which fall back to it) still rendered the full library.
+// Here IDB is unavailable, so the mirror IS the only cache — clearCache must empty
+// it. Fails against an IDB-only clear (cachedBooks would still return the mirror).
+test('clearCache empties every metadata mirror so offline reads go empty', async () => {
+  await Store.cacheBooks([{ ratingKey: '8385', title: 'Fairy Tale' }, { ratingKey: '8696', title: 'Spy' }]);
+  await Store.cacheAuthors([{ ratingKey: '1', title: 'King' }]);
+  await Store.cacheTracks('8385', [{ ratingKey: 't1' }]);
+  await Store.cacheAlbum({ ratingKey: '8385', title: 'Fairy Tale' });
+  // sanity: everything is cached before the clear
+  assert.equal((await Store.cachedBooks()).length, 2);
+  assert.equal((await Store.cachedTracks('8385')).length, 1);
+
+  await Store.clearCache();
+
+  assert.deepEqual(await Store.cachedBooks(), [], 'books mirror cleared');
+  assert.deepEqual(await Store.cachedAuthors(), [], 'authors mirror cleared');
+  assert.equal(await Store.cachedTracks('8385'), null, 'per-book tracks mirror cleared');
+  assert.equal(await Store.cachedAlbum('8385'), null, 'per-book album mirror cleared');
+  assert.equal(global.localStorage.getItem('pb_cache_books'), null, 'raw books key gone');
+  assert.equal(global.localStorage.getItem('pb_cache_tr_8385'), null, 'raw tracks key gone');
+  assert.equal(global.localStorage.getItem('pb_cache_alb_8385'), null, 'raw album key gone');
 });

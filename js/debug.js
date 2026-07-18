@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-17.141';
+  const BUILD = '2026-07-17.142';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -456,18 +456,19 @@
   }
 
   // Cached-data clear (the Diagnostics "Cached data → Clear + reload" button).
-  // Empties the metadata stores (NOT audio/dl/buf/sync/kv — downloads, the
-  // buffer index, and pending progress writes stay) and deletes the cover
-  // cache ('tomeroam-img-v1' — KEEP IN SYNC WITH sw.js; the FIFO index lives
-  // inside it, so deleting the whole cache leaves a clean consistent slate),
-  // then reloads. The SW shell cache is untouched — the app still boots
-  // instantly, it just has no data until the fetches land.
+  // Clears the library metadata caches — BOTH the IDB stores and their
+  // localStorage mirrors (Store.clearCache owns the key names; reads fall back to
+  // ls when IDB is empty, so an IDB-only clear leaves the app fully populated
+  // offline — the bug this fixes). Downloads, the buffer index, and pending
+  // progress writes stay (NOT audio/dl/buf/sync-store/kv-identity). Also deletes
+  // the cover cache ('tomeroam-img-v1' — KEEP IN SYNC WITH sw.js; the FIFO index
+  // lives inside it, so deleting the whole cache leaves a clean consistent slate),
+  // then reloads. The SW shell cache is untouched — the app still boots instantly,
+  // it just has no data until the fetches land.
   async function clearCachedData() {
     const btn = document.getElementById('pbdbg-clearcache');
     if (btn) { btn.disabled = true; btn.textContent = 'Clearing…'; }
-    try {
-      if (window.Store) await Promise.all(['books', 'authors', 'tracks', 'albums'].map((s) => Store.clear(s)));
-    } catch {}
+    try { if (window.Store) await Store.clearCache(); } catch {}
     try { if (window.caches) await caches.delete('tomeroam-img-v1'); } catch {}
     location.reload();
   }
