@@ -118,6 +118,16 @@ test('a background/foreground round trip does not reload or pause live playback 
 // Several bugs (.92/.93) were "the right calls happened in the wrong ORDER". Pin the
 // sequence a selection must produce: the track list is fetched BEFORE the element is
 // pointed at a source, and ownership is claimed only once a source exists.
+//
+// SCOPE — this is the SYNCHRONOUS stream path, and the invariant is narrower than
+// "a claim always follows a source". On the DOWNLOADED path startTrack() returns
+// while Downloads.getBlob() is still pending, so beginPlayback claims Presence
+// first and the blob source is assigned later. That is not a violation to fix: the
+// claim announces the SELECTION (which is decided and final at that point), not the
+// element's readiness, and delaying it until a slow IndexedDB read completes would
+// widen the window in which two devices both think they own the book. So the
+// invariant this pins is: on the path where the source is chosen synchronously, the
+// claim must not jump ahead of it. Mutation 9 in tools/mutate.mjs holds that.
 test('a selection fetches, then sources, then loads, then claims — one ordered stream (.92/.93)', async () => {
   const h = boot();
   try {
@@ -997,6 +1007,50 @@ test('the downloaded-blob path installs a LIVE object URL, never a revoked one (
   } finally { h.dispose(); }
 });
 
+// THE SIGN-OUT LOAD BOUNDARY (.166). startTrack() returns with Downloads.getBlob()
+// still pending, and only `loadGen` gates what that continuation may do. Sign-out
+// went through userPause() → notePlaybackIntent, which bumps the play INTENT and
+// playReqGen but NOT loadGen — so a blob resolving after sign-out still passed its
+// generation check, assigned audio.src, called load(), and then autoplayed from the
+// loadedmetadata handler installed before sign-out. Clearing the Plex token cannot
+// stop it: a local blob needs no auth. Result: audio starting on the sign-in screen.
+//
+// Why the existing sign-out test did not catch it: it defers Plex.getAlbumTracks(),
+// so startTrack() is never reached and there is no in-flight load to invalidate.
+// This one gets INTO startTrack and stalls at the blob.
+//
+// MUTATION: remove `invalidateMediaLoad()` from doSignOut (or drop the `loadGen++`
+// inside it) → RED.
+test('a downloaded blob resolving AFTER sign-out cannot start playback (.166)', async () => {
+  const h = boot({ downloadedTracks: ['bookA-t0'] });
+  try {
+    await settle(h);
+    h.blob.deferNext();                      // stall INSIDE startTrack, blob outstanding
+    tapBook(h, 'bookA');
+    await settle(h);
+    assert.equal(h.blob.pendingCount(), 1, 'precondition: a load really is in flight');
+    const srcBefore = h.audio.src;
+    const loadsBefore = loads(h);
+    const playsBefore = h.audio.playAttempts.length;
+    const claimsBefore = h.log.names().filter((n) => n === 'presence.claimPlaying').length;
+
+    h.screenDeps.GeneralScreen.onSignOut();  // the REAL doSignOut app.js injected
+    await settle(h);
+
+    h.blob.resolve();                        // the stale load finally lands
+    await settle(h);
+    h.audio.emit('loadedmetadata');          // and its handler would fire here
+    await settle(h);
+
+    assert.equal(h.audio.src, srcBefore, 'no source may be installed after sign-out');
+    assert.equal(loads(h), loadsBefore, 'nor the element reloaded');
+    assert.equal(h.audio.playAttempts.length, playsBefore, 'and above all: NO play() after sign-out');
+    assert.equal(h.log.names().filter((n) => n === 'presence.claimPlaying').length, claimsBefore,
+      'no presence claim either');
+    assert.ok(h.audio.paused, 'the element stays paused');
+  } finally { h.dispose(); }
+});
+
 test('a second downloaded track revokes the FIRST url exactly once and keeps the new one live (.162)', async () => {
   const h = boot({ downloadedTracks: ['bookA-t0', 'bookA-t1'] });
   try {
@@ -1034,14 +1088,31 @@ test('a Progress.refresh still in flight cannot disturb a newer selection (.162)
   const h = boot();
   try {
     await settle(h);
-    h.publications.deferNext('progress.refresh');
     tapBook(h, 'bookA');
     await settle(h);
     h.audio.reachPlaying(100);
-    await settle(h, 30);                    // the render tick drives Progress.refresh()
+    await settle(h);
+
+    // Drive a REAL production trigger. The earlier version waited on the render
+    // tick (app.js:880, throttled to 8s) — which the harness never runs, so the
+    // refresh was never in flight and the test returned early WITHOUT ASSERTING
+    // ANYTHING while reporting as covered. `online` (app.js:2121) is a real,
+    // synchronous entry point into Progress.refresh().
+    h.publications.deferNext('progress.refresh');
+    h.window.dispatchEvent(new h.window.Event('online'));
+    await settle(h);
 
     const inflight = h.publications.find('progress.refresh');
-    if (!inflight) return;                  // refresh not driven in this window — nothing to assert
+    assert.ok(inflight, 'the online handler must actually start Progress.refresh()');
+    // SCOPE, stated honestly. What makes this test fail is the assertion above
+    // (mutation-verified: drop Progress.refresh() from the online handler → RED)
+    // plus the source/load assertions below. settle() now also replays the real
+    // onMerged — correct fidelity, since a real refresh ends in rebuild()+cbMerged()
+    // — but that replay is NOT load-bearing here: app.js's onMerged calls
+    // renderPresence(), which touches neither audio.src nor the load count, so
+    // removing the capture leaves this test green. Do not read it as coverage of
+    // merged-state repainting; a test for that must assert on what renderPresence
+    // actually writes.
 
     tapBook(h, 'bookB');                    // newer selection while the read is pending
     await settle(h);

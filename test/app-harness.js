@@ -322,6 +322,7 @@ function boot(opts = {}) {
    * test/progress-publish.test.js.)
    */
   const pubs = { pending: [], deferred: new Set() };
+  let progressMerged = null;        // app.js's real onMerged, captured by progress.init
   const recCtl = (name) => (...args) => {
     log.calls.push({ name, args });
     if (!pubs.deferred.has(name)) return Promise.resolve();
@@ -335,7 +336,19 @@ function boot(opts = {}) {
     deferNext: (name) => pubs.deferred.add(name),
     pending: () => pubs.pending.filter((p) => !p.done),
     find: (name) => pubs.pending.find((p) => p.name === name && !p.done),
-    settle(name) { const p = this.find(name); if (!p) throw new Error('no pending ' + name); p.done = true; p.resolve(); },
+    /**
+     * Settle a deferred publication. For `progress.refresh` this ALSO invokes the
+     * real onMerged callback app.js registered — because that is what a real
+     * refresh completion does: progress.js poll() ends with rebuild() then
+     * cbMerged(). Without it, settling a refresh had NO side effect at all, so a
+     * test asserting "a stale refresh cannot disturb the newer selection" was only
+     * proving that resolving a no-op promise does nothing.
+     */
+    settle(name) {
+      const p = this.find(name); if (!p) throw new Error('no pending ' + name);
+      p.done = true; p.resolve();
+      if (name === 'progress.refresh' && progressMerged) progressMerged();
+    },
     fail(name, err) {
       const p = this.find(name);
       if (!p) throw new Error('no pending ' + name);
@@ -399,7 +412,11 @@ function boot(opts = {}) {
   };
 
   const progress = {
-    init: () => {}, setActive: () => {}, hydrate: () => {}, setSeed: () => {},
+    // Capture onMerged: the real Progress calls it after every poll/rebuild, and
+    // publications.settle('progress.refresh') replays that so a completing refresh
+    // has the side effect it really has (see settle above).
+    init: (o) => { progressMerged = (o && o.onMerged) || null; },
+    setActive: () => {}, hydrate: () => {}, setSeed: () => {},
     isMine: () => true, bookRecord: () => null, myBookRecord: () => null,
     trackRecord: () => null, trackPct: () => 0,
     recordBook: log.rec('progress.recordBook'),
@@ -422,8 +439,21 @@ function boot(opts = {}) {
     trackLocal: (rk) => !!(opts.downloadedTracks || []).includes(String(rk)),
     trackBuffered: () => false,
     trackProgress: () => 0, progress: () => 0, stateOf: () => 'none',
-    getBlob: async (rk) => ((opts.downloadedTracks || []).includes(String(rk)) ? { size: 123, _rk: rk } : null), listDownloaded: async () => [], remove: async () => {}, bufMaxBytes: () => 1e9,
+    // DEFERRABLE, because the interesting case is what lands while it is PENDING:
+    // app.js returns from startTrack() with this promise outstanding, so anything
+    // that happens in between (sign-out, a newer selection) must be able to
+    // invalidate it. An always-immediate fake makes that window unrepresentable —
+    // the same "fake kinder than the real dependency" trap as FakeAudio.play().
+    getBlob: (rk) => {
+      const has = (opts.downloadedTracks || []).includes(String(rk));
+      const value = has ? { size: 123, _rk: rk } : null;
+      if (!blobCtl.defer) return Promise.resolve(value);
+      blobCtl.defer--;
+      return new Promise((resolve) => { blobCtl.pending.push(() => resolve(value)); });
+    },
+    listDownloaded: async () => [], remove: async () => {}, bufMaxBytes: () => 1e9,
   };
+  const blobCtl = { defer: 0, pending: [] };
 
   const banking = {
     MAX_AHEAD: 3, init: () => {}, pump: () => {}, clear: () => {}, has: () => false,
@@ -514,6 +544,22 @@ function boot(opts = {}) {
     pendingTracks,
     objectUrls,
     publications,
+    /**
+     * Control the async downloaded-blob load. `deferNextBlob()` makes the next
+     * Downloads.getBlob() hang so a test can act during the window app.js leaves
+     * open (it returns from startTrack with the promise outstanding); `resolveBlob()`
+     * lets it land. Without this the sign-out/newer-selection races on the
+     * downloaded path cannot be written at all.
+     */
+    blob: {
+      deferNext(n = 1) { blobCtl.defer += n; },
+      pendingCount: () => blobCtl.pending.length,
+      resolve() {
+        const fns = blobCtl.pending.splice(0);
+        fns.forEach((f) => f());
+        return fns.length;
+      },
+    },
     /**
      * The REAL Media Session handlers app.js registered. `invoke` calls the exact
      * callback the browser would — the lock-screen entry point — so a test can prove

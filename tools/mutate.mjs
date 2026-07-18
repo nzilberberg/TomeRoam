@@ -58,6 +58,22 @@ const MUTATIONS = [
     file: 'js/browse.js',
     from: "    if (browseVisible() && !page.classList.contains('hidden')) positionOnEnter(desc, page, 0);",
     to: "    if (!page.classList.contains('hidden')) positionOnEnter(desc, page, 0);" },
+  // The ordering assertion the shared recorder made possible: claim ownership only
+  // AFTER the element is loading. `.162`'s report claimed this lived here and it
+  // did not — the tool had the two production fixes but never this one, so the
+  // "mutations 7–9" claim was not substantiated by the repo. Added so the claim is
+  // true going forward. (Scope: this pins the SYNCHRONOUS stream path, which is
+  // what the ordering test observes — see the note on that test about the async
+  // downloaded-blob path, where the claim legitimately precedes the blob source.)
+  { name: 'ordering: claim Presence BEFORE the element is loading',
+    from: `      startTrack(idx, (posMs || 0) / 1000);`,
+    to: `      Presence.claimPlaying(book, tracks[idx].ratingKey, posMs || 0, tracks[idx].ratingKey);\n      startTrack(idx, (posMs || 0) / 1000);` },
+  // The sign-out load boundary (.166): a downloaded blob resolving after sign-out
+  // could assign a source and autoplay, because notePlaybackIntent bumps the play
+  // intent but never loadGen.
+  { name: 'sign-out no longer invalidates an in-flight media load',
+    from: `    userPause(); invalidateMediaLoad(); Plex.signOut();`,
+    to: `    userPause(); Plex.signOut();` },
 ];
 
 if (process.argv.includes('--restore')) {

@@ -1618,8 +1618,22 @@
   // The settings themselves live in per-screen modules: general/playback/buffering/
   // downloads-screen.js. app.js injects the shared bits they lean on: updateSkipLabels
   // (transport bar), pumpBank (banking), Settings/Presence, and doSignOut (teardown).
+  // TEARDOWN BOUNDARY for in-flight media loads. `notePlaybackIntent` bumps the
+  // INTENT and playReqGen; neither reaches loadGen, and loadGen is what the async
+  // source paths check. So a DOWNLOADED track whose Downloads.getBlob() resolved
+  // AFTER sign-out still passed `gen === loadGen`, assigned audio.src, called
+  // load(), and then autoplayed from the already-installed loadedmetadata handler.
+  // Clearing the Plex token cannot stop that — a local blob needs no auth — so
+  // audio could start playing on the sign-in screen. Bumping the generation is
+  // what makes every pending load a no-op; the rest releases what we own.
+  function invalidateMediaLoad() {
+    loadGen++;
+    curLoad = null;
+    if (curObjUrl) { try { URL.revokeObjectURL(curObjUrl); } catch {} curObjUrl = null; }
+    try { audio.removeAttribute('src'); audio.load(); } catch {}
+  }
   function doSignOut() {
-    userPause(); Plex.signOut(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');   // userPause (not bare audio.pause) → notePlaybackIntent: cancels a pending stream retry timer, bumps intent, AND cancels a not-yet-started book selection (playReqGen) so it can't start audio/claim presence after sign-out
+    userPause(); invalidateMediaLoad(); Plex.signOut(); clearBanks(); setBuffered(0); ctx = null; updatePlayerUI(); show('signin');   // userPause (not bare audio.pause) → notePlaybackIntent: cancels a pending stream retry timer, bumps intent, AND cancels a not-yet-started book selection (playReqGen) so it can't start audio/claim presence after sign-out. invalidateMediaLoad additionally kills any IN-FLIGHT load (the async downloaded-blob path) — see above.
     $('navbar').classList.add('hidden'); Browse.reset(); setView('home'); setNavActive('home');
     localStorage.removeItem(LAST);
     Presence.setActive(false); Progress.setActive(false); stopRenderTick();
