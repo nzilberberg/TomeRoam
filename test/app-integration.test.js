@@ -618,3 +618,115 @@ test('a pause during a PENDING play wins, even when the stale play resolves late
     assert.equal(loads(h), 1, 'exactly one load across the whole sequence');
   } finally { h.dispose(); }
 });
+
+// ══ prevTrack: both branches + the exact boundary (.156) ═══════════════════════
+// app.js:1582 — `if ((audio.currentTime || 0) > 10) { restart } else { step back }`.
+// The rule is STRICTLY greater-than, so exactly 10s steps BACK. Encoded from the
+// production expression, not assumed. Driven through the real npPrev button, whose
+// only home is the Now-Playing screen (the mini-player has no prev/next-TRACK control).
+async function onChapterTwo(h) {
+  await settle(h);
+  tapBook(h, 'bookA');
+  await settle(h);
+  h.audio.reachPlaying(100);
+  await settle(h);
+  h.tap('#player');                    // open Now Playing → builds npPrev/npNext
+  await settle(h);
+  h.tap('#npNext');                    // move off track 0 so "previous" is meaningful
+  await settle(h);
+  assert.match(h.audio.src, /bookA\/1/, 'precondition: on chapter 2');
+  return h;
+}
+
+test('Previous beyond 10s RESTARTS the chapter instead of stepping back (.156)', async () => {
+  const h = boot();
+  try {
+    await onChapterTwo(h);
+    const before = loads(h);
+    h.audio.currentTime = 25;
+    h.tap('#npPrev');
+    await settle(h);
+
+    assert.match(h.audio.src, /bookA\/1/, 'still the same chapter');
+    assert.equal(h.audio.currentTime, 0, 'rewound to the start');
+    assert.equal(loads(h), before, 'a restart must NOT reload the element');
+  } finally { h.dispose(); }
+});
+
+test('Previous below 10s steps to the previous chapter, loading it exactly once (.156)', async () => {
+  const h = boot();
+  try {
+    await onChapterTwo(h);
+    const before = loads(h);
+    h.audio.currentTime = 4;
+    h.tap('#npPrev');
+    await settle(h);
+
+    assert.match(h.audio.src, /bookA\/0/, 'stepped back a chapter');
+    assert.equal(loads(h) - before, 1, 'exactly one load for one transition');
+    const tracks = h.log.calls.filter((c) => c.name === 'presence.setTrack').map((c) => c.args[0]);
+    assert.equal(tracks[tracks.length - 1], 'bookA-t0', 'presence follows to the chapter we landed on');
+  } finally { h.dispose(); }
+});
+
+test('Previous at EXACTLY 10s steps back — the rule is strictly greater-than (.156)', async () => {
+  const h = boot();
+  try {
+    await onChapterTwo(h);
+    h.audio.currentTime = 10;          // not > 10
+    h.tap('#npPrev');
+    await settle(h);
+    assert.match(h.audio.src, /bookA\/0/, 'at the boundary it steps back, it does not restart');
+  } finally { h.dispose(); }
+});
+
+test('Previous on the FIRST chapter below the threshold does nothing (.156)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    h.audio.reachPlaying(100);
+    await settle(h);
+    h.tap('#player');
+    await settle(h);
+    const before = loads(h);
+    h.audio.currentTime = 3;
+    h.tap('#npPrev');                  // idx 0 → no previous chapter exists
+    await settle(h);
+
+    assert.match(h.audio.src, /bookA\/0/, 'still on the first chapter');
+    assert.equal(loads(h), before, 'and nothing was reloaded');
+  } finally { h.dispose(); }
+});
+
+// Scenario 10's exactly-once concern on the ORDINARY current-generation path.
+//
+// NOTE on what is NOT asserted here: two `ended` events fired back-to-back WITHOUT the
+// element resetting does advance two chapters — but that is not a sequence a browser
+// can produce. After the first advance the element is re-sourced and sits near 0, and
+// it is that reset which lets the bogus-ended guard (app.js:1380) reject the second.
+// Asserting on the back-to-back version would be testing the fake's imagination.
+// The realistic hazard is the one the guard's own comment documents: iOS firing a
+// spurious `ended` at the buffer edge. This pins that the guard covers it.
+test('a spurious second ended after an advance does not skip another chapter (.156)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    h.audio.reachPlaying(100);
+    await settle(h);
+
+    h.audio.currentTime = 600;         // genuinely at the end of a 600s chapter
+    h.audio.emit('ended');
+    await settle(h);
+    assert.match(h.audio.src, /bookA\/1/, 'advanced exactly one chapter');
+
+    h.audio.currentTime = 0;           // the new chapter starts at 0, as it really would
+    h.audio.emit('ended');             // …and iOS fires a spurious ended at the buffer edge
+    await settle(h);
+
+    assert.match(h.audio.src, /bookA\/1/, 'the spurious ended must NOT advance again');
+  } finally { h.dispose(); }
+});
