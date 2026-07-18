@@ -425,3 +425,121 @@ test('a stale retry must not reload the old book while a newer selection is stil
     assert.match(h.audio.src, /\/parts\/bookB\//, 'the newer selection still owns playback');
   } finally { h.dispose(); }
 });
+
+// ══ Media Session: the lock-screen entry point (.154) ══════════════════════════
+// app.js registers six handlers (app.js:1965-1970). They are a SEPARATE public
+// entry point from the visible controls — `play` routes to resumePlay()
+// unconditionally while the mini-player button toggles on audio.paused, and
+// previoustrack/nexttrack have NO mini-player equivalent at all (only npPrev/npNext
+// on the Now-Playing screen). Until .154 the harness discarded every handler AND
+// app.js could not see the fake navigator at all, so none of this ran under test.
+//
+// Parity is asserted on the two things resumePlay() does that a bare audio.play()
+// would not: it supersedes a pending retry (notePlaybackIntent) and it ADOPTS a live
+// peer's chapter. Those are what make these tests able to fail.
+
+test('every Media Session action app.js registers is actually captured (fixture guard, .154)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    assert.deepEqual(h.mediaSession.registered().sort(),
+      ['nexttrack', 'pause', 'play', 'previoustrack', 'seekbackward', 'seekforward'],
+      'if this is empty, app.js cannot see the fake navigator (Node defines globalThis.navigator as a getter — it must be installed with defineProperty, not assignment)');
+    assert.ok(h.mediaSession.state.metadata, 'and Media Session metadata was published');
+  } finally { h.dispose(); }
+});
+
+// The peer-adoption case, driven from the LOCK SCREEN instead of the UI button.
+// A Media Session play wired straight to the audio element would resume our stale
+// local chapter — the exact bug this app exists to avoid.
+test('Media Session play adopts a live peer\'s chapter, same as the UI play button (.154)', async () => {
+  const h = boot();
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');                       // local: chapter 0, paused
+    await settle(h);
+    h.pushPeers([{ id: 'peer1', name: 'iPhone', book: 'bookA', track: 'bookA-t2',
+      state: 'playing', claim: 999, at: Date.now(), pos: 300000 }]);
+    await settle(h);
+
+    h.mediaSession.invoke('play');             // the LOCK-SCREEN entry point
+    await settle(h);
+
+    assert.match(h.audio.src, /bookA\/2/, 'the lock-screen Play must adopt the PEER\'s chapter');
+    const published = h.log.calls.filter((c) => c.name === 'presence.setTrack').map((c) => c.args[0]);
+    assert.ok(published.includes('bookA-t2'), 'and publish the adopted chapter');
+  } finally { h.dispose(); }
+});
+
+// resumePlay()'s other job: notePlaybackIntent(), which kills a pending stream retry.
+// A lock-screen Play that skipped it would let the stale retry fire and reload.
+test('Media Session play supersedes a pending stream retry, same as the UI button (.154)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await settle(h);
+    tapBook(h, 'bookA');
+    await settle(h);
+    h.audio.setBuffered(0, 600);
+    h.audio.reachPlaying(100);
+    await settle(h);
+
+    failAudio(h, 2);                           // retry armed (+1000ms)
+    await settle(h);
+    const before = loads(h);
+
+    h.mediaSession.invoke('play');             // lock-screen Play = explicit intent
+    await settle(h);
+    await h.clock.advance(3000);               // the retry's moment passes
+
+    // loads alone does NOT discriminate: a fired retry also produces exactly one load,
+    // so `loads === 1` passes whether or not the retry was cancelled. The retry path is
+    // the ONLY thing that re-resolves the base (resetConn, see the .88 test) — assert on
+    // that instead, or this test cannot fail for the reason it was written.
+    assert.equal(loads(h) - before, 1,
+      'exactly the resume reload — the superseded retry must NOT add a second');
+    assert.equal(h.log.names().filter((n) => n === 'plex.resetConn').length, 0,
+      'the retry was cancelled by the lock-screen Play, so no reconnect probe ever ran');
+  } finally { h.dispose(); }
+});
+
+// previoustrack/nexttrack are the two actions with no mini-player equivalent. The
+// Now-Playing screen owns their only buttons, so compare the two entry points there.
+// NOTE: boot() installs shared globals (window/document/navigator/FakeAudio.last), so
+// two harnesses cannot be alive at once — the second clobbers the first. Run each
+// entry point in its own booted app, snapshot the core state, then compare.
+async function nowPlayingOpen(h) {
+  await settle(h);
+  tapBook(h, 'bookA');
+  await settle(h);
+  h.audio.reachPlaying(100);
+  await settle(h);
+  h.tap('#player');                            // opens Now Playing → builds npPrev/npNext
+  await settle(h);
+}
+const coreState = (h) => ({ src: h.audio.src, loads: loads(h),
+  track: (h.log.calls.filter((c) => c.name === 'presence.setTrack').pop() || { args: [] }).args[0] });
+
+test('Media Session nexttrack matches the Now-Playing next button (.154)', async () => {
+  let viaUi, viaMs;
+  const h1 = boot();
+  try {
+    await nowPlayingOpen(h1);
+    assert.ok(h1.document.getElementById('npNext'), 'the real Now-Playing next button exists');
+    h1.tap('#npNext');
+    await settle(h1);
+    viaUi = coreState(h1);
+  } finally { h1.dispose(); }
+
+  const h2 = boot();
+  try {
+    await nowPlayingOpen(h2);
+    h2.mediaSession.invoke('nexttrack');
+    await settle(h2);
+    viaMs = coreState(h2);
+  } finally { h2.dispose(); }
+
+  assert.match(viaUi.src, /bookA\/1/, 'the UI button advanced a chapter');
+  assert.deepEqual(viaMs, viaUi, 'the lock-screen action must produce the same core state as the button');
+});

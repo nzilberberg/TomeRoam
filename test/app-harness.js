@@ -122,7 +122,14 @@ function boot(opts = {}) {
   // ---- browser globals the app touches -------------------------------------
   global.window = window;
   global.document = document;
-  global.navigator = window.navigator;
+  // MUST be defineProperty, NOT assignment. Node >=21 defines globalThis.navigator as
+  // a GETTER-ONLY accessor, so `global.navigator = …` silently does nothing in sloppy
+  // mode — app.js then saw NODE's navigator (userAgent "Node.js/22") instead of
+  // jsdom's, and every navigator-gated branch took the "not supported" path forever:
+  // `'mediaSession' in navigator` was false, so setMediaSession() returned early in
+  // EVERY test and the entire Media Session surface was dead code under test. The
+  // property is configurable, so defineProperty succeeds where assignment does not.
+  Object.defineProperty(global, 'navigator', { value: window.navigator, configurable: true, writable: true });
   global.localStorage = window.localStorage;
   global.Audio = FakeAudio;
   window.Audio = FakeAudio;
@@ -135,8 +142,28 @@ function boot(opts = {}) {
   global.scrollTo = window.scrollTo;
   global.history = window.history;         // app.js uses the bare `history` global
   global.location = window.location;
+  // Media Session: CAPTURE the handlers instead of discarding them. app.js registers
+  // six (app.js:1965-1970) and they are a genuinely separate entry point from the
+  // visible UI — `play` routes to resumePlay() unconditionally, while the mini-player
+  // button toggles on audio.paused, and previoustrack/nexttrack have NO mini-player
+  // equivalent at all. The old `setActionHandler: () => {}` stub threw all of that
+  // away, so every lock-screen action was unreachable from a test. `log` is declared
+  // below in this same scope; these closures only run once app.js is booted.
+  const msHandlers = new Map();
+  const msState = { metadata: null, playbackState: 'none', positionState: null };
   Object.defineProperty(window.navigator, 'mediaSession', {
-    value: { metadata: null, playbackState: 'none', setActionHandler: () => {} },
+    value: {
+      get metadata() { return msState.metadata; },
+      set metadata(v) { msState.metadata = v; log.calls.push({ name: 'ms.metadata', args: [v && v.title] }); },
+      get playbackState() { return msState.playbackState; },
+      set playbackState(v) { msState.playbackState = v; log.calls.push({ name: 'ms.playbackState', args: [v] }); },
+      // null is the documented "unregister" value — record it as removal, not a handler.
+      setActionHandler(action, fn) {
+        if (fn === null || fn === undefined) msHandlers.delete(action); else msHandlers.set(action, fn);
+        log.calls.push({ name: 'ms.setActionHandler', args: [action, fn ? 'fn' : 'null'] });
+      },
+      setPositionState(s) { msState.positionState = s; log.calls.push({ name: 'ms.setPositionState', args: [s] }); },
+    },
     configurable: true,
   });
   Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
@@ -332,6 +359,11 @@ function boot(opts = {}) {
   put('Nav', real('../js/nav.js'));
   put('HandoffController', real('../js/handoff.js'));
   put('HomeScreen', real('../js/home-screen.js'));   // REAL: renders real tiles via app.js's renderTile
+  // REAL too: it OWNS the only UI buttons for prevTrack/nextTrack (npPrev/npNext,
+  // built in buildControls) — the mini-player has just skip-back/play-pause/skip-fwd.
+  // Stubbed, those two production entry points had no clickable path in any test, so
+  // Media Session's previoustrack/nexttrack had nothing to be compared against.
+  put('NowPlayingScreen', real('../js/nowplaying-screen.js'));
   // speed.js assigns straight to window.SpeedControl (no module.exports), so eval it
   // in this context and mirror it onto global for app.js's bare reference.
   (0, eval)(fs.readFileSync(path.join(ROOT, 'js', 'speed.js'), 'utf8'));
@@ -357,6 +389,24 @@ function boot(opts = {}) {
     plex, presence, progress, downloads, banking, browse, net, screens,
     log,
     pendingTracks,
+    /**
+     * The REAL Media Session handlers app.js registered. `invoke` calls the exact
+     * callback the browser would — the lock-screen entry point — so a test can prove
+     * it routes through the same production action as the visible control rather than
+     * poking the audio element. Throws on an unregistered action so a MISSING
+     * registration fails loudly instead of silently passing.
+     */
+    mediaSession: {
+      state: msState,
+      registered: () => [...msHandlers.keys()],
+      getHandler: (action) => msHandlers.get(action) || null,
+      invoke(action, details) {
+        const fn = msHandlers.get(action);
+        if (!fn) throw new Error('no Media Session handler registered for: ' + action);
+        log.calls.push({ name: 'ms.invoke', args: [action] });
+        return fn(details || { action });
+      },
+    },
     /** Click a real element from the shipped index.html. */
     tap(sel) {
       const el = sel.startsWith('#') ? $(sel.slice(1)) : document.querySelector(sel);
