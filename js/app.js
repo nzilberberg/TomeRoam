@@ -2245,6 +2245,18 @@
   }
   window.PBHardReset = hardReset;   // reachable from diagnostics too
 
+  // Diagnostics hook (debug.js "Windowed browse" toggle): drop rendered browse
+  // pages so the virtualization-mode change applies on the next look, not the
+  // next cold launch. Same discipline as the reconnect path above: clearCache()
+  // removes even an on-screen page, so if a browse view IS current, re-render it
+  // (from Diagnostics the top view is a settings overlay → the no-op branch, and
+  // the emptied cache rebuilds on back-nav's applyScreen).
+  window.PBRebuildBrowse = () => {
+    Browse.clearCache();
+    const d = currentDesc();
+    if (d && ['books', 'authors', 'authorBooks', 'files'].includes(d.v)) applyScreen(d, { render: true, resetScroll: false });
+  };
+
   async function init() {
     if (window.PBDebug) PBDebug.log('BOOT', `id=${bootId} hidden=${document.hidden} signedIn=${Plex.isSignedIn()}`);
     // Banking (js/banking.js) — wire it BEFORE bind() registers the audio listeners

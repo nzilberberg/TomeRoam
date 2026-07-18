@@ -28,6 +28,18 @@ test('threshold: 600 full-renders, 601 virtualizes — exactly', () => {
   assert.equal(VL.usesVirtual(VL.FULL_RENDER_MAX + 1), true);
 });
 
+test('force override: windows ANY size while on, exact threshold restored when off', () => {
+  try {
+    VL.setForceVirtual(true);
+    assert.equal(VL.usesVirtual(1), true, 'a 1-item list windows under force');
+    assert.equal(VL.usesVirtual(0), false, 'an empty list is exempt — classic empty output is the exercised path');
+  } finally {
+    VL.setForceVirtual(false);
+  }
+  assert.equal(VL.usesVirtual(VL.FULL_RENDER_MAX), false, 'off → the exact threshold is back');
+  assert.equal(VL.usesVirtual(VL.FULL_RENDER_MAX + 1), true);
+});
+
 // ---- model geometry ----------------------------------------------------------
 test('group offsets are exact: header + count×row per group, cumulative', () => {
   const m = VL.buildModel(groupsABC(10), S);

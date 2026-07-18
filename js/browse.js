@@ -432,7 +432,7 @@ const Browse = (() => {
     if (note) m.appendChild(note);
     const list = document.createElement('div');
     list.className = 'browselist';
-    if (VL && items.length > VL.FULL_RENDER_MAX) {   // fill-to-budget: same look, windowed rows
+    if (VL && VL.usesVirtual(items.length)) {   // fill-to-budget: same look, windowed rows
       virtualView(m, list, letters.map((L) => ({ letter: L, items: groups.get(L) })), rowFn, letters);
       return;
     }
@@ -459,7 +459,7 @@ const Browse = (() => {
     // No A–Z index here → book rows span the full width.
     const list = document.createElement('div');
     list.className = 'browselist authorlist';
-    if (VL && books.length > VL.FULL_RENDER_MAX) {   // one flat headerless group, windowed
+    if (VL && VL.usesVirtual(books.length)) {   // one flat headerless group, windowed
       virtualView(m, list, [{ letter: '', items: books.slice().sort(bySort) }], bookRow, null);
       return;
     }

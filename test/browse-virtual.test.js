@@ -56,6 +56,26 @@ test('threshold routing: exactly 600 items → the CLASSIC full renderer, byte-i
   assert.ok(m.querySelector('.alphaindex'), 'A–Z index present');
 });
 
+test('force override routes a SMALL list through the real virtual path (the Diagnostics toggle)', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    const m = page();
+    T.listView(m, 'Books', books(5), T.bookRow, false);
+    assert.ok(m._vctl, 'controller created for 5 items under force');
+    assert.ok(m.querySelectorAll('.vshell').length > 0, 'shells built');
+    assert.equal(m.querySelectorAll('.book').length, 0, 'windowed: no rows before activation');
+    m._vctl.activate();
+    assert.equal(m.querySelectorAll('.book').length, 5, 'all 5 realize (window covers the whole list)');
+    m._vctl.destroy();
+  } finally {
+    global.VirtualList.setForceVirtual(false);   // never leak the override into other tests
+  }
+  const m2 = page();
+  T.listView(m2, 'Books', books(5), T.bookRow, false);
+  assert.equal(m2._vctl, undefined, 'off → 5 items classic again');
+  assert.equal(m2.querySelectorAll('.book').length, 5);
+});
+
 test('threshold routing: 601 items → virtual shells, zero rows until activation, index still present', () => {
   const m = page();
   T.listView(m, 'Books', books(MAXN + 1), T.bookRow, false);

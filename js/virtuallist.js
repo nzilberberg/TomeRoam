@@ -25,7 +25,16 @@ const VirtualList = (() => {
   const FULL_RENDER_MAX = 600;
   const OVERSCAN_FACTOR = 1.5;                 // realize viewport ± innerHeight*this
 
-  const usesVirtual = (itemCount) => itemCount > FULL_RENDER_MAX;
+  // Diagnostics override (Options → Diagnostics → "Windowed browse"): window
+  // EVERY list regardless of size, so the >600 path is testable on a small
+  // library. Persisted under pb_forceVirtual; debug.js owns the toggle UI.
+  let forceVirtual = false;
+  try { forceVirtual = typeof localStorage !== 'undefined' && localStorage.getItem('pb_forceVirtual') === '1'; } catch { /* storage unavailable → default off */ }
+  const setForceVirtual = (v) => { forceVirtual = !!v; };
+
+  // (An EMPTY list is exempt from the override — nothing to window, and the
+  // classic renderer's empty output is the exercised path.)
+  const usesVirtual = (itemCount) => (forceVirtual && itemCount > 0) || itemCount > FULL_RENDER_MAX;
 
   // ---- pure model -----------------------------------------------------------
   // groupedItems: [{ letter, items: [...] }] in display order.
@@ -260,7 +269,7 @@ const VirtualList = (() => {
   }
 
   const api = {
-    FULL_RENDER_MAX, usesVirtual,
+    FULL_RENDER_MAX, usesVirtual, setForceVirtual,
     buildModel, windowFor, anchorAt, yForAnchor,
     createController,
     _test: { activeController: () => activeCtl, setActive: (c) => { activeCtl = c; } },
