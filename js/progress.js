@@ -25,7 +25,7 @@ const Progress = (() => {
   const MAX_JSON = 7000;             // keep the published legacy summary comfortably under Plex's limit
   const STABLE_MS = 10 * 60 * 1000;  // a foreign record this old is "stable" → adopted into the replica
                                      // (guards write churn: a LIVE peer's moving position is not re-published)
-  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers', replica: 'pb_progReplica', shardCache: 'pb_progShardCache', shardKeys: 'pb_prog2Keys', purged: 'pb_progPurged', pendingDel: 'pb_progPendingDel' };
+  const LS = { board: 'pb_progBoardKey', mine: 'pb_progMine', peers: 'pb_progPeers', replica: 'pb_progReplica', shardCache: 'pb_progShardCache', shardKeys: 'pb_prog2Keys', purged: 'pb_progPurged', pendingDel: 'pb_progPendingDel', stamp: 'pb_progStamp' };
 
   let seed = null;
   let mine = load();                  // our OWN authored records (persisted, survives offline)
@@ -59,6 +59,34 @@ const Progress = (() => {
   let cbMerged = () => {};
 
   const now = () => (typeof Plex !== 'undefined' && Plex.serverNow ? Plex.serverNow() : Date.now());
+
+  // ---- the monotonic write stamp + THE ordering rule --------------------------
+  // serverNow() can REPEAT a millisecond and can run BACKWARD (plex.js:321 re-estimates
+  // the offset from a whole-second HTTP Date header). Two consequences, both fatal to
+  // an ordering built on raw now():
+  //   * one device could produce TWO different records carrying the same ts, so
+  //     (ts, origin) was not a unique key and NO comparator could order them; and
+  //   * a reset could be stamped BELOW a record it has to suppress.
+  // Every durable write goes through stamp(): strictly increasing, persisted, never
+  // below what we have already issued. Same fix as syncqueue's `rev` (.160) and
+  // presence's `rev` (.170) — this is the third and last durable writer to get it.
+  function loadStamp() { try { return parseInt(localStorage.getItem(LS.stamp) || '0', 10) || 0; } catch { return 0; } }
+  let lastStamp = loadStamp();
+  function stamp(atLeast) {
+    const t = Math.max(now(), lastStamp + 1, atLeast || 0);
+    lastStamp = t;
+    try { localStorage.setItem(LS.stamp, String(t)); } catch { /* best effort; still monotonic in-session */ }
+    return t;
+  }
+  // THE comparator for competing records — used at EVERY site where records compete
+  // (live merge, replica adoption, shard collapse, publication, preservation). It is
+  // GLOBAL: no reference to which device is evaluating it. An observer-relative rule
+  // ("mine wins ties") is not an order at all — device A keeps A's record while
+  // device B keeps B's, forever, each republishing its own winner. With stamp()
+  // guaranteeing one device never reuses a ts, (ts, origin) is a genuine total order.
+  const winsOver = (ts, id, curTs, curId) => (
+    (ts || 0) !== (curTs || 0) ? (ts || 0) > (curTs || 0) : String(id || '') > String(curId || '')
+  );
   const myId = () => (typeof Plex !== 'undefined' && Plex.getClientId ? Plex.getClientId() : 'me');
   const myName = () => (typeof Presence !== 'undefined' && Presence.name ? Presence.name() : 'device');
   const dbg = (t, m) => { if (typeof PBDebug !== 'undefined') PBDebug.log(t, m); };
@@ -234,7 +262,9 @@ const Progress = (() => {
       if (!bk || origin === myId() || (bk.ts || 0) > cutoff) return;
       if ((purged[origin] || 0) >= (bk.ts || 0)) return;   // purged identities are never re-adopted
       const cur = replica.books[book];
-      if (cur && cur.bk && (cur.bk.ts || 0) >= (bk.ts || 0)) return;
+      // THE comparator, not a bare >=: first-adopted used to win an equal-ts tie and
+      // the replica is immutable, so the losing copy was frozen in permanently.
+      if (cur && cur.bk && !winsOver(bk.ts || 0, origin, cur.bk.ts || 0, cur.bk.origin)) return;
       replica.books[book] = Object.assign({}, cur, { bk: { t: bk.t, o: bk.o || 0, cum: bk.cum || 0, tot: bk.tot || 0, ts: bk.ts || 0, origin, name: name || '' } });
       changed = true;
     };
@@ -272,7 +302,7 @@ const Progress = (() => {
     for (const book in replica.books) {
       const r = replica.books[book];
       const e = out[book] || (out[book] = {});
-      if (r.bk && (purged[r.bk.origin] || 0) < (r.bk.ts || 0) && (!e.bk || (r.bk.ts || 0) > (e.bk.ts || 0))) e.bk = r.bk;
+      if (r.bk && (purged[r.bk.origin] || 0) < (r.bk.ts || 0) && (!e.bk || winsOver(r.bk.ts || 0, r.bk.origin, e.bk.ts || 0, e.bk.origin))) e.bk = r.bk;
       if (r.rst && (!e.rst || r.rst > e.rst)) { e.rst = r.rst; e.rstOrigin = r.rstOrigin || ''; }
     }
     // Never ship a payload that contradicts itself. This checked the PURGE floor
@@ -292,7 +322,7 @@ const Progress = (() => {
     const recs = {};
     for (const e of entries) {
       const cur = recs[e.book] || (recs[e.book] = {});
-      if (e.bk && (!cur.bk || (e.bk.ts || 0) > (cur.bk.ts || 0))) cur.bk = e.bk;
+      if (e.bk && (!cur.bk || winsOver(e.bk.ts || 0, e.bk.origin, cur.bk.ts || 0, cur.bk.origin))) cur.bk = e.bk;
       if (e.rst && (!cur.rst || e.rst > cur.rst)) { cur.rst = e.rst; cur.rstOrigin = e.rstOrigin || ''; }
     }
     return groupByOrigin(recs);
@@ -311,12 +341,12 @@ const Progress = (() => {
   // ---- recording (app.js calls these on the existing save triggers) ---------
   function recordTrack(book, track, offsetMs, durMs) {
     if (book == null || track == null) return;
-    bookSlot(book).tr[track] = [Math.round(offsetMs) || 0, Math.round(durMs) || 0, now()];
+    bookSlot(book).tr[track] = [Math.round(offsetMs) || 0, Math.round(durMs) || 0, stamp()];
     touch(book); saveMine(); rebuild(); schedulePublish();
   }
   function recordBook(book, rec) {   // rec = { t, o, cum, tot } in ms
     if (book == null) return;
-    bookSlot(book).bk = { t: rec.t, o: Math.round(rec.o) || 0, cum: Math.round(rec.cum) || 0, tot: Math.round(rec.tot) || 0, ts: now() };
+    bookSlot(book).bk = { t: rec.t, o: Math.round(rec.o) || 0, cum: Math.round(rec.cum) || 0, tot: Math.round(rec.tot) || 0, ts: stamp() };
     touch(book); saveMine(); rebuild(); schedulePublish();
   }
   // Erase a book's records on OUR OWN board (no cross-device guarantee). A bare
@@ -340,9 +370,31 @@ const Progress = (() => {
   // (entriesForPublish emits every rst unconditionally). So tombstones are durable —
   // and currently unbounded there. Compaction is still deferred; nothing trims them
   // today. See the reset plan.
+  // The highest ordering value anyone we can see holds for this book — records AND
+  // tombstones, ours, replicated, and every live/shard source.
+  function knownMaxTs(book) {
+    let m = 0;
+    const up = (v) => { if ((v || 0) > m) m = v || 0; };
+    const b = mine.books[book];
+    if (b) { if (b.bk) up(b.bk.ts); up(b.rst); for (const tr in (b.tr || {})) up((b.tr[tr] || [])[2]); }
+    const r = replica.books[book];
+    if (r) { if (r.bk) up(r.bk.ts); up(r.rst); }
+    for (const src of peerBoards.concat(shardBoards)) {
+      const s = src && src.books && src.books[book];
+      if (!s) continue;
+      if (s.bk) up(s.bk.ts); up(s.rst);
+      for (const tr in (s.tr || {})) up((s.tr[tr] || [])[2]);
+    }
+    return m;
+  }
   function resetBook(book) {
     if (book == null) return;
-    const floor = now();
+    // The floor must outrank EVERYTHING already known for this book, not merely the
+    // current clock reading — a regressed clock could otherwise stamp the reset
+    // BELOW a record it exists to suppress, and the book would come straight back.
+    // stamp() persists this value, so the playback that follows a reset is
+    // automatically above the floor and can legitimately supersede it.
+    const floor = stamp(knownMaxTs(book) + 1);
     mine.books[book] = { bk: null, tr: {}, rst: floor, _ts: floor };
     // Clear the REPLICA too. `.164` gave applyPeerResets this duty, but that path
     // only ever fires for a reset learned from a PEER — our own reset was never in
@@ -593,15 +645,7 @@ const Progress = (() => {
   // listing order. So: ours still wins its ties, and foreign-vs-foreign is broken on
   // the ORIGIN id — arbitrary, but identically arbitrary on every device, which is
   // the property convergence actually needs.
-  function beats(ts, by, cur) {
-    if (!cur) return true;
-    const curTs = cur.ts || 0;
-    if (ts !== curTs) return ts > curTs;
-    const me = myId();
-    if (cur.by === me) return false;                  // ours holds it — keep (documented preference)
-    if (by === me) return true;                       // ours wins its tie whatever the source order
-    return String(by || '') > String(cur.by || '');   // neither is ours → deterministic everywhere
-  }
+  const beats = (ts, by, cur) => (!cur ? true : winsOver(ts, by, cur.ts, cur.by));
   function rebuild() {
     const m = { books: {} };
     // Ours first (authored by myId, wins timestamp ties), then adopted replicas,
@@ -872,7 +916,7 @@ const Progress = (() => {
       for (const book in (src.books || {})) {
         const s = src.books[book];
         const cur = replica.books[book] || {};
-        if (s.bk && (s.bk.ts || 0) > entry.purgeTs && (!cur.bk || (s.bk.ts || 0) > (cur.bk.ts || 0))) {
+        if (s.bk && (s.bk.ts || 0) > entry.purgeTs && (!cur.bk || winsOver(s.bk.ts || 0, entry.id, cur.bk.ts || 0, cur.bk.origin))) {
           cur.bk = { t: s.bk.t, o: s.bk.o || 0, cum: s.bk.cum || 0, tot: s.bk.tot || 0, ts: s.bk.ts || 0, origin: entry.id, name: src.name || '' };
           changed = true;
         }
@@ -1186,7 +1230,7 @@ const Progress = (() => {
         mine = { v: 1, books: {} }; replica = { v: 1, books: {} }; purged = {}; pendingDeletes = {};
         peerBoards = []; shardBoards = []; merged = { books: {} };
         legacyInv = []; shardInv = {};
-        prunedSession = false; dirty = false; dirtySince = 0; dirtySeq = 0; lastShardPub = 0;
+        prunedSession = false; dirty = false; dirtySince = 0; dirtySeq = 0; lastShardPub = 0; lastStamp = 0;
         shardHandoffSeq = 0; legacyPub = { state: 'idle', at: 0, status: 0 };
         if (pubTimer) { clearTimeout(pubTimer); pubTimer = null; }
         if (shardPubTimer) { clearTimeout(shardPubTimer); shardPubTimer = null; }

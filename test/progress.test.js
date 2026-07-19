@@ -8,7 +8,12 @@ const { install } = require('./env.js');
 
 install();
 let NOW = 1_700_000_000_000;
-const ME = 'pbpwa-me-0001';
+const REAL_ME = 'pbpwa-me-0001';   // the file's own identity — NOT the mutable ME
+let ME = REAL_ME;
+// Some tests re-run a scenario as a DIFFERENT device. Restoring with setClientId(ME)
+// cannot work — ME is the variable being mutated, so the "restore" pins whatever was
+// set last and leaks that identity into every later test in the file.
+const setClientId = (id) => { ME = id; };
 global.Plex = { serverNow: () => NOW, getClientId: () => ME };
 const Progress = require('../js/progress.js');
 const T = Progress._test;
@@ -83,21 +88,123 @@ test('merge: a peer with a NEWER timestamp wins the book-level record', () => {
   assert.equal(Progress.isMine(bk), false);
 });
 
-test('merge: our record wins on an OLDER peer and on a timestamp TIE (ours is listed first)', () => {
+// This used to assert "our record wins a timestamp TIE". That expectation was
+// DROPPED at .172, deliberately: it is observer-relative, so it is not an ordering
+// rule at all — device A keeps A's record while device B keeps B's, forever, each
+// republishing its own winner. A replicated merge needs one comparator that returns
+// the same answer everywhere. Ties now go to the higher origin id: arbitrary, but
+// identically arbitrary on every device. What survives unchanged is the part that
+// was always real — an OLDER peer never displaces a newer record.
+test('merge: an older peer loses, and a timestamp TIE is resolved by the GLOBAL rule', () => {
   reset();
-  Progress.recordBook('shared', { t: 'trOurs', o: 1000, cum: 1000, tot: 5000 });   // ts = NOW
+  Progress.recordBook('shared', { t: 'trOurs', o: 1000, cum: 1000, tot: 5000 });
+  const ourTs = T.mineBooks()['shared'].bk.ts;
   const older = peerBoard('peer-1', 'Kitchen', {
-    shared: { bk: { t: 'trOld', o: 9, cum: 9, tot: 5000, ts: NOW - 1 } },
+    shared: { bk: { t: 'trOld', o: 9, cum: 9, tot: 5000, ts: ourTs - 1 } },
   });
   const tie = peerBoard('peer-2', 'Den', {
-    shared: { bk: { t: 'trTie', o: 9, cum: 9, tot: 5000, ts: NOW } },              // equal ts
+    shared: { bk: { t: 'trTie', o: 9, cum: 9, tot: 5000, ts: ourTs } },            // equal ts
   });
   T.setPeers([older, tie]);
   T.rebuild();
 
   const bk = Progress.bookRecord('shared');
-  assert.equal(bk.t, 'trOurs');
-  assert.ok(Progress.isMine(bk), 'strict > means an equal-ts peer does not displace us');
+  assert.notEqual(bk.t, 'trOld', 'an older record never wins');
+  // 'peer-2' > 'pbpwa-me-0001' lexically, so the tie goes to the peer — on EVERY
+  // device, which is the whole point. The convergence test below proves that.
+  assert.equal(bk.t, 'trTie');
+  assert.equal(bk.by, 'peer-2');
+});
+
+// THE property .169 claimed and did not have. Two writers, same timestamp, different
+// positions: each must compute the SAME winner, or they diverge permanently and keep
+// republishing different answers. Run the identical scenario from BOTH devices'
+// point of view — that is what a single fixed local id could never test.
+//
+// MUTATION: reintroduce the observer-relative arms (`if (cur.by === me) return
+// false; if (by === me) return true;`) in the comparator → RED.
+test('CONVERGENCE: two writers with equal timestamps pick the SAME winner', () => {
+  const A = 'pbpwa-dev-aaaa', B = 'pbpwa-dev-zzzz';
+  const TS = 1_700_000_500_000;
+  const recA = { t: 'trA', o: 1111, cum: 1111, tot: 5000, ts: TS };
+  const recB = { t: 'trB', o: 2222, cum: 2222, tot: 5000, ts: TS };
+
+  // Same situation seen from each device: its own record local, the other foreign.
+  const winnerSeenBy = (meId, mineRec, otherId, otherRec, order) => {
+    setClientId(meId);
+    reset();
+    T.mineBooks()['shared'] = { bk: mineRec, tr: {}, _ts: TS };
+    const boards = [peerBoard(otherId, 'Other', { shared: { bk: otherRec } })];
+    T.setPeers(order ? boards.slice().reverse() : boards);
+    T.rebuild();
+    return Progress.bookRecord('shared');
+  };
+
+  for (const order of [0, 1]) {
+    const onA = winnerSeenBy(A, recA, B, recB, order);
+    const onB = winnerSeenBy(B, recB, A, recA, order);
+    assert.equal(onA.t, onB.t, `order ${order}: both devices choose the same record`);
+    assert.equal(onA.o, onB.o, `order ${order}: and therefore the same position`);
+  }
+  setClientId(REAL_ME);
+});
+
+// The comparator has to be used at EVERY site where records compete, not just the
+// merged view. Otherwise the UI can settle on one equal-timestamp winner while the
+// replica or the archive keeps the other — and when the live boards are pruned, the
+// durable state reverts to the alternate.
+//
+// MUTATION: revert adoptStableForeign to a bare `>=` → RED (first-adopted wins, and
+// the replica is IMMUTABLE, so the losing copy is frozen in permanently).
+test('adoptStableForeign adopts the GLOBAL winner on a tie, whatever the listing order', () => {
+  const TS = 1_700_000_000_000;
+  const boards = [
+    peerBoard('pbpwa-dev-aaaa', 'A', { shared: { bk: { t: 'trA', o: 1111, cum: 0, tot: 5000, ts: TS } } }),
+    peerBoard('pbpwa-dev-zzzz', 'Z', { shared: { bk: { t: 'trZ', o: 2222, cum: 0, tot: 5000, ts: TS } } }),
+  ];
+  const adoptWith = (order) => {
+    reset(TS + 20 * 60 * 1000);            // past STABLE_MS, so foreign records are adoptable
+    T.setPeers(order ? boards.slice().reverse() : boards);
+    T.adoptStableForeign();
+    return T.replicaBooks()['shared'].bk;
+  };
+  const a = adoptWith(0), b = adoptWith(1);
+  assert.equal(a.origin, b.origin, 'the same record is adopted regardless of listing order');
+  assert.equal(a.o, b.o);
+});
+
+// MUTATION: revert the shard collapse to a bare `>` → RED. This is the path that
+// matters most once live boards vanish: it is what the archive restores from.
+test('shard collapse resolves a tie identically, whatever the entry order', () => {
+  const TS = 1_700_000_000_000;
+  const entries = [
+    { book: 'shared', bk: { t: 'trA', o: 1111, cum: 0, tot: 5000, ts: TS, origin: 'pbpwa-dev-aaaa', name: 'A' } },
+    { book: 'shared', bk: { t: 'trZ', o: 2222, cum: 0, tot: 5000, ts: TS, origin: 'pbpwa-dev-zzzz', name: 'Z' } },
+  ];
+  const winnerFor = (order) => {
+    const srcs = T.shardEntriesToBoards(order ? entries.slice().reverse() : entries);
+    const carrying = srcs.filter((s) => s.books.shared && s.books.shared.bk);
+    assert.equal(carrying.length, 1, 'exactly one record survives the collapse');
+    return carrying[0].books.shared.bk.o;
+  };
+  assert.equal(winnerFor(0), winnerFor(1), 'the archive keeps the same winner as the live merge');
+});
+
+// A device must never mint two records with the same ordering value — otherwise
+// (ts, origin) is not unique and NO comparator can order them. serverNow() can
+// repeat a millisecond, so this cannot come from the clock.
+//
+// MUTATION: revert recordBook/recordTrack to raw now() → RED.
+test('a frozen clock still yields strictly increasing stamps for our own writes', () => {
+  reset();
+  const seen = [];
+  for (let i = 0; i < 5; i++) {           // NOW does not move
+    Progress.recordBook('bk', { t: 't', o: i * 10, cum: 0, tot: 5000 });
+    seen.push(T.mineBooks()['bk'].bk.ts);
+  }
+  for (let i = 1; i < seen.length; i++) {
+    assert.ok(seen[i] > seen[i - 1], `stamp ${i} (${seen[i]}) must exceed ${seen[i - 1]}`);
+  }
 });
 
 test('merge: per-chapter records resolve independently by timestamp', () => {
@@ -278,6 +385,46 @@ test('applyPeerResets keeps a REPLICA record newer than the tombstone', () => {
   T.applyPeerResets();
   const rep = T.replicaBooks()['bk'];
   assert.ok(rep && rep.bk && rep.bk.o === 700, 'a post-reset replica position survives');
+});
+
+// A reset stamped from a REGRESSED clock used to land BELOW the record it exists to
+// suppress, so the book came straight back. The floor must outrank everything known
+// for that book regardless of what the clock says.
+//
+// MUTATION: revert resetBook to `const floor = now();` → RED.
+test('Reset Progress wins even when the clock has moved BACKWARD since the record', () => {
+  reset();
+  NOW = 1_700_000_005_000;
+  Progress.recordBook('bk', { t: 't', o: 5000, cum: 5000, tot: 60000 });
+  const recTs = T.mineBooks()['bk'].bk.ts;
+  T.setPeers([peerBoard('peer-1', 'Kitchen', {
+    bk: { bk: { t: 't', o: 9000, cum: 9000, tot: 60000, ts: recTs + 4000 } },   // a peer is even further ahead
+  })]);
+  NOW = recTs - 500;                       // serverNow REGRESSES below both records
+  Progress.resetBook('bk');
+  T.rebuild();
+  assert.equal(Progress.bookRecord('bk'), null, 'the book reads as unplayed despite the backward clock');
+  assert.ok(T.mineBooks()['bk'].rst > recTs + 4000, 'the tombstone outranks every record it must suppress');
+});
+
+// …and the reset must not be a one-way door: playback after it has to be able to win
+// again, even while the clock is still below the floor. stamp() persists the floor,
+// so ordinary writes continue above it.
+//
+// MUTATION: make stamp() ignore `lastStamp` (return now()) → RED.
+test('playback right after a reset supersedes it, even with the clock still behind', () => {
+  reset();
+  NOW = 1_700_000_005_000;
+  Progress.recordBook('bk', { t: 't', o: 5000, cum: 5000, tot: 60000 });
+  NOW = 1_700_000_000_000;                 // clock behind
+  Progress.resetBook('bk');
+  const floor = T.mineBooks()['bk'].rst;
+  Progress.recordBook('bk', { t: 't2', o: 100, cum: 100, tot: 60000 });   // user plays on
+  T.rebuild();
+  const bk = Progress.bookRecord('bk');
+  assert.ok(bk, 'the new position is visible again');
+  assert.equal(bk.t, 't2');
+  assert.ok(bk.ts > floor, 'because its stamp is above the reset floor');
 });
 
 // `.164` made clear-on-contact clean the replica — but ONLY on the path that learns
