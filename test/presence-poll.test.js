@@ -89,6 +89,29 @@ test('poll: a slow poll cannot reinstate an older peer set over a newer one', as
   assert.equal(after[0].pos, 275900, 'the NEWER read owns the peer set regardless of resolve order');
 });
 
+// The board ratingKey has to actually REACH mergePeers, and only poll() can supply
+// it. The logic tests construct `_rk` by hand, so they stay green if the wiring
+// stops attaching it — measured: that mutation survived them. This drives the real
+// poll twice over the SAME board, with the second event carrying a LOWER `at`
+// (serverNow() is re-estimated from a whole-second HTTP Date header and can move
+// backward), and requires the current content to win.
+//
+// MUTATION: drop `p._rk = b.ratingKey` from poll() → RED.
+test('poll: a same-board update with a LOWER timestamp still wins (serverNow can go backward)', async () => {
+  reset();
+  script.next = [
+    [asBoard(peer({ state: 'playing', at: NOW - 300 }))],
+    [asBoard(peer({ state: 'paused', pos: 999000, at: NOW - 950 }))],   // newer event, lower clock
+  ];
+  await Presence._test.poll();
+  assert.equal(Presence._test.peers()[0].state, 'playing', 'baseline');
+  await Presence._test.poll();
+  const after = Presence._test.peers();
+  assert.equal(after.length, 1);
+  assert.equal(after[0].state, 'paused', 'the board is authoritative for its own content');
+  assert.equal(after[0].pos, 999000, 'and the current position came with it');
+});
+
 // NOTE: the "can a RETAINED peer spuriously supersede us" safety property is
 // tested in test/logic.test.js as pure mergePeers→findSuperseder composition.
 // It was drafted here first and driven through Presence.claimPlaying — which

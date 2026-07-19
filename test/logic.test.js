@@ -120,6 +120,51 @@ test('mergePeers: an OLDER copy of a present board cannot overwrite fresher know
   assert.equal(out[0].pos, 275900, 'the newer event wins regardless of which source it came from');
 });
 
+// ⚠ `at` IS NOT MONOTONIC. It comes from Plex.serverNow(), whose offset is
+// re-estimated from the whole-second HTTP `Date` header on every response
+// (plex.js:321), so serverNow() can move BACKWARD and one device's successive
+// events can carry DECREASING timestamps. Arbitrating same-board content by `at`
+// therefore rejected genuinely newer events, leaving a phantom player for up to the
+// 90s ghost window. Board identity is the signal that cannot regress: each device
+// is the single writer of its own board, so a read of that board IS its current
+// content. Every test below uses a LOWER `at` on the newer event deliberately.
+const RK = (rk, o) => Object.assign({ _rk: rk }, o);
+
+// MUTATION: drop the same-board branch (fall through to the `at` comparison) → RED.
+test('mergePeers: a same-board PAUSE with a LOWER timestamp still supersedes cached playing', () => {
+  const now = 200000, GHOST = 90000;
+  // Both inside the ghost window — the point is the ORDER of the two, not their age.
+  const prev = [RK('rk1', { id: 'phone', state: 'playing', book: '8913', pos: 5000, at: now - 300 })];
+  const parsed = [RK('rk1', { id: 'phone', state: 'paused', book: '8913', pos: 9000, at: now - 950 })];
+  const out = L.mergePeers(prev, parsed, 'me', now, GHOST);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].state, 'paused', 'the clock went backward; the board is still authoritative');
+  assert.ok(!out[0].stale, 'and it is a confirmed read, not a retained guess');
+});
+
+// MUTATION: same as above → RED. Distinct from the pause case because a phantom
+// PLAYING peer at the wrong chapter drives resume to the wrong place.
+test('mergePeers: a same-board track change with a LOWER timestamp still wins', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [RK('rk1', { id: 'phone', state: 'playing', book: '8913', track: 't1', pos: 5000, at: now - 300 })];
+  const parsed = [RK('rk1', { id: 'phone', state: 'playing', book: '8913', track: 't7', pos: 100, at: now - 950 })];
+  const out = L.mergePeers(prev, parsed, 'me', now, GHOST);
+  assert.equal(out[0].track, 't7', 'the current chapter wins over the cached one');
+});
+
+// The same-board rule must NOT swallow the duplicate-board fix: a historical board
+// is a DIFFERENT ratingKey, so timestamps still arbitrate there.
+// MUTATION: let any read beat the cache regardless of board → RED.
+test('mergePeers: a different historical board does NOT beat the cached current board', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [RK('rk1', { id: 'phone', state: 'playing', book: '8913', pos: 275900, at: now - 1000 })];
+  const parsed = [RK('rk-old', { id: 'phone', state: 'idle', at: now - 50000 })];
+  const out = L.mergePeers(prev, parsed, 'me', now, GHOST);
+  assert.equal(out.length, 1, 'the live peer survives the historical duplicate');
+  assert.equal(out[0].state, 'playing');
+  assert.equal(out[0].stale, true);
+});
+
 // Duplicate active+idle boards, BOTH array orders — listing order must not decide.
 for (const [label, order] of [['active first', 0], ['idle first', 1]]) {
   test(`mergePeers: duplicate active+idle boards resolve by recency (${label})`, () => {

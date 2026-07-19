@@ -103,7 +103,14 @@ const Presence = (() => {
     try {
       const boards = await board.readAll();
       if (myPoll !== pollSeq) return;   // a newer poll owns the peer set — drop this read
-      const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
+      // Carry the board's ratingKey onto the parsed event. mergePeers needs it as
+      // the ordering signal that cannot regress: `at` comes from serverNow(), which
+      // is re-estimated from the HTTP Date header and CAN go backward, so same-board
+      // content must supersede our cached copy on identity, not on timestamp.
+      const parsed = boards.map((b) => {
+        try { const p = JSON.parse(b.summary); if (p && typeof p === 'object') p._rk = b.ratingKey; return p; }
+        catch { return null; }
+      });
       // Drop ourselves, idle boards, and "playing" ghosts (crashed mid-play), then
       // RETAIN any known peer this listing simply failed to include — see
       // PBLogic.mergePeers for why assigning the read erased live peers on a

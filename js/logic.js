@@ -76,21 +76,48 @@ const PBLogic = (() => {
   // rules to the winner. That keeps the invariant that matters ("an intentional
   // stop wins") while scoping it correctly: a genuinely NEWER idle removes the
   // peer, an older one cannot. Ties go to the read, which is the fresher source.
+  // ⚠ `at` IS NOT MONOTONIC — do not arbitrate same-board content with it. It comes
+  // from Plex.serverNow() (presence.js:61), and serverOffset is RE-ESTIMATED from the
+  // HTTP `Date` header on every response (plex.js:321). `Date` has whole-second
+  // granularity, so a fresh estimate can move serverNow() BACKWARD; a device's own
+  // successive events can therefore carry DECREASING `at`. Ordering purely by
+  // timestamp meant a genuinely newer pause/seek could be rejected in favour of a
+  // cached playing event, leaving a phantom player until the 90s ghost window ran
+  // out — the same wrong-resume class this function exists to prevent.
+  //
+  // The signal that cannot regress is BOARD IDENTITY. Each device is the single
+  // writer of its own board, so whatever we just read from a board IS that board's
+  // current content, whatever its clock says. Timestamps are then only needed for
+  // the one thing board identity cannot settle: which of several DIFFERENT boards
+  // for one device (Plex keeps historical duplicates) is the live one.
   function mergePeers(prev, parsed, meId, nowMs, ghostMs) {
-    const best = new Map();                      // id → { p, stale }
-    const consider = (p, stale) => {
-      if (!p || !p.id) return;
-      const id = String(p.id);
-      const cur = best.get(id);
-      if (cur && (cur.p.at || 0) >= (p.at || 0)) return;
-      best.set(id, { p, stale });
-    };
-    for (const p of (parsed || [])) consider(p, false);   // read first → it wins ties
-    for (const p of (prev || [])) consider(p, true);
+    const rkOf = (p) => (p && p._rk != null ? String(p._rk) : null);
+    // One event per device from THIS read. Between two different boards only `at`
+    // can arbitrate — they are independent artefacts, not successive states.
+    const fresh = new Map();
+    for (const p of (parsed || [])) {
+      if (!p || !p.id) continue;
+      const id = String(p.id), cur = fresh.get(id);
+      if (!cur || (p.at || 0) > (cur.at || 0)) fresh.set(id, p);
+    }
+    const prevById = new Map();
+    for (const p of (prev || [])) if (p && p.id) prevById.set(String(p.id), p);
+
     const out = [];
-    for (const { p, stale } of best.values()) {
-      if (!filterPeers([p], meId, nowMs, ghostMs).length) continue;
+    const emit = (p, stale) => {
+      if (!filterPeers([p], meId, nowMs, ghostMs).length) return;
       out.push(stale ? Object.assign({}, p, { stale: true }) : p);
+    };
+    for (const id of new Set([...fresh.keys(), ...prevById.keys()])) {
+      const f = fresh.get(id), q = prevById.get(id);
+      if (!f) { emit(q, true); continue; }        // board absent from the read → retain
+      if (!q) { emit(f, false); continue; }
+      // SAME BOARD → the read wins unconditionally. This is the non-regressing case.
+      if (rkOf(f) != null && rkOf(f) === rkOf(q)) { emit(f, false); continue; }
+      // Different boards (or a cached entry predating board tracking) → newest wins,
+      // ties to the read.
+      const readWins = (f.at || 0) >= (q.at || 0);
+      emit(readWins ? f : q, !readWins);
     }
     return out;
   }
