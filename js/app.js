@@ -203,7 +203,40 @@
   // the underlying page never scrolls); two in-flow views can't coexist, so an
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
   function bindSwipeBack() {
-    let d = null, finishing = false;
+    let d = null, finishing = false, unbindGesture = null;
+
+    // A live gesture's move/end listeners live on the NODE THE TOUCH STARTED ON, not
+    // on `document`. Per the Touch Events spec the touch target is fixed at
+    // touchstart and every later event of that gesture is dispatched AT THAT NODE —
+    // so once the node is removed from the document (its propagation path becomes
+    // just itself) a document-level listener stops hearing the gesture entirely and
+    // the swipe freezes mid-drag, forever. That shipped: build .177, an Authors
+    // edge-swipe with windowed browse on, where the swipe's own mid-drag render
+    // dematerialized the row under the finger. Three other paths destroy browse DOM
+    // with no gesture awareness (the SWR repaint's rebuild, Net.onReconnect →
+    // clearCache, evictLRU), so this is not specific to the virtual list.
+    //
+    // The gesture does not own that node and must not depend on it staying attached.
+    // Binding to the target makes the drag survive whatever happens to the DOM
+    // underneath it. (Deliberately NOT pointer events + setPointerCapture: pointer
+    // events cannot preventDefault a pan, so blocking native scroll would have to
+    // move to `touch-action` CSS — and touch-action intersects down the ancestor
+    // chain, so a body-level rule would permanently disable the home carousels'
+    // horizontal scrolling with no way for a descendant to restore it.)
+    function bindGesture(target) {
+      const onMove = (e) => { const t = e.changedTouches[0]; move(t.clientX, t.clientY, e); };
+      const onEnd = () => end();
+      target.addEventListener('touchmove', onMove, { passive: false });
+      target.addEventListener('touchend', onEnd, { passive: true });
+      target.addEventListener('touchcancel', onEnd, { passive: true });
+      unbindGesture = () => {
+        target.removeEventListener('touchmove', onMove);
+        target.removeEventListener('touchend', onEnd);
+        target.removeEventListener('touchcancel', onEnd);
+        unbindGesture = null;
+      };
+    }
+    const releaseGesture = () => { if (unbindGesture) unbindGesture(); };
     const navPill = () => $('navbar').querySelector('.np-actions');
     // A detached, non-interactive clone of the pill for the duration of an NP swipe:
     // it rides with NP (added as a mover) so the pill travels, while np-locked is off
@@ -273,6 +306,7 @@
       // what stops corruption from accumulating over many swipes.
       if (d || document.querySelector('.nav-ghost')) {
         if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');
+        releaseGesture();   // never leave a dead gesture's listeners on a stale node
         d = null; resetSwipeStyles(); applyScreen(currentDesc(), { render: false });
       }
       if (target.closest && target.closest('#player, .alphaindex, input, .navbtn, .np-controls, .np-actions, .carousel')) return;
@@ -286,7 +320,9 @@
       else return;
       if (!dest) return;
       d = { dir, from, dest, newNav, x0: x, y0: y, dx: 0, w: window.innerWidth, live: false, locked: false,
-            lastX: x, lastT: performance.now(), vx: 0, scroll0: window.scrollY || 0, movers: [], clobbered: false };
+            lastX: x, lastT: performance.now(), vx: 0, scroll0: window.scrollY || 0, movers: [], clobbered: false,
+            tgt: target };
+      bindGesture(target);
     }
 
     // Ensure `desc`'s app-view is the visible one in .app, rendering browse content
@@ -377,7 +413,7 @@
         if (ev && ev.cancelable) ev.preventDefault();
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
         d.locked = true;
-        if (Math.abs(dx) <= Math.abs(dy)) { d = null; return; }   // vertical intent → abandon (native scroll resumes)
+        if (Math.abs(dx) <= Math.abs(dy)) { releaseGesture(); d = null; return; }   // vertical intent → abandon (native scroll resumes)
         start();
       }
       if (!d.live) return;
@@ -391,6 +427,7 @@
     }
 
     function end() {
+      releaseGesture();
       if (!d) return;
       const cur = d; d = null;
       if (!cur.live) return;
@@ -414,7 +451,12 @@
       const dropPanes = () => { for (const m of cur.movers) if (m.remove && m.el.parentNode) m.el.remove(); };
       const finalize = () => {
         if (done) return; done = true;
-        if (window.PBDebug) PBDebug.log('SWIPE', `${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`);
+        // `tgt=detached` means the node the finger started on was destroyed mid-drag
+        // and the gesture settled anyway — i.e. the .178 target-binding did its job.
+        // That is the one part of this fix no local test can confirm (jsdom cannot
+        // tell us what iOS dispatches after a removal), so it is recorded on device.
+        if (window.PBDebug) PBDebug.log('SWIPE', `${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`
+          + ` tgt=${cur.tgt && cur.tgt.isConnected ? 'live' : 'detached'}`);
         for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }
         if (commit) {
           if (cur.dir === 'back') fwdStack.push(navStack.pop());
@@ -454,13 +496,17 @@
       setTimeout(finalize, 340);
     }
 
+    // Only ARMING is document-wide — at touchstart the target is by definition still
+    // attached, so it is reachable here. move/end are bound to that target for the
+    // life of the gesture (bindGesture above) and are deliberately NOT on document:
+    // a document listener stops hearing a gesture whose start node gets removed.
     document.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; begin(t.clientX, t.clientY, e.target); }, { passive: true });
-    document.addEventListener('touchmove', (e) => { const t = e.changedTouches[0]; move(t.clientX, t.clientY, e); }, { passive: false });
-    document.addEventListener('touchend', end, { passive: true });
-    document.addEventListener('touchcancel', end, { passive: true });
+    // Mouse keeps the document-level pointer path: a mouse gesture's events are not
+    // pinned to the mousedown node, so detachment cannot starve it.
     document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') begin(e.clientX, e.clientY, e.target); });
     document.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && d) move(e.clientX, e.clientY, e); });
     document.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') end(); });
+    document.addEventListener('pointercancel', (e) => { if (e.pointerType === 'mouse') end(); });   // the touch path has touchcancel; this was its missing twin
     // History stays at one entry, so a popstate is only a stray OS gesture — re-anchor
     // and keep the current in-memory screen (never navigate away → never reload).
     window.addEventListener('popstate', () => { try { history.replaceState({ v: 'app' }, ''); } catch {} applyScreen(currentDesc()); });

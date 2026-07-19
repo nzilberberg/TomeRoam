@@ -32,8 +32,13 @@
 //     at the wrong time, that is a REAL failure here — which is the point, and is
 //     exactly the class .106's #npDl ordering trap belonged to.
 //
-// The swipe GESTURE is deliberately out of scope (drag/layout-coupled; jsdom has no
-// layout — see the standing note in js/nav.js).
+// The swipe gesture's DRAG GEOMETRY stays out of scope (jsdom has no layout, so
+// thresholds/velocity/committed-distance are not meaningful here — see the standing
+// note in js/nav.js). Its EVENT PLUMBING is in scope as of .178 and is driven by
+// `h.touch` below: which node the listeners are bound to, and whether a gesture can
+// still be settled after the DOM under the finger is destroyed, are exactly the
+// wiring questions this harness exists for — and a real starved-gesture bug shipped
+// because nothing covered them.
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
@@ -620,6 +625,53 @@ function boot(opts = {}) {
       s.value = dur ? String((sec / dur) * 1000) : '0';
       s.dispatchEvent(new window.Event('change', { bubbles: true }));
     },
+    /**
+     * Drive a REAL touch gesture against the shipped listeners.
+     *
+     * FIDELITY RULE — the reason this is not a convenience wrapper: per the Touch
+     * Events spec the touch target is fixed at `touchstart`, and every later
+     * touchmove/touchend/touchcancel of that gesture is dispatched AT THAT NODE —
+     * including after it has been removed from the document, at which point the
+     * event no longer reaches `document` (a detached node's propagation path is
+     * itself). This harness reproduces that exactly: `move`/`end` re-dispatch at the
+     * ORIGINAL start target, attached or not.
+     *
+     * A fake that re-targeted to `document` instead would be KINDER than a real
+     * browser and would silently hide the entire bug class this exists to catch —
+     * a gesture starved because the DOM under the finger was destroyed mid-drag.
+     */
+    touch: (() => {
+      let target = null;
+      const ev = (type, x, y) => {
+        // touchstart/touchmove are cancelable in a real browser until the platform
+        // takes the gesture over; app.js:377 branches on exactly that flag.
+        const e = new window.Event(type, { bubbles: true, cancelable: type !== 'touchend' && type !== 'touchcancel' });
+        const t = { clientX: x, clientY: y, identifier: 0, target };
+        e.changedTouches = [t];
+        e.touches = (type === 'touchend' || type === 'touchcancel') ? [] : [t];
+        return e;
+      };
+      const fire = (type, x, y) => {
+        if (!target) throw new Error('touch.' + type + ' with no gesture started');
+        target.dispatchEvent(ev(type, x, y));
+      };
+      return {
+        /** Begin a gesture on a real element (selector or node). x/y are viewport px. */
+        start(x, y, sel) {
+          target = typeof sel === 'string'
+            ? (sel.startsWith('#') ? $(sel.slice(1)) : document.querySelector(sel))
+            : sel;
+          if (!target) throw new Error('no such element to touch: ' + sel);
+          fire('touchstart', x, y);
+          return target;
+        },
+        move(x, y) { fire('touchmove', x, y); },
+        end(x, y) { fire('touchend', x, y); target = null; },
+        cancel(x, y) { fire('touchcancel', x, y); target = null; },
+        /** The node the gesture is bound to — for asserting it really got detached. */
+        target: () => target,
+      };
+    })(),
     /** Drive a background/foreground transition through the real listener. */
     setHidden(v) {
       hidden = !!v;
