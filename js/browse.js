@@ -129,10 +129,18 @@ const Browse = (() => {
   // every row of every cached page. So the failure mode is bounded, not unbounded.
   let holdRows = false;
   let holdGen = 0;
-  function beginHold() { holdRows = true; return ++holdGen; }
+  // Background revalidates that arrived mid-gesture, latest-wins per page key.
+  // Suspending the rows is not enough on its own: an SWR repaint destroys them by a
+  // different door (patchInPlace → ctl.update → dematerialize, or buildFor →
+  // innerHTML=''), so the abort rebuilds the page after all. MEASURED: a swipe taken
+  // ~0.7s after a nav tap — i.e. inside the revalidate window — revealed the page
+  // with withSrc=0 and 17 covers refetched, while a swipe following another swipe
+  // was perfectly clean. Deferring costs one gesture of data staleness.
+  const heldRepaints = new Map();
+  function beginHold() { holdRows = true; heldRepaints.clear(); return ++holdGen; }
   function endHold(token) {
     if (token !== holdGen || !holdRows) return;
-    holdRows = false;
+    holdRows = false;                       // cleared FIRST, or the deferred repaints re-defer
     // Now do the teardown the hold deferred: any page still suspended is off screen
     // for good, so it goes to the normal dematerialized resting state. The VISIBLE
     // page is skipped — it is the one the gesture landed on.
@@ -140,11 +148,16 @@ const Browse = (() => {
       const c = v.el._vctl;
       if (c && c.state && c.state() === 'suspended') c.deactivate();
     }
+    // Now apply whatever the revalidates wanted to do. Each re-runs the real repaint,
+    // which re-checks page identity, so one evicted/replaced meanwhile is dropped.
+    const pending = [...heldRepaints.values()];
+    heldRepaints.clear();
+    for (const fn of pending) fn();
   }
   // Destructive cache operations invalidate any outstanding hold: their controllers
   // are being destroyed, and a hold surviving them would wrongly govern whatever
   // pages get built next.
-  function dropHold() { holdRows = false; holdGen++; }
+  function dropHold() { holdRows = false; holdGen++; heldRepaints.clear(); }
   const browseVisible = () => !!(o.mount && !o.mount.classList.contains('hidden'));
   function activeEntry() {
     for (const v of pageCache.values()) if (!v.el.classList.contains('hidden')) return v;
@@ -420,6 +433,14 @@ const Browse = (() => {
       const repaint = (fresh) => {
         const cur = pageCache.get(key);
         if (!cur || cur.el !== page || !page.isConnected) return;
+        // A swipe is in flight → this would destroy the rows the hold is preserving.
+        // Park it; endHold replays the latest one per page. (Keyed by page, so a
+        // burst of revalidates collapses to the freshest.)
+        if (holdRows) {
+          heldRepaints.set(key, () => repaint(fresh));
+          if (typeof PBDebug !== 'undefined' && PBDebug.log) PBDebug.log('FLASH', `repaint deferred (${key}) — swipe in flight`);
+          return;
+        }
         // Only touch rows that actually changed; full rebuild just for a
         // structural change (add/remove/re-sort).
         if (!patchInPlace(desc, page, fresh)) buildFor(desc, fresh, page);

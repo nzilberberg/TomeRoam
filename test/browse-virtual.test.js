@@ -117,6 +117,40 @@ test('swipe hold: endHold drops the rows the hold deferred — no live hidden co
   } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
 });
 
+// The residual flash after .181, measured: a swipe taken ~0.7s after a nav tap lands
+// inside the SWR revalidate window, and the repaint destroys the suspended rows by a
+// door the hold did not cover (patchInPlace → ctl.update → dematerialize). The abort
+// then rebuilt the page anyway — withSrc=0, 17 covers refetched. A swipe following
+// another swipe (no revalidate in flight) was clean, which is what pinned it.
+test('swipe hold: an SWR repaint arriving mid-gesture is DEFERRED until the hold ends', async () => {
+  let fireFresh = null;
+  const prevGetBooks = global.Plex.getBooks;
+  // Drives the REAL render() → fetchFor → repaint closure, because that closure is
+  // where the deferral lives. Calling patchInPlace directly would prove nothing: it
+  // dematerializes either way, which is exactly the destruction being deferred.
+  global.Plex.getBooks = (opts) => { fireFresh = opts && opts.onFresh; return Promise.resolve(books(5)); };
+  try {
+    global.VirtualList.setForceVirtual(true);
+    Browse.clearCache();
+    await Browse.render({ v: 'books' });
+    const el = T.pageCache.get('books').el;
+    assert.equal(el.querySelectorAll('.book').length, 5, 'rows realized');
+    assert.ok(fireFresh, 'fixture sanity: the revalidate callback was captured');
+
+    const tok = Browse.beginHold();
+    fireFresh(books(6));                       // a background revalidate lands MID-SWIPE
+    assert.equal(el.querySelectorAll('.book').length, 5,
+      'rows must SURVIVE — otherwise the abort rebuilds the page and every cover refetches');
+
+    Browse.endHold(tok);
+    assert.equal(el.querySelectorAll('.book').length, 6, 'and the fresh data applies once the gesture ends');
+  } finally {
+    global.Plex.getBooks = prevGetBooks;
+    global.VirtualList.setForceVirtual(false);
+    Browse.clearCache();
+  }
+});
+
 test('swipe hold: a STALE token cannot release a newer gesture hold', () => {
   try {
     global.VirtualList.setForceVirtual(true);
