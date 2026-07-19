@@ -203,7 +203,7 @@
   // the underlying page never scrolls); two in-flow views can't coexist, so an
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
   function bindSwipeBack() {
-    let d = null, finishing = false, unbindGesture = null;
+    let d = null, finishing = false, unbindGesture = null, revealWatch = null;
 
     // A live gesture's move/end listeners live on the NODE THE TOUCH STARTED ON, not
     // on `document`. Per the Touch Events spec the touch target is fixed at
@@ -538,50 +538,69 @@
         // catches an unknown cause as readily as a known one.
         const reportReveal = (tag, rootEl) => {
           if (!window.PBDebug) return;
+          if (revealWatch) { try { revealWatch(); } catch { /* already ended */ } }
           const before = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
           const t0 = performance.now();
           const rows0 = rootEl.querySelectorAll('.book, .author').length;
           const imgs0 = rootEl.querySelectorAll('img').length;
           const src0 = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src')).length;
-          const m = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, failed: 0, cls: 0, cont: 0 };
+          // Attribute every mutation to ITS page, and split the page the user is
+          // LOOKING AT from the hidden siblings. Without that split these counters
+          // were unreadable: a browse→browse swipe builds the destination page
+          // mid-drag and tears it down afterwards, and that landed in the same
+          // totals as a genuine rebuild of the visible page. Driving the same
+          // aborted swipe locally reads +0/-1 on the VISIBLE page while the raw
+          // totals read +33/-36 — the whole difference is the destination page's
+          // normal lifecycle, which I read as the bug for three builds.
+          const vis = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0 };
+          const hid = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0 };
           const countImgs = (n) => (n.nodeType !== 1 ? 0
             : (n.tagName === 'IMG' ? 1 : (n.querySelectorAll ? n.querySelectorAll('img').length : 0)));
+          // Removed nodes are already detached, so classify by the mutation TARGET
+          // (the surviving parent), never by the removed node itself.
+          const bucket = (node) => {
+            const pg = (node && node.nodeType === 1 && node.closest) ? node.closest('.browsepage') : null;
+            return (pg && !pg.classList.contains('hidden')) ? vis : hid;
+          };
           let obs = null;
           try {
             obs = new MutationObserver((muts) => {
               for (const mu of muts) {
+                const b = bucket(mu.target);
                 if (mu.type === 'childList') {
-                  for (const n of mu.addedNodes) m.add += countImgs(n);
-                  for (const n of mu.removedNodes) m.rem += countImgs(n);
-                } else if (mu.type === 'attributes') {
-                  if (mu.target === rootEl) { m.cont++; continue; }
-                  if (mu.target.tagName !== 'IMG') continue;
-                  if (mu.attributeName === 'src') { if (mu.target.getAttribute('src')) m.srcSet++; else m.srcClr++; }
+                  for (const n of mu.addedNodes) b.add += countImgs(n);
+                  for (const n of mu.removedNodes) b.rem += countImgs(n);
+                } else if (mu.type === 'attributes' && mu.target.tagName === 'IMG') {
+                  if (mu.attributeName === 'src') { if (mu.target.getAttribute('src')) b.srcSet++; else b.srcClr++; }
                   else {
                     const c = String(mu.target.className || '');
-                    if (/art-done/.test(c)) m.fade++;
-                    else if (/art-instant/.test(c)) m.instant++;
-                    else if (/art-failed/.test(c)) m.failed++;
-                    else m.cls++;
+                    if (/art-done/.test(c)) b.fade++;
+                    else if (/art-instant/.test(c)) b.instant++;
                   }
                 }
               }
             });
             obs.observe(rootEl, { childList: true, subtree: true, attributes: true,
-              attributeFilter: ['src', 'class', 'style'] });
+              attributeFilter: ['src', 'class'] });
           } catch { /* no MutationObserver → the ArtLoader deltas below still land */ }
-          setTimeout(() => {
+          const finish = () => {
+            revealWatch = null;
             if (obs) { try { obs.disconnect(); } catch { /* already gone */ } }
             const a = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
             const art = (a && before)
               ? ` | art loaded=${a.loads - before.loads} instant=${a.instant - before.instant}`
-                + ` FADED=${a.fade - before.fade} queued=${a.queued - before.queued} released=${a.released - before.released}`
+                + ` FADED=${a.fade - before.fade} released=${a.released - before.released}`
               : ' | art n/a';
             PBDebug.log('FLASH', `${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
-              + ` | DOM +img=${m.add} -img=${m.rem} src+=${m.srcSet} src-=${m.srcClr}`
-              + ` fadeIn=${m.fade} instant=${m.instant} failed=${m.failed} cls=${m.cls} container=${m.cont}`
+              + ` | VISIBLE +img=${vis.add} -img=${vis.rem} src+=${vis.srcSet} src-=${vis.srcClr}`
+              + ` fade=${vis.fade} inst=${vis.instant}`
+              + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
               + art + ` | win=${Math.round(performance.now() - t0)}ms`);
-          }, 1500);
+          };
+          // ONE window per gesture. Rapid swipes used to overlap, so a later window
+          // counted the previous gesture's cleanup as its own.
+          const timer = setTimeout(finish, 1500);
+          revealWatch = () => { clearTimeout(timer); revealWatch = null; if (obs) { try { obs.disconnect(); } catch { /* gone */ } } };
         };
         if (commit && dest.v === 'home') {
           applyScreen(dest, { render: false, keepGhosts: true });
