@@ -90,9 +90,11 @@ test('swipe hold: showPage SUSPENDS the outgoing page (rows kept) instead of dem
     assert.ok(a.classList.contains('hidden'), 'and it is still hidden, exactly as before');
 
     T.showPage('books');                         // the abort: back to where we started
-    assert.equal(a._vctl.state(), 'active');
     assert.equal(a.querySelectorAll('.book').length, 5, 'restored with no rebuild');
     Browse.endHold(tok);
+    // Activation is deferred to endHold so it realizes against the RESTORED scroll,
+    // not the clamped one — see the scroll-clamp test below.
+    assert.equal(a._vctl.state(), 'active');
   } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
 });
 
@@ -149,6 +151,41 @@ test('swipe hold: an SWR repaint arriving mid-gesture is DEFERRED until the hold
     global.VirtualList.setForceVirtual(false);
     Browse.clearCache();
   }
+});
+
+// MEASURED against a live reproduction (2026-07-19): with the list scrolled to
+// y=11209, an aborted browse→browse swipe destroyed ALL 33 realized rows and rebuilt
+// them, losing every loaded cover (33 with src → 16). Cause: rendering the short
+// destination page mid-drag collapses the document, so the browser clamps scrollY to
+// 0; showPage then re-activated the returning page AT THAT CLAMPED SCROLL, releasing
+// every row on screen. The swipe restores the real scroll immediately afterwards, so
+// activation simply has to wait for it. Every earlier local test sat at scroll 0,
+// where the clamp is a no-op — which is why this went unreproduced for six builds.
+test('swipe hold: a page returning from SUSPENDED waits for endHold to activate', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    T.pageCache.clear();
+    const a = page(); T.listView(a, 'Books', books(5), T.bookRow, false);
+    T.pageCache.set('books', { el: a, order: 1 });
+    const b = page(); T.listView(b, 'Authors', books(5, 'x'), T.bookRow, false);
+    T.pageCache.set('authors', { el: b, order: 2 });
+    T.showPage('books');
+
+    const tok = Browse.beginHold();
+    T.showPage('authors');
+    assert.equal(a._vctl.state(), 'suspended', 'outgoing suspended');
+    assert.equal(b._vctl.state(), 'active',
+      'the INCOMING page still activates — deferring it too would slide in a blank pane');
+
+    T.showPage('books');                       // the abort, back to where we started
+    assert.equal(a._vctl.state(), 'suspended',
+      'must NOT activate yet — realizing here happens at the clamped scroll and releases every row');
+    assert.equal(a.querySelectorAll('.book').length, 5, 'and its rows are still intact');
+
+    Browse.endHold(tok);
+    assert.equal(a._vctl.state(), 'active', 'endHold activates it, once the swipe has restored the scroll');
+    assert.equal(a.querySelectorAll('.book').length, 5, 'with the SAME rows — nothing rebuilt, no cover refetch');
+  } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
 });
 
 test('swipe hold: a STALE token cannot release a newer gesture hold', () => {

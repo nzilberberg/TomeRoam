@@ -144,6 +144,11 @@ const Browse = (() => {
     // Now do the teardown the hold deferred: any page still suspended is off screen
     // for good, so it goes to the normal dematerialized resting state. The VISIBLE
     // page is skipped — it is the one the gesture landed on.
+    // The page we landed on activates FIRST, now that the swipe has put the real
+    // scroll back — so its realize computes the right window and reuses the rows it
+    // kept, instead of releasing them against a clamped offset.
+    const shown = activeEntry();
+    if (shown && shown.el._vctl) shown.el._vctl.activate();
     for (const v of pageCache.values()) {
       const c = v.el._vctl;
       if (c && c.state && c.state() === 'suspended') c.deactivate();
@@ -243,7 +248,20 @@ const Browse = (() => {
     }
     for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
     const shown = pageCache.get(key);
-    if (shown && shown.el._vctl) shown.el._vctl.activate();
+    if (shown && shown.el._vctl) {
+      const c = shown.el._vctl;
+      // A page coming back from SUSPENDED is a swipe ABORTING to where it started.
+      // Activating here would realize rows against the scroll the browser CLAMPED
+      // when the destination page shortened the document — measured: scroll 11209 →
+      // 0 → 11209, all 33 realized rows destroyed and recreated, their loaded covers
+      // gone (33 → 16 with src). That is the flicker. The swipe restores the real
+      // scroll immediately after this returns, and endHold() activates then.
+      //
+      // Any OTHER page still activates normally, so the incoming page during a drag
+      // is materialized as before — deferring that one too would slide in a blank.
+      const returningFromSwipe = holdRows && c.state && c.state() === 'suspended';
+      if (!returningFromSwipe) c.activate();
+    }
   }
   // Top-level virtual-list lifecycle for the WHOLE Browse view. showPage() owns the
   // page-to-page handoff, but leaving Browse entirely (→ Home) hides the #browse
