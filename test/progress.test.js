@@ -14,7 +14,10 @@ let ME = REAL_ME;
 // cannot work — ME is the variable being mutated, so the "restore" pins whatever was
 // set last and leaks that identity into every later test in the file.
 const setClientId = (id) => { ME = id; };
-global.Plex = { serverNow: () => NOW, getClientId: () => ME };
+global.Plex = {
+  serverNow: () => NOW, getClientId: () => ME,
+  deletePlaylist: async () => true, listBoards: async () => [],
+};
 const Progress = require('../js/progress.js');
 const T = Progress._test;
 
@@ -188,6 +191,89 @@ test('shard collapse resolves a tie identically, whatever the entry order', () =
     return carrying[0].books.shared.bk.o;
   };
   assert.equal(winnerFor(0), winnerFor(1), 'the archive keeps the same winner as the live merge');
+});
+
+// LOCALLY monotonic is not enough — the clock must be CAUSALLY monotonic. A counter
+// over what THIS device issued cannot order our next write against a value we just
+// ACCEPTED from elsewhere, so playback right after learning a REMOTE reset was
+// stamped below its floor and stayed invisible (and unpublished) until our stamps
+// organically climbed past it. With a future-skewed peer that is not seconds.
+//
+// MUTATION: remove observeStamp() from applyPeerResets → RED.
+test('playback after learning a REMOTE reset beats it, even when the floor is far ahead', () => {
+  reset();
+  // Seed the stamp FIRST. Otherwise the lazy seedStamp() inside the first stamp()
+  // walks every peer board and observes the floor anyway — which made the earlier
+  // version of this test pass with the observation removed.
+  Progress.recordBook('other', { t: 't0', o: 1, cum: 0, tot: 1000 });
+  const remoteFloor = NOW + 5_000_000;                 // a peer whose clock is well ahead
+  T.setPeers([peerBoard('peer-1', 'Kitchen', { bk: { rst: remoteFloor } })]);
+  T.applyPeerResets();
+  Progress.recordBook('bk', { t: 't2', o: 4321, cum: 0, tot: 60000 });   // user plays immediately
+  T.rebuild();
+  const rec = Progress.bookRecord('bk');
+  assert.ok(rec, 'the new position is visible, not suppressed by the adopted floor');
+  assert.equal(rec.o, 4321);
+  assert.ok(rec.ts > remoteFloor, 'our stamp cleared the remote floor');
+});
+
+// A purge of OUR OWN identity is documented as self-healing: the device keeps playing
+// and its post-purge records survive. That only works if our next stamp outranks the
+// purge floor we just adopted.
+//
+// MUTATION: remove observeStamp() from adoptPurges → RED.
+test('after adopting a purge of OUR identity, new playback survives and republishes', () => {
+  reset();
+  Progress.recordBook('other', { t: 't0', o: 1, cum: 0, tot: 1000 });   // seed the stamp first
+  const floor = NOW + 5_000_000;
+  T._adoptPurges({ [ME]: floor });                     // we learn we were deleted elsewhere
+  Progress.recordBook('bk', { t: 't3', o: 999, cum: 0, tot: 60000 });
+  T.rebuild();
+  const rec = Progress.bookRecord('bk');
+  assert.ok(rec, 'a device deleted elsewhere keeps working — that is the documented contract');
+  assert.ok(rec.ts > floor, 'above its own purge floor');
+  const pub = T.entriesForPublish().find((e) => e.book === 'bk');
+  assert.ok(pub && pub.bk, 'and it is republished, not silently withheld');
+});
+
+// UPGRADE PATH: a build before .172 has durable records but no persisted stamp. If
+// serverNow() has since moved backward, the first write must still outrank this
+// device's own surviving records — so the stamp seeds from durable state, not from
+// the (absent) key alone.
+//
+// MUTATION: drop the seedStamp() call from stamp() → RED.
+test('upgrading with no persisted stamp seeds from our own existing records', () => {
+  reset();
+  const ahead = NOW + 5_000_000;
+  T.mineBooks()['bk'] = { bk: { t: 'old', o: 10, cum: 0, tot: 60000, ts: ahead }, tr: {}, _ts: ahead };
+  localStorage.removeItem('pb_progStamp');             // pre-.172 install: no stamp key
+  Progress.recordBook('bk', { t: 'new', o: 20, cum: 0, tot: 60000 });
+  const rec = T.mineBooks()['bk'].bk;
+  assert.equal(rec.t, 'new');
+  assert.ok(rec.ts > ahead, 'the first write after upgrade outranks our own older record');
+  assert.ok(parseInt(localStorage.getItem('pb_progStamp'), 10) >= rec.ts, 'and the floor is persisted');
+});
+
+// DELETE DEVICE built destructive authority from a raw clock read. If our clock sits
+// behind the target's records, those PRE-delete records are classified as post-purge,
+// preservePostPurgeRecords copies them into our replica as survivors, the boards are
+// destroyed — and the history the user asked to delete comes back.
+//
+// MUTATION: revert the purge stamp to `now()` → RED.
+test('Delete Device purges above the target records visible at click time', async () => {
+  reset();
+  Progress.recordBook('other', { t: 't0', o: 1, cum: 0, tot: 1000 });   // seed the stamp first
+  const ahead = NOW + 5_000_000;                       // target's clock runs ahead of ours
+  T.setPeers([peerBoard('peer-1', 'Kitchen', {
+    bk: { bk: { t: 't', o: 5000, cum: 0, tot: 60000, ts: ahead }, tr: { c1: [10, 60000, ahead + 10] } },
+  })]);
+  // Drive the REAL deleteDevice, not a copy of its floor expression — the first
+  // version of this test called a hook that duplicated the arithmetic, so the
+  // mutation reverting the production line left it green.
+  await Progress.deleteDevice({ key: 'peer-1', id: 'peer-1', name: 'Kitchen' });
+  const floor = T.purgedMap()['peer-1'];
+  assert.ok(floor, 'a purge was recorded');
+  assert.ok(floor > ahead + 10, 'the floor clears every record the target holds, book AND CHAPTER');
 });
 
 // A device must never mint two records with the same ordering value — otherwise

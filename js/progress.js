@@ -70,13 +70,49 @@ const Progress = (() => {
   // Every durable write goes through stamp(): strictly increasing, persisted, never
   // below what we have already issued. Same fix as syncqueue's `rev` (.160) and
   // presence's `rev` (.170) — this is the third and last durable writer to get it.
+  // ⚠ LOCALLY monotonic is NOT enough — it must be CAUSALLY monotonic (Lamport).
+  // A counter over what this device has ISSUED cannot order our next write against a
+  // value we have just ACCEPTED from elsewhere. Concretely: device B publishes a reset
+  // at T+5000, we adopt that floor, the user immediately plays — and our next stamp is
+  // ~T+1, below the floor, so the new position is suppressed and unpublished until our
+  // stamps organically climb past T+5000. With a future-skewed peer that is not
+  // seconds, it is indefinite. The same held for a purge of our OWN identity, which is
+  // documented as self-healing and was not.
+  // So: advance on OBSERVATION, and seed from durable state we already hold (an
+  // upgrade from a build with no persisted stamp must not start below its own records).
   function loadStamp() { try { return parseInt(localStorage.getItem(LS.stamp) || '0', 10) || 0; } catch { return 0; } }
   let lastStamp = loadStamp();
+  const saveStamp = () => { try { localStorage.setItem(LS.stamp, String(lastStamp)); } catch { /* best effort; still monotonic in-session */ } };
+  function observeStamp(ts) { if ((ts || 0) > lastStamp) { lastStamp = ts || 0; saveStamp(); } }
+  // Walk a board-shaped source (ours, a peer's, or a shard pseudo-board).
+  function observeSource(src) {
+    for (const bk in ((src && src.books) || {})) {
+      const s = src.books[bk] || {};
+      if (s.bk) observeStamp(s.bk.ts);
+      observeStamp(s.rst);
+      for (const tr in (s.tr || {})) observeStamp((s.tr[tr] || [])[2]);
+    }
+    for (const id in ((src && src.purged) || {})) observeStamp(src.purged[id]);
+  }
+  let stampSeeded = false;
+  function seedStamp() {
+    if (stampSeeded) return;
+    stampSeeded = true;
+    for (const b in mine.books) {
+      const x = mine.books[b];
+      if (x.bk) observeStamp(x.bk.ts);
+      observeStamp(x.rst);
+      for (const tr in (x.tr || {})) observeStamp((x.tr[tr] || [])[2]);
+    }
+    for (const b in replica.books) { const r = replica.books[b]; if (r.bk) observeStamp(r.bk.ts); observeStamp(r.rst); }
+    for (const id in purged) observeStamp(purged[id]);
+    for (const src of peerBoards.concat(shardBoards)) observeSource(src);
+  }
   function stamp(atLeast) {
-    const t = Math.max(now(), lastStamp + 1, atLeast || 0);
-    lastStamp = t;
-    try { localStorage.setItem(LS.stamp, String(t)); } catch { /* best effort; still monotonic in-session */ }
-    return t;
+    seedStamp();                       // lazy, so call order cannot leave us below our own history
+    lastStamp = Math.max(now(), lastStamp + 1, atLeast || 0);
+    saveStamp();
+    return lastStamp;
   }
   // THE comparator for competing records — used at EVERY site where records compete
   // (live merge, replica adoption, shard collapse, publication, preservation). It is
@@ -216,6 +252,7 @@ const Progress = (() => {
   function adoptPurges(incoming) {
     let changed = false;
     for (const id in (incoming || {})) {
+      observeStamp(incoming[id]);   // a purge we accept must not outrank our next write
       if ((incoming[id] || 0) > (purged[id] || 0)) { purged[id] = incoming[id]; changed = true; }
     }
     if (!changed) return;
@@ -525,6 +562,15 @@ const Progress = (() => {
       if (myPoll !== pollSeq) return;   // a newer poll owns the peer set — drop this read entirely
       const parsed = boards.map((b) => { try { return JSON.parse(b.summary); } catch { return null; } });
       peerBoards = parsed.filter((p) => p && p.id && p.id !== myId());
+      // Causal clock: everything we READ counts. UNTESTED, and deliberately so —
+      // this file's tests have no board fake, so poll() cannot be driven here. It is
+      // also redundant for every correctness-critical value: the reset floors and
+      // purge values that must not outrank our next write are observed by
+      // applyPeerResets/adoptPurges below (both tested, both run in this same poll).
+      // What this adds is plain peer RECORD timestamps, where losing to a genuinely
+      // newer peer record is the correct outcome anyway. Kept as completeness, not
+      // as a guard something depends on.
+      for (const p of peerBoards) observeSource(p);
       cachePeerBoards();   // persist for next launch's first-frame paint (see restorePeerBoards)
       legacyInv = [];
       for (let i = 0; i < boards.length; i++) {
@@ -537,6 +583,7 @@ const Progress = (() => {
           const r = await shards.readAll();
           if (myPoll !== pollSeq) return;   // superseded mid shard-read
           shardBoards = shardEntriesToBoards(r.entries);
+          for (const p of shardBoards) observeSource(p);
           shardInv = r.devices || {};
           cacheShardBoards();
           adoptPurges(r.purges);   // purges ride the VERIFIED shard channel too
@@ -587,7 +634,9 @@ const Progress = (() => {
   function applyPeerResets() {
     const peerRst = {};
     for (const p of peerBoards.concat(shardBoards)) for (const bk in (p.books || {})) {
-      const r = p.books[bk].rst || 0; if (r > (peerRst[bk] || 0)) peerRst[bk] = r;
+      const r = p.books[bk].rst || 0;
+      observeStamp(r);   // a reset we adopt must not outrank the playback that follows it
+      if (r > (peerRst[bk] || 0)) peerRst[bk] = r;
     }
     let changed = false, repChanged = false;
     for (const bk in peerRst) {
@@ -850,6 +899,26 @@ const Progress = (() => {
   // boards and keeps playing as itself). Books also played elsewhere keep their
   // newer progress; the identity's tombstoned resets are kept (a reset is a real
   // action, not the identity's data).
+  // Everything we can currently see for a delete target: book records, chapter
+  // records, its reset tombstones, and any purge already standing against it.
+  function targetMaxTs(desc) {
+    let m = purged[desc && desc.id] || 0;
+    const up = (v) => { if ((v || 0) > m) m = v || 0; };
+    for (const src of peerBoards.concat(shardBoards)) {
+      if (!src || !desc || src.id !== desc.id) continue;
+      for (const bk in (src.books || {})) {
+        const s = src.books[bk] || {};
+        if (s.bk) up(s.bk.ts);
+        up(s.rst);
+        for (const tr in (s.tr || {})) up((s.tr[tr] || [])[2]);
+      }
+    }
+    for (const book in replica.books) {
+      const r = replica.books[book];
+      if (r && r.bk && desc && r.bk.origin === desc.id) up(r.bk.ts);
+    }
+    return m;
+  }
   async function deleteDevice(desc) {
     if (!desc) return { ok: false, error: 'invalid' };
     const isPurge = !!(desc.id && desc.id !== myId());
@@ -857,8 +926,18 @@ const Progress = (() => {
       // Idempotent: retrying a pending delete REUSES the original purge timestamp.
       // Stamping now() again would silently widen the deletion to records the
       // (possibly live) target created after the first attempt.
+      // The purge floor decides which of the target's records count as DELETED and
+      // which count as legitimately created after deletion began. Built from a raw
+      // clock read, a device whose clock sits behind the target classified the
+      // target's EXISTING records as post-purge — preservePostPurgeRecords then
+      // copied them into our replica as survivors, the boards were destroyed, and
+      // the history the user asked to delete came back. Not slow cleanup: a
+      // permanent misclassification of pre-delete data as post-delete data. So the
+      // initial floor must clear everything the target holds AT CLICK TIME.
+      // Retries still reuse the original value — stamping again would silently
+      // widen the deletion to activity the (possibly live) target created since.
       const prior = pendingDeletes[desc.key];
-      const ts = prior ? prior.purgeTs : now();
+      const ts = prior ? prior.purgeTs : stamp(targetMaxTs(desc) + 1);
       if ((purged[desc.id] || 0) < ts) { purged[desc.id] = ts; savePurged(); }
       applyPurgesLocally();
       pendingDeletes[desc.key] = {
@@ -1230,7 +1309,7 @@ const Progress = (() => {
         mine = { v: 1, books: {} }; replica = { v: 1, books: {} }; purged = {}; pendingDeletes = {};
         peerBoards = []; shardBoards = []; merged = { books: {} };
         legacyInv = []; shardInv = {};
-        prunedSession = false; dirty = false; dirtySince = 0; dirtySeq = 0; lastShardPub = 0; lastStamp = 0;
+        prunedSession = false; dirty = false; dirtySince = 0; dirtySeq = 0; lastShardPub = 0; lastStamp = 0; stampSeeded = false;
         shardHandoffSeq = 0; legacyPub = { state: 'idle', at: 0, status: 0 };
         if (pubTimer) { clearTimeout(pubTimer); pubTimer = null; }
         if (shardPubTimer) { clearTimeout(shardPubTimer); shardPubTimer = null; }
@@ -1243,6 +1322,7 @@ const Progress = (() => {
       purgedMap: () => purged,
       rebuild() { rebuild(); return merged; },
       applyPeerResets, cachePeerBoards, restorePeerBoards, hydrate,
+      _adoptPurges: adoptPurges,
       serialize, packAll,
       poll, publish, entriesForPublish, adoptStableForeign, shardEntriesToBoards,
       shards: () => shards,
