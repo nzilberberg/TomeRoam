@@ -113,6 +113,38 @@ This is the original open bug: resume landing ~10s behind on the degraded device
 - ✅ Diagnostics: the new record's `ts` is **above** the reset floor. (`.172` makes this
   hold even if the clock regressed; if it fails, the stamp is not persisting.)
 
+### Test 6b — Reset on the OTHER device, then play here (added at `.174`)
+
+Test 6 covers a reset made on the *same* device. `.174` fixed the remote case, which
+is a different code path (the local reset advances our stamp as a side effect; a
+remote one has to be *observed*). Before `.174` the new position was saved locally but
+stayed invisible and unpublished.
+
+1. On A: Reset Progress on the book.
+2. On B: as soon as B has polled and shows the book unplayed, play it for ~30s.
+3. Check B, then A.
+
+- ✅ B shows the new position immediately — not "unplayed" while audio is playing.
+- ✅ A picks it up on its next poll.
+- ✅ B's diagnostics: the new record's `ts` is **above** the reset floor, and the book
+  appears in the published entries (not withheld).
+- ❌ If B plays but the tile stays unplayed, the stamp is not observing the remote
+  floor. Capture B's diagnostics — the `RESET floor` and the record `ts` beside each
+  other are the whole diagnosis.
+
+### Test 10b — Delete a device that is ahead of you (added at `.174`)
+
+Only meaningful if the two devices' clocks differ; worth doing because the failure is
+silent and permanent.
+
+1. Make sure B has recent progress on a book.
+2. On A: Options → Devices → Delete B.
+
+- ✅ B's records stop appearing on A and do not come back after later polls.
+- ❌ If B's positions reappear in A's diagnostics as replica entries after the delete,
+  the purge floor landed below B's records and pre-delete data was preserved as
+  post-delete data.
+
 ### Test 7 — Board recreation
 
 1. On B, delete B's own presence board from Plex (Plex web → Playlists → the hidden
