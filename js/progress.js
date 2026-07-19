@@ -275,6 +275,16 @@ const Progress = (() => {
       if (r.bk && (purged[r.bk.origin] || 0) < (r.bk.ts || 0) && (!e.bk || (r.bk.ts || 0) > (e.bk.ts || 0))) e.bk = r.bk;
       if (r.rst && (!e.rst || r.rst > e.rst)) { e.rst = r.rst; e.rstOrigin = r.rstOrigin || ''; }
     }
+    // Never ship a payload that contradicts itself. This checked the PURGE floor
+    // but not the RESET floor, so an entry could carry `rst` alongside a record
+    // that same `rst` suppresses — a record every reader drops on arrival and we
+    // keep republishing. Belt to resetBook's brace: the replica can also be
+    // refilled behind a reset by adoptStableForeign, which applies only the purge
+    // floor.
+    for (const book in out) {
+      const e = out[book];
+      if (e.bk && e.rst && (e.bk.ts || 0) <= e.rst) delete e.bk;
+    }
     return Object.keys(out).map((book) => Object.assign({ book }, out[book])).filter((e) => e.bk || e.rst);
   }
   // Shard entries (flat, per-book, origin-attributed) → per-origin pseudo-boards.
@@ -332,7 +342,19 @@ const Progress = (() => {
   // today. See the reset plan.
   function resetBook(book) {
     if (book == null) return;
-    mine.books[book] = { bk: null, tr: {}, rst: now(), _ts: now() };
+    const floor = now();
+    mine.books[book] = { bk: null, tr: {}, rst: floor, _ts: floor };
+    // Clear the REPLICA too. `.164` gave applyPeerResets this duty, but that path
+    // only ever fires for a reset learned from a PEER — our own reset was never in
+    // `peerRst`, so an adopted foreign pre-reset position stayed put and
+    // entriesForPublish kept shipping it. We would go on being a resurrection
+    // source for a book WE reset. Same duty, other half.
+    const rep = replica.books[book];
+    if (rep && rep.bk && (rep.bk.ts || 0) <= floor) {
+      delete rep.bk;
+      if (!rep.rst) delete replica.books[book];
+      saveReplica();
+    }
     saveMine(); rebuild(); schedulePublish();
   }
 
@@ -556,6 +578,30 @@ const Progress = (() => {
       try { await Plex.deletePlaylist(b.ratingKey); } catch { /* retry next launch */ }
     }
   }
+  // LWW needs a TOTAL order or it does not converge. Every comparison here used a
+  // strict `>`, so an exact tie fell to whichever SOURCE came first — and that
+  // order is per-device (ours, then replica insertion order, then whatever order
+  // the Plex listing happened to return). Two devices could settle the same tie
+  // differently and stay disagreed forever, each republishing its own winner.
+  // Ties are reachable, not theoretical: serverNow() can return the same
+  // millisecond twice — the reason syncqueue.js carries a monotonic `rev`.
+  // The existing rule "on a tie OUR record wins" is DELIBERATE (it has its own test)
+  // and is kept: on this device, the record we just wrote is the better guess, and
+  // resume should not jump to a peer that happened to stamp the same millisecond.
+  // That rule is device-relative by nature, so it cannot be the whole answer — it
+  // says nothing when NEITHER record is ours, which is exactly the case that fell to
+  // listing order. So: ours still wins its ties, and foreign-vs-foreign is broken on
+  // the ORIGIN id — arbitrary, but identically arbitrary on every device, which is
+  // the property convergence actually needs.
+  function beats(ts, by, cur) {
+    if (!cur) return true;
+    const curTs = cur.ts || 0;
+    if (ts !== curTs) return ts > curTs;
+    const me = myId();
+    if (cur.by === me) return false;                  // ours holds it — keep (documented preference)
+    if (by === me) return true;                       // ours wins its tie whatever the source order
+    return String(by || '') > String(cur.by || '');   // neither is ours → deterministic everywhere
+  }
   function rebuild() {
     const m = { books: {} };
     // Ours first (authored by myId, wins timestamp ties), then adopted replicas,
@@ -576,10 +622,10 @@ const Progress = (() => {
         const f = floor[bk] || 0;
         const dst = m.books[bk] || (m.books[bk] = { bk: null, tr: {}, rst: f });
         const s = src.books[bk];
-        if (s.bk && (s.bk.ts || 0) > f && (s.bk.ts || 0) > pf && (!dst.bk || (s.bk.ts || 0) > (dst.bk.ts || 0))) dst.bk = Object.assign({}, s.bk, { by, name });
+        if (s.bk && (s.bk.ts || 0) > f && (s.bk.ts || 0) > pf && beats(s.bk.ts || 0, by, dst.bk)) dst.bk = Object.assign({}, s.bk, { by, name });
         if (s.tr) for (const tr in s.tr) {
           const r = s.tr[tr], ts = r[2] || 0;
-          if (ts > f && ts > pf && (!dst.tr[tr] || ts > (dst.tr[tr].ts || 0))) dst.tr[tr] = { o: r[0] || 0, d: r[1] || 0, ts, by, name };
+          if (ts > f && ts > pf && beats(ts, by, dst.tr[tr])) dst.tr[tr] = { o: r[0] || 0, d: r[1] || 0, ts, by, name };
         }
       }
     }

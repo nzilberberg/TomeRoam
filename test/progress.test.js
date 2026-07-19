@@ -280,6 +280,64 @@ test('applyPeerResets keeps a REPLICA record newer than the tombstone', () => {
   assert.ok(rep && rep.bk && rep.bk.o === 700, 'a post-reset replica position survives');
 });
 
+// `.164` made clear-on-contact clean the replica — but ONLY on the path that learns
+// a reset from a PEER. Our OWN reset (resetBook) touches `mine` and nothing else,
+// and applyPeerResets collects tombstones from peerBoards/shardBoards only, never
+// from us. So after resetting a book on THIS device, an adopted foreign pre-reset
+// position stayed in the replica and entriesForPublish kept shipping it — the same
+// resurrection-source defect, on the half I did not fix.
+//
+// MUTATION: remove the replica clean from resetBook → RED.
+test('OUR OWN reset clears the replica too, not just a reset learned from a peer', () => {
+  reset();
+  T.replicaBooks()['bk'] = { bk: { t: 't', o: 5000, cum: 5000, tot: 60000, ts: NOW, origin: 'peer-2', name: 'Tablet' } };
+  NOW += 1000;
+  Progress.resetBook('bk');
+  const rep = T.replicaBooks()['bk'];
+  assert.ok(!rep || !rep.bk, 'the pre-reset replica copy is dropped by our own reset');
+});
+
+// Belt to that brace: even if a pre-reset record reaches the replica by another
+// route (adoptStableForeign runs every poll and checks only the PURGE floor), the
+// publication must never carry a record its own tombstone suppresses. The payload
+// was self-contradictory: `rst` and a record at/below it in the same entry.
+//
+// MUTATION: drop the reset-floor check in entriesForPublish → RED.
+test('entriesForPublish never emits a record its own tombstone suppresses', () => {
+  reset();
+  const stale = NOW;
+  NOW += 1000;
+  Progress.resetBook('bk');                       // rst = stale + 1000
+  // Sneak a pre-reset foreign copy in behind the reset, as adoptStableForeign would.
+  T.replicaBooks()['bk'] = { bk: { t: 't', o: 5000, cum: 5000, tot: 60000, ts: stale, origin: 'peer-2', name: 'Tablet' } };
+  const e = T.entriesForPublish().find((x) => x.book === 'bk');
+  assert.ok(e, 'the tombstone itself is still published — it must propagate');
+  assert.ok(!e.bk, 'but not a record the same entry says was reset away');
+});
+
+// LWW needs a TOTAL order to converge. Every comparison in rebuild() is strictly
+// `>`, so an exact tie is resolved by whichever source comes first — and that order
+// is per-device (our own records, then replica insertion order, then whatever order
+// the Plex listing returned). Two devices could therefore settle a tie differently
+// and never converge. Ties are reachable, not theoretical: serverNow() can return
+// the same millisecond twice (the reason syncqueue.js carries a `rev`).
+//
+// MUTATION: remove the origin tie-break → RED (the two orders disagree).
+test('rebuild resolves an exact timestamp tie identically whatever the source order', () => {
+  const boards = [
+    peerBoard('dev-aaa', 'A', { bk: { bk: { t: 't1', o: 1000, cum: 1000, tot: 60000, ts: NOW } } }),
+    peerBoard('dev-zzz', 'Z', { bk: { bk: { t: 't9', o: 9000, cum: 9000, tot: 60000, ts: NOW } } }),
+  ];
+  reset();
+  T.setPeers(boards);
+  const first = T.rebuild().books['bk'].bk;
+  reset();
+  T.setPeers(boards.slice().reverse());
+  const second = T.rebuild().books['bk'].bk;
+  assert.equal(first.by, second.by, 'the same record wins regardless of listing order');
+  assert.equal(first.o, second.o, 'so every device converges on one position');
+});
+
 test('applyPeerResets keeps our records that are NEWER than the peer tombstone', () => {
   reset();
   const resetAt = NOW;
