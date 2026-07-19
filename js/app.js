@@ -483,14 +483,87 @@
         // needs this: hiding a view drops its decoded images, so showing it again
         // re-decodes them in front of the user.
         const holdGhostUntilPaintable = (rootEl) => {
+          const t0 = performance.now();
           const covers = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src'));
           let dropped = false;
-          const drop = () => { if (dropped) return; dropped = true; dropPanes(); finishing = false; };
-          Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve()))).then(drop);
-          setTimeout(drop, 600);   // safety net — never keep the cover pane forever
+          const drop = (why) => {
+            if (dropped) return; dropped = true; dropPanes(); finishing = false;
+            // How long the cover actually held, and over how many images. A hold of
+            // ~0ms over 0 covers means this did NOTHING for that reveal — which is
+            // exactly what happens when the revealed rows are freshly materialized
+            // `img[data-art]` with no `src` yet (they are invisible to the filter
+            // above). Measured, so the next fix is not another guess.
+            if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(performance.now() - t0)}ms `
+              + `covers=${covers.length} via=${why}`);
+          };
+          Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve()))).then(() => drop('decode'));
+          setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever
+        };
+        // FLASH DIAGNOSTIC (.180). The reported "cover images flicker on every aborted
+        // swipe return" already had one evidence-free fix (.179) that did not land, so
+        // this MEASURES the art pipeline across the reveal instead of inferring it:
+        // how many covers had to load again, and how many were slow enough (>=120ms)
+        // to replay artloader's 0.3s fade-in — that file's own documented flash
+        // mechanism. One deferred log line per swipe; no behaviour change.
+        // Deliberately instruments the OUTCOME, not a suspect. Enumerating causes
+        // (art fetch, re-decode, SW cache miss, SWR rebuild, retry cycle, container
+        // transition, iOS dropping decoded bitmaps) and logging each one only proves
+        // or clears the ones I thought of — and the first two fixes here failed
+        // precisely because the cause was not on my list. Every mechanism that makes
+        // an image visibly change has to write to the DOM to do it: a node replaced,
+        // a `src` set or cleared, a class swapped (`art-done` = the 0.3s fade,
+        // `art-instant` = no fade), or the container restyled. Watching those writes
+        // catches an unknown cause as readily as a known one.
+        const reportReveal = (tag, rootEl) => {
+          if (!window.PBDebug) return;
+          const before = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
+          const t0 = performance.now();
+          const rows0 = rootEl.querySelectorAll('.book, .author').length;
+          const imgs0 = rootEl.querySelectorAll('img').length;
+          const src0 = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src')).length;
+          const m = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, failed: 0, cls: 0, cont: 0 };
+          const countImgs = (n) => (n.nodeType !== 1 ? 0
+            : (n.tagName === 'IMG' ? 1 : (n.querySelectorAll ? n.querySelectorAll('img').length : 0)));
+          let obs = null;
+          try {
+            obs = new MutationObserver((muts) => {
+              for (const mu of muts) {
+                if (mu.type === 'childList') {
+                  for (const n of mu.addedNodes) m.add += countImgs(n);
+                  for (const n of mu.removedNodes) m.rem += countImgs(n);
+                } else if (mu.type === 'attributes') {
+                  if (mu.target === rootEl) { m.cont++; continue; }
+                  if (mu.target.tagName !== 'IMG') continue;
+                  if (mu.attributeName === 'src') { if (mu.target.getAttribute('src')) m.srcSet++; else m.srcClr++; }
+                  else {
+                    const c = String(mu.target.className || '');
+                    if (/art-done/.test(c)) m.fade++;
+                    else if (/art-instant/.test(c)) m.instant++;
+                    else if (/art-failed/.test(c)) m.failed++;
+                    else m.cls++;
+                  }
+                }
+              }
+            });
+            obs.observe(rootEl, { childList: true, subtree: true, attributes: true,
+              attributeFilter: ['src', 'class', 'style'] });
+          } catch { /* no MutationObserver → the ArtLoader deltas below still land */ }
+          setTimeout(() => {
+            if (obs) { try { obs.disconnect(); } catch { /* already gone */ } }
+            const a = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
+            const art = (a && before)
+              ? ` | art loaded=${a.loads - before.loads} instant=${a.instant - before.instant}`
+                + ` FADED=${a.fade - before.fade} queued=${a.queued - before.queued} released=${a.released - before.released}`
+              : ' | art n/a';
+            PBDebug.log('FLASH', `${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
+              + ` | DOM +img=${m.add} -img=${m.rem} src+=${m.srcSet} src-=${m.srcClr}`
+              + ` fadeIn=${m.fade} instant=${m.instant} failed=${m.failed} cls=${m.cls} container=${m.cont}`
+              + art + ` | win=${Math.round(performance.now() - t0)}ms`);
+          }, 1500);
         };
         if (commit && dest.v === 'home') {
           applyScreen(dest, { render: false, keepGhosts: true });
+          reportReveal('commit→home', $('home'));
           holdGhostUntilPaintable($('home'));
           return;
         }
@@ -504,10 +577,15 @@
         if (!commit && cur.clobbered) {
           applyScreen(dest, { render: true, resetScroll: false, keepGhosts: true });
           window.scrollTo(0, cur.scroll0);
+          reportReveal('abort→' + dest.v, $('browse'));
           holdGhostUntilPaintable($('browse'));
           return;
         }
         dropPanes();
+        // Measured on the plain paths too, so an abort's numbers have something to be
+        // compared AGAINST — "covers reload on every transition" and "covers reload
+        // only on aborts" call for completely different fixes.
+        reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'));
         if (commit) applyScreen(dest, { render: false });   // dest already rendered live → reconcile only
         else {
           // Aborted → restore the current screen (re-render only if its element was

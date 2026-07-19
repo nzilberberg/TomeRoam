@@ -514,7 +514,11 @@ function boot(opts = {}) {
   put('Store', { persist: async () => 'granted', cachedBooks: async () => books });
   put('SyncQueue', { init: noop, enqueue: noop, count: async () => 0 });
   put('Warmer', { start: noop });
-  put('ArtLoader', { scan: noop, observe: noop, release: noop });
+  // `stats` must exist or app.js's .180 reveal diagnostic short-circuits and the whole
+  // path stays dark in every test — the .154 "a fake that is never consulted is
+  // invisible" trap. Counters stay zero; the point is that the code RUNS.
+  put('ArtLoader', { scan: noop, observe: noop, release: noop,
+    stats: () => ({ queued: 0, loads: 0, instant: 0, fade: 0, failed: 0, released: 0, maxDt: 0 }) });
   for (const [k, v] of Object.entries(screens)) put(k, v);
   put('PBDebug', { log: (tag, m) => log.calls.push({ name: 'debug', args: [tag, String(m)] }),
     watchAudio: noop, registerState: noop, snapshot: () => ({}) });
