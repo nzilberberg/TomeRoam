@@ -23,14 +23,47 @@ going unless it blocks the rest; fix in a later session.
 
 Two instruments, and they answer different questions:
 
-1. **Options → Diagnostics → Copy diagnostics** — the `.163` record-level snapshot. This is
+1. **Options → Diagnostics → `Cache`**, then **`Copy sanitized`** in the panel that opens
+   (titled *"Cache & Offline Diagnostics"* — the name predates `.163`; it carries the
+   progress snapshot too now). This is
    the one that matters here. Per book it shows: our authored record, the replica copy,
    each peer and shard copy, the reset floor, and **which record WON**, plus
    `DURABLE PROGRESS: SAFE / NOT verified`. Capture it **on both devices** at each
    checkpoint below. Two snapshots taken at the same moment are what prove or disprove
    convergence.
-2. **Bug report** (Options) — carries the log ring plus a compact progress verdict. Post one
-   whenever something looks wrong, from **both** devices.
+2. **Options → Diagnostics → `Send report`** — uploads the log ring plus a compact progress
+   verdict. Post one whenever something looks wrong, from **both** devices. If the upload
+   fails, the fallback is **`Open log` → `Copy`** and paste it directly.
+
+**The exact controls, since they are not obviously named** — all under Options → Diagnostics:
+
+| I want | Press |
+|---|---|
+| the record-level progress snapshot | `Cache` → `Copy sanitized` |
+| the log uploaded for me to pull | `Send report` |
+| the raw log to paste myself | `Open log` → `Copy` |
+| verbose logging while testing | the `Live debug` toggle (leave it ON) |
+
+⚠️ **The log ring is 600 lines and rolls** (`js/debug.js` `CAP`). Real playback fills it
+quickly, so do NOT run all fourteen scenarios and then send one report — the early tests
+will have scrolled out. Snapshots (`Copy sanitized`) are point-in-time and cannot overflow,
+so take those freely; reports are the thing to pace.
+
+**Suggested batching** — six report-pairs instead of fourteen, destructive tests last:
+
+| Group | Tests | Why grouped |
+|---|---|---|
+| 1 | 1, 2, 3, 4 | one setup; **test 4 is the headline — if it fails, STOP and send** |
+| 2 | 7, 8 | board-infrastructure fiddling in Plex web |
+| 3 | 5, 6, 6b | the reset family — destructive to progress |
+| 4 | 9 | offline return; mostly waiting |
+| 5 | 10, 10b | delete device — destructive to identity |
+| 6 | 11 | reinstall — ⚠️ **post that device's report BEFORE reinstalling**, the wipe takes the log ring with it (on iOS, the whole container) |
+
+Take a snapshot from **both** devices after **every** test. Send a report pair at the end of
+each group, and immediately on any failure — waiting means the evidence rolls away. Label
+what you paste ("group 1, device B"); the report's `STATE` header identifies the build and
+connection but not which test it belongs to.
 
 Pull reports afterwards from `Desktop\TomeRoam`:
 
