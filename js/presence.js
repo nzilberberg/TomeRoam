@@ -17,7 +17,23 @@ const Presence = (() => {
   const GHOST_MS = 90000;      // a "playing" peer silent longer than this is treated as dead
   const STALE_MS = 3 * 24 * 60 * 60 * 1000;   // a non-playing board untouched this long is dead → delete it
 
-  const LS = { name: 'pb_deviceName', board: 'pb_boardKey', peerCache: 'pb_peerCache' };
+  const LS = { name: 'pb_deviceName', board: 'pb_boardKey', peerCache: 'pb_peerCache', rev: 'pb_presRev' };
+
+  // MONOTONIC PUBLICATION COUNTER. Neither of the earlier ordering signals is
+  // complete on its own: `at` comes from serverNow() and can run BACKWARD or repeat
+  // (plex.js:321), and board identity only survives while the board does — a 404
+  // clears the saved key and the next publish creates a playlist with a NEW
+  // ratingKey (plex.js makeBoard.ensure), after which same-board comparison no
+  // longer applies and arbitration fell back to the untrustworthy clock. `rev` is
+  // ours alone, never derived from a clock, and persisted OUTSIDE the board so it
+  // survives board recreation and reloads. Same fix syncqueue.js already carries.
+  function loadRev() { try { return parseInt(localStorage.getItem(LS.rev) || '0', 10) || 0; } catch { return 0; } }
+  let rev = loadRev();
+  function nextRev() {
+    rev++;
+    try { localStorage.setItem(LS.rev, String(rev)); } catch { /* best effort; still monotonic in-session */ }
+    return rev;
+  }
 
   let seed = null;
   let st = { book: null, track: null, pos: 0, at: 0, playState: 'idle', speed: 1, claim: 0, grab: false };
@@ -63,6 +79,7 @@ const Presence = (() => {
       id: Plex.getClientId(), name: name(),
       book: st.book, track: st.track, pos: Math.round(st.pos),
       at: st.at, state: st.playState, speed: st.speed, claim: st.claim,
+      rev: nextRev(),       // monotonic per device — the only ordering signal that survives both a backward clock AND board recreation
       g: st.grab ? 1 : 0,   // "grabbed": owns the book (via a scrub takeover) even while paused → a playing peer still yields
     });
     // (Careful naming here: `st` above is the presence STATE — an earlier version
@@ -88,6 +105,15 @@ const Presence = (() => {
     let parsed;
     try { parsed = JSON.parse(localStorage.getItem(LS.peerCache) || 'null'); } catch { return []; }
     if (!Array.isArray(parsed) || !parsed.length) return [];
+    // CACHE MIGRATION. An entry written before board identity / rev existed carries
+    // neither, so it cannot take part in the ordering rules — and a PAUSED one never
+    // ages out (filterPeers only ghosts PLAYING records), so it would sit in front of
+    // the live board indefinitely, get re-persisted every poll, and never acquire an
+    // identity. Drop those; one poll repopulates the cache in the current format.
+    // Cost is a single launch painting without cached peers, which is the pre-cache
+    // behaviour and self-correcting.
+    parsed = parsed.filter((p) => p && (p._rk != null || p.rev != null));
+    if (!parsed.length) return [];
     return PBLogic.filterPeers(parsed, Plex.getClientId(), now(), GHOST_MS);
   }
   function restoreCachedPeers() { const p = cachedPeers(); if (p.length) { peers = p; cbPeers(p); } }
@@ -269,7 +295,7 @@ const Presence = (() => {
     // Test-only (mirrors Progress._test): drive one poll pass directly so the
     // WIRING — not just PBLogic's arithmetic — is covered. Every stale-peer bug
     // this module has had lived in the poll body, not in the pure helpers.
-    _test: { cachePeers, restoreCachedPeers, cachedPeers, poll, peers: () => peers },
+    _test: { cachePeers, restoreCachedPeers, cachedPeers, poll, publish, peers: () => peers },
   };
 })();
 

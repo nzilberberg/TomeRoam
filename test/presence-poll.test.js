@@ -20,7 +20,7 @@ const ME = 'pbpwa-me000001';
 
 // The board readAll is queue-driven so a test can script the exact sequence of
 // listings — including the partial one the real degraded connection produced.
-const script = { next: [], delays: [] };
+const script = { next: [], delays: [], published: [] };
 global.Plex = {
   serverNow: () => NOW,
   getClientId: () => ME,
@@ -32,7 +32,7 @@ global.Plex = {
       if (d) await new Promise((r) => setTimeout(r, d));
       return boards;
     },
-    publish: async () => 200,
+    publish: async (blob) => { script.published.push(JSON.parse(blob)); return 200; },
   }),
   deletePlaylist: async () => true,
 };
@@ -42,7 +42,7 @@ const Presence = require('../js/presence.js');
 const asBoard = (o) => ({ ratingKey: 'rk_' + o.id, title: 'pb_dev_' + o.id, summary: JSON.stringify(o) });
 const peer = (over) => Object.assign({ id: 'phone', name: 'iPhone', state: 'playing', book: '8913', track: 't1', pos: 275900, at: NOW - 10000, speed: 1, claim: 1 }, over || {});
 
-function reset() { script.next = []; script.delays = []; Presence._test.cachePeers([]); }
+function reset() { script.next = []; script.delays = []; script.published = []; Presence._test.cachePeers([]); }
 
 // MUTATION: revert poll() to `peers = PBLogic.filterPeers(parsed, …)` → RED.
 // That single line IS the bug: the peer vanishes, peerFor() returns null, and
@@ -110,6 +110,39 @@ test('poll: a same-board update with a LOWER timestamp still wins (serverNow can
   assert.equal(after.length, 1);
   assert.equal(after[0].state, 'paused', 'the board is authoritative for its own content');
   assert.equal(after[0].pos, 999000, 'and the current position came with it');
+});
+
+// The rev has to actually be PUBLISHED and PERSISTED, and only presence.js can do
+// that — the logic tests hand-build it. Persistence outside the board is the whole
+// point: a 404 recreates the playlist under a new ratingKey, and the counter has to
+// keep climbing across that (and across reloads) or it is no better than the key.
+//
+// MUTATION: drop `rev: nextRev()` from the published blob, or make nextRev() stop
+// persisting to localStorage → RED.
+test('publish: every event carries a rev, strictly increasing and persisted', async () => {
+  reset();
+  await Presence._test.publish();
+  await Presence._test.publish();
+  const seen = script.published;
+  assert.equal(seen.length, 2);
+  assert.ok(typeof seen[0].rev === 'number', 'a rev rides every publication');
+  assert.ok(seen[1].rev > seen[0].rev, 'and strictly increases');
+  const stored = parseInt(global.localStorage.getItem('pb_presRev'), 10);
+  assert.equal(stored, seen[1].rev, 'persisted OUTSIDE the board, so it survives recreation + reload');
+});
+
+// MUTATION: remove the `_rk != null || rev != null` filter from cachedPeers → RED.
+// A pre-.168 cache entry carries neither signal, and a PAUSED one never ages out
+// (filterPeers ghosts only playing records), so it would front-run the live board
+// indefinitely and be re-persisted on every poll.
+test('cachedPeers: entries written before board identity / rev are discarded on upgrade', () => {
+  reset();
+  global.localStorage.setItem('pb_peerCache', JSON.stringify([
+    { id: 'legacy', state: 'paused', book: 'b', pos: 5000, at: NOW - 300 },              // pre-.168
+    { id: 'modern', state: 'paused', book: 'b', pos: 7000, at: NOW - 300, _rk: 'rk9' },  // current format
+  ]));
+  const out = Presence._test.cachedPeers();
+  assert.deepEqual(out.map((p) => p.id), ['modern'], 'only entries that can take part in the ordering survive');
 });
 
 // NOTE: the "can a RETAINED peer spuriously supersede us" safety property is

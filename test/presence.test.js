@@ -35,9 +35,13 @@ test('cachePeers persists the raw boards (nulls dropped)', () => {
 test('restoreCachedPeers: paints last-known peers on init, dropping self + aged ghosts', () => {
   NOW = 5_000_000;
   const me = 'pbpwa-test-1234abcd';
-  const fresh = { id: 'peerA', name: 'Kitchen', state: 'playing', book: 'b', track: 't', pos: 1000, at: NOW - 5000, speed: 1, claim: 1 };
-  const ghost = { id: 'peerB', name: 'Dead', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW - 600000, speed: 1, claim: 1 };   // silent >> GHOST_MS
-  const self  = { id: me, name: 'Me', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW, speed: 1, claim: 1 };
+  // `_rk` is the CURRENT cache format — poll() attaches the board ratingKey and
+  // cachePeers persists the merged set, so every real entry carries one. Entries
+  // without it are pre-.170 and are deliberately discarded on upgrade (covered by
+  // test/presence-poll.test.js); these fixtures are about aging + self-drop.
+  const fresh = { id: 'peerA', name: 'Kitchen', state: 'playing', book: 'b', track: 't', pos: 1000, at: NOW - 5000, speed: 1, claim: 1, _rk: 'rkA' };
+  const ghost = { id: 'peerB', name: 'Dead', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW - 600000, speed: 1, claim: 1, _rk: 'rkB' };   // silent >> GHOST_MS
+  const self  = { id: me, name: 'Me', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW, speed: 1, claim: 1, _rk: 'rkMe' };
   storage.setItem('pb_peerCache', JSON.stringify([fresh, ghost, self]));
   let captured = null;
   Presence.init({ onPeers: (p) => { captured = p; } });   // init restores + fires onPeers before the first poll
@@ -48,8 +52,8 @@ test('restoreCachedPeers: paints last-known peers on init, dropping self + aged 
 
 test('cachedPeers: read-only pre-paint hydrate returns last-known peers (aged, self-free)', () => {
   NOW = 6_000_000;
-  const fresh = { id: 'peerC', name: 'Den', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW - 1000, speed: 1, claim: 1 };
-  const ghost = { id: 'peerD', name: 'Old', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW - 600000, speed: 1, claim: 1 };
+  const fresh = { id: 'peerC', name: 'Den', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW - 1000, speed: 1, claim: 1, _rk: 'rkC' };
+  const ghost = { id: 'peerD', name: 'Old', state: 'playing', book: 'b', track: 't', pos: 0, at: NOW - 600000, speed: 1, claim: 1, _rk: 'rkD' };
   storage.setItem('pb_peerCache', JSON.stringify([fresh, ghost]));
   assert.deepEqual(Presence.cachedPeers().map((p) => p.id), ['peerC'], 'the app can pull cached peers before init, ghost dropped');
 });

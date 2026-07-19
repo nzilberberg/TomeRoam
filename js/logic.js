@@ -90,15 +90,34 @@ const PBLogic = (() => {
   // current content, whatever its clock says. Timestamps are then only needed for
   // the one thing board identity cannot settle: which of several DIFFERENT boards
   // for one device (Plex keeps historical duplicates) is the live one.
+  //
+  // ⚠ BOARD IDENTITY IS ALSO INCOMPLETE — it only holds while the board does. A 404
+  // clears the saved key and the next publish creates a playlist with a NEW
+  // ratingKey, so a recreated board falls outside the same-board rule and used to
+  // drop back to the untrustworthy clock: a genuinely newer event on the new board
+  // could lose to a cached event on the dead one, preserving a phantom player.
+  // `rev` (presence.js) is the complete signal — monotonic per device, never
+  // derived from a clock, persisted outside the board so it survives recreation.
+  // Precedence: rev → same board → `at`. The last two remain for peers still
+  // publishing without a rev.
   function mergePeers(prev, parsed, meId, nowMs, ghostMs) {
     const rkOf = (p) => (p && p._rk != null ? String(p._rk) : null);
-    // One event per device from THIS read. Between two different boards only `at`
-    // can arbitrate — they are independent artefacts, not successive states.
+    const revOf = (p) => (p && typeof p.rev === 'number' ? p.rev : null);
+    // Is `a` strictly newer than `b`? Both are events from the SAME device.
+    const newer = (a, b) => {
+      const ar = revOf(a), br = revOf(b);
+      if (ar != null && br != null) return ar > br;   // both modern → rev alone decides
+      if (ar != null) return true;                    // a carries a rev, b predates it → a is authoritative
+      if (br != null) return false;
+      return (a.at || 0) > (b.at || 0);               // legacy pair → nothing better than the clock
+    };
+    // One event per device from THIS read: several boards for one device (a dead
+    // one plus its replacement) must not be settled by `at` when a rev exists.
     const fresh = new Map();
     for (const p of (parsed || [])) {
       if (!p || !p.id) continue;
       const id = String(p.id), cur = fresh.get(id);
-      if (!cur || (p.at || 0) > (cur.at || 0)) fresh.set(id, p);
+      if (!cur || newer(p, cur)) fresh.set(id, p);
     }
     const prevById = new Map();
     for (const p of (prev || [])) if (p && p.id) prevById.set(String(p.id), p);
@@ -112,10 +131,19 @@ const PBLogic = (() => {
       const f = fresh.get(id), q = prevById.get(id);
       if (!f) { emit(q, true); continue; }        // board absent from the read → retain
       if (!q) { emit(f, false); continue; }
+      // A rev on EITHER side decides it — including the upgrade case, where a live
+      // rev-bearing event must beat a cache written before revs existed.
+      if (revOf(f) != null || revOf(q) != null) {
+        // Ties go to the READ, as everywhere else here: equal revs mean the same
+        // event seen both cached and live, and the live copy was CONFIRMED by this
+        // read — taking the cached one would flag it `stale` when it plainly is not.
+        const fWins = !newer(q, f);
+        emit(fWins ? f : q, !fWins);
+        continue;
+      }
       // SAME BOARD → the read wins unconditionally. This is the non-regressing case.
       if (rkOf(f) != null && rkOf(f) === rkOf(q)) { emit(f, false); continue; }
-      // Different boards (or a cached entry predating board tracking) → newest wins,
-      // ties to the read.
+      // Two legacy events on different boards → nothing better than the clock.
       const readWins = (f.at || 0) >= (q.at || 0);
       emit(readWins ? f : q, !readWins);
     }

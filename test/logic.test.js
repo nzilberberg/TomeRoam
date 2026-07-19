@@ -165,6 +165,81 @@ test('mergePeers: a different historical board does NOT beat the cached current 
   assert.equal(out[0].stale, true);
 });
 
+// ⚠ BOARD IDENTITY IS ALSO INCOMPLETE. A 404 clears the saved board key and the next
+// publish creates a playlist with a NEW ratingKey, so a recreated board falls outside
+// the same-board rule and used to drop back to the untrustworthy clock — a genuinely
+// newer event on the replacement board losing to a cached event on the dead one, i.e.
+// a preserved phantom player. `rev` is monotonic per device, never derived from a
+// clock, and persisted outside the board so it survives recreation. Precedence is
+// rev → same board → `at`. Every case below uses a LOWER `at` on the newer event.
+const REV = (rk, rev, o) => Object.assign({ _rk: rk, rev }, o);
+
+// MUTATION: remove the rev branch from mergePeers → RED (falls back to `at`).
+test('mergePeers: a RECREATED board with a lower timestamp still wins on rev', () => {
+  const now = 200000, GHOST = 90000;
+  const prev = [REV('rk-old', 7, { id: 'phone', state: 'playing', book: 'b', pos: 5000, at: now - 300 })];
+  const parsed = [REV('rk-new', 8, { id: 'phone', state: 'paused', book: 'b', pos: 99000, at: now - 800 })];
+  const out = L.mergePeers(prev, parsed, 'me', now, GHOST);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].state, 'paused', 'the replacement board is newer by rev');
+  assert.equal(out[0].pos, 99000);
+});
+
+// MUTATION: revert the `fresh` collapse to `(p.at||0) > (cur.at||0)` → RED. The dead
+// board is still in the listing and has the HIGHER timestamp.
+test('mergePeers: with the dead board AND its replacement listed, rev picks the replacement', () => {
+  const now = 200000, GHOST = 90000;
+  const dead = REV('rk-old', 7, { id: 'phone', state: 'playing', book: 'b', pos: 5000, at: now - 300 });
+  const live = REV('rk-new', 8, { id: 'phone', state: 'paused', book: 'b', pos: 99000, at: now - 800 });
+  for (const [label, parsed] of [['dead first', [dead, live]], ['live first', [live, dead]]]) {
+    const out = L.mergePeers([dead], parsed, 'me', now, GHOST);
+    assert.equal(out.length, 1, label);
+    assert.equal(out[0].rev, 8, `${label}: highest rev wins, not highest timestamp`);
+    assert.equal(out[0].pos, 99000, label);
+  }
+});
+
+// MUTATION: drop the `if (ar != null) return true` arm → RED. THE UPGRADE PATH: a
+// cache written before revs existed has neither signal, and a PAUSED entry never
+// ages out (filterPeers only ghosts playing records), so without this it sat in
+// front of the live board forever and was re-persisted every poll.
+test('mergePeers: a live rev-bearing event beats a cache entry written before revs', () => {
+  const now = 200000, GHOST = 90000;
+  let cached = [{ id: 'phone', state: 'paused', book: 'b', pos: 5000, at: now - 300 }];   // legacy: no _rk, no rev
+  const live = [REV('rk1', 3, { id: 'phone', state: 'paused', book: 'b', pos: 99000, at: now - 800 })];
+  for (let i = 0; i < 3; i++) cached = L.mergePeers(cached, live, 'me', now, GHOST);   // must not oscillate
+  assert.equal(cached.length, 1);
+  assert.equal(cached[0].pos, 99000, 'the live board wins despite the lower timestamp');
+  assert.equal(cached[0].rev, 3, 'and the retained entry now carries an identity');
+});
+
+// MUTATION: compare revs with `>=` or fall back to `at` when both have revs → RED.
+test('mergePeers: writes completing OUT OF ORDER resolve by rev, not arrival', () => {
+  const now = 200000, GHOST = 90000;
+  // The cached entry is the HIGHER rev; a late-arriving older write must not win.
+  const prev = [REV('rk1', 9, { id: 'phone', state: 'paused', book: 'b', pos: 99000, at: now - 100 })];
+  const parsed = [REV('rk1', 4, { id: 'phone', state: 'playing', book: 'b', pos: 1, at: now - 50 })];
+  const out = L.mergePeers(prev, parsed, 'me', now, GHOST);
+  assert.equal(out[0].rev, 9, 'the higher rev wins even though the other was read just now');
+  assert.equal(out[0].pos, 99000);
+});
+
+// An equal rev means the SAME event, seen both cached and live. The read confirmed
+// it, so it must not come back flagged `stale` — that flag is how a caller tells
+// "extrapolated from an older read" from "this board just said so".
+//
+// MUTATION: give rev ties to the CACHED side (`newer(f, q)` instead of
+// `!newer(q, f)`) → RED.
+test('mergePeers: an event re-confirmed by this read is not marked stale', () => {
+  const now = 200000, GHOST = 90000;
+  const ev = { id: 'phone', state: 'playing', book: 'b', pos: 5000, at: now - 300 };
+  const out = L.mergePeers(
+    [Object.assign({ _rk: 'rk1', rev: 5, stale: true }, ev)],
+    [Object.assign({ _rk: 'rk1', rev: 5 }, ev)], 'me', now, GHOST);
+  assert.equal(out.length, 1);
+  assert.ok(!out[0].stale, 'the live read confirmed this exact event');
+});
+
 // Duplicate active+idle boards, BOTH array orders — listing order must not decide.
 for (const [label, order] of [['active first', 0], ['idle first', 1]]) {
   test(`mergePeers: duplicate active+idle boards resolve by recency (${label})`, () => {
