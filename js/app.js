@@ -204,6 +204,23 @@
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
   function bindSwipeBack() {
     let d = null, finishing = false, unbindGesture = null, revealWatch = null;
+    // Snapshot of the browse page the gesture STARTED on, taken before the mid-drag
+    // render touches anything. Compared at reveal, it is the one measurement that
+    // separates "the page was rebuilt" from "the page was preserved and is still
+    // loading its covers" — two causes that produce identical mutation counts and
+    // need opposite fixes. Identity first: same node and same controller instance
+    // means nothing was torn down, whatever the counters say.
+    let revealBase = null;
+    const snapBrowse = () => {
+      const p = [...document.querySelectorAll('#browse .browsepage')].find((x) => !x.classList.contains('hidden'));
+      if (!p) return null;
+      const imgs = p.querySelectorAll('img');
+      return { node: p, ctl: p._vctl || null,
+        rows: p.querySelectorAll('.book, .author').length, imgs: imgs.length,
+        src: Array.from(imgs).filter((i) => i.getAttribute('src')).length,
+        state: p._vctl && p._vctl.state ? p._vctl.state() : 'classic',
+        realized: p._vctl && p._vctl.realizedCount ? p._vctl.realizedCount() : -1 };
+    };
 
     // A live gesture's move/end listeners live on the NODE THE TOUCH STARTED ON, not
     // on `document`. Per the Touch Events spec the touch target is fixed at
@@ -380,6 +397,7 @@
     // scroll-neutral) or a fixed snapshot — so scroll cannot change during a swipe.
     function start() {
       d.live = true;
+      revealBase = snapBrowse();   // BEFORE the mid-drag render clobbers #browse
       takeRowHold();   // from here the outgoing page keeps its rows until this gesture ends
       const fromV = d.from.v, toV = d.dest.v, off = d.dir === 'back' ? -d.w : d.w;
       const fromOv = isOverlay(fromV), toOv = isOverlay(toV);
@@ -591,10 +609,19 @@
               ? ` | art loaded=${a.loads - before.loads} instant=${a.instant - before.instant}`
                 + ` FADED=${a.fade - before.fade} released=${a.released - before.released}`
               : ' | art n/a';
+            // PRESERVED vs REBUILT — the discriminator. Same node + same controller
+            // instance means the page was never torn down, so any churn above is it
+            // filling in, not being recreated.
+            const now = snapBrowse();
+            const cmp = (!revealBase || !now) ? 'base n/a'
+              : `sameNode=${now.node === revealBase.node} sameCtl=${now.ctl === revealBase.ctl}`
+                + ` rows ${revealBase.rows}→${now.rows} src ${revealBase.src}→${now.src}`
+                + ` realized ${revealBase.realized}→${now.realized} state ${revealBase.state}→${now.state}`;
             PBDebug.log('FLASH', `${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
               + ` | VISIBLE +img=${vis.add} -img=${vis.rem} src+=${vis.srcSet} src-=${vis.srcClr}`
               + ` fade=${vis.fade} inst=${vis.instant}`
               + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
+              + ` | ${cmp}`
               + art + ` | win=${Math.round(performance.now() - t0)}ms`);
           };
           // ONE window per gesture. Rapid swipes used to overlap, so a later window
