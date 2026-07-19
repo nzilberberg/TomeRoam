@@ -86,3 +86,23 @@ test('debug.js clearCachedData targets the exact IMG_CACHE name sw.js owns', () 
   assert.ok(/caches\.delete\(IMG\)/.test(dbg),
     'debug.js must clear the cover cache (caches.delete(IMG))');
 });
+
+// The one-tap bug report must carry the RENDERED diagnostics, not just the log ring.
+// The record-level progress snapshot used to be reachable only via "Copy sanitized"
+// — the clipboard — which on a phone or tablet means emailing yourself to get the
+// text off the device. That friction is why evidence goes uncaptured, so `Send
+// report` has to produce everything in one tap.
+//
+// STRUCTURAL only: debug.js is an IIFE that touches `document`, so it cannot be
+// loaded here (same constraint as the other debug.js guards in this file). This
+// pins the wiring, not the behaviour.
+test('the bug report includes the sanitized diagnostics, not only the log', () => {
+  const dbg = read('js/debug.js');
+  const pipe = read('js/logpipe.js');
+  assert.match(dbg, /function diagReport\(\)/, 'debug.js exposes a report-shaped diagnostics builder');
+  assert.match(dbg, /return sanitize\(diagText\(await collectDiagnostics\(\)\)\)/,
+    'and it goes through the SAME sanitizer as Copy sanitized — a second unsanitized path would leak');
+  assert.match(dbg, /copyDiagnostics, diagReport \}/, 'exported on PBDebug');
+  assert.match(pipe, /await PBDebug\.diagReport\(\)/, 'the report path calls it');
+  assert.match(pipe, /===== LOG =====/, 'and keeps the log below it, clearly delimited');
+});

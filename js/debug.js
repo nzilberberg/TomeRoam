@@ -16,7 +16,7 @@
   // Bump this on every deploy so we can tell which build a device is running
   // (iOS loves to serve a stale cached copy). Shown on the Options screen and
   // stamped into the diagnostics log. KEEP IN SYNC WITH sw.js.
-  const BUILD = '2026-07-19.176';
+  const BUILD = '2026-07-19.177';
   window.PB_BUILD = BUILD;
 
   const CAP = 600;                       // ring-buffer size
@@ -412,6 +412,16 @@
     return s;
   }
 
+  // The rendered, SANITIZED diagnostics — same text the Cache panel shows and the
+  // same sanitizer "Copy sanitized" uses, but returned instead of copied so the
+  // one-tap bug report can carry it. Clipboard-only was fine when a human was at a
+  // desktop; on a phone or tablet it means emailing yourself to get the text out,
+  // which is enough friction to stop the evidence being captured at all.
+  async function diagReport() {
+    try { return sanitize(diagText(await collectDiagnostics())); }
+    catch (e) { return 'DIAGNOSTICS UNAVAILABLE: ' + ((e && e.message) || e); }
+  }
+
   async function copyDiagnostics() {
     const d = await collectDiagnostics();
     const text = sanitize(diagText(d));
@@ -742,5 +752,5 @@
     if (taps.length >= TAP_N) { taps = []; open(); }
   }, true);
 
-  window.PBDebug = { log, clear, open, close, asText, verbose, lastSeq, getSince, watchAudio, registerState, snapshot, openConsole, openDiag, collectDiagnostics, copyDiagnostics };
+  window.PBDebug = { log, clear, open, close, asText, verbose, lastSeq, getSince, watchAudio, registerState, snapshot, openConsole, openDiag, collectDiagnostics, copyDiagnostics, diagReport };
 })();

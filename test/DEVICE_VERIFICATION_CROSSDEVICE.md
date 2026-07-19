@@ -13,7 +13,7 @@ going unless it blocks the rest; fix in a later session.
 
 - Two devices, A and B. Note which is which; the arc's bugs were **asymmetric** (they hit
   whichever device had the worse connection).
-- Both on web build **`2026-07-18.172`** or later — check Options → the build string.
+- Both on web build **`2026-07-19.177`** or later (the one-tap report needs it) — check Options → the build string.
   A device on an older build invalidates any peer-arbitration result.
 - Put **B on a deliberately poor connection** for tests 4–6 (cellular with weak signal, or
   force relay). The original ~10s stale-resume bug only appeared on the degraded side.
@@ -23,31 +23,42 @@ going unless it blocks the rest; fix in a later session.
 
 Two instruments, and they answer different questions:
 
-1. **Options → Diagnostics → `Cache`**, then **`Copy sanitized`** in the panel that opens
-   (titled *"Cache & Offline Diagnostics"* — the name predates `.163`; it carries the
-   progress snapshot too now). This is
-   the one that matters here. Per book it shows: our authored record, the replica copy,
-   each peer and shard copy, the reset floor, and **which record WON**, plus
-   `DURABLE PROGRESS: SAFE / NOT verified`. Capture it **on both devices** at each
-   checkpoint below. Two snapshots taken at the same moment are what prove or disprove
-   convergence.
-2. **Options → Diagnostics → `Send report`** — uploads the log ring plus a compact progress
-   verdict. Post one whenever something looks wrong, from **both** devices. If the upload
-   fails, the fallback is **`Open log` → `Copy`** and paste it directly.
+1. **The record-level snapshot** — per book: our authored record, the replica copy, each
+   peer and shard copy, the reset floor, **which record WON**, and
+   `DURABLE PROGRESS: SAFE / NOT verified`. This is the one that matters here, and two of
+   them taken on both devices at the same moment are what prove or disprove convergence.
+2. **The log ring** — the narrative of how it got there.
 
-**The exact controls, since they are not obviously named** — all under Options → Diagnostics:
+Since `.177` a single **`Send report`** carries both, so there is exactly one action per
+device per checkpoint.
+
+## ⭐ ONE TAP, NO COPY-PASTE (`.177`)
+
+**`Send report` now carries the record-level diagnostics as well as the log.** On each
+device: **Options → Diagnostics → `Send report`**. That is the whole capture step — the
+snapshot rides the same upload. Nothing needs to leave the device through the clipboard.
+
+Copy-paste from a phone or tablet means emailing yourself to get the text out, which is
+enough friction that evidence stops being captured. If a step here asks you to copy
+anything, that is a defect in this document.
+
+I pull them afterwards from the desktop with the `tail-log.mjs --reports` command above;
+each report leads with the diagnostics, then `===== LOG =====`, then the ring.
+
+Other controls under Options → Diagnostics, for reference:
 
 | I want | Press |
 |---|---|
-| the record-level progress snapshot | `Cache` → `Copy sanitized` |
-| the log uploaded for me to pull | `Send report` |
-| the raw log to paste myself | `Open log` → `Copy` |
-| verbose logging while testing | the `Live debug` toggle (leave it ON) |
+| **everything, uploaded — use this** | **`Send report`** |
+| verbose logging while testing | the `Live debug` toggle — **leave it ON** |
+| to eyeball the snapshot on-device | `Cache` (opens *"Cache & Offline Diagnostics"*) |
+| a manual paste if the upload fails | `Open log` → `Copy` |
 
 ⚠️ **The log ring is 600 lines and rolls** (`js/debug.js` `CAP`). Real playback fills it
 quickly, so do NOT run all fourteen scenarios and then send one report — the early tests
-will have scrolled out. Snapshots (`Copy sanitized`) are point-in-time and cannot overflow,
-so take those freely; reports are the thing to pace.
+will have scrolled out. This is the reason for batching, and it applies to the diagnostics
+half too: the snapshot is point-in-time, so a report sent at the end of a group describes
+the state at the END of that group.
 
 **Suggested batching** — six report-pairs instead of fourteen, destructive tests last:
 
@@ -60,10 +71,10 @@ so take those freely; reports are the thing to pace.
 | 5 | 10, 10b | delete device — destructive to identity |
 | 6 | 11 | reinstall — ⚠️ **post that device's report BEFORE reinstalling**, the wipe takes the log ring with it (on iOS, the whole container) |
 
-Take a snapshot from **both** devices after **every** test. Send a report pair at the end of
-each group, and immediately on any failure — waiting means the evidence rolls away. Label
-what you paste ("group 1, device B"); the report's `STATE` header identifies the build and
-connection but not which test it belongs to.
+Send a report from BOTH devices at the end of each group, and immediately on any failure —
+waiting means the log rolls away. Tell me which group each pair belongs to when you say
+they are up; the report's `STATE` header identifies build and connection, but not which
+test it came from.
 
 Pull reports afterwards from `Desktop\TomeRoam`:
 
@@ -81,13 +92,13 @@ TOKEN=$(grep -m1 '^token:' /c/ProgramData/Lyrion/prefs/plugin/plexbooks.prefs | 
 
 1. Both devices open the same book. Play on A for ~1 min, pause.
 2. Play on B for ~1 min, pause.
-3. Capture diagnostics on both.
+3. `Send report` on both.
 
 - ✅ Both snapshots name the **same winning record** (`WON: … by=<same id>`).
 - ✅ The losing device still lists the other's record as a peer/shard copy — it should be
   visible, not absent.
 - ❌ If A says A won and B says B won, that is the convergence failure `.172` was meant to
-  fix. Capture both snapshots.
+  fix. Send a report from both.
 
 ### Test 2 — Equal / regressing timestamps
 
@@ -122,7 +133,7 @@ This is the original open bug: resume landing ~10s behind on the degraded device
 
 - ✅ B lands within ~1s of A's actual live position.
 - ❌ ~10s behind = the bug is still present. Post a bug report from **B** immediately, and
-  capture diagnostics from both.
+  send one from A too.
 - Also check B's diagnostics `peerBoards` count: if it is 0 while A is plainly playing, B is
   not seeing the peer at all, which is the mechanism `.164`/`.170` addressed.
 
@@ -135,8 +146,8 @@ This is the original open bug: resume landing ~10s behind on the degraded device
 
 - ✅ The book reads **unplayed on both** devices.
 - ✅ B's diagnostics show a `RESET floor` for that book and **no winner**.
-- ❌ If the book comes back on either device, capture both snapshots — that is resurrection,
-  and the `rst` value versus the surviving record's `ts` tells us which axis failed.
+- ❌ If the book comes back on either device that is resurrection — `Send report` from both;
+  the `rst` value beside the surviving record's `ts` tells us which axis failed.
 
 ### Test 6 — Reset, then keep playing
 
@@ -162,8 +173,8 @@ stayed invisible and unpublished.
 - ✅ B's diagnostics: the new record's `ts` is **above** the reset floor, and the book
   appears in the published entries (not withheld).
 - ❌ If B plays but the tile stays unplayed, the stamp is not observing the remote
-  floor. Capture B's diagnostics — the `RESET floor` and the record `ts` beside each
-  other are the whole diagnosis.
+  floor. `Send report` from B — the `RESET floor` and the record `ts` beside each other
+  are the whole diagnosis.
 
 ### Test 10b — Delete a device that is ahead of you (added at `.174`)
 
@@ -187,7 +198,7 @@ silent and permanent.
 
 - ✅ A follows B onto the **new** board — B's position keeps updating on A.
 - ❌ If A stays on B's old state until it ages out (~90s), the `.170` `rev` is not doing its
-  job. Capture A's diagnostics.
+  job. `Send report` from A.
 
 ### Test 8 — Duplicate historical boards
 

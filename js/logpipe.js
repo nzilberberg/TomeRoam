@@ -151,7 +151,14 @@ const LogPipe = (() => {
     try {
       const seed = await findSeed();
       if (!seed) throw new Error('no seed track');
-      const chunks = PBLogic.chunkText(PBDebug.asText(), 4500);
+      // Lead with the rendered diagnostics — the record-level progress snapshot,
+      // shard/archive health, connectivity. It used to be reachable only through
+      // "Copy sanitized", i.e. the clipboard, which on a phone means emailing
+      // yourself to get it off the device. One tap has to produce everything or the
+      // evidence does not get captured. Failure here must not lose the log, so
+      // diagReport() returns a marker string rather than throwing.
+      const diag = PBDebug.diagReport ? await PBDebug.diagReport() : '(no diagReport in this build)';
+      const chunks = PBLogic.chunkText(`${diag}\n\n===== LOG =====\n${PBDebug.asText()}`, 4500);
       const ts = Date.now().toString(36);
       for (let i = 0; i < chunks.length; i++) {
         const rk = await Plex.createPlaylist(`pb_report_${ts}_${i + 1}of${chunks.length}`, seed);
