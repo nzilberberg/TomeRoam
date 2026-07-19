@@ -123,6 +123,65 @@ test('a book change clears all retry state', () => {
   assert.equal(Banking._test.retry.size, 0, 'idx-keyed backoff is irrelevant after a book change');
 });
 
+// `banks` is keyed by INDEX, so it is only valid while an index means the same
+// track — and book identity does not guarantee that. restoreLastPlayed re-fetches
+// the album and replaces ctx.tracks for the SAME book (app.js), and a Plex re-scan
+// can reorder a list (plex.js sorts by `index`, which is 0 for untagged files, so
+// ties fall back to server order). Same book + different list = every banked blob
+// one slot off: the wrong-CHAPTER form of the .160 wrong-book bug.
+//
+// MUTATION: revert ensureBook to `if (bankBook !== book)` → RED.
+test('ensureBook clears idx-keyed banks when the same book\'s track LIST changes', async () => {
+  setup(AHEAD);
+  Banking.ensureBook('bookA', 'r0,r1,r2');
+  fetchImpl = async () => ({ blob: { size: 1000 }, bytes: 1000, total: 1000 });
+  Banking.pump();
+  await flush();
+  assert.ok(Banking._test.banks.size > 0, 'precondition: something is banked against this list');
+  Banking.ensureBook('bookA', 'r0,r2,r1');   // SAME book, reordered list
+  assert.equal(Banking._test.banks.size, 0, 'idx-keyed banks cannot survive a different list');
+});
+
+// Control: an unchanged signature must NOT clear, or the test above would pass for
+// the wrong reason (i.e. "always clear").
+test('ensureBook keeps banks when the book AND the list are unchanged', async () => {
+  setup(AHEAD);
+  Banking.ensureBook('bookA', 'r0,r1,r2');
+  fetchImpl = async () => ({ blob: { size: 1000 }, bytes: 1000, total: 1000 });
+  Banking.pump();
+  await flush();
+  const before = Banking._test.banks.size;
+  assert.ok(before > 0, 'precondition');
+  Banking.ensureBook('bookA', 'r0,r1,r2');
+  assert.equal(Banking._test.banks.size, before, 'an identical list is not a reason to discard work');
+});
+
+// The DISK write's book label was read AFTER the fetch await, so it recorded whatever
+// book became current while the bytes were downloading — not the one the bank was
+// issued for. No reader consumes that field today, so this was a latent trap plus a
+// comment asserting the opposite of what the code did.
+//
+// MUTATION: pass the live `bankBook` to bufferTrack again → RED.
+test('bufferTrack records the book the bank was ISSUED for, not the one current when it completed', async () => {
+  setup(AHEAD);
+  const bufferedFor = [];
+  global.window.Downloads.bufferTrack = async (book) => { bufferedFor.push(book); return true; };
+  // The window that matters is the FETCH, not the persist: bankBook is read on the
+  // line right after the fetch await resolves. Switching the book during the persist
+  // is too late to distinguish the two versions.
+  let releaseFetch;
+  fetchImpl = () => new Promise((r) => { releaseFetch = () => r({ blob: { size: 10 }, bytes: 10 }); });
+
+  Banking.pump();
+  await flush();
+  assert.ok(releaseFetch, 'precondition: a fetch is in flight for bookA');
+  Banking.ensureBook('bookB');     // the user opens another book mid-download
+  releaseFetch();                  // the bytes land anyway (already past the abort point)
+  await flush();
+
+  assert.deepEqual(bufferedFor, ['bookA'], 'the row belongs to the book that issued the fetch');
+});
+
 // ---- ownership of `banks` across the bufferTrack await ----------------------
 // clearBanks() (via ensureBook on a book change) aborts bankCtl and revokes every
 // bank — but an in-flight bankOne that is already PAST its fetch, awaiting

@@ -75,6 +75,45 @@ function assertSameEntries(actual, expected, msg) {
   assert.deepEqual(actual.map(bkKey).sort(), expected.map(bkKey).sort(), msg);
 }
 
+// ---- duplicate boards claiming one prefix --------------------------------------
+// Plex does NOT dedupe playlist titles (the fake models that deliberately). A create
+// whose RESPONSE was lost leaves a playlist we hold no ratingKey for, so the retry
+// makes a second with the same title. Both the writer's listing and the reader's
+// listing used `Map.set(prefix, …)`, i.e. LAST ONE WINS, silently — and those are
+// two separate listings, so writer and reader could pick DIFFERENT twins and the
+// choice could flip between polls: a resume point moving back and forth with no
+// pattern while every device reports `verified`. The tie must break the same way
+// everywhere, and it must be visible.
+//
+// MUTATION: revert either Map.set to plain last-wins → RED.
+test('duplicate boards for one prefix resolve DETERMINISTICALLY, not by listing order', async () => {
+  const fake = fakeServer();
+  const store = makeStore(fake);
+  store.ensurePublished([entry(BOOKS[0], T0)], {});
+  await store.flush();
+  const root = fake.byTitle(`pb_prog2_${DEV}_p`);
+  assert.ok(root, 'precondition: the root board exists');
+
+  // The abandoned twin: same title, older ratingKey, stale content.
+  const stale = 'rk1';                                   // lower than any minted rk (nextRk starts at 1000)
+  fake.boards.set(stale, { title: root.title, summary: root.summary });
+  const logged = [];
+  const reader = makeStore(fake, { deviceId: DEV, log: (t, m) => logged.push(m) });
+
+  const a = await reader.readAll();
+  const b = await reader.readAll();
+  assert.deepEqual(a.entries.map(bkKey).sort(), b.entries.map(bkKey).sort(),
+    'two reads of the same duplicated set agree');
+  assert.ok(logged.some((m) => /DUPLICATE board/.test(m)),
+    'and the duplication is REPORTED — it is otherwise invisible in diagnostics');
+});
+
+// NOT TESTED, deliberately: WHICH twin wins. I wrote that test and it was inert —
+// flipping pickTwin flips the writer and every reader together, so they still agree
+// and nothing observable changes. Consistency is the load-bearing property and the
+// test above pins it; "newer" is a defensible arbitrary choice, not a behaviour.
+// Recording this so the gap reads as a decision rather than an oversight.
+
 // ---- basics -------------------------------------------------------------------
 test('publish + readAll round-trip without splits (budget not hit)', async () => {
   const fake = fakeServer();

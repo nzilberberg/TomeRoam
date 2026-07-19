@@ -175,6 +175,23 @@ const createShardStore = (opts) => {
     return e;
   }
 
+  // Which of two boards claiming one prefix to trust. WHICH one is arbitrary; that
+  // every device reaches the SAME answer is the whole point, so this is one rule
+  // used identically by the writer and by every reader. An earlier version had the
+  // writer prefer its persisted hint while readers preferred the newer board —
+  // which is a divergence waiting to happen the moment those disagree (the writer
+  // keeps updating one twin while everyone reads the other, forever). The hint
+  // keeps its real job, which is stopping a duplicate from being CREATED; it does
+  // not arbitrate one that already exists.
+  //
+  // "Newer" is the sensible arbitrary choice — the abandoned twin is the create
+  // whose response was lost, so the retry's board is the one being written — but
+  // note it is NOT independently observable: flip it and writer and reader flip
+  // together, which is why only the consistency property has a test.
+  // Plex ratingKeys are ascending numerics.
+  const rkNum = (v) => { const n = parseInt(String(v == null ? '' : v).replace(/\D/g, ''), 10); return Number.isFinite(n) ? n : -1; };
+  const pickTwin = (a, b) => (rkNum(b.rk) > rkNum(a.rk) ? b : a);
+
   async function loadMine() {
     const boards = await plex.listBoards();
     verified.clear();                      // never trust pre-failure verification state
@@ -195,6 +212,21 @@ const createShardStore = (opts) => {
         // Our OWN corrupt board: local storage is the source of truth for what we
         // publish, so ensureLeaf simply overwrites it (self-heal). Never read as empty.
         log('SHARD', `own board ${id.prefix || '(root)'} undecodable — will rewrite (${e && e.message})`);
+      }
+      // DUPLICATE TITLES ARE POSSIBLE — Plex does not dedupe them (stated at the
+      // createBoard call below), and a create whose RESPONSE was lost leaves a
+      // playlist we hold no ratingKey for, so the retry makes a second. Taking the
+      // last one silently is the worst option: loadMine and readAll are SEPARATE
+      // listings, so writer and reader could pick DIFFERENT twins, and the choice
+      // could flip between polls — a book's resume point moving back and forth with
+      // no pattern while every device reports `verified`. One rule everywhere (see
+      // pickTwin) and SAY so — a duplicate is otherwise invisible in diagnostics.
+      const prior = t.get(id.prefix);
+      if (prior) {
+        const keep = pickTwin(prior, node);
+        log('SHARD', `DUPLICATE board for ${id.prefix || '(root)'}: rk ${prior.rk} + ${b.ratingKey} — keeping ${keep.rk}`);
+        t.set(id.prefix, keep);
+        continue;
       }
       t.set(id.prefix, node);
     }
@@ -447,7 +479,19 @@ const createShardStore = (opts) => {
       let m = byDev.get(id.dev); if (!m) { m = new Map(); byDev.set(id.dev, m); }
       try {
         const p = await decode(b.summary);
-        m.set(id.prefix, { payload: p, kind: classify(p, id.dev, id.prefix) });
+        // Same duplicate hazard as loadMine, on the READ side and for EVERY device.
+        // This is a separate listing from the writer's, so the tie must break the
+        // same way or writer and reader diverge. No hints exist for a foreign
+        // device, and the writer deliberately uses this SAME rule — see pickTwin.
+        const dup = m.get(id.prefix);
+        if (dup) {
+          const keep = pickTwin({ rk: dup.rk, payload: dup.payload, kind: dup.kind, corrupt: dup.corrupt, reason: dup.reason },
+            { rk: b.ratingKey, payload: p, kind: classify(p, id.dev, id.prefix) });
+          log('SHARD', `DUPLICATE board ${id.dev}/${id.prefix || '(root)'}: rk ${dup.rk} + ${b.ratingKey} — reading ${keep.rk}`);
+          m.set(id.prefix, keep);
+          continue;
+        }
+        m.set(id.prefix, { rk: b.ratingKey, payload: p, kind: classify(p, id.dev, id.prefix) });
         if (p.id && !dv.id) {
           dv.id = p.id;
           const oi = (p.origins || []).indexOf(p.id);

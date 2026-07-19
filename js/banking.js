@@ -238,6 +238,11 @@ const Banking = (() => {
     const t = ctx && ctx.tracks[idx];
     if (!t || !t.partKey) return;
     const ctl = new AbortController(); bankCtl = ctl; bankingIdx = idx;
+    // Capture the owning book NOW. `bankBook` is module-level and ensureBook can
+    // change it while the fetch below is in flight — reading it after the await
+    // labels the row with whatever book became current, not the one this bank was
+    // issued for. Same capture-across-await shape as the .160 defect one line down.
+    const ownerBook = bankBook;
     const started = Date.now();
     let outcome = 'fail';
     try {
@@ -255,7 +260,7 @@ const Banking = (() => {
       // (persist failed, or no controller — desktop #nosw / pre-first-SW) AND it
       // stays under the RAM ceiling; RAM blobs were the old jetsam hazard.
       const persisted = window.Downloads && Downloads.bufferTrack
-        ? await Downloads.bufferTrack(bankBook, t.ratingKey, blob) : false;
+        ? await Downloads.bufferTrack(ownerBook, t.ratingKey, blob) : false;
       // OWNERSHIP: clearBanks() (a book change, via ensureBook) aborts bankCtl and
       // wipes `banks` — but that abort only rejects the FETCH. A bank already PAST the
       // fetch, sitting in this bufferTrack await, never sees it. Everything below
@@ -264,7 +269,10 @@ const Banking = (() => {
       // chapter and app.js:1048's bankedUrl(idx) serves it — wrong-book audio. The
       // `finally` makes the same comparison, but only to suppress the pump restart;
       // by then the poisoned entry is already in the map. (The disk write above is
-      // fine: it was keyed by the book that was current when it was issued.)
+      // keyed by `ownerBook`, captured before the fetch — it used to read the live
+      // `bankBook`, i.e. the book current when the write COMPLETED, not the one it
+      // was issued for. No reader consumes that field today, so it was a latent
+      // trap and a comment asserting the opposite of what the code did.)
       if (bankCtl !== ctl) return;
       const swServes = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
       if (!(persisted && swServes) && usedBytes() + bytes <= MAX_TOTAL_BANK_BYTES) banks.set(idx, { url: URL.createObjectURL(blob), bytes });
@@ -301,7 +309,21 @@ const Banking = (() => {
 
   // Book change: banks are keyed by idx, so wipe them when the loaded book changes
   // (was `if (bankBook !== ctx.book) { clearBanks(); bankBook = ctx.book; }`).
-  function ensureBook(book) { if (bankBook !== book) { clearBanks(); bankBook = book; } }
+  // `banks` is keyed by INDEX, so it is only valid while the index means the same
+  // track. Book identity alone does not guarantee that: restoreLastPlayed re-fetches
+  // the album and replaces ctx.tracks for the SAME book, and a re-scan can reorder a
+  // list (plex.js sorts by `index`, which is 0 for untagged files, so ties fall back
+  // to server order). Same book + different list = every banked blob one slot off,
+  // which is the wrong-CHAPTER form of the .160 wrong-book bug. So invalidate on the
+  // list signature too. `sig` is optional: a caller that does not supply one keeps
+  // the old book-only behaviour rather than silently clearing.
+  let bankSig = null;
+  function ensureBook(book, sig) {
+    if (bankBook !== book || (sig != null && bankSig !== null && bankSig !== sig)) {
+      clearBanks(); bankBook = book; bankSig = null;
+    }
+    if (sig != null) bankSig = sig;
+  }
   // audio 'progress' handler: abort an in-flight bank the instant the element
   // resumes fetching (was `if (bankCtl && elementBusy()) bankCtl.abort()`).
   function abortIfBusy() { if (bankCtl && elementBusy()) { try { bankCtl.abort(); } catch {} } }

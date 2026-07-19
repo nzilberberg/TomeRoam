@@ -749,6 +749,9 @@
     Settings.speed,
   );
   const trackCache = {};   // book -> tracks[] so a peer's book-cum can be computed from its presence pos
+  // Identity of a track LIST, for anything keyed by index (banking). Order matters:
+  // a reorder is exactly the case that makes an index mean a different track.
+  const trackSig = (tracks) => (tracks || []).map((t) => t.ratingKey).join(',');
   function cacheTracks(book, tracks) { if (book != null && tracks && tracks.length) trackCache[book] = tracks; }
   function tracksFor(book) { return (ctx && String(ctx.book) === String(book)) ? ctx.tracks : (trackCache[book] || null); }
   // A peer's BOOK cumulative (ms) + total from its LIVE presence {track,pos}, using the
@@ -1039,7 +1042,7 @@
   function startTrack(idx, seekSec = 0, autoplay = true) {
     const t = ctx.tracks[idx];
     ctx.idx = idx;
-    Banking.ensureBook(ctx.book);   // banks are per-book (keyed by idx) — wipe on book change
+    Banking.ensureBook(ctx.book, trackSig(ctx.tracks));   // banks are idx-keyed — wipe on book OR list change
     curLoad = { idx, seekSec, autoplay };       // remembered so a network error can retry this exact load
     Playback.cancelRetry();                       // a new load supersedes any pending stream retry
     const gen = ++loadGen;                       // invalidate any in-flight loadedmetadata from a prior src
@@ -1239,6 +1242,12 @@
       const elementLive = !!(audio.src && !audio.error && audio.readyState >= 1);
       const reload = PBLogic.shouldReloadOnRestore(saved.book, saved.track, prev && prev.book, prevT && prevT.ratingKey, elementLive);
       ctx = { album: alb, tracks, idx, book: saved.book, updatedAt: saved.ts || Plex.serverNow(), coverUrl: alb.thumb ? Plex.artUrl(alb.thumb) : null };
+      // This REPLACES ctx.tracks for the same book from a fresh (SWR) fetch, so the
+      // idx-keyed banks may now be indexed against a list they were not built for.
+      // On the no-reload path startTrack never runs, so this is the only place that
+      // can notice — without it a later chapter advance serves the old list's blob
+      // for the new list's slot.
+      Banking.ensureBook(saved.book, trackSig(tracks));
       if (reload) startTrack(idx, (saved.pos || 0) / 1000, !audio.paused);
       else if (window.PBDebug) PBDebug.log('PLAY', `restore KEPT live track=${saved.track} @ ${(audio.currentTime || 0).toFixed(1)}s (no reload — element already on target)`);
       updatePlayerUI(); setMediaSession();
