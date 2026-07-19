@@ -63,6 +63,103 @@ const vlOpts = {
 T.setVlOpts(vlOpts);
 const page = () => { const el = document.createElement('div'); el.className = 'browsepage'; document.getElementById('mount').appendChild(el); return el; };
 
+// ── the swipe row-hold (2026-07-19) ───────────────────────────────────────────
+// MEASURED cause of "cover images flash on every aborted swipe return": a
+// browse→browse swipe renders the destination mid-drag, showPage deactivates the
+// outgoing controller, deactivate dematerializes, and an ABORT then rebuilds every
+// row — so all covers refetch and the user watches an empty grid fill in. The device
+// log showed 36 images and ZERO with a src at reveal (+img=72 -img=90).
+// While a gesture is live the outgoing controller SUSPENDS instead: hidden, not
+// realizing, rows kept, so the abort restores instead of rebuilding.
+test('swipe hold: showPage SUSPENDS the outgoing page (rows kept) instead of dematerializing', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    T.pageCache.clear();
+    const a = page(); T.listView(a, 'Books', books(5), T.bookRow, false);
+    T.pageCache.set('books', { el: a, order: 1 });
+    const b = page(); T.listView(b, 'Authors', books(5, 'x'), T.bookRow, false);
+    T.pageCache.set('authors', { el: b, order: 2 });
+
+    T.showPage('books');
+    assert.equal(a.querySelectorAll('.book').length, 5, 'books realized while shown');
+
+    const tok = Browse.beginHold();
+    T.showPage('authors');                       // the mid-drag render
+    assert.equal(a._vctl.state(), 'suspended', 'outgoing page suspended, not deactivated');
+    assert.equal(a.querySelectorAll('.book').length, 5, 'ITS ROWS SURVIVE — nothing to rebuild on abort');
+    assert.ok(a.classList.contains('hidden'), 'and it is still hidden, exactly as before');
+
+    T.showPage('books');                         // the abort: back to where we started
+    assert.equal(a._vctl.state(), 'active');
+    assert.equal(a.querySelectorAll('.book').length, 5, 'restored with no rebuild');
+    Browse.endHold(tok);
+  } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
+});
+
+test('swipe hold: endHold drops the rows the hold deferred — no live hidden controller', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    T.pageCache.clear();
+    const a = page(); T.listView(a, 'Books', books(5), T.bookRow, false);
+    T.pageCache.set('books', { el: a, order: 1 });
+    const b = page(); T.listView(b, 'Authors', books(5, 'x'), T.bookRow, false);
+    T.pageCache.set('authors', { el: b, order: 2 });
+    T.showPage('books');
+
+    const tok = Browse.beginHold();
+    T.showPage('authors');                       // a COMMITTED swipe: we stay on authors
+    assert.equal(a._vctl.state(), 'suspended');
+
+    Browse.endHold(tok);
+    assert.equal(a._vctl.state(), 'inactive', 'the deferred teardown actually happened');
+    assert.equal(a.querySelectorAll('.book').length, 0, 'rows dropped — the WS1c leak gate holds');
+    assert.equal(b._vctl.state(), 'active', 'the page we landed on is untouched');
+  } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
+});
+
+test('swipe hold: a STALE token cannot release a newer gesture hold', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    T.pageCache.clear();
+    const a = page(); T.listView(a, 'Books', books(5), T.bookRow, false);
+    T.pageCache.set('books', { el: a, order: 1 });
+    const b = page(); T.listView(b, 'Authors', books(5, 'x'), T.bookRow, false);
+    T.pageCache.set('authors', { el: b, order: 2 });
+    T.showPage('books');
+
+    const stale = Browse.beginHold();
+    Browse.endHold(stale);                       // gesture 1 ends
+    const fresh = Browse.beginHold();            // gesture 2 starts
+    T.showPage('authors');
+    Browse.endHold(stale);                       // gesture 1's finalizer fires LATE
+    assert.equal(a._vctl.state(), 'suspended', 'the stale release must be ignored');
+    Browse.endHold(fresh);
+    assert.equal(a._vctl.state(), 'inactive', 'the real owner still releases it');
+  } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
+});
+
+test('swipe hold: clearCache force-releases, so a hold cannot govern the NEXT pages', () => {
+  try {
+    global.VirtualList.setForceVirtual(true);
+    T.pageCache.clear();
+    const a = page(); T.listView(a, 'Books', books(5), T.bookRow, false);
+    T.pageCache.set('books', { el: a, order: 1 });
+    T.showPage('books');
+
+    Browse.beginHold();
+    Browse.clearCache();                         // e.g. Net.onReconnect, mid-gesture
+
+    const c = page(); T.listView(c, 'Books', books(5), T.bookRow, false);
+    T.pageCache.set('books', { el: c, order: 1 });
+    const d2 = page(); T.listView(d2, 'Authors', books(5, 'x'), T.bookRow, false);
+    T.pageCache.set('authors', { el: d2, order: 2 });
+    T.showPage('books');
+    T.showPage('authors');
+    assert.equal(c._vctl.state(), 'inactive', 'the dead hold must not suspend a fresh page');
+    assert.equal(c.querySelectorAll('.book').length, 0);
+  } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
+});
+
 test('threshold routing: exactly 600 items → the CLASSIC full renderer, byte-identical structure', () => {
   const m = page();
   T.listView(m, 'Books', books(MAXN), T.bookRow, false);

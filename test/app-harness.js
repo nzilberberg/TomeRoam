@@ -495,8 +495,14 @@ function boot(opts = {}) {
     BufferingScreen: { init: noop, render: noop },
   };
 
+  // The swipe row-hold. Modelled with the REAL token semantics (a monotonic token,
+  // and endHold ignores a stale one) because the hazard being tested is a hold that
+  // is never released — a fake that accepted any token would pass a leak.
+  let holdSeq = 0;
   const browse = {
     init: noop, render: async () => {}, reset: noop, clearCache: noop,
+    beginHold: () => { log.calls.push({ name: 'browse.beginHold', args: [] }); return ++holdSeq; },
+    endHold: (t) => { log.calls.push({ name: 'browse.endHold', args: [t === holdSeq ? 'current' : 'stale'] }); },
     deactivate: log.rec('browse.deactivate'), showPage: noop,
     patchRows: () => false,          // never claim the repaint — force the real renderTile path
     bookSig: (b) => JSON.stringify([b && b.thumb, b && b.title, b && b.parentTitle]),

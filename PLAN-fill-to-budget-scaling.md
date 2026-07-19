@@ -16,7 +16,7 @@
 ### Resolved review positions (settled, do not relitigate)
 - **Row height:** book rows are uniform except when a live peer name (`.pline .pname`) shows. Fix = reserve fixed geometry in virtual lists (a `min-height` on `.pline`), **not** a measured/variable-height virtualizer.
 - **Recycling:** use **keyed materialization** (create/remove whole rows by ratingKey); **never** rebind a row node into a different item — closures in `bookRow`/`authorRow`/dlbtn capture the item, and ArtLoader won't reload a mutated `data-art`.
-- **pageCache:** hidden pages **dematerialize to ~0 realized rows** (keep data + scroll anchor only). The "12×800 resident rows" fear does not apply; controllers deactivate/destroy on hide/evict.
+- **pageCache:** hidden pages **dematerialize to ~0 realized rows** (keep data + scroll anchor only). The "12×800 resident rows" fear does not apply; controllers deactivate/destroy on hide/evict. *(Amended `.181`: one exception, the gesture-scoped `suspended` state — hidden with rows kept, for the duration of a swipe only, so an aborted swipe does not rebuild the page. Bounded by MAX_PAGES × one window and released when the gesture ends. See §6.5 A.)*
 
 ---
 
@@ -109,7 +109,7 @@ Apply independently to authors and books. Surface in **diagnostics/status**, not
   - only the visible page listens to document scroll; hidden pages stop scheduling/rendering and **dematerialize to ~0 realized rows** (retain data + anchor).
   - `evictLRU`, `reset()`, `clearCache()` **destroy the controller** (listeners, IO/observers, row maps, rAF, timers) before removing the element.
 - **Swipe:** ensure a cloned ghost page doesn't react to document scroll and the real page's controller survives the app-view swap (respect app.js:264 — clones must not re-trigger the art loader).
-**Tests:** controller activate/deactivate/destroy; **no scroll-listener leak after pageCache eviction**; hidden-page reactivation restores window + anchor; anchor preserved after insertion/removal/re-sort inside vs before viewport; edge-swipe in/out of a virtual page leaves no live hidden controller. **Risk:** high (lifecycle + nav interaction). **Done:** navigate/swipe/evict cycles leak nothing; SWR never jumps the viewport; author pages virtualize.
+**Tests:** controller activate/deactivate/**suspend**/destroy; **no scroll-listener leak after pageCache eviction**; hidden-page reactivation restores window + anchor; anchor preserved after insertion/removal/re-sort inside vs before viewport; edge-swipe in/out of a virtual page leaves no live hidden controller **and no controller left SUSPENDED once the gesture ended**. **Risk:** high (lifecycle + nav interaction). **Done:** navigate/swipe/evict cycles leak nothing; SWR never jumps the viewport; author pages virtualize.
 
 ### WS2b — On-demand neighborhood warming (DEFERRED until WS1 stable)
 Not list-trimming — new Browse→Warmer plumbing. Enqueue only **after the viewport settles**; debounce rapid scroll; prefer selected/adjacent rows; **do not** warm every row crossed in an A–Z sweep; dedup against WS2a's set. **Done:** scrolling a large list warms only settled neighborhoods, never floods the relay.
@@ -125,7 +125,7 @@ Only when a real user hits painful cold-load. Not a Browse-only optimization —
 
 **On-device (the real verdict — can't reproduce locally; no "fixed" until confirmed):**
 - **Author's ~145-book library:** confirm *zero* visible change — covers, scroll, letter index, progress bars, resume, presence numbers. This is the acceptance gate for "small libraries sacrifice nothing."
-- **Synthetic large fixtures:** flat memory scrolling A→Z; letter-jump lands correctly; hard fling shows ≤1–2 frames of skeleton then fills; playback never starves (warmer gates hold); cover cache stays ≤ high-water; edge-swipe leaves no live hidden controller.
+- **Synthetic large fixtures:** flat memory scrolling A→Z; letter-jump lands correctly; hard fling shows ≤1–2 frames of skeleton then fills; playback never starves (warmer gates hold); cover cache stays ≤ high-water; edge-swipe leaves no live hidden controller, and none left SUSPENDED after the gesture (check `realizedRows` on the hidden pages once the swipe settles).
 
 **On-device diagnostics object (expose):**
 ```
@@ -161,7 +161,37 @@ paper first; the implementation is checked against this list, not against intent
 | created | model built, shells sized, 0 rows realized | render() cache-miss on a >600 list | activate |
 | active | realizes windows from document scroll | showPage(this) while browse visible | deactivate, destroy |
 | inactive | hidden; **dematerialized to 0 realized rows**, keeps data+anchor | showPage(other), leaving browse | activate, destroy |
+| suspended | hidden and NOT realizing, but **rows KEPT** | showPage(other) *while a swipe gesture holds rows* | activate, deactivate, destroy |
 | destroyed | rows released (ArtLoader), maps cleared, deregistered | evictLRU / clearCache / reset | — |
+
+**AMENDED 2026-07-19 (build `.181`) — the `suspended` state.** Added against measured
+evidence, not preference. An aborted browse→browse swipe was rebuilding the whole
+page: `showPage` deactivated the outgoing controller mid-drag, which dematerialized
+it, so aborting re-materialized every row and re-fetched every cover. The device log
+showed the revealed page holding 36 images and **zero with a `src`** (`+img=72
+-img=90`, `art loaded=34`), i.e. the user watched an empty grid fill in on every
+aborted swipe. Two evidence-free fixes preceded this one and both missed.
+
+Constraints this state is bound by, all deliberate:
+- Entered **only** by `browse.js` while a swipe gesture holds rows (`beginHold` /
+  `endHold`, an owned token in the same idiom as `beginRestore`), so the §6.5 "owner
+  of every transition: browse.js" rule still holds — `app.js` requests a hold, it
+  does not drive controllers.
+- `endHold` deactivates every still-suspended controller, so the WS1c gate below is
+  restated rather than weakened: **no controller may be suspended once its gesture
+  has ended.** `clearCache`/`reset` force-release. `destroy()` already dematerializes
+  from any state.
+- Rows are **not** released on suspend: `ArtLoader.release` sets `data-art-released`
+  and `enqueue` refuses a released image forever, so releasing would permanently
+  strand any cover that had not finished loading. Keeping the observation is free
+  while hidden — an element with no box never intersects, so nothing loads.
+- Footprint is one overscan window (~35 rows) per suspended page, hard-bounded by
+  `MAX_PAGES`, and does not scale with library size. For context it is an order of
+  magnitude BELOW what the classic (≤600-item) renderer already keeps in every
+  hidden cached page today, so "hidden page holds rows" is not a new pattern here.
+- `update()` landing on a suspended controller still dematerializes and re-shells.
+  That is accepted: the page is `display:none` behind the swipe ghost, so the blank
+  is invisible, and the abort simply rebuilds as it did before.
 - ONE shared document-scroll listener in the virtualizer dispatches to the ACTIVE
   controller only — leak-proof by construction (no per-controller listeners to forget).
 - `update(items)` is legal in created/active/inactive: rebuild model, restore anchor

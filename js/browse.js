@@ -59,6 +59,7 @@ const Browse = (() => {
 
   function init(opts) { o = opts; }
   function reset() {
+    dropHold();                  // these controllers are going away; no hold may outlive them
     authorsCache = null;
     pageCache.forEach((v) => destroyController(v.el));
     pageCache.clear();
@@ -67,6 +68,7 @@ const Browse = (() => {
   // Drop cached pages so lists rebuild from fresh data (pull-to-refresh). Safe to
   // call while browse is hidden (home). Removes the page nodes; keeps the mount.
   function clearCache() {
+    dropHold();
     authorsCache = null;
     pageCache.forEach((v) => { destroyController(v.el); if (v.el.parentNode) v.el.remove(); });
     pageCache.clear();
@@ -111,6 +113,38 @@ const Browse = (() => {
   // superseded probe's finalizer cleared a newer probe's state; fixed the same way.
   function beginRestore() { restoring = true; return ++restoreGen; }
   function endRestore(token) { if (token === restoreGen) restoring = false; }
+
+  // ── ROW HOLD (swipe-scoped) ─────────────────────────────────────────────────
+  // While a swipe gesture is live, showPage() SUSPENDS the outgoing page's
+  // controller instead of deactivating it: hidden and not realizing, but rows
+  // kept. An aborted swipe then restores the page it never really left, instead of
+  // rebuilding every row and re-fetching every cover — which is the measured cause
+  // of "images flash on each aborted swipe return" (at reveal the page had 36
+  // images and ZERO with a src).
+  //
+  // Same owned-token idiom as beginRestore above, for the same reason: a stale
+  // gesture's finalizer must not release a newer gesture's hold. Held state is
+  // bounded — one overscan window per suspended page — and a LEAKED hold degrades
+  // to what the classic (≤600-item) renderer already does today, which is keep
+  // every row of every cached page. So the failure mode is bounded, not unbounded.
+  let holdRows = false;
+  let holdGen = 0;
+  function beginHold() { holdRows = true; return ++holdGen; }
+  function endHold(token) {
+    if (token !== holdGen || !holdRows) return;
+    holdRows = false;
+    // Now do the teardown the hold deferred: any page still suspended is off screen
+    // for good, so it goes to the normal dematerialized resting state. The VISIBLE
+    // page is skipped — it is the one the gesture landed on.
+    for (const v of pageCache.values()) {
+      const c = v.el._vctl;
+      if (c && c.state && c.state() === 'suspended') c.deactivate();
+    }
+  }
+  // Destructive cache operations invalidate any outstanding hold: their controllers
+  // are being destroyed, and a hold surviving them would wrongly govern whatever
+  // pages get built next.
+  function dropHold() { holdRows = false; holdGen++; }
   const browseVisible = () => !!(o.mount && !o.mount.classList.contains('hidden'));
   function activeEntry() {
     for (const v of pageCache.values()) if (!v.el.classList.contains('hidden')) return v;
@@ -190,7 +224,9 @@ const Browse = (() => {
     // AFTER it's visible again, for the same reason.
     for (const [k, v] of pageCache) {
       const c = v.el._vctl;
-      if (c && k !== key) c.deactivate();
+      // holdRows → suspend (keep rows) instead of dematerializing. Either way the
+      // anchor is captured HERE, before `.hidden` lands, for the reason above.
+      if (c && k !== key) { if (holdRows && c.suspend) c.suspend(); else c.deactivate(); }
     }
     for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
     const shown = pageCache.get(key);
@@ -730,6 +766,7 @@ const Browse = (() => {
   }
 
   return { init, reset, render, clearCache, patchRows, bookSig, deactivate, activate,
+    beginHold, endHold,
     // internals exposed for unit tests only (no runtime behaviour change)
     _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY,
       applyScrollY, showPage, positionOnEnter, updateTruncNote, isRestoring: () => restoring,

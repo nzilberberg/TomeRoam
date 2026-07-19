@@ -161,6 +161,80 @@ test('an ABORTED browse→browse swipe re-renders UNDER the ghost, never bare (c
   } finally { h.dispose(); }
 });
 
+// ── the row hold ──────────────────────────────────────────────────────────────
+// While a gesture is live, Browse keeps the outgoing page's rows so an ABORT does
+// not rebuild the page. The hazard is a hold that is never released: hidden pages
+// would then keep rows indefinitely. Bounded (it degrades to what the classic
+// renderer already does) but still a leak, so every exit path is pinned here.
+const holds = (h) => h.log.calls.filter((c) => c.name === 'browse.beginHold').length;
+const releases = (h) => h.log.calls.filter((c) => c.name === 'browse.endHold' && c.args[0] === 'current').length;
+
+test('row hold: a completed swipe takes the hold and releases it', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    await edgeSwipe(h, addRow(h));
+    assert.equal(holds(h), 1, 'the gesture took a hold');
+    assert.equal(releases(h), 1, 'and released it — a stranded hold keeps hidden rows forever');
+  } finally { h.dispose(); }
+});
+
+// The hold is taken in start(), NOT begin() — begin() has five early returns and can
+// arm a gesture that never crosses the direction lock, and a hold taken there would
+// be stranded by every one of them. These two pin that placement: asserting the hold
+// is never taken is falsifiable (move takeRowHold() into begin() and both go red),
+// where asserting taken===released would pass vacuously at 0===0.
+test('row hold: a VERTICAL abandon never took one — the hold belongs to start(), not begin()', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const row = addRow(h);
+    h.touch.start(10, 300, row);
+    await realSleep(12);
+    h.touch.move(14, 360);        // crosses the lock VERTICALLY → abandoned before start()
+    await realSleep(12);
+    h.touch.end(14, 360);
+    await settle(h);
+    await h.clock.advance(400);
+    assert.equal(holds(h), 0, 'a vertical drag must never take a row hold');
+    assert.equal(releases(h), 0);
+  } finally { h.dispose(); }
+});
+
+test('row hold: a tap under the direction lock never took one', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const row = addRow(h);
+    h.touch.start(10, 300, row);
+    h.touch.move(12, 301);        // under the 8px lock — start() never runs
+    h.touch.end(12, 301);
+    await settle(h);
+    await h.clock.advance(400);
+    assert.equal(holds(h), 0, 'an unlocked tap must never take a row hold');
+  } finally { h.dispose(); }
+});
+
+test('row hold: an INTERRUPTED live gesture releases it via the hard reset', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const row = addRow(h);
+    // Go live (start() runs → hold taken), then never finish this gesture.
+    h.touch.start(10, 300, row);
+    await realSleep(12);
+    h.touch.move(120, 302);
+    assert.equal(holds(h), 1, 'fixture sanity: the gesture went live and took a hold');
+    assert.equal(releases(h), 0, 'fixture sanity: still held mid-drag');
+
+    // A second touch arrives with the first still live → begin()'s hard reset. This is
+    // the ONLY path that can strand a taken hold, since settle() never runs here.
+    h.touch.start(10, 300, addRow(h));
+    await settle(h);
+    assert.equal(releases(h), 1, 'the hard reset must release the stranded hold');
+  } finally { h.dispose(); }
+});
+
 test('a FINISHED gesture stops listening — a stale node cannot end the next gesture', async () => {
   const h = boot({ fakeTimers: true });
   try {

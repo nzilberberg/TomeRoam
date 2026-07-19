@@ -237,6 +237,23 @@
       };
     }
     const releaseGesture = () => { if (unbindGesture) unbindGesture(); };
+
+    // While a gesture is live, Browse keeps the outgoing page's rows instead of
+    // dematerializing them, so an ABORT restores the page instead of rebuilding it
+    // and re-fetching every cover (measured: 36 images, ZERO with a src, at reveal).
+    // Taken in start() rather than begin() — begin() has five early returns and can
+    // arm a gesture that never crosses the direction lock. Released on EVERY exit:
+    // settle's three branches, the vertical abandon, an end() that never went live,
+    // the hard reset, and a throwing finalize. A leaked hold is bounded (it degrades
+    // to what the classic renderer already does — keep every hidden page's rows) but
+    // it is still a leak, so every path is covered rather than most of them.
+    let holdTok = 0;
+    const takeRowHold = () => { if (window.Browse && Browse.beginHold) holdTok = Browse.beginHold(); };
+    const dropRowHold = () => {
+      if (!holdTok) return;
+      const t = holdTok; holdTok = 0;
+      if (window.Browse && Browse.endHold) Browse.endHold(t);
+    };
     const navPill = () => $('navbar').querySelector('.np-actions');
     // A detached, non-interactive clone of the pill for the duration of an NP swipe:
     // it rides with NP (added as a mover) so the pill travels, while np-locked is off
@@ -307,6 +324,7 @@
       if (d || document.querySelector('.nav-ghost')) {
         if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');
         releaseGesture();   // never leave a dead gesture's listeners on a stale node
+        dropRowHold();      // …nor its row hold
         d = null; resetSwipeStyles(); applyScreen(currentDesc(), { render: false });
       }
       if (target.closest && target.closest('#player, .alphaindex, input, .navbtn, .np-controls, .np-actions, .carousel')) return;
@@ -362,6 +380,7 @@
     // scroll-neutral) or a fixed snapshot — so scroll cannot change during a swipe.
     function start() {
       d.live = true;
+      takeRowHold();   // from here the outgoing page keeps its rows until this gesture ends
       const fromV = d.from.v, toV = d.dest.v, off = d.dir === 'back' ? -d.w : d.w;
       const fromOv = isOverlay(fromV), toOv = isOverlay(toV);
       const incomingBrowse = !toOv && toV !== 'home';   // a real #browse render (must occupy .app)
@@ -428,6 +447,10 @@
 
     function end() {
       releaseGesture();
+      // NB: no dropRowHold() on either early return. The hold outlives end() by design
+      // — finalize() still needs it for the reveal ~340ms later — and d is ALREADY null
+      // in that window, so releasing here would drop a hold that is still in use and
+      // the abort would rebuild the page after all. Released in finalize / hard reset only.
       if (!d) return;
       const cur = d; d = null;
       if (!cur.live) return;
@@ -449,8 +472,7 @@
       });
       let done = false;
       const dropPanes = () => { for (const m of cur.movers) if (m.remove && m.el.parentNode) m.el.remove(); };
-      const finalize = () => {
-        if (done) return; done = true;
+      const runFinalize = () => {
         // `tgt=detached` means the node the finger started on was destroyed mid-drag
         // and the gesture settled anyway — i.e. the .178 target-binding did its job.
         // That is the one part of this fix no local test can confirm (jsdom cannot
@@ -594,6 +616,15 @@
           window.scrollTo(0, cur.scroll0);
         }
         finishing = false;
+      };
+      // try/finally so the row hold can never be stranded. runFinalize has THREE
+      // exits — the two ghost-held reveals return early — and none is guaranteed to
+      // run if applyScreen or Browse.render throws. A finally covers every return AND
+      // the throw. It lands after the SYNCHRONOUS applyScreen, which is the part that
+      // must still see the hold; the deferred ghost drop does not need it.
+      const finalize = () => {
+        if (done) return; done = true;
+        try { runFinalize(); } finally { dropRowHold(); }
       };
       const anchor = cur.movers[0] && cur.movers[0].el;
       if (anchor) anchor.addEventListener('transitionend', finalize, { once: true });
