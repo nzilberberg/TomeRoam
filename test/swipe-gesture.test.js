@@ -32,6 +32,14 @@ const { boot } = require('./app-harness.js');
 
 async function settle(h, n = 12) { for (let i = 0; i < n; i++) await h.settle(); }
 
+// REAL wall-clock, captured before boot() patches global.setTimeout. The swipe's
+// velocity tracker only recomputes when >8ms of real time has elapsed since the last
+// sample (app.js move()), so synthetic moves dispatched back-to-back leave vx holding
+// the OUTWARD flick — which commits. A gesture meant to abort has to let real time
+// pass between the outward move and the retreat, or it is a coin toss.
+const realSetTimeout = global.setTimeout;
+const realSleep = (ms) => new Promise((r) => realSetTimeout(r, ms));
+
 /** Every SWIPE line the real app logged, in order. */
 const swipeLog = (h) => h.log.calls
   .filter((c) => c.name === 'debug' && c.args[0] === 'SWIPE')
@@ -63,12 +71,21 @@ function addRow(h) {
   return row;
 }
 
-/** A full left-edge back-drag: grab at the edge, drag right, release. */
+/**
+ * A left-edge back-drag that deterministically ABORTS: out past the direction lock,
+ * then back toward the edge, so both the committed fraction and the release velocity
+ * say "no". (Dragging out and releasing would be velocity-dependent, and jsdom's
+ * timing would decide commit-vs-abort for us.)
+ */
 async function edgeSwipe(h, row) {
   h.touch.start(10, 300, row);      // inside EDGE (44px)
   h.touch.move(80, 302);            // past the 8px lock, horizontal → start()
-  h.touch.move(200, 304);
-  h.touch.end(200, 304);
+  await realSleep(12);              // > the 8ms sample gate, so the NEXT move records lastX…
+  h.touch.move(200, 304);           // …here, at the outward extreme
+  await realSleep(12);              // …and again, so the retreat is measured FROM 200
+  h.touch.move(30, 304);            // retreat → prog below THRESH and vx clearly negative
+  await realSleep(12);
+  h.touch.end(30, 304);
   await settle(h);
   await h.clock.advance(400);       // settle()'s 340ms finalize safety net
   await settle(h);
@@ -108,6 +125,39 @@ test('a swipe settles even when the row under the finger is DESTROYED mid-drag (
     assert.equal(row.isConnected, false, 'fixture sanity: the row really was destroyed mid-gesture');
     assert.ok(log.some((m) => /^(abort|commit) /.test(m)),
       `a gesture whose start node was destroyed must STILL settle — got ${JSON.stringify(log)}`);
+  } finally { h.dispose(); }
+});
+
+// ── 2026-07-19, reported after .178 shipped ────────────────────────────────────
+// "cover images flash on each aborted swipe return". start() renders the DESTINATION
+// into the live #browse, which puts display:none on the outgoing page — and the
+// browser drops a hidden view's decoded images. Restoring that page on abort
+// re-decodes them (and under windowed browse re-materializes its rows, whose art must
+// reload). finalize() dropped the ghost BEFORE re-applying the screen, so that
+// re-decode happened with nothing covering it. The commit-to-home path had solved the
+// identical problem the opposite way — reveal under the ghost, hold until paintable,
+// then drop — and this path simply never got it.
+test('an ABORTED browse→browse swipe re-renders UNDER the ghost, never bare (cover flash)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const row = addRow(h);
+
+    const ghostsAtRender = [];
+    const inner = h.browse.render;
+    h.browse.render = async (desc) => {
+      ghostsAtRender.push(h.document.querySelectorAll('.nav-ghost').length);
+      return inner(desc);
+    };
+
+    await edgeSwipe(h, row);
+
+    assert.ok(swipeLog(h).some((m) => /^abort /.test(m)),
+      `fixture sanity: this gesture must ABORT — got ${JSON.stringify(swipeLog(h))}`);
+    assert.ok(ghostsAtRender.length >= 2,
+      `render runs during the drag AND again on abort — got ${JSON.stringify(ghostsAtRender)}`);
+    assert.ok(ghostsAtRender[ghostsAtRender.length - 1] >= 1,
+      'the abort re-render must happen while a ghost still covers the view, or the re-decode is visible');
   } finally { h.dispose(); }
 });
 

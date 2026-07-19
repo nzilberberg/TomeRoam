@@ -455,8 +455,15 @@
         // and the gesture settled anyway — i.e. the .178 target-binding did its job.
         // That is the one part of this fix no local test can confirm (jsdom cannot
         // tell us what iOS dispatches after a removal), so it is recorded on device.
+        // WHAT was grabbed matters as much as whether it survived: only a realized
+        // ROW is removed by the windowed dematerialize, so a `live` result on a
+        // container grab proves nothing either way about the .178 binding.
+        const tg = cur.tgt;
+        const tgDesc = !tg ? 'none'
+          : (tg.nodeName || '?').toLowerCase() + (tg.className && typeof tg.className === 'string'
+            ? '.' + tg.className.trim().split(/\s+/).join('.') : '');
         if (window.PBDebug) PBDebug.log('SWIPE', `${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`
-          + ` tgt=${cur.tgt && cur.tgt.isConnected ? 'live' : 'detached'}`);
+          + ` tgt=${tg && tg.isConnected ? 'live' : 'detached'}:${tgDesc}`);
         for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }
         if (commit) {
           if (cur.dir === 'back') fwdStack.push(navStack.pop());
@@ -469,16 +476,35 @@
         // the real home UNDERNEATH the still-covering snapshot, let it decode for a
         // couple frames, THEN drop the snapshot → no flash. (Swiping back from NP never
         // flashed because NP keeps home visible; this gives every path that behavior.)
-        if (commit && dest.v === 'home') {
-          applyScreen(dest, { render: false, keepGhosts: true });
-          // Keep the cover until the real home's covers are actually decoded/paintable
-          // (a fixed frame count guessed wrong). img.decode() resolves when the image
-          // can paint without a flash — covering both a re-decode and a re-fetch.
-          const covers = Array.from($('home').querySelectorAll('img')).filter((i) => i.getAttribute('src'));
+        // Keep the ghost covering until the revealed view's covers can actually paint
+        // (a fixed frame count guessed wrong). img.decode() resolves when the image is
+        // paintable without a flash — covering both a re-decode and a re-fetch.
+        // EVERY path that re-reveals an in-flow view the browser had at display:none
+        // needs this: hiding a view drops its decoded images, so showing it again
+        // re-decodes them in front of the user.
+        const holdGhostUntilPaintable = (rootEl) => {
+          const covers = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src'));
           let dropped = false;
           const drop = () => { if (dropped) return; dropped = true; dropPanes(); finishing = false; };
           Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve()))).then(drop);
           setTimeout(drop, 600);   // safety net — never keep the cover pane forever
+        };
+        if (commit && dest.v === 'home') {
+          applyScreen(dest, { render: false, keepGhosts: true });
+          holdGhostUntilPaintable($('home'));
+          return;
+        }
+        // ABORTING a browse→browse swipe is the SAME reveal, and had the ordering
+        // backwards — it dropped the ghost first and re-showed the page bare. start()
+        // rendered the destination into the live #browse, which put display:none on the
+        // outgoing page; restoring it re-decodes its covers (and under windowed browse
+        // re-materializes its rows, whose art must reload). Reported 2026-07-19 as
+        // "cover images flash on each aborted swipe return" — it became noticeable once
+        // .178 made aborts actually complete on every swipe.
+        if (!commit && cur.clobbered) {
+          applyScreen(dest, { render: true, resetScroll: false, keepGhosts: true });
+          window.scrollTo(0, cur.scroll0);
+          holdGhostUntilPaintable($('browse'));
           return;
         }
         dropPanes();
