@@ -39,6 +39,15 @@ const SignInScreen = (() => {
         tries: 90, intervalMs: 2000,           // ~3 min, room for 2FA
         onTick: (n) => { info.textContent = `Approve in the Plex tab, then come back here. Waiting… (${n})`; },
       });
+      // Approval succeeded → the Plex tab has done its job. Close it BEFORE entering
+      // the app: closing a script-opened window returns focus to its opener, so the
+      // user lands back on TomeRoam already showing Home instead of being left
+      // staring at plex.tv wondering whether it worked and having to find the tab
+      // themselves. Only on SUCCESS — on failure or timeout the user may still be
+      // mid-approval (2FA), and closing it out from under them would be worse.
+      // Best-effort: a window we did not really open (popup blocked → w is null) or
+      // one the platform refuses to close just stays, exactly as it does today.
+      try { if (w && !w.closed) w.close(); } catch { /* platform refused — leave it */ }
       link.classList.add('hidden'); info.textContent = 'Signed in! Loading…';
       return d.enterApp();
     } catch (e) {

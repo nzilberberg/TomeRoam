@@ -26,9 +26,26 @@
    reach (over-scroll, viewport-bug gaps) — must match the app, never black. */
 html { background: #14171c; }
 html, body { margin: 0; height: 100%; }
+
+/* THE PAGE BACKDROP — one definition, one layer, viewport-anchored.
+   It used to live on `body`, which is height:100% — so it painted only the top
+   viewport-height OF THE DOCUMENT and scrolled away. On a long list (Books at
+   y=11209 the body box sits at top:-11209) you were looking at bare
+   html #14171c, and the moment a swipe began the ghost pane — position:fixed,
+   same gradient, anchored to the VIEWPORT — painted it back. That mismatch is
+   the "whole background pops to a new position" on swipe start.
+   A fixed pseudo-element rather than background-attachment:fixed, which iOS
+   Safari treats unreliably (and this app is iOS-first).
+   TEMPORARY: the near end is RED so any residual movement is obvious. The
+   gradient is going away entirely once that is confirmed. */
+:root { --page-bg: radial-gradient(140% 120% at 50% 0%, #ff2d2d 0%, var(--bg) 55%); }
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1;
+  background: var(--page-bg);
+  pointer-events: none;
+}
 body {
   font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
-  background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
   color: var(--text);
   overscroll-behavior-y: contain;
   /* App-like feel: text is not selectable anywhere except real input fields
@@ -63,6 +80,20 @@ body.has-player .app { padding-bottom: calc(var(--nav-pad) + 190px); }
    Trade-off: a little empty scroll room below the carousels. Tunable via 12vh. */
 body.home-tall .app { min-height: calc(100% + 12vh); }
 .hidden { display: none !important; }
+/* A browse page PARKED for the duration of a swipe: off-viewport but STILL
+   PAINTED, so iOS keeps its decoded cover bitmaps. display:none drops them, and
+   an aborted swipe then re-decodes every cover at once — the whole list visibly
+   pops back in with the DOM untouched. Exactly the reason #home.parked exists
+   below; this is the same technique for the browse pages. Out of flow, so the
+   document height comes from the page being swiped to, which is what the swipe
+   wants anyway. Gesture-scoped — browse.js parks on swipe start and returns the
+   page to display:none when the gesture ends. */
+.browsepage.parked {
+  position: fixed; top: 0; left: 0; right: 0;
+  max-width: 640px; margin: 0 auto;
+  transform: translateX(-101vw);
+  overflow: hidden; pointer-events: none; z-index: 0;
+}
 /* HOME while another view is active: parked OFF-SCREEN but STILL PAINTED (its own
    compositing layer via will-change) — NOT display:none, which makes iOS drop the
    decoded cover images so they flash/re-decode when home is shown again. Fixed +
@@ -100,7 +131,7 @@ body.home-tall .app { min-height: calc(100% + 12vh); }
   bottom: calc(var(--nav-h) + var(--nav-pad));       /* top of the nav bar (no transport) */
   z-index: 25;
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
+  background: var(--page-bg);
   padding: 14px max(16px, calc((100% - 608px) / 2)) 40px;
 }
 /* When the transport is showing (.player is 106px tall, pinned just above the nav
@@ -387,7 +418,7 @@ body.has-player #options { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); 
   position: fixed; inset: 0; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;
   overscroll-behavior: none;   /* never chain a bounce to the document */
   display: flex; flex-direction: column;
-  background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
+  background: var(--page-bg);
   /* Full-bleed: content owns the whole height; close = swipe right / back.
      The pill keeps a small 5px margin off the physical screen edge. */
   padding: calc(var(--safe-top) + 14px) 20px 5px;
@@ -661,7 +692,7 @@ input.dl-src { --buffer: var(--downloaded); }
   bottom: calc(var(--nav-h) + var(--nav-pad));       /* top of the nav bar (no transport) */
   z-index: 26;
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  background: radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%);
+  background: var(--page-bg);
   padding: 14px max(16px, calc((100% - 608px) / 2)) 40px;
 }
 body.has-player #downloads, body.has-player #general, body.has-player #playback,
@@ -732,22 +763,28 @@ html::-webkit-scrollbar, body::-webkit-scrollbar,
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   FADES OFF — diagnostic, kept across the .177 reset (user request).
+   ⭐ .210 DIAGNOSTIC — FADES OFF (temporary, revert by deleting this block)
 
-   PROVEN NOT to be the flash: on build .210 the device reported, for the covers
-   on an aborted book-list swipe, `phase=n/a` and `animSync=0` — getAnimations()
-   returned EMPTY on both the ghost's covers and the live ones, with `bg=0`,
-   `op=0.00` and `art loaded=0 instant=0 FADED=0`. No animation existed anywhere
-   on those elements and the list still flashed. Kept off only so they cannot
-   muddy the next measurement.
+   Scope corrected from .209, which disabled ALL motion including the swipe's
+   own transform slides. That was wrong: it changes the gesture under test, and
+   it stops `transitionend` firing so the settle finalises through its 340ms
+   fallback instead — a different code path, so the result would not have been
+   readable.
 
-   OFF: artFadeIn + artShimmer on .cover/.authoravatar/.np-art (and the shimmer
-   gradient itself), the virtual-list placeholder stripes, dlpulse, and the
-   opacity ramps on scrims/toast/scroll-indicator/covertap.
-   STILL RUNNING: every transform — navInRight/navInLeft, the swipe's own
-   slides, filmstrips, the sheet's translateY, spin.
+   OFF here — anything that ramps OPACITY or the cover skeleton:
+     image   artFadeIn (the cover fade-in) and artShimmer (the skeleton), on
+             .cover / .authoravatar / .np-art and the virtual-list placeholder
+     bar     dlpulse (the queued-download opacity pulse)
+     page    the opacity ramps on scrims, the track sheet, the book menu,
+             the toast, the scroll indicator, and covertap
+   STILL RUNNING — every transform/movement the swipe depends on:
+     navInRight / navInLeft, the swipe's transform slides, overlay filmstrips,
+     the sheet's translateY, spin, and the small background/colour tints.
 
-   REVERT: delete this block. Nothing else references it.
+   READING IT:
+     flash GONE    -> a fade is in it; re-enable image, then bar, then page
+     flash REMAINS -> fades are eliminated; nothing here ramps opacity, so
+                      nothing here can be what flashes
    ═══════════════════════════════════════════════════════════════════════════ */
 .cover, .authoravatar, .np-art,
 .cover.art-done, .authoravatar.art-done, .np-art.art-done,
@@ -755,7 +792,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar,
 .authoravatar:not(.art-done):not(.art-instant):not(.art-failed),
 .np-art:not(.art-done):not(.art-instant):not(.art-failed) {
   animation: none !important;
-  background-image: none !important;
+  background-image: none !important;   /* the shimmer gradient itself */
   opacity: 1 !important;
 }
 .virtual-list .vrows { animation: none !important; }

@@ -22,6 +22,13 @@
   let inflight = 0;
   const queue = [];
 
+  // Cumulative pipeline counters (.180). A caller snapshots before an event and
+  // diffs after, so "how much art had to reload across this transition, and how
+  // much of it was slow enough to replay the 0.3s fade" is a MEASUREMENT rather
+  // than an inference. `fade` is the one that matters: it is this file's own
+  // documented flash mechanism (see the >=120ms branch in onL below).
+  const stats = { queued: 0, loads: 0, instant: 0, fade: 0, failed: 0, released: 0, maxDt: 0 };
+
   const io = ('IntersectionObserver' in window)
     ? new IntersectionObserver((entries) => {
         for (const e of entries) {
@@ -33,6 +40,7 @@
   function enqueue(img) {
     if (!img.dataset.art || img.dataset.artState || img.dataset.artReleased) return;   // no url / already handled / disposed
     img.dataset.artState = 'queued';
+    stats.queued++;
     queue.push(img);
     pump();
   }
@@ -46,6 +54,7 @@
   function release(img) {
     if (!img) return;
     img.dataset.artReleased = '1';
+    stats.released++;
     if (io) { try { io.unobserve(img); } catch { /* already gone */ } }
     const qi = queue.indexOf(img);
     if (qi >= 0) queue.splice(qi, 1);
@@ -80,6 +89,8 @@
         // with the 3-at-a-time queue: later tiles fade in after the first few).
         const dt = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
         img.classList.add(dt < 120 ? 'art-instant' : 'art-done');   // CSS: art-instant = shown, no fade
+        stats.loads++; if (dt < 120) stats.instant++; else stats.fade++;
+        if (dt > stats.maxDt) stats.maxDt = dt;
         if (tries && window.PBDebug) PBDebug.log('IMG_OK', `recovered after ${tries} ${shortUrl(art)}`);
         done();
       };
@@ -141,5 +152,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 
-  window.ArtLoader = { scan, observe, release };
+  window.ArtLoader = { scan, observe, release, stats: () => Object.assign({}, stats) };
 })();
