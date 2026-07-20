@@ -1,0 +1,164 @@
+SWIPE / REVEAL — FROZEN MODEL (PLAN-swipe-reveal.md stage 1)
+GENERATED, DO NOT EDIT.  Regenerate: node tools/gen-swipe-model.mjs
+Guarded by: test/swipe-model.test.js
+
+Every row below is one of:
+  [parity] reproduces what js/app.js does today, verified at the named region
+  [policy] NEW behaviour the rewrite must CLOSE — today this path is UNDEFINED
+
+SOURCE FINGERPRINTS — if one changes, the mirrored rule must be RE-VERIFIED
+before this document is trusted again. Never update a pinned constant alone.
+  transition branches   2cf44185fe7497bc
+  navTo stack rule      0e84abdf6d072586
+  begin/nav-relation    ac356cd1a669c2a3
+  end/state-routing     f1d6b8391fa4ad57
+  begin/supersession    a470962594518cb9
+
+1. REGISTRY (derived from Nav.SETTINGS_SUBS + the browse family)
+   12 screens, 132 ordered name pairs.
+   The structural matrix lives in docs/transition-matrix.generated.txt and is
+   imported here rather than restated — one derivation, one home.
+
+2. DESCRIPTOR SCENARIOS (§4.3) — names are NOT enough
+   navTo REPLACES the stack top when `v` matches AND the descriptor carries
+   neither `author` nor `book`; otherwise it PUSHES. The guard tests PRESENCE,
+   not identity, so authorBooks(A) over authorBooks(A) pushes just like (B).
+   Consequence, derived rather than asserted: a pair whose forward navigation
+   REPLACES can never occupy two adjacent stack slots, so it is UNREACHABLE as a
+   back-swipe. That is why 132 name pairs cannot express this space.
+
+   ⚠️ That derivation is only sound because of the append census below. navTo is
+   NOT the only site that appends to navStack. The invariant that actually holds:
+   EVERY append path either applies navTo's replace guard, or appends a descriptor
+   whose `v` differs from the current top. A new append site would break this
+   silently, so the sites are pinned:
+     js/app.js:127   let navStack = [{ v: 'home' }];
+     js/app.js:141   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
+     js/app.js:142   else navStack.push(desc);
+     js/app.js:165   navStack.push({ v }); fwdStack.length = 0;
+     js/app.js:778   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:779   else navStack.push(fwdStack.pop());
+     js/app.js:1297  navStack = [{ v: 'home' }];
+
+   case                              from -> to                              result
+   --------------------------------  --------------------------------------  ------------------------
+   different type                    books() -> authors()                    pane=yes abort=rerender back=reachable
+   same type, different identity     authorBooks(A) -> authorBooks(B)        pane=yes abort=rerender back=reachable
+   same type, different identity     files(A) -> files(B)                    pane=yes abort=rerender back=reachable
+   same semantic descriptor          books() -> books()                      pane=yes abort=rerender back=UNREACHABLE
+   same parameterized identity       authorBooks(A) -> authorBooks(A)        pane=yes abort=rerender back=reachable
+   browse -> home                    books() -> home()                       pane=yes abort=none     back=reachable
+   home -> browse                    home() -> books()                       pane=yes abort=none     back=reachable
+   overlay -> overlay                general() -> options()                  pane=no  abort=none     back=reachable
+   overlay -> browse                 options() -> books()                    pane=no  abort=none     back=reachable
+   browse -> overlay                 books() -> nowplaying()                 pane=no  abort=none     back=reachable
+   nowplaying -> files (new-forward)  nowplaying() -> files(A)                pane=no  abort=none     back=reachable
+   malformed payload                 authorBooks(—) -> books()               REJECTED source malformed-descriptor:authorBooks-without-author
+   malformed payload                 books() -> files(—)                     REJECTED destination malformed-descriptor:files-without-book
+   not a transition                  home() -> home()                        REJECTED not-a-transition:home-to-home
+
+   Two independently allocated but semantically equal descriptors classify
+   identically — the model keys on VALUE, never on object identity.
+
+3. THE FOUR RESOLVED RULES (§2.6)
+   [parity] NP pill
+        cloned when nowplaying is EITHER endpoint; a third mover with the
+        same lifetime as outgoing/incoming; from NP -> base 0 and body loses
+        np-locked; to NP -> base off
+        verified at: start(): pill built in both the fromV and toV nowplaying branches
+   [parity] navigation relation
+        back = left edge, dest navStack[len-2]; new-forward = right edge
+        FROM nowplaying only -> filesDescForCurrent(), newNav, commit PUSHES
+        and CLEARS fwdStack; forward-replay = right edge otherwise, dest
+        fwdStack top; a back commit pushes the popped entry onto fwdStack
+        verified at: begin(): the fromLeft / from.v===nowplaying / fwdStack.length branch chain
+   [parity] overlay->overlay reachability
+        ESTABLISHED, not deferred: openSub() pushes a sub-screen ON TOP of
+        Options, so a left-edge swipe yields e.g. general->options directly.
+        Button navigation between overlays uses Nav.overlayFilmstrip(), a
+        DIFFERENT path this plan does not touch and must not assume shares
+        code
+        verified at: openSub(): navStack.push({v}) while currentDesc().v === options
+   [parity] scroll policy
+        FROZEN FOR PARITY. Home entry uses window.scrollTo(0,1) when
+        resetScroll is set. This is NOT an iOS-26 runway requirement —
+        nav.js says the navbar seater is body.home-tall and the 1px is a
+        remnant of the abandoned runway theory. Stage 1 does NOT decide
+        whether the 1px survives; remove it AFTER device parity in a
+        separate commit
+        verified at: nav.js: body.home-tall seating comment; plan §2.6.4 / T12
+
+   scroll policy object (plan states policy; Browse resolves coordinates):
+        onCommit   destination-entry
+        onAbort    restore-session-start
+        overlay    preserve-document
+        reveal     destination-final
+
+4. GESTURE-ENDING INPUTS, BY STATE (§3.7, I19)
+   state              basis     outcome
+   -----------------  --------  -------------------------------------------------
+   ARMED              [parity]  finish, NO navigation, release listeners, remain on source
+                              at: end(): releaseGesture() then returns at `if (!cur.live)`
+   DRAGGING           [parity]  ordinary travel+velocity decision via settleSession(); touchcancel CAN commit
+                              at: touchcancel binds the SAME onEnd as touchend
+   SETTLING or later  [parity]  ignore as a stale duplicate event
+                              at: end() returns at `if (!d)` — d is nulled before settle()
+
+5. SUPERSESSION — a new touch during ARMED or DRAGGING (§3.7, I20)
+   [parity] PARITY IS SUPERSEDE, NOT REJECT. begin() rejects only while
+            `finishing` is true; otherwise it hard-resets and arms the new
+            gesture. I17(a) is the separate rule: while an active session is
+            SETTLING / FINALIZING / REVEALING a new gesture does NOT arm, and
+            that session's pane is NOT disposed to make room (I10 must hold).
+   [parity] The old session is recovered pre-stack and fully released BEFORE the
+            new one arms; movers are torn down BY OWNERSHIP (§3.2) — panes
+            disposed, decorations removed, borrowed real views RESTORED and
+            NEVER removed.
+   [policy] ⚠️ ONE DELIBERATE DIFFERENCE: today's hard reset does NOT restore the
+            starting scroll, so a superseded browse->browse drag can be left at
+            the DESTINATION's scroll (its mid-drag render ran positionOnEnter).
+            The rewrite restores it. This is a behaviour change and arguably a
+            bug fix — it needs its own device check, and it is NOT parity.
+
+6. TERMINATION REASONS (§3.7)
+   reason                      basis     nav              screen        scroll              pane
+   --------------------------  --------  ---------------  ------------  ------------------  --------------
+   vertical-intent (pre-drag)  [parity]  unchanged        source        unchanged           none built
+   touch-cancel (dragging)     [parity]  settle decision  from decision  commit/abort        normal settle
+   hard-reset (leftover)       [parity]  unchanged        currentDesc()  NOT restored today  dispose orphan
+
+7. RECOVERY — ONE RULE, KEYED ON PHASE (§3.7, I18)
+   reasons: lease-invalid | destination-gone | finalize-threw | superseded
+   There are NO per-reason screen/scroll rules. After the stack has been mutated
+   the stack is authoritative, for every reason alike.
+   phase        basis     navigation           screen                    scroll
+   -----------  --------  -------------------  ------------------------  ----------------------
+   pre-stack    [policy]  unchanged            restore source            restore session start
+   post-stack   [policy]  stack authoritative  render current stack top  destination policy
+   [policy] ALL RECOVERY ROWS ARE NEW. Today finalization has a try/finally for
+            the row hold and nothing else. These are gaps the rewrite must CLOSE,
+            not behaviour it must reproduce.
+
+8. PANE DISPOSAL (§3.4) — release is the normal path, dispose is the emergency
+   permitted dispose reasons: superseded, lease-invalid, finalize-threw, hard-reset, destination-gone
+   pane.release()       ONLY from reveal(), ONLY after under-view readiness AND
+                        the paint barrier (I10).
+   pane.dispose(reason) idempotent emergency teardown; bypasses I10 deliberately.
+
+9. AUTHORITATIVE SETTLED DESCRIPTOR (I11) — selected by OUTCOME, not by stack
+   commit              -> the committed destination
+   abort               -> the original source
+   pre-stack recovery  -> the original source
+   post-stack recovery -> the current stack top
+   hard reset          -> currentDesc()
+   Draft 5 said "destination descriptor", which is IMPOSSIBLE on an abort: the
+   destination is precisely the thing NOT navigated to.
+
+10. PARITY vs NEW POLICY LEDGER (§8A) — the short answer
+    NEW POLICY, and only these:
+      - the recovery table (§7 above), pre/post-stack, all reasons
+      - restoring the starting scroll when a gesture is SUPERSEDED
+    Everything else in this document is preserved deliberately, including the
+    1px Home entry scroll and the overlay->browse hidden-host side effect
+    (abort leaves #browse holding the destination's content; canonicalizing it
+    is a SEPARATE cleanup after parity).
