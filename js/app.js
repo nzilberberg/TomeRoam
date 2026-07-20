@@ -767,6 +767,9 @@
           const finish = (why) => {
             if (done) return; done = true;
             revealWatch = null;
+            // FIRST, before anything that could throw: a patched window.scrollTo leaking
+            // past this window would be a real bug, not merely a bad measurement.
+            if (cover.restoreScrollTo) { try { cover.restoreScrollTo(); } catch { /* already restored */ } }
             clearTimeout(timer);
             try { document.removeEventListener('touchstart', onInput, true); } catch { /* gone */ }
             try { document.removeEventListener('mousedown', onInput, true); } catch { /* gone */ }
@@ -800,6 +803,8 @@
             const fmt = (s) => `+img=${s.add} -img=${s.rem} rows+=${s.rows} LETTERS=${s.heads}`
               + ` attr=${s.attr} src+=${s.srcSet} src-=${s.srcClr} fade=${s.fade} inst=${s.instant}`;
             const seen = firsts.length ? ` | first=[${firsts.join(' ')}]` : '';
+          const wrote = cover.writes && cover.writes.length
+            ? ` | scrollWrites=[${cover.writes.join(' ')}]` : '';
             // POSITION across the reveal — scrollY/documentHeight at each step, plus the
             // scroll the ghost was frozen at. A move between preDrop and postDrop, or a
             // reveal at a Y different from ghostY, IS the flash: the whole page jumping,
@@ -816,7 +821,7 @@
               + ` | EXPOSED ${fmt(exp)}${seen}`
               + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
               + ` | ${cmp}`
-              + art + trail + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
+              + art + trail + wrote + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
           };
           // The flash happens within a few frames of the uncover, so the window only has
           // to outlive that. 1500ms was long enough to swallow the user's NEXT action and
@@ -860,6 +865,38 @@
         };
         cover.mark = mark;   // the hold samples either side of the removal through this
         cover.ghostY = (cur.ghostY == null) ? null : Math.round(cur.ghostY);
+        //
+        // ⭐ .202 — WHO MOVES THE SCROLL. The .201 trail found it on the first log:
+        //   scroll=[finalize=13631/14676 applied=1534/2386 restored=1534/2386
+        //           preDrop=13631/2386 postDrop=13631/2386 final=1534/2386] ghostY=1534
+        // The document COLLAPSES 14676->2386 when the destination is applied, scroll
+        // clamps to 1534 — and then the view is UNCOVERED at 13631, ~12,000px from where
+        // the ghost was showing, before snapping back. EXPOSED agreed for the first time
+        // (`row-:vrows@+1`, ROWS KEPT 0/36): the virtualizer tearing rows out 1ms after
+        // the uncover because the scroll is nowhere near what they were built for.
+        // That is one mechanism for all three reported symptoms — images, letters, bars
+        // — because the view is briefly showing a DIFFERENT PART OF THE LIST.
+        // Three writers can do this (app.js's own restore, browse.js applyScrollY,
+        // virtuallist's anchor restore) and guessing between them is what this session
+        // has repeatedly got wrong, so: record EVERY write with its caller. Patching the
+        // global is cause-agnostic — it catches a writer I have not thought of, which is
+        // the property that made the mutation watcher worth having.
+        cover.writes = [];
+        const tFin = performance.now();
+        const realScrollTo = window.scrollTo;
+        window.scrollTo = function (...args) {
+          try {
+            const y = (args.length > 1) ? args[1] : (args[0] && args[0].top);
+            // One frame of the stack past this wrapper names the caller.
+            const st = String(new Error().stack || '').split('\n').slice(2, 4).join(' ')
+              .replace(/https?:\/\/[^)\s]*\//g, '')        // https://…/js/app.js:880 → app.js:880
+              .replace(/[A-Za-z]:[\\/][^)\s]*[\\/]/g, '')  // …and a local path under test
+              .replace(/\s+at\s+/g, ' ').replace(/[()]/g, '').trim().slice(0, 70);
+            cover.writes.push(`${Math.round(y || 0)}@+${Math.round(performance.now() - tFin)}:${st}`);
+          } catch { /* a diagnostic must never break scrolling */ }
+          return realScrollTo.apply(window, args);
+        };
+        cover.restoreScrollTo = () => { window.scrollTo = realScrollTo; };
         mark('finalize');
         if (commit && dest.v === 'home') {
           applyScreen(dest, { render: false, keepGhosts: true });

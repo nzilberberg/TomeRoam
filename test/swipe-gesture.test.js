@@ -378,6 +378,15 @@ test('the reveal reports the scroll trail across the uncover, both sides of it (
     // One `end=` only. The trail used to carry its own `end=`, colliding with the
     // window's `end=<why>` and making the line ambiguous to parse.
     assert.equal((line.match(/end=/g) || []).length, 1, `exactly one end= token: ${line}`);
+    // .202: the abort's own restore is a scroll write, so the tracer must have caught
+    // at least one — an empty trace would mean the patch never took.
+    assert.match(line, /scrollWrites=\[/, `scroll writes must be traced: ${line}`);
+    // And the patch MUST be removed. Leaving a wrapper on the global outlives the
+    // diagnostic and becomes a real bug; every later swipe would stack another.
+    assert.equal(h.window.scrollTo, h.window.scrollTo,
+      'sanity: scrollTo is readable');
+    assert.ok(!String(h.window.scrollTo).includes('cover.writes'),
+      'the traced scrollTo must be restored when the window closes');
   } finally { h.dispose(); }
 });
 
