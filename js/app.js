@@ -408,7 +408,7 @@
       const nSync = copyAnimPhase(document.querySelector('.app'), clone);
       document.body.appendChild(wrap);
       copyScroll(document.querySelector('.app'), clone);   // match carousel scroll to the live page
-      if (d) d.animSync = nSync;
+      if (d) d.animSync = (d.animSync || 0) + nSync;
       return wrap;
     }
 
@@ -477,7 +477,7 @@
       wrap.appendChild(box);
       // Home's tiles carry the same cover animations, so this snapshot needs the same
       // phase sync as ghostApp's — set before insertion, for the same reason.
-      copyAnimPhase($('home'), clone);
+      if (d) d.animSync = (d.animSync || 0) + copyAnimPhase($('home'), clone);
       document.body.appendChild(wrap);
       copyScroll($('home'), clone);   // match carousel scroll so the snapshot shows the same tiles as the live home
       return wrap;
@@ -616,7 +616,7 @@
             const g = Array.from(pane.el.querySelectorAll(sel)).slice(0, 8);
             const r = Array.from(live.querySelectorAll(sel)).slice(0, 8);
             if (!g.length && !r.length) return `${sel.replace(/[.#]/g, '')} 0/0`;
-            let maxDy = 0, maxDx = 0, maxOp = 0, maxPhase = 0;
+            let maxDy = 0, maxDx = 0, maxOp = 0, maxPhase = 0, pairs = 0;
             const n = Math.min(g.length, r.length);
             for (let i = 0; i < n; i++) {
               const a = g[i].getBoundingClientRect(), b = r[i].getBoundingClientRect();
@@ -632,14 +632,24 @@
                 const rAn = r[i].getAnimations ? r[i].getAnimations() : [];
                 if (gAn.length && rAn.length && gAn[0].currentTime != null && rAn[0].currentTime != null) {
                   maxPhase = Math.max(maxPhase, Math.abs(gAn[0].currentTime - rAn[0].currentTime));
+                  pairs++;   // how many pairs were actually COMPARABLE
                 }
               } catch { /* computed style unavailable → the rect deltas still land */ }
             }
+            // `phase=n/a` when NO pair carried a comparable animation. A bare 0 there
+            // would read as "perfectly in sync" when it actually means "never measured"
+            // — the same false-reassurance that made the .205 reading look like a pass.
             return `${sel.replace(/[.#]/g, '')} ${g.length}/${r.length}`
               + ` dy=${Math.round(maxDy)} dx=${Math.round(maxDx)}`
-              + ` op=${maxOp.toFixed(2)} phase=${Math.round(maxPhase)}ms`;
+              + ` op=${maxOp.toFixed(2)} phase=${pairs ? Math.round(maxPhase) + 'ms/' + pairs : 'n/a'}`;
           };
-          return [probe('.letterhead'), probe('.book'), probe('.author'), probe('.alphaindex')].join(' ');
+          // ⭐ .206 — probe the elements that actually CARRY the animation, and the ones
+          // HOME is built from. The .205 reading was blind twice over: `commit→home`
+          // reported `0/0` for everything because home uses `.tile`, not `.book`, and
+          // `phase=0ms` on a `.book` says nothing because the animation lives on the
+          // `.cover` INSIDE it. Measuring the wrong elements is not a null result.
+          return [probe('.cover'), probe('.tile'), probe('.letterhead'), probe('.book'),
+            probe('.author'), probe('.alphaindex')].join(' ');
         } catch { return 'err'; }
       };
       const FADE_MS = 120;
@@ -950,7 +960,11 @@
             const seen = firsts.length ? ` | first=[${firsts.join(' ')}]` : '';
           const wrote = cover.writes && cover.writes.length
             ? ` | scrollWrites=[${cover.writes.join(' ')}]` : '';
-          const ghostDiff = cover.diff ? ` | ghostVsReal=[${cover.diff}]` : '';
+          // How many covers the ghost builder actually phase-seeded. `animSync=0` means
+          // the .205 fix did not run at all (no getAnimations, or nothing matched), which
+          // is indistinguishable from "it ran and did not help" unless it is reported.
+          const ghostDiff = (cover.diff ? ` | ghostVsReal=[${cover.diff}]` : '')
+            + ` animSync=${cur.animSync == null ? '?' : cur.animSync}`;
             // POSITION across the reveal — scrollY/documentHeight at each step, plus the
             // scroll the ghost was frozen at. A move between preDrop and postDrop, or a
             // reveal at a Y different from ghostY, IS the flash: the whole page jumping,

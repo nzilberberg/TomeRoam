@@ -399,6 +399,16 @@ test('the reveal reports the scroll trail across the uncover, both sides of it (
     assert.match(line, /ghostVsReal=\[/, `ghost/real fidelity must be measured: ${line}`);
     assert.ok(!/ghostVsReal=\[(no-pane|err)\]/.test(line),
       `the comparison must run against a live pane: ${line}`);
+    // .206: it must probe the element that CARRIES the animation (.cover) and the one
+    // HOME is built from (.tile). Probing only .book/.letterhead is how the .205 reading
+    // came back all-zero and looked like a pass.
+    assert.match(line, /ghostVsReal=\[cover /, `the comparison must probe .cover: ${line}`);
+    assert.match(line, /tile \d+\/\d+/, `the comparison must probe .tile (home's rows): ${line}`);
+    // Nothing in this fixture carries an animation, so phase must report `n/a` — NOT a
+    // bare 0. A 0 there reads as "perfectly in sync" when it means "never measured",
+    // which is exactly how the .205 device reading looked like a pass and was not.
+    assert.match(line, /phase=n\/a/,
+      `an unmeasurable phase must say n/a, never 0: ${line}`);
     // And the patch MUST be removed. Leaving a wrapper on the global outlives the
     // diagnostic and becomes a real bug; every later swipe would stack another.
     assert.equal(h.window.scrollTo, h.window.scrollTo,
@@ -462,6 +472,50 @@ test('the ghost inherits the live view’s animation phase, not a restarted one 
     // restarted from zero, i.e. the ghost is out of phase with what it stands in for.
     assert.equal(ghostCover, `-${LIVE_PHASE}ms`,
       `the ghost's cover must be seeded to the live phase, got ${JSON.stringify(ghostCover)}`);
+  } finally { h.dispose(); }
+});
+
+// ⭐ .206 — the HOME snapshot needs the same phase sync, and the report must SAY so.
+//
+// The .205 device reading looked like a pass and was not: on `commit→home` the
+// comparison printed `0/0` for every selector, because it probed `.book`/`.letterhead`
+// while HOME is built from `.tile`, and `phase=0ms` came from elements that carry no
+// animation at all (the animation is on the `.cover` INSIDE a row). Measuring the wrong
+// elements is not a null result, and a bare 0 read as "in sync" when it meant "never
+// measured". The user reports the WHOLE home screen flashing on every swipe back, and
+// home is 36 of 45 images without src — i.e. almost entirely shimmering skeleton.
+//
+// So this pins the home path end-to-end: the snapshot builder seeds phase, and the
+// report states how many covers were seeded. `animSync=0` would mean the fix never ran,
+// which is otherwise indistinguishable from "ran and did not help".
+test('the HOME snapshot phase-syncs its covers, and the report says how many (.206)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    h.tap('.navbtn[data-nav="books"]');       // navStack = [home, books] → back = home
+    await settle(h);
+
+    const tile = h.document.createElement('div');
+    tile.className = 'tile';
+    const cover = h.document.createElement('img');
+    cover.className = 'cover';
+    tile.appendChild(cover);
+    h.$('home').appendChild(tile);
+
+    h.window.Element.prototype.getAnimations = function () {
+      return this.classList && this.classList.contains('cover') ? [{ currentTime: 640 }] : [];
+    };
+
+    const row = addRow(h);
+    await edgeSwipe(h, row);
+    await h.clock.advance(600);
+    await settle(h);
+
+    const line = flashLog(h).find((m) => /@reveal/.test(m));
+    assert.ok(line, `no @reveal line — got ${JSON.stringify(flashLog(h))}`);
+    const m = /animSync=(\d+|\?)/.exec(line);
+    assert.ok(m, `the report must state how many covers were phase-seeded: ${line}`);
+    assert.ok(m[1] !== '?' && Number(m[1]) >= 1,
+      `home's covers must be phase-seeded — animSync=${m && m[1]} in: ${line}`);
   } finally { h.dispose(); }
 });
 
