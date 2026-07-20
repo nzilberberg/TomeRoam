@@ -713,6 +713,46 @@
           setTimeout(() => { if (el.parentNode) el.remove(); }, FADE_MS + 60);
         }
       };
+      // ⭐ .213 — AN OBJECTIVE FLASH DETECTOR, so the user stops being the instrument.
+      //
+      // The flash is INTERMITTENT. Every reading so far has depended on a human
+      // noticing it inside ~100ms and remembering which of 15 swipes it was, which is
+      // not a reasonable thing to ask and is why half this investigation's data is
+      // ambiguous. I also just proposed an A/B of two single swipes, which cannot work
+      // on an intermittent event — my error.
+      //
+      // A whole-viewport re-rasterisation MUST cost frame time. So sample frames across
+      // the uncover: 60fps is 16.7ms, and a repaint of the full view shows up as one
+      // long frame. That is a proxy for the flash, not the flash — but it is objective,
+      // it runs on EVERY swipe, and it needs no labelling. Intermittency stops being a
+      // problem and becomes the data: with pane type logged beside it, dozens of swipes
+      // in one report say whether long frames track panes.
+      const watchFrames = (paneKind) => {
+        if (!window.PBDebug || typeof requestAnimationFrame !== 'function') return;
+        const t0 = performance.now();
+        const gaps = [];
+        let prev = t0, n = 0;
+        const tick = () => {
+          const now = performance.now();
+          gaps.push(Math.round(now - prev));
+          prev = now;
+          if (++n < 12) { requestAnimationFrame(tick); return; }
+          const worst = gaps.reduce((a, b) => (b > a ? b : a), 0);
+          // `long` = frames over 32ms, i.e. at least one dropped frame.
+          const long = gaps.filter((g) => g > 32).length;
+          PBDebug.log('FLASH', `frames pane=${paneKind} worst=${worst}ms long=${long}`
+            + ` gaps=[${gaps.join(',')}]`);
+        };
+        requestAnimationFrame(tick);
+      };
+      // Which kind of full-viewport pane this settle built, if any. The two builders are
+      // ghostApp() (browse→browse) and snapshotHome() (→home); every other transition
+      // slides REAL elements and covers nothing. That is the correlation to test.
+      const paneKindOf = () => {
+        const p = cur.movers.filter((m) => m.remove);
+        if (!p.length) return 'none';
+        return cur.dest && cur.dest.v === 'home' ? 'snapshot' : 'ghost';
+      };
       const runFinalize = () => {
         // `tgt=detached` means the node the finger started on was destroyed mid-drag
         // and the gesture settled anyway — i.e. the .178 target-binding did its job.
@@ -803,6 +843,7 @@
             cover.diff = ghostVsReal(rootEl);
             fadePanes();
             if (cover.mark) cover.mark('postDrop');
+            watchFrames(paneKindOf());   // .213: objective flash proxy, held paths
             finishing = false;
             if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(cover.dropAt - t0)}ms `
               + `covers=${covers.length} via=${why} fade=${FADE_MS}ms`);
@@ -1135,6 +1176,10 @@
         // first instant and every mutation below belongs in the EXPOSED bucket.
         cover.dropAt = performance.now();
         dropPanes();
+        // .213: fires on the NO-PANE transitions too (browse↔options, ↔nowplaying).
+        // Those are the control group, and they collect themselves — if long frames
+        // appear here as often as on the pane paths, panes are not the mechanism.
+        watchFrames(paneKindOf());
         // Measured on the plain paths too, so an abort's numbers have something to be
         // compared AGAINST — "covers reload on every transition" and "covers reload
         // only on aborts" call for completely different fixes.

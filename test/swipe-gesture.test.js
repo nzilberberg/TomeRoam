@@ -608,6 +608,39 @@ test('the phase sync pairs covers that correspond, not by raw index (.208)', asy
   } finally { h.dispose(); }
 });
 
+// ⭐ .213 — every settle must report a frame sample AND which pane kind it built.
+//
+// The flash is intermittent, and until now the only detector was a human noticing it
+// inside ~100ms and remembering which of fifteen swipes it was. That is why so much of
+// this investigation's data is ambiguous, and it is why an A/B of two single swipes
+// (which I proposed) cannot work. A whole-view repaint costs frame time, so the frame
+// sample is an objective proxy that runs on EVERY swipe with no labelling — and
+// `pane=` beside it makes the correlation self-collecting.
+//
+// The control group is the point: transitions that build NO pane must be reported too,
+// or "long frames happen on pane paths" would have nothing to be compared against.
+test('every settle reports a frame sample tagged with its pane kind (.213)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    await edgeSwipe(h, addRow(h));
+    await h.clock.advance(600);
+    await settle(h);
+
+    const frames = flashLog(h).filter((m) => /^frames /.test(m));
+    assert.ok(frames.length >= 1,
+      `a settle must emit a frame sample — got ${JSON.stringify(flashLog(h))}`);
+    assert.match(frames[0], /pane=(ghost|snapshot|none)\b/,
+      `the sample must name the pane kind, or the correlation cannot be made: ${frames[0]}`);
+    assert.match(frames[0], /worst=\d+ms long=\d+ gaps=\[/,
+      `the sample must carry the worst frame, the dropped-frame count and the raw gaps: ${frames[0]}`);
+    // browse→browse builds ghostApp(), so this path must NOT report `none` — a detector
+    // that mislabels the pane kind would invert the very correlation it exists to test.
+    assert.ok(!/pane=none/.test(frames[0]),
+      `a browse→browse settle builds a ghost pane; got ${frames[0]}`);
+  } finally { h.dispose(); }
+});
+
 // ── the row hold ──────────────────────────────────────────────────────────────
 // While a gesture is live, Browse keeps the outgoing page's rows so an ABORT does
 // not rebuild the page. The hazard is a hold that is never released: hidden pages
