@@ -538,7 +538,13 @@
             ? '.' + tg.className.trim().split(/\s+/).join('.') : '');
         if (window.PBDebug) PBDebug.log('SWIPE', `${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`
           + ` tgt=${tg && tg.isConnected ? 'live' : 'detached'}:${tgDesc}`);
-        for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }
+        for (const m of cur.movers) {
+          m.el.style.transition = '';
+          // LAYER PROBE (.195) — see nav.js resetSwipeStyles. Keep the in-flow views'
+          // compositing layer alive rather than demoting it at the end of the gesture.
+          m.el.style.transform = (m.el.id === 'home' || m.el.id === 'browse') ? 'translateZ(0)' : '';
+          m.el.style.willChange = '';
+        }
         if (commit) {
           if (cur.dir === 'back') fwdStack.push(navStack.pop());
           else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
