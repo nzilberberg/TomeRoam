@@ -249,7 +249,15 @@ function boot(opts = {}) {
   // MutationObserver (.199). When app.js touches a DOM global, install it here.
   global.Element = window.Element;
   global.getComputedStyle = window.getComputedStyle.bind(window);
-  window.scrollTo = () => {};
+  // RECORDED, not discarded. A no-op scrollTo made every scroll decision in the swipe
+  // path invisible: the abort restore (app.js `window.scrollTo(0, cur.scroll0)`) and
+  // its ABSENCE on the supersession hard-reset path looked exactly alike from a test.
+  // `log` is declared below in this same scope; this closure only runs once app.js is
+  // booted, like the Media Session closures above.
+  // ⚠️ HONEST SCOPE, so this cannot imply more than it checks: jsdom pins
+  // window.scrollY at 0, so `cur.scroll0` is always 0 here. These recordings pin
+  // WHETHER a restore was issued, never WHICH coordinate it restored to.
+  window.scrollTo = (x, y) => { log.calls.push({ name: 'window.scrollTo', args: [x, y] }); };
   global.scrollTo = window.scrollTo;
   global.history = window.history;         // app.js uses the bare `history` global
   global.location = window.location;
