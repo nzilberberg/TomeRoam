@@ -203,97 +203,7 @@
   // the underlying page never scrolls); two in-flow views can't coexist, so an
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
   function bindSwipeBack() {
-    let d = null, finishing = false, unbindGesture = null, revealWatch = null;
-    // Snapshot of the browse page the gesture STARTED on, taken before the mid-drag
-    // render touches anything. Compared at reveal, it is the one measurement that
-    // separates "the page was rebuilt" from "the page was preserved and is still
-    // loading its covers" — two causes that produce identical mutation counts and
-    // need opposite fixes. Identity first: same node and same controller instance
-    // means nothing was torn down, whatever the counters say.
-    let revealBase = null;
-    // Numbers every reveal so a report can be tied to "the second-to-last swipe".
-    let revealSeq = 0;
-    // Row IDENTITY, not row counts. +img/-img totals cannot separate "the swipe
-    // rebuilt the page" from "something else in the 1.5s window touched it" — two
-    // device logs were read wrongly that way, one contaminated by the next gesture
-    // and one by a nav tap that legitimately dematerializes the page. Stamping the
-    // actual row nodes answers it outright: a row that is still the SAME element was
-    // never destroyed, whatever else happened meanwhile.
-    let stampGen = 0;
-    const snapBrowse = (stamp) => {
-      const p = [...document.querySelectorAll('#browse .browsepage')].find((x) => !x.classList.contains('hidden'));
-      if (!p) return null;
-      const imgs = p.querySelectorAll('img');
-      const rows = p.querySelectorAll('.book, .author');
-      // Stamp ONLY when capturing the gesture-start baseline. Stamping on the
-      // comparison snapshot as well relabels every row, which makes "kept" always
-      // read 0 — measured locally before this shipped.
-      const gen = stamp ? 'g' + (++stampGen) : null;
-      if (stamp) rows.forEach((r) => { r.dataset.swGen = gen; });
-      return { node: p, ctl: p._vctl || null, gen,
-        rows: rows.length, imgs: imgs.length,
-        src: Array.from(imgs).filter((i) => i.getAttribute('src')).length,
-        state: p._vctl && p._vctl.state ? p._vctl.state() : 'classic',
-        realized: p._vctl && p._vctl.realizedCount ? p._vctl.realizedCount() : -1 };
-    };
-    // How many of `base`'s stamped rows are still in the document, and how many rows
-    // on screen are new since then.
-    const survivors = (base) => {
-      if (!base || !base.node) return null;
-      const rows = [...document.querySelectorAll('#browse .browsepage:not(.hidden) .book, #browse .browsepage:not(.hidden) .author')];
-      const kept = rows.filter((r) => r.dataset.swGen === base.gen).length;
-      return { kept, of: base.rows, fresh: rows.filter((r) => r.dataset.swGen !== base.gen).length };
-    };
-
-    // A live gesture's move/end listeners live on the NODE THE TOUCH STARTED ON, not
-    // on `document`. Per the Touch Events spec the touch target is fixed at
-    // touchstart and every later event of that gesture is dispatched AT THAT NODE —
-    // so once the node is removed from the document (its propagation path becomes
-    // just itself) a document-level listener stops hearing the gesture entirely and
-    // the swipe freezes mid-drag, forever. That shipped: build .177, an Authors
-    // edge-swipe with windowed browse on, where the swipe's own mid-drag render
-    // dematerialized the row under the finger. Three other paths destroy browse DOM
-    // with no gesture awareness (the SWR repaint's rebuild, Net.onReconnect →
-    // clearCache, evictLRU), so this is not specific to the virtual list.
-    //
-    // The gesture does not own that node and must not depend on it staying attached.
-    // Binding to the target makes the drag survive whatever happens to the DOM
-    // underneath it. (Deliberately NOT pointer events + setPointerCapture: pointer
-    // events cannot preventDefault a pan, so blocking native scroll would have to
-    // move to `touch-action` CSS — and touch-action intersects down the ancestor
-    // chain, so a body-level rule would permanently disable the home carousels'
-    // horizontal scrolling with no way for a descendant to restore it.)
-    function bindGesture(target) {
-      const onMove = (e) => { const t = e.changedTouches[0]; move(t.clientX, t.clientY, e); };
-      const onEnd = () => end();
-      target.addEventListener('touchmove', onMove, { passive: false });
-      target.addEventListener('touchend', onEnd, { passive: true });
-      target.addEventListener('touchcancel', onEnd, { passive: true });
-      unbindGesture = () => {
-        target.removeEventListener('touchmove', onMove);
-        target.removeEventListener('touchend', onEnd);
-        target.removeEventListener('touchcancel', onEnd);
-        unbindGesture = null;
-      };
-    }
-    const releaseGesture = () => { if (unbindGesture) unbindGesture(); };
-
-    // While a gesture is live, Browse keeps the outgoing page's rows instead of
-    // dematerializing them, so an ABORT restores the page instead of rebuilding it
-    // and re-fetching every cover (measured: 36 images, ZERO with a src, at reveal).
-    // Taken in start() rather than begin() — begin() has five early returns and can
-    // arm a gesture that never crosses the direction lock. Released on EVERY exit:
-    // settle's three branches, the vertical abandon, an end() that never went live,
-    // the hard reset, and a throwing finalize. A leaked hold is bounded (it degrades
-    // to what the classic renderer already does — keep every hidden page's rows) but
-    // it is still a leak, so every path is covered rather than most of them.
-    let holdTok = 0;
-    const takeRowHold = () => { if (window.Browse && Browse.beginHold) holdTok = Browse.beginHold(); };
-    const dropRowHold = () => {
-      if (!holdTok) return;
-      const t = holdTok; holdTok = 0;
-      if (window.Browse && Browse.endHold) Browse.endHold(t);
-    };
+    let d = null, finishing = false;
     const navPill = () => $('navbar').querySelector('.np-actions');
     // A detached, non-interactive clone of the pill for the duration of an NP swipe:
     // it rides with NP (added as a mover) so the pill travels, while np-locked is off
@@ -313,14 +223,7 @@
     // re-rendered for the destination, so the outgoing state must be snapshotted).
     // Opaque gradient identical to the page background — a flat var(--bg) read as a
     // DARKER pane than the gradient-backed real page (visible on swipe begin).
-    // Read the backdrop from CSS rather than carrying a third copy of the literal.
-    // Three copies (body, #options, here) is how the ghost and the page drifted apart:
-    // the page background scrolled away with the document and this one did not, so a
-    // swipe repainted a gradient that had not been on screen a moment earlier.
-    const GHOST_BG = (() => {
-      try { return getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)'; }
-      catch { return 'var(--bg)'; }
-    })();
+    const GHOST_BG = 'radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%)';
     // Clones must NOT re-trigger the art loader: a cloned <img> that was never
     // scrolled into view (no src yet) would get adopted + fetched (= "loading all
     // images" during the slide). Strip data-art so loaded covers still show via
@@ -335,82 +238,6 @@
       const s = src.querySelectorAll('.carousel'), c = dst.querySelectorAll('.carousel');
       // Prefer the saved dataset.sl (survives display:none, where scrollLeft reads 0).
       s.forEach((el, i) => { if (c[i]) c[i].scrollLeft = (+el.dataset.sl || el.scrollLeft || 0); });
-    }
-    // ⭐ …and cloneNode does not copy ANIMATION PHASE either. Exactly the same class of
-    // bug as copyScroll above — runtime state a clone silently loses, so the ghost is
-    // not the stand-in it claims to be and something visibly changes when the swipe
-    // settles — and the cure belongs right next to it.
-    //
-    // Every cover carries a CSS animation: an unloaded one shimmers
-    // (`artShimmer 1.25s infinite`, app.css:347) and a loaded one fades
-    // (`artFadeIn .3s both`, app.css:357). A CLONE RESTARTS BOTH FROM t=0, so for the
-    // whole gesture the ghost's covers run out of phase with the live page's, and at the
-    // swap every one of them jumps at once. On the reported device roughly 30 of 52
-    // images have no src (`imgs=52 withSrc=22`) — i.e. most of the screen is shimmering
-    // skeleton, which is what "all the bars flashed with all their contents" looks like.
-    //
-    // Why nothing caught it: it produces NO DOM mutation, NO position change (.204
-    // measured rects only — dy=0 dx=0 says elements are in the same PLACE, nothing about
-    // how they LOOK), and it survives a cross-fade (.203), because fading between two
-    // out-of-phase animations still shows the discontinuity.
-    //
-    // A negative animation-delay seeks the clone to the live element's current time:
-    // for the infinite shimmer that matches phase, and for a finished fade it lands past
-    // the end where `both` holds the final state.
-    // ⭐ .207 — SET THE ANIMATION'S TIME, don't try to express it as a CSS delay.
-    // .205 wrote `animation-delay: -<currentTime>ms` before insertion. It RAN (device:
-    // animSync=28 and 38) and did NOT sync: covers stayed 1011ms out of phase on the
-    // book list and 10111ms on home, every comparable pair, against a 1.25s shimmer —
-    // i.e. nearly opposite phase, on both screens. My error was writing a value whose
-    // semantics I had not verified (a negative delay shifts the EFFECT; it is not the
-    // same thing as seeking the animation) and then reading back a number that may not
-    // be comparable between the two sides. The Web Animations API says exactly what is
-    // meant, so use it: assign currentTime on the clone's own animation.
-    // Must run AFTER insertion — a detached clone has no CSS animations to fetch.
-    let lastAnimResidual = 0;
-    function copyAnimPhase(src, dst) {
-      if (typeof Element === 'undefined' || !Element.prototype.getAnimations) return 0;
-      // ⭐ .208 — MATCH THE PRUNED SHAPE, or index `i` means different elements on each
-      // side. ghostApp REMOVES `.hidden, .parked` from the clone, so the live `.app`
-      // still holds parked home and every hidden .browsepage while the clone holds only
-      // the visible page. Index-matching two lists of different shape paired covers with
-      // the wrong twins and mostly failed outright: device .207 reported animSync=6 on a
-      // book list carrying ~36 skeletons, phase=17126ms, bg=8 — while HOME, whose
-      // snapshot clones one subtree with nothing pruned, reached 38 and dropped to 48ms.
-      // Filtering the source to what SURVIVES the prune restores the correspondence.
-      // (Same latent trap as copyScroll's "index-matched" assumption directly above.)
-      // Mirror the prune EXACTLY: the clone drops `.hidden/.parked` nodes BELOW its
-      // root, and both builders strip those classes from the root itself. So walk up to
-      // the root and never test the root — snapshotHome's source IS `#home.parked`
-      // (home is parked while browse is showing), and testing it would filter away
-      // every cover and silently sync nothing. Caught by the .206 test, not by me.
-      const kept = (root) => (el) => {
-        let n = el;
-        while (n && n !== root) {
-          if (n.classList && (n.classList.contains('hidden') || n.classList.contains('parked'))) return false;
-          n = n.parentElement;
-        }
-        return true;
-      };
-      const s = Array.from(src.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(src));
-      const c = Array.from(dst.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(dst));
-      let synced = 0, residual = 0;
-      s.forEach((el, i) => {
-        const twin = c[i];
-        if (!twin) return;
-        try {
-          const a = el.getAnimations(), b = twin.getAnimations();
-          if (!a.length || !b.length || a[0].currentTime == null) return;
-          b[0].currentTime = a[0].currentTime;
-          // Verify AT THE POINT OF THE FIX rather than 500ms later in a reveal report.
-          // A residual here says the assignment did not take, which is the failure .205
-          // had and could not distinguish from "ran and did not help".
-          residual = Math.max(residual, Math.abs((b[0].currentTime || 0) - (a[0].currentTime || 0)));
-          synced++;
-        } catch { /* an unsynced cover is the old behaviour, never a broken ghost */ }
-      });
-      lastAnimResidual = Math.round(residual);
-      return synced;
     }
     // The fixed full-viewport pane both snapshot builders mount into.
     function ghostWrap() {
@@ -431,20 +258,11 @@
       clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());   // drop cached/hidden/parked panes — only the visible view matters
       freezeArt(clone);
       clone.style.margin = '0 auto';                                  // keep .app's centering (was '0' → left-aligned vs the real page)
-      // The scroll this snapshot is FROZEN at. The ghost shows the page as it looked at
-      // this Y for the whole gesture; if the real view is revealed at a different Y the
-      // page appears to jump the instant the ghost goes — with no DOM write anywhere,
-      // which is precisely the state the .200 logs measured on a flashing abort.
-      const ghostY = window.scrollY || 0;
-      if (d) d.ghostY = ghostY;
-      clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
+      clone.style.transform = 'translateY(' + (-(window.scrollY || 0)) + 'px)';
       const wrap = ghostWrap();
       wrap.appendChild(clone);
       document.body.appendChild(wrap);
       copyScroll(document.querySelector('.app'), clone);   // match carousel scroll to the live page
-      // AFTER insertion: a detached clone has no CSS animations to seek (.207).
-      const nSync = copyAnimPhase(document.querySelector('.app'), clone);
-      if (d) { d.animSync = (d.animSync || 0) + nSync; d.animRes = lastAnimResidual; }
       return wrap;
     }
 
@@ -453,24 +271,11 @@
       // Leftover from an INTERRUPTED gesture (a 2nd touch mid-swipe, a missed
       // touchend, etc.) → hard-reset to known-good before starting fresh. This is
       // what stops corruption from accumulating over many swipes.
-      // A `.spent` pane is one that has already uncovered and is only finishing its
-      // .203 fade-out. It is NOT leftover state — but it IS still a `.nav-ghost`, so
-      // without this a swipe started during the fade would trip the hard reset below
-      // and re-introduce the wrong-page/wrong-tap failure .178 fixed. Clear them first.
-      document.querySelectorAll('.nav-ghost.spent').forEach((n) => n.remove());
       if (d || document.querySelector('.nav-ghost')) {
         if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');
-        releaseGesture();   // never leave a dead gesture's listeners on a stale node
-        dropRowHold();      // …nor its row hold
         d = null; resetSwipeStyles(); applyScreen(currentDesc(), { render: false });
       }
-      // NOTE: `.alphaindex` is deliberately NOT excluded. It sits on the forward-swipe
-      // edge band (measured: 77% of the band, 80% of the screen height), so excluding
-      // it meant a forward swipe almost never armed — the strip swallowed the touch.
-      // The two gestures are orthogonal (scrub is vertical, swipe is horizontal), so
-      // the direction lock below arbitrates instead, and the strip's own handler cedes
-      // on |dx| > |dy| — exactly the complement of this one's rule.
-      if (target.closest && target.closest('#player, input, .navbtn, .np-controls, .np-actions, .carousel')) return;
+      if (target.closest && target.closest('#player, .alphaindex, input, .navbtn, .np-controls, .np-actions, .carousel')) return;
       const fromLeft = x <= EDGE, fromRight = x >= window.innerWidth - EDGE;
       if (!fromLeft && !fromRight) return;
       const from = currentDesc();
@@ -481,9 +286,7 @@
       else return;
       if (!dest) return;
       d = { dir, from, dest, newNav, x0: x, y0: y, dx: 0, w: window.innerWidth, live: false, locked: false,
-            lastX: x, lastT: performance.now(), vx: 0, scroll0: window.scrollY || 0, movers: [], clobbered: false,
-            tgt: target };
-      bindGesture(target);
+            lastX: x, lastT: performance.now(), vx: 0, scroll0: window.scrollY || 0, movers: [], clobbered: false };
     }
 
     // Ensure `desc`'s app-view is the visible one in .app, rendering browse content
@@ -510,14 +313,8 @@
       const lib = document.createElement('div'); lib.style.paddingTop = '46px'; lib.appendChild(clone);
       const box = document.createElement('div'); box.className = 'app'; box.style.margin = '0 auto'; box.appendChild(lib);
       const wrap = ghostWrap();
-      wrap.appendChild(box);
-      // Home's tiles carry the same cover animations, so this snapshot needs the same
-      // phase sync as ghostApp's — set before insertion, for the same reason.
-      document.body.appendChild(wrap);
+      wrap.appendChild(box); document.body.appendChild(wrap);
       copyScroll($('home'), clone);   // match carousel scroll so the snapshot shows the same tiles as the live home
-      // AFTER insertion, same reason as ghostApp (.207).
-      const nSync = copyAnimPhase($('home'), clone);
-      if (d) { d.animSync = (d.animSync || 0) + nSync; d.animRes = lastAnimResidual; }
       return wrap;
     }
 
@@ -529,8 +326,6 @@
     // scroll-neutral) or a fixed snapshot — so scroll cannot change during a swipe.
     function start() {
       d.live = true;
-      revealBase = snapBrowse(true);   // BEFORE the mid-drag render clobbers #browse
-      takeRowHold();   // from here the outgoing page keeps its rows until this gesture ends
       const fromV = d.from.v, toV = d.dest.v, off = d.dir === 'back' ? -d.w : d.w;
       const fromOv = isOverlay(fromV), toOv = isOverlay(toV);
       const incomingBrowse = !toOv && toV !== 'home';   // a real #browse render (must occupy .app)
@@ -582,7 +377,7 @@
         if (ev && ev.cancelable) ev.preventDefault();
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
         d.locked = true;
-        if (Math.abs(dx) <= Math.abs(dy)) { releaseGesture(); d = null; return; }   // vertical intent → abandon (native scroll resumes)
+        if (Math.abs(dx) <= Math.abs(dy)) { d = null; return; }   // vertical intent → abandon (native scroll resumes)
         start();
       }
       if (!d.live) return;
@@ -596,11 +391,6 @@
     }
 
     function end() {
-      releaseGesture();
-      // NB: no dropRowHold() on either early return. The hold outlives end() by design
-      // — finalize() still needs it for the reveal ~340ms later — and d is ALREADY null
-      // in that window, so releasing here would drop a hold that is still in use and
-      // the abort would rebuild the page after all. Released in finalize / hard reset only.
       if (!d) return;
       const cur = d; d = null;
       if (!cur.live) return;
@@ -622,116 +412,9 @@
       });
       let done = false;
       const dropPanes = () => { for (const m of cur.movers) if (m.remove && m.el.parentNode) m.el.remove(); };
-      //
-      // ⭐ .203 PROBE — CROSS-FADE THE GHOST INSTEAD OF YANKING IT.
-      // Two consecutive device repros (.202 #8 and #10, both "flashed at the snap
-      // back") measured completely clean: ghostY == the revealed scroll, both scroll
-      // writes landing under cover at +14/+16ms, EXPOSED all-zero, LETTERS=0, ROWS KEPT
-      // n/n, sameNode + sameCtl. Nothing moved and nothing changed. Everything the DOM
-      // can express is eliminated, so what is left is the UNCOVER itself: a full-viewport
-      // composited layer destroyed in one frame over content iOS then has to
-      // re-rasterize.
-      //
-      // The probe tests exactly that and nothing else. If the flash is content being
-      // rasterized as it is exposed, a short cross-fade gives it time to rasterize while
-      // still covered and the flash goes. If the flash survives a fade, re-rasterization
-      // is dead too and the structural fix (never transform the real in-flow view) is
-      // the only explanation left standing.
-      // Deliberately NOT the .195/.196 approach of parking a transform to keep a layer
-      // alive: that is a proven dead end — a persistent transform on #browse makes it
-      // the containing block for position:fixed descendants and permanently breaks the
-      // A-Z strip.
-      // Ghost-vs-real fidelity, measured at the instant of the swap. Compares the
-      // viewport rect of corresponding elements in the covering pane and in the live
-      // view. Zeros mean the ghost is a faithful stand-in and the swap is invisible;
-      // anything else is a difference the user sees at the uncover with no DOM write.
-      const ghostVsReal = (realRoot) => {
-        try {
-          const pane = cur.movers.find((m) => m.remove && m.el.parentNode);
-          if (!pane) return 'no-pane';
-          const live = realRoot.querySelector('.browsepage:not(.hidden):not(.parked)') || realRoot;
-          const probe = (sel) => {
-            const g = Array.from(pane.el.querySelectorAll(sel)).slice(0, 8);
-            const r = Array.from(live.querySelectorAll(sel)).slice(0, 8);
-            if (!g.length && !r.length) return `${sel.replace(/[.#]/g, '')} 0/0`;
-            let maxDy = 0, maxDx = 0, maxOp = 0, maxPhase = 0, pairs = 0, bgDiff = 0;
-            const n = Math.min(g.length, r.length);
-            for (let i = 0; i < n; i++) {
-              const a = g[i].getBoundingClientRect(), b = r[i].getBoundingClientRect();
-              maxDy = Math.max(maxDy, Math.abs(a.top - b.top));
-              maxDx = Math.max(maxDx, Math.abs(a.left - b.left));
-              // ⭐ APPEARANCE, not just place. `dy=0 dx=0` says two elements are in the
-              // same POSITION and nothing whatever about how they LOOK — which is how a
-              // whole-screen animation phase difference went unmeasured for six builds.
-              try {
-                const ga = getComputedStyle(g[i]), rb = getComputedStyle(r[i]);
-                maxOp = Math.max(maxOp, Math.abs(parseFloat(ga.opacity || '1') - parseFloat(rb.opacity || '1')));
-                // GROUND TRUTH: the shimmer animates background-position, so comparing
-                // the computed value compares what is actually PAINTED. currentTime
-                // depends on API semantics I have already been wrong about once.
-                if (ga.backgroundPosition !== rb.backgroundPosition) bgDiff++;
-                const gAn = g[i].getAnimations ? g[i].getAnimations() : [];
-                const rAn = r[i].getAnimations ? r[i].getAnimations() : [];
-                if (gAn.length && rAn.length && gAn[0].currentTime != null && rAn[0].currentTime != null) {
-                  maxPhase = Math.max(maxPhase, Math.abs(gAn[0].currentTime - rAn[0].currentTime));
-                  pairs++;   // how many pairs were actually COMPARABLE
-                }
-              } catch { /* computed style unavailable → the rect deltas still land */ }
-            }
-            // `phase=n/a` when NO pair carried a comparable animation. A bare 0 there
-            // would read as "perfectly in sync" when it actually means "never measured"
-            // — the same false-reassurance that made the .205 reading look like a pass.
-            return `${sel.replace(/[.#]/g, '')} ${g.length}/${r.length}`
-              + ` dy=${Math.round(maxDy)} dx=${Math.round(maxDx)}`
-              + ` op=${maxOp.toFixed(2)} phase=${pairs ? Math.round(maxPhase) + 'ms/' + pairs : 'n/a'} bg=${bgDiff}`;
-          };
-          // ⭐ .206 — probe the elements that actually CARRY the animation, and the ones
-          // HOME is built from. The .205 reading was blind twice over: `commit→home`
-          // reported `0/0` for everything because home uses `.tile`, not `.book`, and
-          // `phase=0ms` on a `.book` says nothing because the animation lives on the
-          // `.cover` INSIDE it. Measuring the wrong elements is not a null result.
-          return [probe('.cover'), probe('.tile'), probe('.letterhead'), probe('.book'),
-            probe('.author'), probe('.alphaindex')].join(' ');
-        } catch { return 'err'; }
-      };
-      // .209: 0 — the ghost cross-fade IS a fade, so it goes with the rest of them.
-      // Its hypothesis (re-rasterisation on exposure) was disproven at .203 anyway: the
-      // flash survived a 120ms fade. Left as a constant rather than ripped out so the
-      // whole motion experiment reverts by changing two numbers, not by restructuring
-      // the settle path. The pane still leaves the DOM on the same timer.
-      const FADE_MS = 0;   // .210: still 0 — the ghost cross-fade IS a fade
-      const fadePanes = () => {
-        for (const m of cur.movers) {
-          if (!m.remove || !m.el.parentNode) continue;
-          const el = m.el;
-          // `spent` = uncovered, awaiting removal. begin() clears these on sight so a
-          // fading pane is never mistaken for a wedged gesture's leftover state.
-          el.classList.add('spent');
-          el.style.pointerEvents = 'none';
-          el.style.transition = 'opacity ' + FADE_MS + 'ms linear';
-          el.style.opacity = '0';
-          setTimeout(() => { if (el.parentNode) el.remove(); }, FADE_MS + 60);
-        }
-      };
-      const runFinalize = () => {
-        // `tgt=detached` means the node the finger started on was destroyed mid-drag
-        // and the gesture settled anyway — i.e. the .178 target-binding did its job.
-        // That is the one part of this fix no local test can confirm (jsdom cannot
-        // tell us what iOS dispatches after a removal), so it is recorded on device.
-        // WHAT was grabbed matters as much as whether it survived: only a realized
-        // ROW is removed by the windowed dematerialize, so a `live` result on a
-        // container grab proves nothing either way about the .178 binding.
-        const tg = cur.tgt;
-        const tgDesc = !tg ? 'none'
-          : (tg.nodeName || '?').toLowerCase() + (tg.className && typeof tg.className === 'string'
-            ? '.' + tg.className.trim().split(/\s+/).join('.') : '');
-        // #N matches the FLASH line's #N for this same settle, so "the second-to-last
-        // swipe" resolves to one exact pair of lines instead of a guess from timestamps.
-        // Allocated HERE, once per settle, so the pairing cannot drift if a path ever
-        // returns without reporting.
-        const seq = ++revealSeq;
-        if (window.PBDebug) PBDebug.log('SWIPE', `#${seq} ${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`
-          + ` tgt=${tg && tg.isConnected ? 'live' : 'detached'}:${tgDesc}`);
+      const finalize = () => {
+        if (done) return; done = true;
+        if (window.PBDebug) PBDebug.log('SWIPE', `${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`);
         for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }
         if (commit) {
           if (cur.dir === 'back') fwdStack.push(navStack.pop());
@@ -744,401 +427,19 @@
         // the real home UNDERNEATH the still-covering snapshot, let it decode for a
         // couple frames, THEN drop the snapshot → no flash. (Swiping back from NP never
         // flashed because NP keeps home visible; this gives every path that behavior.)
-        // Keep the ghost covering until the revealed view has actually been PAINTED.
-        //
-        // ⭐ .198: this function did not do what its name says, and the device logs
-        // proved it. Across every report the hold was 1-2ms — a frame is 16.7ms — and
-        // 16 of them held over `covers=0`, i.e. nothing whatsoever. The cause is that
-        // .179 and .194 cancel each other: .179 waits on `img.decode()`, and .194 parks
-        // the outgoing page instead of display:none'ing it precisely SO THAT its covers
-        // stay decoded. An already-decoded image resolves decode() on the microtask
-        // queue, so the ghost was lifted in the SAME FRAME as the reveal — before the
-        // browser had laid out and painted the restored page. That is consistent with
-        // every measurement we have: DOM untouched (ROWS KEPT 68/68), no image churn,
-        // and plain TEXT flashing — because what flashes is not the covers, it is the
-        // whole view being uncovered before it has painted.
-        //
-        // So there are TWO gates now and the ghost lifts only when BOTH have settled:
-        //   decode — the covers hold a paintable bitmap (still needed: a reveal from a
-        //            genuine display:none, e.g. commit→home, really can re-decode)
-        //   paint  — a frame containing the revealed content has been committed. Double
-        //            rAF is the signal: the first callback runs BEFORE the next paint,
-        //            the second AFTER it. Not a fixed delay — no frame count is assumed.
-        // `via=` names whichever gate settled LAST, so the next device report says
-        // plainly whether the hold became real and whether that was enough.
-        const holdGhostUntilPaintable = (rootEl, cover) => {
-          const t0 = performance.now();
-          const covers = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src'));
-          let dropped = false, decoded = false, painted = false;
-          const drop = (why) => {
-            if (dropped) return; dropped = true;
-            // Stamp the exact moment the view stops being covered BEFORE removing the
-            // pane, so the reveal watcher can split what churned while hidden from what
-            // churned in front of the user. That split is the whole question.
-            cover.dropAt = performance.now();
-            // Sample on BOTH sides of the removal. If the page moves between these two,
-            // the ghost was hiding a different scroll position than the one revealed —
-            // and that jump is the flash, with no DOM write anywhere.
-            if (cover.mark) cover.mark('preDrop');
-            //
-            // ⭐ .204 — COMPARE THE GHOST TO THE REAL VIEW, the blind spot behind every
-            // clean reading so far. Every counter built in .199-.202 watches the REAL
-            // page, so a difference between the GHOST and the page it is swapped for is
-            // invisible to all of them: no mutation happens, nothing moves, and the user
-            // still sees a change — which is exactly the signature of #8, #10 and #5
-            // (EXPOSED all-zero, ghostY == revealed scroll, ROWS KEPT n/n), and it
-            // survives a 120ms cross-fade (.203) because a fade between two DIFFERENT
-            // renderings still shows the difference.
-            // The ghost is a CLONE with ids stripped and `transform: translateY(-scrollY)`
-            // applied, so id-based CSS and any position:fixed descendant resolve
-            // differently inside it than in the live document. Rather than enumerate
-            // which — the enumeration is what has been wrong every time — measure the
-            // OUTCOME: corresponding elements' viewport rects, ghost vs real. If the
-            // ghost is faithful they are identical and this prints zeros.
-            // Taken BEFORE the pane goes. ⚠️ Not mutation-verified, and labelled rather
-            // than left to imply coverage: while the .203 fade keeps the node alive for
-            // ~180ms, swapping these two lines changes nothing observable. It matters
-            // the moment the probe is reverted to an immediate dropPanes(), which is a
-            // one-line change, so the order stays correct by construction.
-            cover.diff = ghostVsReal(rootEl);
-            fadePanes();
-            if (cover.mark) cover.mark('postDrop');
-            finishing = false;
-            if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(cover.dropAt - t0)}ms `
-              + `covers=${covers.length} via=${why} fade=${FADE_MS}ms`);
-          };
-          const gate = (why) => { if (decoded && painted) drop(why); };
-          Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve())))
-            .then(() => { decoded = true; gate('decode'); });
-          // rAF does not fire in a hidden tab (a known trap here) — the safety net below
-          // is what releases the ghost in that case, so it can never be stranded.
-          requestAnimationFrame(() => requestAnimationFrame(() => { painted = true; gate('paint'); }));
-          setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever
-        };
-        // FLASH DIAGNOSTIC (.180). The reported "cover images flicker on every aborted
-        // swipe return" already had one evidence-free fix (.179) that did not land, so
-        // this MEASURES the art pipeline across the reveal instead of inferring it:
-        // how many covers had to load again, and how many were slow enough (>=120ms)
-        // to replay artloader's 0.3s fade-in — that file's own documented flash
-        // mechanism. One deferred log line per swipe; no behaviour change.
-        // Deliberately instruments the OUTCOME, not a suspect. Enumerating causes
-        // (art fetch, re-decode, SW cache miss, SWR rebuild, retry cycle, container
-        // transition, iOS dropping decoded bitmaps) and logging each one only proves
-        // or clears the ones I thought of — and the first two fixes here failed
-        // precisely because the cause was not on my list. Every mechanism that makes
-        // an image visibly change has to write to the DOM to do it: a node replaced,
-        // a `src` set or cleared, a class swapped (`art-done` = the 0.3s fade,
-        // `art-instant` = no fade), or the container restyled. Watching those writes
-        // catches an unknown cause as readily as a known one.
-        //
-        // ⭐ .199 — THE MISSING AXIS: COVERED vs EXPOSED.
-        // .198 made the hold real (device: `hold 39-48ms via=paint`, was 1-2ms) and the
-        // flash SURVIVED. The report on the offending abort read `ROWS KEPT 0/36 fresh=36`
-        // with `sameNode=true` — every row replaced under a surviving controller. But the
-        // watch window is 1500ms and the ghost lifts at ~41ms, so that number could not
-        // say WHEN the churn landed, and that is the entire question: churn under the
-        // ghost is invisible and harmless, the SAME churn after it lifts IS the flash.
-        // Counting what changed was never going to answer it; only counting WHEN can.
-        // So every mutation is now stamped against the ghost-drop time. `EXPOSED` is the
-        // load-bearing half — anything non-zero there happened in front of the user.
-        //
-        // ⭐ .200 — THE WINDOW ITSELF WAS DESTROYING THE EVIDENCE. Two defects, both
-        // mine, both found by the user pointing at a specific swipe I then had no record
-        // of. (a) A new reveal CANCELLED the open one, and 1500ms is longer than the
-        // ~1400ms between back-to-back swipes — so of two consecutive aborts only the
-        // second was ever logged, and the flashing swipe is exactly the one you repeat.
-        // The user named the second-to-last abort; it had produced no line at all.
-        // (b) 1500ms swallows whatever you do NEXT: every large EXPOSED reading in that
-        // log had a TAP inside its window, and `row-:vrows@+1254` was a letter tap 1.25s
-        // after the uncover, not the swipe. So: a pending window is now FLUSHED, never
-        // cancelled; the window is short and ends at the first real user input; and every
-        // reveal carries a SEQ so "the second-to-last one" maps to an exact line.
-        const reportReveal = (tag, rootEl, cover) => {
-          if (!window.PBDebug) return;
-          // FLUSH the previous window instead of discarding it. Cancelling was silent
-          // data loss precisely when swipes come fast, which is when the bug shows.
-          // ⚠️ NOT MUTATION-VERIFIED, and labelled rather than left to imply coverage:
-          // every reveal reachable today is preceded by a touchstart/mousedown, so the
-          // input cutoff below always closes the previous window first and no test can
-          // distinguish this line's absence. It stays as a backstop — if a future path
-          // ever produces a reveal with no preceding user input, the alternative is
-          // silently losing the measurement again, which is what cost this session a
-          // whole round trip.
-          if (revealWatch) { try { revealWatch('superseded'); } catch { /* already ended */ } }
-          const before = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
-          const t0 = performance.now();
-          const rows0 = rootEl.querySelectorAll('.book, .author').length;
-          const imgs0 = rootEl.querySelectorAll('img').length;
-          const src0 = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src')).length;
-          // Attribute every mutation to ITS page, and split the page the user is
-          // LOOKING AT from the hidden siblings. Without that split these counters
-          // were unreadable: a browse→browse swipe builds the destination page
-          // mid-drag and tears it down afterwards, and that landed in the same
-          // totals as a genuine rebuild of the visible page. Driving the same
-          // aborted swipe locally reads +0/-1 on the VISIBLE page while the raw
-          // totals read +33/-36 — the whole difference is the destination page's
-          // normal lifecycle, which I read as the bug for three builds.
-          const vis = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0 };
-          const hid = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0 };
-          const countImgs = (n) => (n.nodeType !== 1 ? 0
-            : (n.tagName === 'IMG' ? 1 : (n.querySelectorAll ? n.querySelectorAll('img').length : 0)));
-          // Removed nodes are already detached, so classify by the mutation TARGET
-          // (the surviving parent), never by the removed node itself.
-          const bucket = (node) => {
-            const pg = (node && node.nodeType === 1 && node.closest) ? node.closest('.browsepage') : null;
-            return (pg && !pg.classList.contains('hidden')) ? vis : hid;
-          };
-          // The COVERED/EXPOSED split, on the VISIBLE page only (a hidden sibling is
-          // never on screen, so "was it covered" is meaningless there).
-          // `heads` = the DIVIDER LETTERS (.letterhead), tracked separately because they
-          // are what the user reports flashing and they are plain text — no image, no
-          // decode, no fetch. If heads churn while EXPOSED, the letters were genuinely
-          // rewritten; if they do not and the letters still flashed, no DOM write can
-          // explain it and the cause is the repaint itself.
-          const cov = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, rows: 0, heads: 0, attr: 0 };
-          const exp = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, rows: 0, heads: 0, attr: 0 };
-          // WHAT the user saw, not just how much: the first few exposed writes, each
-          // stamped ms-after-uncover, with the element that changed. A count says churn
-          // happened; this says what it was and whether it was one burst or a trickle.
-          const firsts = [];
-          const note = (kind, node, dt) => {
-            if (firsts.length >= 6) return;
-            const el = (node && node.nodeType === 1) ? node : null;
-            const cls = el && typeof el.className === 'string' ? el.className.trim().split(/\s+/)[0] : '';
-            firsts.push(`${kind}${cls ? ':' + cls : ''}@+${Math.round(dt)}`);
-          };
-          const countRows = (n) => (n.nodeType !== 1 ? 0
-            : ((n.classList && (n.classList.contains('book') || n.classList.contains('author'))) ? 1
-              : (n.querySelectorAll ? n.querySelectorAll('.book, .author').length : 0)));
-          const countHeads = (n) => (n.nodeType !== 1 ? 0
-            : ((n.classList && n.classList.contains('letterhead')) ? 1
-              : (n.querySelectorAll ? n.querySelectorAll('.letterhead').length : 0)));
-          let obs = null;
-          try {
-            obs = new MutationObserver((muts) => {
-              // Sample the clock ONCE per batch: a MutationObserver delivers a batch at
-              // microtask time, so every record in it landed in the same task.
-              const now = performance.now();
-              const uncovered = cover.dropAt > 0 && now >= cover.dropAt;
-              const dt = uncovered ? now - cover.dropAt : 0;
-              for (const mu of muts) {
-                const b = bucket(mu.target);
-                const t = (b === vis) ? (uncovered ? exp : cov) : null;   // timing only for the visible page
-                if (mu.type === 'childList') {
-                  for (const n of mu.addedNodes) {
-                    b.add += countImgs(n);
-                    if (t) {
-                      t.add += countImgs(n); t.rows += countRows(n); t.heads += countHeads(n);
-                      if (t === exp && countHeads(n)) note('LETTER+', n, dt);
-                      else if (t === exp && countRows(n)) note('row+', n, dt);
-                    }
-                  }
-                  for (const n of mu.removedNodes) {
-                    b.rem += countImgs(n);
-                    if (t) {
-                      t.rem += countImgs(n); t.heads += countHeads(n);
-                      if (t === exp && countHeads(n)) note('LETTER-', mu.target, dt);
-                      else if (t === exp && countRows(n)) note('row-', mu.target, dt);
-                    }
-                  }
-                } else if (mu.type === 'attributes' && mu.target.tagName === 'IMG') {
-                  if (mu.attributeName === 'src') {
-                    if (mu.target.getAttribute('src')) { b.srcSet++; if (t) { t.srcSet++; if (t === exp) note('src+', mu.target, dt); } }
-                    else { b.srcClr++; if (t) { t.srcClr++; if (t === exp) note('src-', mu.target, dt); } }
-                  } else {
-                    const c = String(mu.target.className || '');
-                    if (/art-done/.test(c)) { b.fade++; if (t) { t.fade++; if (t === exp) note('FADE', mu.target, dt); } }
-                    else if (/art-instant/.test(c)) { b.instant++; if (t) { t.instant++; if (t === exp) note('inst', mu.target, dt); } }
-                  }
-                } else if (mu.type === 'attributes') {
-                  // A class/style change on a CONTAINER (.browsepage parked/hidden, a
-                  // group shell, the list itself) restyles everything inside it without
-                  // touching a single row — the one DOM cause that could repaint the
-                  // letters while every row-identity counter reads clean. Previously
-                  // ignored entirely: only IMG targets were examined.
-                  if (t) { t.attr++; if (t === exp) note('attr:' + String(mu.attributeName), mu.target, dt); }
-                }
-              }
-            });
-            // `style` joins the filter: a container restyle is invisible to a class
-            // watch, and it is precisely the kind of write that repaints unchanged text.
-            obs.observe(rootEl, { childList: true, subtree: true, attributes: true,
-              attributeFilter: ['src', 'class', 'style'] });
-          } catch { /* no MutationObserver → the ArtLoader deltas below still land */ }
-          let done = false;
-          const finish = (why) => {
-            if (done) return; done = true;
-            revealWatch = null;
-            // FIRST, before anything that could throw: a patched window.scrollTo leaking
-            // past this window would be a real bug, not merely a bad measurement.
-            if (cover.restoreScrollTo) { try { cover.restoreScrollTo(); } catch { /* already restored */ } }
-            clearTimeout(timer);
-            try { document.removeEventListener('touchstart', onInput, true); } catch { /* gone */ }
-            try { document.removeEventListener('mousedown', onInput, true); } catch { /* gone */ }
-            if (obs) { try { obs.disconnect(); } catch { /* already gone */ } }
-            const a = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
-            const art = (a && before)
-              ? ` | art loaded=${a.loads - before.loads} instant=${a.instant - before.instant}`
-                + ` FADED=${a.fade - before.fade} released=${a.released - before.released}`
-              : ' | art n/a';
-            // PRESERVED vs REBUILT — the discriminator. Same node + same controller
-            // instance means the page was never torn down, so any churn above is it
-            // filling in, not being recreated.
-            const now = snapBrowse();
-            // ROWS KEPT is the load-bearing number: how many of the row elements that
-            // were on screen when the gesture began are STILL the same elements. It is
-            // immune to whatever else lands in the window, which the +img/-img totals
-            // are not.
-            const surv = survivors(revealBase);
-            const cmp = (!revealBase || !now) ? 'base n/a'
-              : `ROWS KEPT ${surv ? surv.kept + '/' + surv.of + ' fresh=' + surv.fresh : '?'}`
-                + ` | sameNode=${now.node === revealBase.node} sameCtl=${now.ctl === revealBase.ctl}`
-                + ` src ${revealBase.src}→${now.src}`
-                + ` realized ${revealBase.realized}→${now.realized} state ${revealBase.state}→${now.state}`;
-            // COVERED = churned while the ghost still hid it (invisible, fine).
-            // EXPOSED = churned in front of the user. If the flash is a DOM write at
-            // all, it is in here; if EXPOSED is all-zero on a swipe the user saw flash,
-            // then nothing wrote to the visible page and the cause is not the DOM —
-            // it is the uncover itself (layer teardown / a repaint of unchanged
-            // content), which is a different fix and worth knowing without another
-            // round of guessing.
-            const fmt = (s) => `+img=${s.add} -img=${s.rem} rows+=${s.rows} LETTERS=${s.heads}`
-              + ` attr=${s.attr} src+=${s.srcSet} src-=${s.srcClr} fade=${s.fade} inst=${s.instant}`;
-            const seen = firsts.length ? ` | first=[${firsts.join(' ')}]` : '';
-          const wrote = cover.writes && cover.writes.length
-            ? ` | scrollWrites=[${cover.writes.join(' ')}]` : '';
-          // How many covers the ghost builder actually phase-seeded. `animSync=0` means
-          // the .205 fix did not run at all (no getAnimations, or nothing matched), which
-          // is indistinguishable from "it ran and did not help" unless it is reported.
-          // `res=` is the residual measured AT the sync: 0 means the assignment took.
-          // A large res says the seek itself failed; res=0 with the flash still present
-          // says animation phase is not the mechanism after all.
-          const ghostDiff = (cover.diff ? ` | ghostVsReal=[${cover.diff}]` : '')
-            + ` animSync=${cur.animSync == null ? '?' : cur.animSync}`
-            + `/res=${cur.animRes == null ? '?' : cur.animRes}`;
-            // POSITION across the reveal — scrollY/documentHeight at each step, plus the
-            // scroll the ghost was frozen at. A move between preDrop and postDrop, or a
-            // reveal at a Y different from ghostY, IS the flash: the whole page jumping,
-            // invisible to every DOM counter above (all of which read zero on the aborts
-            // the user confirmed flashing).
-            // `final`, NOT `end` — the line already ends with `end=<why>`, and two
-            // different `end=` tokens in one log line is exactly the kind of ambiguity
-            // that makes a reading unparseable later. Caught by a surviving mutation.
-            mark('final');
-            const trail = cover.marks.length
-              ? ` | scroll=[${cover.marks.join(' ')}] ghostY=${cover.ghostY == null ? '?' : cover.ghostY}` : '';
-            PBDebug.log('FLASH', `#${seq} ${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
-              + ` | COVERED ${fmt(cov)}`
-              + ` | EXPOSED ${fmt(exp)}${seen}`
-              + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
-              + ` | ${cmp}`
-              + art + trail + wrote + ghostDiff + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
-          };
-          // The flash happens within a few frames of the uncover, so the window only has
-          // to outlive that. 1500ms was long enough to swallow the user's NEXT action and
-          // report it as this swipe's churn — which is exactly what it did.
-          const timer = setTimeout(() => finish('timeout'), 500);
-          // …and end EARLY at the first real input. A tap or the next swipe is the user
-          // acting on a view that has already finished revealing; anything it causes
-          // belongs to that action, not to this one.
-          const onInput = () => finish('input');
-          try {
-            document.addEventListener('touchstart', onInput, true);
-            document.addEventListener('mousedown', onInput, true);
-          } catch { /* listener support is not optional in practice */ }
-          revealWatch = (why) => finish(why || 'superseded');
-        };
-        // Shared between the watcher and the hold: `dropAt` is 0 while the ghost still
-        // covers the view and becomes the uncover timestamp the instant it lifts. One
-        // object per finalize, so overlapping gestures cannot cross-stamp each other.
-        //
-        // ⭐ .201 — `marks` is the LAST UNMEASURED AXIS: WHERE the page is sitting.
-        // Device build .200, the abort the user reported as flashing, read EXPOSED
-        // all-zero on a clean window (`win=502ms end=timeout`): no rows, no LETTERS, no
-        // attr, no src, ROWS KEPT 36/36, sameNode+sameCtl. Nothing wrote to the visible
-        // page and it still flashed — so the flash is not content changing, it is the
-        // view being repainted UNCHANGED. Every DOM cause is now eliminated by
-        // measurement rather than by argument.
-        // What is still untracked is POSITION. The ghost is a snapshot pinned at
-        // translateY(-scrollY) taken at gesture start; the abort restores the scroll
-        // separately, and the destination page rendered mid-drag changes the document
-        // height, which the browser CLAMPS. If the revealed view sits even slightly off
-        // where the ghost was showing, the whole page jumps at the uncover — visually
-        // identical to "everything flashed", letters included, with zero DOM writes and
-        // invisible to every counter above. So: sample scroll + document height at each
-        // step of the reveal and print the trail.
-        const cover = { dropAt: 0, marks: [] };
-        const mark = (label) => {
-          try {
-            const se = document.scrollingElement || document.documentElement;
-            cover.marks.push(`${label}=${Math.round(window.scrollY || 0)}/${se ? se.scrollHeight : 0}`);
-          } catch { /* a diagnostic must never break the reveal */ }
-        };
-        cover.mark = mark;   // the hold samples either side of the removal through this
-        cover.ghostY = (cur.ghostY == null) ? null : Math.round(cur.ghostY);
-        //
-        // ⭐ .202 — WHO MOVES THE SCROLL. The .201 trail found it on the first log:
-        //   scroll=[finalize=13631/14676 applied=1534/2386 restored=1534/2386
-        //           preDrop=13631/2386 postDrop=13631/2386 final=1534/2386] ghostY=1534
-        // The document COLLAPSES 14676->2386 when the destination is applied, scroll
-        // clamps to 1534 — and then the view is UNCOVERED at 13631, ~12,000px from where
-        // the ghost was showing, before snapping back. EXPOSED agreed for the first time
-        // (`row-:vrows@+1`, ROWS KEPT 0/36): the virtualizer tearing rows out 1ms after
-        // the uncover because the scroll is nowhere near what they were built for.
-        // That is one mechanism for all three reported symptoms — images, letters, bars
-        // — because the view is briefly showing a DIFFERENT PART OF THE LIST.
-        // Three writers can do this (app.js's own restore, browse.js applyScrollY,
-        // virtuallist's anchor restore) and guessing between them is what this session
-        // has repeatedly got wrong, so: record EVERY write with its caller. Patching the
-        // global is cause-agnostic — it catches a writer I have not thought of, which is
-        // the property that made the mutation watcher worth having.
-        cover.writes = [];
-        const tFin = performance.now();
-        const realScrollTo = window.scrollTo;
-        window.scrollTo = function (...args) {
-          try {
-            const y = (args.length > 1) ? args[1] : (args[0] && args[0].top);
-            // One frame of the stack past this wrapper names the caller.
-            const st = String(new Error().stack || '').split('\n').slice(2, 4).join(' ')
-              .replace(/https?:\/\/[^)\s]*\//g, '')        // https://…/js/app.js:880 → app.js:880
-              .replace(/[A-Za-z]:[\\/][^)\s]*[\\/]/g, '')  // …and a local path under test
-              .replace(/\s+at\s+/g, ' ').replace(/[()]/g, '').trim().slice(0, 70);
-            cover.writes.push(`${Math.round(y || 0)}@+${Math.round(performance.now() - tFin)}:${st}`);
-          } catch { /* a diagnostic must never break scrolling */ }
-          return realScrollTo.apply(window, args);
-        };
-        cover.restoreScrollTo = () => { window.scrollTo = realScrollTo; };
-        mark('finalize');
         if (commit && dest.v === 'home') {
           applyScreen(dest, { render: false, keepGhosts: true });
-          reportReveal('commit→home', $('home'), cover);
-          holdGhostUntilPaintable($('home'), cover);
+          // Keep the cover until the real home's covers are actually decoded/paintable
+          // (a fixed frame count guessed wrong). img.decode() resolves when the image
+          // can paint without a flash — covering both a re-decode and a re-fetch.
+          const covers = Array.from($('home').querySelectorAll('img')).filter((i) => i.getAttribute('src'));
+          let dropped = false;
+          const drop = () => { if (dropped) return; dropped = true; dropPanes(); finishing = false; };
+          Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve()))).then(drop);
+          setTimeout(drop, 600);   // safety net — never keep the cover pane forever
           return;
         }
-        // ABORTING a browse→browse swipe is the SAME reveal, and had the ordering
-        // backwards — it dropped the ghost first and re-showed the page bare. start()
-        // rendered the destination into the live #browse, which put display:none on the
-        // outgoing page; restoring it re-decodes its covers (and under windowed browse
-        // re-materializes its rows, whose art must reload). Reported 2026-07-19 as
-        // "cover images flash on each aborted swipe return" — it became noticeable once
-        // .178 made aborts actually complete on every swipe.
-        if (!commit && cur.clobbered) {
-          applyScreen(dest, { render: true, resetScroll: false, keepGhosts: true });
-          mark('applied');
-          window.scrollTo(0, cur.scroll0);
-          mark('restored');
-          reportReveal('abort→' + dest.v, $('browse'), cover);
-          holdGhostUntilPaintable($('browse'), cover);
-          return;
-        }
-        // No hold on this path — the panes go NOW, so the view is exposed from the
-        // first instant and every mutation below belongs in the EXPOSED bucket.
-        cover.dropAt = performance.now();
         dropPanes();
-        // Measured on the plain paths too, so an abort's numbers have something to be
-        // compared AGAINST — "covers reload on every transition" and "covers reload
-        // only on aborts" call for completely different fixes.
-        reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'), cover);
         if (commit) applyScreen(dest, { render: false });   // dest already rendered live → reconcile only
         else {
           // Aborted → restore the current screen (re-render only if its element was
@@ -1148,31 +449,18 @@
         }
         finishing = false;
       };
-      // try/finally so the row hold can never be stranded. runFinalize has THREE
-      // exits — the two ghost-held reveals return early — and none is guaranteed to
-      // run if applyScreen or Browse.render throws. A finally covers every return AND
-      // the throw. It lands after the SYNCHRONOUS applyScreen, which is the part that
-      // must still see the hold; the deferred ghost drop does not need it.
-      const finalize = () => {
-        if (done) return; done = true;
-        try { runFinalize(); } finally { dropRowHold(); }
-      };
       const anchor = cur.movers[0] && cur.movers[0].el;
       if (anchor) anchor.addEventListener('transitionend', finalize, { once: true });
       setTimeout(finalize, 340);
     }
 
-    // Only ARMING is document-wide — at touchstart the target is by definition still
-    // attached, so it is reachable here. move/end are bound to that target for the
-    // life of the gesture (bindGesture above) and are deliberately NOT on document:
-    // a document listener stops hearing a gesture whose start node gets removed.
     document.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; begin(t.clientX, t.clientY, e.target); }, { passive: true });
-    // Mouse keeps the document-level pointer path: a mouse gesture's events are not
-    // pinned to the mousedown node, so detachment cannot starve it.
+    document.addEventListener('touchmove', (e) => { const t = e.changedTouches[0]; move(t.clientX, t.clientY, e); }, { passive: false });
+    document.addEventListener('touchend', end, { passive: true });
+    document.addEventListener('touchcancel', end, { passive: true });
     document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') begin(e.clientX, e.clientY, e.target); });
     document.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && d) move(e.clientX, e.clientY, e); });
     document.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') end(); });
-    document.addEventListener('pointercancel', (e) => { if (e.pointerType === 'mouse') end(); });   // the touch path has touchcancel; this was its missing twin
     // History stays at one entry, so a popstate is only a stray OS gesture — re-anchor
     // and keep the current in-memory screen (never navigate away → never reload).
     window.addEventListener('popstate', () => { try { history.replaceState({ v: 'app' }, ''); } catch {} applyScreen(currentDesc()); });

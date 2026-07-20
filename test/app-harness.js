@@ -32,13 +32,8 @@
 //     at the wrong time, that is a REAL failure here — which is the point, and is
 //     exactly the class .106's #npDl ordering trap belonged to.
 //
-// The swipe gesture's DRAG GEOMETRY stays out of scope (jsdom has no layout, so
-// thresholds/velocity/committed-distance are not meaningful here — see the standing
-// note in js/nav.js). Its EVENT PLUMBING is in scope as of .178 and is driven by
-// `h.touch` below: which node the listeners are bound to, and whether a gesture can
-// still be settled after the DOM under the finger is destroyed, are exactly the
-// wiring questions this harness exists for — and a real starved-gesture bug shipped
-// because nothing covered them.
+// The swipe GESTURE is deliberately out of scope (drag/layout-coupled; jsdom has no
+// layout — see the standing note in js/nav.js).
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
@@ -220,35 +215,11 @@ function boot(opts = {}) {
   global.localStorage = window.localStorage;
   global.Audio = FakeAudio;
   window.Audio = FakeAudio;
-  // jsdom has no rAF/layout. DEFAULT: run callbacks synchronously so paint-deferred
-  // work is observable in-test.
-  //
-  // ⭐ opts.deferRaf — QUEUE them instead, one frame per `h.raf.frame()`. A synchronous
-  // rAF is a fake KINDER than a browser: it collapses "the frame has not been painted
-  // yet" out of existence, so any test of code that waits for a painted frame would pass
-  // whether the wait was there or not. .198 needs exactly that state to be expressible
-  // (the ghost must still be covering the view UNTIL the paint frame lands), so a test
-  // written against the synchronous default could not fail and would prove nothing.
-  const rafQ = [];
-  const raf = opts.deferRaf
-    ? (fn) => { rafQ.push(fn); return rafQ.length; }
-    : (fn) => { fn(0); return 0; };
+  // jsdom has no rAF/layout; run callbacks synchronously so paint-deferred work is
+  // observable in-test (the app only uses rAF to sequence, never to measure here).
+  const raf = (fn) => { fn(0); return 0; };
   global.requestAnimationFrame = raf; window.requestAnimationFrame = raf;
   global.cancelAnimationFrame = () => {}; window.cancelAnimationFrame = () => {};
-  // app.js reads MutationObserver as a BARE global, and node has none — so
-  // `new MutationObserver(...)` threw a ReferenceError that app.js's own defensive
-  // catch swallowed. The entire reveal-mutation diagnostic (app.js reportReveal, the
-  // thing every FLASH device reading comes from) was therefore DEAD in every test
-  // since .180, while looking merely optional. Same shape as the .154 navigator
-  // defect: a global that was never installed is invisible AND silent.
-  global.MutationObserver = window.MutationObserver;
-  // THIRD time this exact defect: app.js reads `Element` as a bare global (feature-
-  // detecting Element.prototype.getAnimations), node has none, so the guard would
-  // silently take the unsupported path in every test and the ghost's animation-phase
-  // sync would be dead code under test. Same shape as navigator (.154) and
-  // MutationObserver (.199). When app.js touches a DOM global, install it here.
-  global.Element = window.Element;
-  global.getComputedStyle = window.getComputedStyle.bind(window);
   window.scrollTo = () => {};
   global.scrollTo = window.scrollTo;
   global.history = window.history;         // app.js uses the bare `history` global
@@ -519,14 +490,8 @@ function boot(opts = {}) {
     BufferingScreen: { init: noop, render: noop },
   };
 
-  // The swipe row-hold. Modelled with the REAL token semantics (a monotonic token,
-  // and endHold ignores a stale one) because the hazard being tested is a hold that
-  // is never released — a fake that accepted any token would pass a leak.
-  let holdSeq = 0;
   const browse = {
     init: noop, render: async () => {}, reset: noop, clearCache: noop,
-    beginHold: () => { log.calls.push({ name: 'browse.beginHold', args: [] }); return ++holdSeq; },
-    endHold: (t) => { log.calls.push({ name: 'browse.endHold', args: [t === holdSeq ? 'current' : 'stale'] }); },
     deactivate: log.rec('browse.deactivate'), showPage: noop,
     patchRows: () => false,          // never claim the repaint — force the real renderTile path
     bookSig: (b) => JSON.stringify([b && b.thumb, b && b.title, b && b.parentTitle]),
@@ -544,11 +509,7 @@ function boot(opts = {}) {
   put('Store', { persist: async () => 'granted', cachedBooks: async () => books });
   put('SyncQueue', { init: noop, enqueue: noop, count: async () => 0 });
   put('Warmer', { start: noop });
-  // `stats` must exist or app.js's .180 reveal diagnostic short-circuits and the whole
-  // path stays dark in every test — the .154 "a fake that is never consulted is
-  // invisible" trap. Counters stay zero; the point is that the code RUNS.
-  put('ArtLoader', { scan: noop, observe: noop, release: noop,
-    stats: () => ({ queued: 0, loads: 0, instant: 0, fade: 0, failed: 0, released: 0, maxDt: 0 }) });
+  put('ArtLoader', { scan: noop, observe: noop, release: noop });
   for (const [k, v] of Object.entries(screens)) put(k, v);
   put('PBDebug', { log: (tag, m) => log.calls.push({ name: 'debug', args: [tag, String(m)] }),
     watchAudio: noop, registerState: noop, snapshot: () => ({}) });
@@ -659,53 +620,6 @@ function boot(opts = {}) {
       s.value = dur ? String((sec / dur) * 1000) : '0';
       s.dispatchEvent(new window.Event('change', { bubbles: true }));
     },
-    /**
-     * Drive a REAL touch gesture against the shipped listeners.
-     *
-     * FIDELITY RULE — the reason this is not a convenience wrapper: per the Touch
-     * Events spec the touch target is fixed at `touchstart`, and every later
-     * touchmove/touchend/touchcancel of that gesture is dispatched AT THAT NODE —
-     * including after it has been removed from the document, at which point the
-     * event no longer reaches `document` (a detached node's propagation path is
-     * itself). This harness reproduces that exactly: `move`/`end` re-dispatch at the
-     * ORIGINAL start target, attached or not.
-     *
-     * A fake that re-targeted to `document` instead would be KINDER than a real
-     * browser and would silently hide the entire bug class this exists to catch —
-     * a gesture starved because the DOM under the finger was destroyed mid-drag.
-     */
-    touch: (() => {
-      let target = null;
-      const ev = (type, x, y) => {
-        // touchstart/touchmove are cancelable in a real browser until the platform
-        // takes the gesture over; app.js:377 branches on exactly that flag.
-        const e = new window.Event(type, { bubbles: true, cancelable: type !== 'touchend' && type !== 'touchcancel' });
-        const t = { clientX: x, clientY: y, identifier: 0, target };
-        e.changedTouches = [t];
-        e.touches = (type === 'touchend' || type === 'touchcancel') ? [] : [t];
-        return e;
-      };
-      const fire = (type, x, y) => {
-        if (!target) throw new Error('touch.' + type + ' with no gesture started');
-        target.dispatchEvent(ev(type, x, y));
-      };
-      return {
-        /** Begin a gesture on a real element (selector or node). x/y are viewport px. */
-        start(x, y, sel) {
-          target = typeof sel === 'string'
-            ? (sel.startsWith('#') ? $(sel.slice(1)) : document.querySelector(sel))
-            : sel;
-          if (!target) throw new Error('no such element to touch: ' + sel);
-          fire('touchstart', x, y);
-          return target;
-        },
-        move(x, y) { fire('touchmove', x, y); },
-        end(x, y) { fire('touchend', x, y); target = null; },
-        cancel(x, y) { fire('touchcancel', x, y); target = null; },
-        /** The node the gesture is bound to — for asserting it really got detached. */
-        target: () => target,
-      };
-    })(),
     /** Drive a background/foreground transition through the real listener. */
     setHidden(v) {
       hidden = !!v;
@@ -738,24 +652,6 @@ function boot(opts = {}) {
           for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
         }
         vnow = target;
-      },
-    },
-    /**
-     * Deferred animation frames. Only meaningful under boot({ deferRaf: true }) —
-     * otherwise rAF ran synchronously and `pending()` is always 0.
-     */
-    raf: {
-      /** How many callbacks are waiting for a frame. */
-      pending: () => rafQ.length,
-      /**
-       * Run ONE frame's worth of callbacks. Callbacks queued BY those callbacks wait
-       * for the next frame, exactly as a browser schedules them — which is what makes
-       * a double-rAF genuinely take two frames here instead of collapsing into one.
-       */
-      async frame() {
-        const batch = rafQ.splice(0, rafQ.length);
-        for (const fn of batch) { try { fn(0); } catch { /* the app's business */ } }
-        for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
       },
     },
     /** Cancel anything still pending so node:test can exit. ALWAYS call in a finally. */

@@ -59,7 +59,6 @@ const Browse = (() => {
 
   function init(opts) { o = opts; }
   function reset() {
-    dropHold();                  // these controllers are going away; no hold may outlive them
     authorsCache = null;
     pageCache.forEach((v) => destroyController(v.el));
     pageCache.clear();
@@ -68,7 +67,6 @@ const Browse = (() => {
   // Drop cached pages so lists rebuild from fresh data (pull-to-refresh). Safe to
   // call while browse is hidden (home). Removes the page nodes; keeps the mount.
   function clearCache() {
-    dropHold();
     authorsCache = null;
     pageCache.forEach((v) => { destroyController(v.el); if (v.el.parentNode) v.el.remove(); });
     pageCache.clear();
@@ -113,85 +111,9 @@ const Browse = (() => {
   // superseded probe's finalizer cleared a newer probe's state; fixed the same way.
   function beginRestore() { restoring = true; return ++restoreGen; }
   function endRestore(token) { if (token === restoreGen) restoring = false; }
-
-  // ── ROW HOLD (swipe-scoped) ─────────────────────────────────────────────────
-  // While a swipe gesture is live, showPage() SUSPENDS the outgoing page's
-  // controller instead of deactivating it: hidden and not realizing, but rows
-  // kept. An aborted swipe then restores the page it never really left, instead of
-  // rebuilding every row and re-fetching every cover — which is the measured cause
-  // of "images flash on each aborted swipe return" (at reveal the page had 36
-  // images and ZERO with a src).
-  //
-  // Same owned-token idiom as beginRestore above, for the same reason: a stale
-  // gesture's finalizer must not release a newer gesture's hold. Held state is
-  // bounded — one overscan window per suspended page — and a LEAKED hold degrades
-  // to what the classic (≤600-item) renderer already does today, which is keep
-  // every row of every cached page. So the failure mode is bounded, not unbounded.
-  let holdRows = false;
-  let holdGen = 0;
-  // Background revalidates that arrived mid-gesture, latest-wins per page key.
-  // Suspending the rows is not enough on its own: an SWR repaint destroys them by a
-  // different door (patchInPlace → ctl.update → dematerialize, or buildFor →
-  // innerHTML=''), so the abort rebuilds the page after all. MEASURED: a swipe taken
-  // ~0.7s after a nav tap — i.e. inside the revalidate window — revealed the page
-  // with withSrc=0 and 17 covers refetched, while a swipe following another swipe
-  // was perfectly clean. Deferring costs one gesture of data staleness.
-  const heldRepaints = new Map();
-  function beginHold() {
-    holdRows = true; heldRepaints.clear();
-    // Freeze scroll-driven realization too. Suspending the OUTGOING page's rows is
-    // not sufficient on its own: a page that is never hidden during the gesture
-    // (swiping back to Home moves the real #browse by transform, so showPage never
-    // runs) stays active and re-realizes on every transient scroll.
-    if (VL && VL.setScrollSuspended) VL.setScrollSuspended(true);
-    return ++holdGen;
-  }
-  function endHold(token) {
-    if (token !== holdGen || !holdRows) return;
-    holdRows = false;                       // cleared FIRST, or the deferred repaints re-defer
-    if (VL && VL.setScrollSuspended) VL.setScrollSuspended(false);
-    // Now do the teardown the hold deferred: any page still suspended is off screen
-    // for good, so it goes to the normal dematerialized resting state. The VISIBLE
-    // page is skipped — it is the one the gesture landed on.
-    // It activates FIRST, now that the swipe has put the real scroll back, so its
-    // realize computes the right window and reuses the rows it kept instead of
-    // releasing them against a transient offset. activate() is a no-op for a page
-    // that was never suspended (swiping back to Home never hides it), so realize
-    // explicitly — this is the ONE realization the gesture gets, against the
-    // settled scroll.
-    // Parking is gesture-scoped: hand the pages back to display:none now, or every
-    // cached page stays painted for the rest of the session.
-    const stillShown = activeEntry();
-    for (const v of pageCache.values()) {
-      if (!v.el.classList.contains('parked')) continue;
-      v.el.classList.remove('parked');
-      if (v !== stillShown) v.el.classList.add('hidden');
-    }
-    const shown = activeEntry();
-    if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }
-    for (const v of pageCache.values()) {
-      const c = v.el._vctl;
-      if (c && c.state && c.state() === 'suspended') c.deactivate();
-    }
-    // Now apply whatever the revalidates wanted to do. Each re-runs the real repaint,
-    // which re-checks page identity, so one evicted/replaced meanwhile is dropped.
-    const pending = [...heldRepaints.values()];
-    heldRepaints.clear();
-    for (const fn of pending) fn();
-  }
-  // Destructive cache operations invalidate any outstanding hold: their controllers
-  // are being destroyed, and a hold surviving them would wrongly govern whatever
-  // pages get built next.
-  function dropHold() {
-    holdRows = false; holdGen++; heldRepaints.clear();
-    if (VL && VL.setScrollSuspended) VL.setScrollSuspended(false);
-  }
   const browseVisible = () => !!(o.mount && !o.mount.classList.contains('hidden'));
-  // A page is off screen when it is display:none'd OR parked off-viewport during a
-  // swipe. Testing only for `.hidden` would count a parked page as the visible one.
-  const offscreen = (el) => el.classList.contains('hidden') || el.classList.contains('parked');
   function activeEntry() {
-    for (const v of pageCache.values()) if (!offscreen(v.el)) return v;
+    for (const v of pageCache.values()) if (!v.el.classList.contains('hidden')) return v;
     return null;
   }
   if (typeof window !== 'undefined') {
@@ -219,16 +141,6 @@ const Browse = (() => {
     const se = document.scrollingElement || document.documentElement;
     const mine = beginRestore();
     window.scrollTo(0, clampY(y, se.scrollHeight, window.innerHeight));
-    // This is a DELIBERATE placement — the page's real entry position — which is the
-    // opposite of the transient scrolls the swipe freezes realization for (iOS
-    // granting a native scroll, or a shorter page clamping scrollY). So realize
-    // against it explicitly: while a gesture holds the freeze, the scroll event this
-    // fires is ignored, and the incoming page would be left scrolled to one place
-    // with its rows built for another. MEASURED: entering Books at y=11209 mid-swipe
-    // left 21 rows sitting 11,059px above the viewport — group shells reserving
-    // space with nothing in them, i.e. empty bars until the gesture ended.
-    const cur = activeEntry();
-    if (cur && cur.el._vctl && cur.el._vctl._realize) cur.el._vctl._realize();
     // Two frames: the scroll + any clamp it provokes must both land first.
     requestAnimationFrame(() => requestAnimationFrame(() => endRestore(mine)));
   }
@@ -278,37 +190,11 @@ const Browse = (() => {
     // AFTER it's visible again, for the same reason.
     for (const [k, v] of pageCache) {
       const c = v.el._vctl;
-      // holdRows → suspend (keep rows) instead of dematerializing. Either way the
-      // anchor is captured HERE, before `.hidden` lands, for the reason above.
-      if (c && k !== key) { if (holdRows && c.suspend) c.suspend(); else c.deactivate(); }
+      if (c && k !== key) c.deactivate();
     }
-    // While a swipe holds rows, the outgoing page is PARKED (off-viewport but still
-    // painted) rather than display:none'd. iOS drops the decoded cover images of a
-    // display:none subtree, so an aborted swipe re-decodes every cover at once and
-    // the whole list visibly pops back in — with the DOM completely untouched
-    // (measured on device: ROWS KEPT 68/68, src 22->22, +img 0). Same technique and
-    // the same reason as #home.parked. Gesture-scoped: endHold puts the pages back
-    // to display:none so cached pages do not stay painted for the session.
-    for (const [k, v] of pageCache) {
-      const away = k !== key;
-      v.el.classList.toggle('parked', away && holdRows);
-      v.el.classList.toggle('hidden', away && !holdRows);
-    }
+    for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
     const shown = pageCache.get(key);
-    if (shown && shown.el._vctl) {
-      const c = shown.el._vctl;
-      // A page coming back from SUSPENDED is a swipe ABORTING to where it started.
-      // Activating here would realize rows against the scroll the browser CLAMPED
-      // when the destination page shortened the document — measured: scroll 11209 →
-      // 0 → 11209, all 33 realized rows destroyed and recreated, their loaded covers
-      // gone (33 → 16 with src). That is the flicker. The swipe restores the real
-      // scroll immediately after this returns, and endHold() activates then.
-      //
-      // Any OTHER page still activates normally, so the incoming page during a drag
-      // is materialized as before — deferring that one too would slide in a blank.
-      const returningFromSwipe = holdRows && c.state && c.state() === 'suspended';
-      if (!returningFromSwipe) c.activate();
-    }
+    if (shown && shown.el._vctl) shown.el._vctl.activate();
   }
   // Top-level virtual-list lifecycle for the WHOLE Browse view. showPage() owns the
   // page-to-page handoff, but leaving Browse entirely (→ Home) hides the #browse
@@ -369,7 +255,7 @@ const Browse = (() => {
     else if (desc.v === 'authorBooks') authorView(el, data.author, data.books);
     else if (desc.v === 'files') filesView(el, desc.book, data);
     // A rebuilt virtual page must resume realizing if it's the page on screen.
-    if (el._vctl && !offscreen(el) && browseVisible()) el._vctl.activate();
+    if (el._vctl && !el.classList.contains('hidden') && browseVisible()) el._vctl.activate();
   }
 
   // ---- in-place keyed reconcile (background-revalidate repaint) -------------
@@ -498,14 +384,6 @@ const Browse = (() => {
       const repaint = (fresh) => {
         const cur = pageCache.get(key);
         if (!cur || cur.el !== page || !page.isConnected) return;
-        // A swipe is in flight → this would destroy the rows the hold is preserving.
-        // Park it; endHold replays the latest one per page. (Keyed by page, so a
-        // burst of revalidates collapses to the freshest.)
-        if (holdRows) {
-          heldRepaints.set(key, () => repaint(fresh));
-          if (typeof PBDebug !== 'undefined' && PBDebug.log) PBDebug.log('FLASH', `repaint deferred (${key}) — swipe in flight`);
-          return;
-        }
         // Only touch rows that actually changed; full rebuild just for a
         // structural change (add/remove/re-sort).
         if (!patchInPlace(desc, page, fresh)) buildFor(desc, fresh, page);
@@ -536,7 +414,7 @@ const Browse = (() => {
     // leaves the active page node WITHOUT .hidden — so the page check alone still let
     // a late fetch scroll the window while Home was on screen. showPage()/the virtual
     // controllers already combine these two the same way (see line ~258).
-    if (browseVisible() && !offscreen(page)) positionOnEnter(desc, page, 0);
+    if (browseVisible() && !page.classList.contains('hidden')) positionOnEnter(desc, page, 0);
   }
 
   // ---- grouping by first sort-letter --------------------------------------
@@ -842,62 +720,16 @@ const Browse = (() => {
       highlight(L); scrollTo(L);
     };
     idx.addEventListener('click', (e) => { const t = e.target.closest('.alpha'); if (t) { highlight(t.dataset.letter); scrollTo(t.dataset.letter); setTimeout(clear, 180); } });
-
-    // ── who owns this drag: the strip, or the edge swipe? ────────────────────
-    // The strip sits ON the forward-swipe edge band (measured on a 375px screen:
-    // 77% of the band, 80% of the screen height), so it cannot simply claim every
-    // drag that starts on it — that is what stopped forward swipes arming at all.
-    // It does not need to: scrubbing is VERTICAL, the swipe is HORIZONTAL.
-    //
-    // ONE arbitration for BOTH input families. Doing it for touch only left the
-    // pointer path claiming every mouse drag, so a swipe started on the strip
-    // scrubbed AND swiped — the page jumped to that letter the instant the drag
-    // began, and jumped back when the swipe aborted.
-    //
-    // Deliberately complementary to app.js's rule (it proceeds only when
-    // |dx| > |dy|): this takes the drag on |dy| >= |dx|, so exactly one of the two
-    // ever owns it. Nothing is claimed and nothing is preventDefault-ed until the
-    // direction is known — deciding early would fight the gesture that owns it.
-    // Taps are unaffected: they jump via the `click` handler above, not on movement.
-    const LOCK = 8;                       // same threshold app.js uses
-    let g0 = null, owned = false;
-    const gStart = (x, y) => { g0 = { x, y }; owned = false; };
-    const gOwns = (x, y) => {
-      if (owned) return true;
-      if (!g0) return false;              // already ceded to the swipe
-      const dx = x - g0.x, dy = y - g0.y;
-      if (Math.abs(dx) < LOCK && Math.abs(dy) < LOCK) return false;   // direction unknown
-      if (Math.abs(dx) > Math.abs(dy)) { g0 = null; return false; }   // horizontal → the swipe
-      owned = true;
-      return true;
-    };
-    const gEnd = () => { g0 = null; owned = false; clear(); };
-
-    // Mouse. Touch also emits pointer events, so this family is gated to mouse and
-    // the touch listeners below own touch — otherwise one drag is arbitrated twice.
-    idx.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') gStart(e.clientX, e.clientY); });
-    idx.addEventListener('pointermove', (e) => {
-      if (e.pointerType !== 'mouse' || !e.buttons) return;
-      if (gOwns(e.clientX, e.clientY)) jump(e.clientY);
-    });
-    idx.addEventListener('pointerup', gEnd);
-    idx.addEventListener('pointerleave', gEnd);
-
-    // Touch.
-    idx.addEventListener('touchstart', (e) => { const t = e.touches[0]; gStart(t.clientX, t.clientY); }, { passive: true });
-    idx.addEventListener('touchmove', (e) => {
-      const t = e.touches[0];
-      if (!gOwns(t.clientX, t.clientY)) return;
-      jump(t.clientY);
-      e.preventDefault();                 // only once this drag is ours
-    }, { passive: false });
-    idx.addEventListener('touchend', gEnd);
-    idx.addEventListener('touchcancel', gEnd);
+    idx.addEventListener('pointermove', (e) => { if (e.buttons) jump(e.clientY); });
+    idx.addEventListener('pointerup', clear);
+    idx.addEventListener('pointerleave', clear);
+    idx.addEventListener('touchmove', (e) => { jump(e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+    idx.addEventListener('touchend', clear);
+    idx.addEventListener('touchcancel', clear);
     return idx;
   }
 
   return { init, reset, render, clearCache, patchRows, bookSig, deactivate, activate,
-    beginHold, endHold,
     // internals exposed for unit tests only (no runtime behaviour change)
     _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY,
       applyScrollY, showPage, positionOnEnter, updateTruncNote, isRestoring: () => restoring,

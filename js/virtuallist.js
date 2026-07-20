@@ -18,14 +18,6 @@
 //     → destroyed. Inactive DEMATERIALIZES to 0 realized rows (keeps data +
 //     anchor). activate/deactivate are idempotent; update() is legal in any
 //     non-destroyed state.
-//   * SUSPENDED is a fourth, strictly gesture-scoped state: hidden and not
-//     realizing, but rows KEPT, so an aborted swipe restores without rebuilding
-//     the page (the measured cause of cover flicker on abort). It is entered
-//     ONLY by browse.js while a swipe is live and always leaves via deactivate()
-//     or destroy() — a suspended controller outliving its gesture would be the
-//     "live hidden controller" the plan's WS1c gate forbids. Its footprint is one
-//     overscan window (~35 rows), an order of magnitude BELOW what the classic
-//     (≤600-item) renderer already keeps in every hidden cached page today.
 const VirtualList = (() => {
   // Per-page realization threshold. ≤ this → the existing full renderer runs,
   // byte-for-byte unchanged (a ~500-book library never trips it). SINGLE source
@@ -131,18 +123,8 @@ const VirtualList = (() => {
   // ---- shared scroll dispatch (leak-proof: one static listener) --------------
   let activeCtl = null;
   let rafPending = false;
-  // While a swipe gesture is in flight the document scroll is TRANSIENT: iOS grants
-  // a native scroll the moment a touchmove goes non-cancelable (app.js documents
-  // this), and rendering a shorter destination page clamps scrollY outright. Both
-  // snap back when the gesture settles. Realizing against those intermediate
-  // positions releases the rows on screen and recreates them as fresh nodes whose
-  // covers must reload — measured: a 600px excursion destroyed 6 of 33 rows and lost
-  // their covers; a full clamp destroyed all 33. Owner: browse.js (beginHold /
-  // endHold), which does one realize at the end, against the settled scroll.
-  let scrollSuspended = false;
-  const setScrollSuspended = (v) => { scrollSuspended = !!v; };
   function onDocScroll() {
-    if (!activeCtl || rafPending || scrollSuspended) return;
+    if (!activeCtl || rafPending) return;
     if (!activeCtl.isVisible()) return;   // browse hidden (Home/Options scrolling) → not our scroll
     rafPending = true;
     requestAnimationFrame(() => { rafPending = false; if (activeCtl) activeCtl._realize(); });
@@ -243,38 +225,11 @@ const VirtualList = (() => {
       return top > 0 ? anchorAt(model, top) : null;
     }
     function deactivate() {
-      // Also the DEFERRED drop for a suspended controller — without accepting that
-      // state here, suspended rows could never be dropped short of destroy(), which
-      // is precisely the "live hidden controller" leak the plan forbids.
-      if (state !== 'active' && state !== 'suspended') return;
-      // Only capture while the box still measures. A suspended controller is already
-      // display:none, so getBoundingClientRect() is zeros and re-capturing here would
-      // silently rewrite a good anchor to row 0.
-      if (state === 'active') savedAnchor = captureAnchor();
+      if (state !== 'active') return;
+      savedAnchor = captureAnchor();
       state = 'inactive';
       if (activeCtl === api) activeCtl = null;
       dematerialize();                          // hidden pages hold ~0 realized rows
-    }
-    // SUSPEND — hidden, but rows KEPT (state 'suspended'). Used only while a swipe
-    // gesture is live, so an ABORTED swipe restores instantly instead of rebuilding.
-    // Measured cause of the flicker: an aborted browse→browse swipe re-materialized
-    // the whole page, so every cover had to re-fetch and the user watched an empty
-    // grid fill in (+img=72 -img=90, withSrc=0 at reveal, art loaded=34).
-    //
-    // Rows are deliberately NOT released: ArtLoader.release() sets data-art-released,
-    // and enqueue() refuses a released image forever — so releasing here would
-    // permanently strand any cover that had not finished loading. Keeping the
-    // observation costs nothing while hidden: an element with no box never
-    // intersects, so nothing loads until the page is shown again.
-    //
-    // Nulling activeCtl is load-bearing: it closes activate()'s back door below,
-    // where the INCOMING controller would otherwise call activeCtl.deactivate() and
-    // dematerialize this one anyway.
-    function suspend() {
-      if (state !== 'active') return;
-      savedAnchor = captureAnchor();            // while it still measures
-      state = 'suspended';
-      if (activeCtl === api) activeCtl = null;
     }
     function destroy() {
       if (state === 'destroyed') return;
@@ -319,7 +274,7 @@ const VirtualList = (() => {
 
     buildShells();
     const api = {
-      activate, deactivate, suspend, destroy, update, _realize, anchorEntryY,
+      activate, deactivate, destroy, update, _realize, anchorEntryY,
       // Visible = the container actually renders (an ancestor display:none —
       // browse hidden behind Home — means document scrolls are not ours).
       isVisible: opts.isVisible || (() => {
@@ -336,7 +291,7 @@ const VirtualList = (() => {
   }
 
   const api = {
-    FULL_RENDER_MAX, usesVirtual, setForceVirtual, setScrollSuspended,
+    FULL_RENDER_MAX, usesVirtual, setForceVirtual,
     buildModel, windowFor, anchorAt, yForAnchor,
     createController,
     _test: { activeController: () => activeCtl, setActive: (c) => { activeCtl = c; } },
