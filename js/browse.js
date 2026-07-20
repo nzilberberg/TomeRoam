@@ -820,40 +820,57 @@ const Browse = (() => {
       highlight(L); scrollTo(L);
     };
     idx.addEventListener('click', (e) => { const t = e.target.closest('.alpha'); if (t) { highlight(t.dataset.letter); scrollTo(t.dataset.letter); setTimeout(clear, 180); } });
-    idx.addEventListener('pointermove', (e) => { if (e.buttons) jump(e.clientY); });
-    idx.addEventListener('pointerup', clear);
-    idx.addEventListener('pointerleave', clear);
-    // The strip sits ON the forward-swipe edge band — measured on a 375px screen it
-    // covers 77% of that band and 80% of the screen height — so claiming every touch
-    // that lands on it meant a forward swipe almost never armed. It does not need to
-    // claim them: scrubbing is VERTICAL and the swipe is HORIZONTAL, so the same
-    // 8px direction lock the swipe already uses against page scrolling separates them.
+
+    // ── who owns this drag: the strip, or the edge swipe? ────────────────────
+    // The strip sits ON the forward-swipe edge band (measured on a 375px screen:
+    // 77% of the band, 80% of the screen height), so it cannot simply claim every
+    // drag that starts on it — that is what stopped forward swipes arming at all.
+    // It does not need to: scrubbing is VERTICAL, the swipe is HORIZONTAL.
     //
-    // Deliberately complementary to app.js's rule (it proceeds only when |dx| > |dy|):
-    // this takes the gesture on |dy| >= |dx|, so exactly one of the two ever owns it.
-    // Nothing is claimed and nothing is preventDefault'ed until that is decided —
-    // preventing early would fight a swipe that turns out to be the real gesture.
-    // Taps are untouched: they jump via the `click` handler above, not on movement.
-    let t0 = null, owned = false;
-    idx.addEventListener('touchstart', (e) => {
-      const t = e.touches[0];
-      t0 = { x: t.clientX, y: t.clientY }; owned = false;
-    }, { passive: true });
+    // ONE arbitration for BOTH input families. Doing it for touch only left the
+    // pointer path claiming every mouse drag, so a swipe started on the strip
+    // scrubbed AND swiped — the page jumped to that letter the instant the drag
+    // began, and jumped back when the swipe aborted.
+    //
+    // Deliberately complementary to app.js's rule (it proceeds only when
+    // |dx| > |dy|): this takes the drag on |dy| >= |dx|, so exactly one of the two
+    // ever owns it. Nothing is claimed and nothing is preventDefault-ed until the
+    // direction is known — deciding early would fight the gesture that owns it.
+    // Taps are unaffected: they jump via the `click` handler above, not on movement.
+    const LOCK = 8;                       // same threshold app.js uses
+    let g0 = null, owned = false;
+    const gStart = (x, y) => { g0 = { x, y }; owned = false; };
+    const gOwns = (x, y) => {
+      if (owned) return true;
+      if (!g0) return false;              // already ceded to the swipe
+      const dx = x - g0.x, dy = y - g0.y;
+      if (Math.abs(dx) < LOCK && Math.abs(dy) < LOCK) return false;   // direction unknown
+      if (Math.abs(dx) > Math.abs(dy)) { g0 = null; return false; }   // horizontal → the swipe
+      owned = true;
+      return true;
+    };
+    const gEnd = () => { g0 = null; owned = false; clear(); };
+
+    // Mouse. Touch also emits pointer events, so this family is gated to mouse and
+    // the touch listeners below own touch — otherwise one drag is arbitrated twice.
+    idx.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') gStart(e.clientX, e.clientY); });
+    idx.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse' || !e.buttons) return;
+      if (gOwns(e.clientX, e.clientY)) jump(e.clientY);
+    });
+    idx.addEventListener('pointerup', gEnd);
+    idx.addEventListener('pointerleave', gEnd);
+
+    // Touch.
+    idx.addEventListener('touchstart', (e) => { const t = e.touches[0]; gStart(t.clientX, t.clientY); }, { passive: true });
     idx.addEventListener('touchmove', (e) => {
       const t = e.touches[0];
-      if (!owned) {
-        if (!t0) return;                                   // already ceded to the swipe
-        const dx = t.clientX - t0.x, dy = t.clientY - t0.y;
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;   // direction not established yet
-        if (Math.abs(dx) > Math.abs(dy)) { t0 = null; return; }   // horizontal → the swipe's
-        owned = true;
-      }
+      if (!gOwns(t.clientX, t.clientY)) return;
       jump(t.clientY);
-      e.preventDefault();                                   // only once this gesture is ours
+      e.preventDefault();                 // only once this drag is ours
     }, { passive: false });
-    const endTouch = () => { t0 = null; owned = false; clear(); };
-    idx.addEventListener('touchend', endTouch);
-    idx.addEventListener('touchcancel', endTouch);
+    idx.addEventListener('touchend', gEnd);
+    idx.addEventListener('touchcancel', gEnd);
     return idx;
   }
 

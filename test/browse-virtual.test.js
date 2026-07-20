@@ -322,6 +322,43 @@ test('A–Z strip: a VERTICAL drag still scrubs and claims the gesture', () => {
   assert.equal(moved.defaultPrevented, true, 'and claims the gesture once it owns it');
 });
 
+// The MOUSE path was the hole: arbitration was added for touch only, so
+// pointermove (gated merely on e.buttons) still scrubbed every drag. Starting a
+// swipe low on the strip jumped the page to that letter instantly, then jumped back
+// when the swipe aborted. Both families must share one arbitration.
+function pointerOn(el, type, x, y, buttons) {
+  const e = new dom.window.Event(type, { bubbles: true, cancelable: true });
+  Object.assign(e, { pointerType: 'mouse', pointerId: 1, buttons, clientX: x, clientY: y });
+  el.dispatchEvent(e);
+  return e;
+}
+
+test('A–Z strip (MOUSE): a horizontal drag does not scrub — it belongs to the swipe', () => {
+  dom.window.Element.prototype.scrollIntoView = function () {};
+  const m = page();
+  T.listView(m, 'Books', books(30), T.bookRow, false);
+  const idx = m.querySelector('.alphaindex');
+
+  pointerOn(idx, 'pointerdown', 350, 300, 1);
+  pointerOn(idx, 'pointermove', 300, 302, 1);          // 50px across, 2px down
+
+  assert.equal(idx.querySelectorAll('.alpha.on').length, 0,
+    'a horizontal MOUSE drag must not jump the page — that was the reported regression');
+});
+
+test('A–Z strip (MOUSE): a vertical drag still scrubs', () => {
+  dom.window.Element.prototype.scrollIntoView = function () {};
+  const m = page();
+  T.listView(m, 'Books', books(30), T.bookRow, false);
+  const idx = m.querySelector('.alphaindex');
+  idx.getBoundingClientRect = () => ({ top: 0, height: 500, left: 340, right: 366, bottom: 500, width: 26 });
+
+  pointerOn(idx, 'pointerdown', 350, 100, 1);
+  pointerOn(idx, 'pointermove', 352, 260, 1);          // 2px across, 160px down
+
+  assert.equal(idx.querySelectorAll('.alpha.on').length, 1, 'vertical mouse drag scrubs, as before');
+});
+
 test('A–Z strip: the 8px direction lock — nothing happens before the direction is known', () => {
   dom.window.Element.prototype.scrollIntoView = function () {};
   const m = page();
