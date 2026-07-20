@@ -572,13 +572,18 @@
         //            the second AFTER it. Not a fixed delay — no frame count is assumed.
         // `via=` names whichever gate settled LAST, so the next device report says
         // plainly whether the hold became real and whether that was enough.
-        const holdGhostUntilPaintable = (rootEl) => {
+        const holdGhostUntilPaintable = (rootEl, cover) => {
           const t0 = performance.now();
           const covers = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src'));
           let dropped = false, decoded = false, painted = false;
           const drop = (why) => {
-            if (dropped) return; dropped = true; dropPanes(); finishing = false;
-            if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(performance.now() - t0)}ms `
+            if (dropped) return; dropped = true;
+            // Stamp the exact moment the view stops being covered BEFORE removing the
+            // pane, so the reveal watcher can split what churned while hidden from what
+            // churned in front of the user. That split is the whole question.
+            cover.dropAt = performance.now();
+            dropPanes(); finishing = false;
+            if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(cover.dropAt - t0)}ms `
               + `covers=${covers.length} via=${why}`);
           };
           const gate = (why) => { if (decoded && painted) drop(why); };
@@ -604,7 +609,18 @@
         // a `src` set or cleared, a class swapped (`art-done` = the 0.3s fade,
         // `art-instant` = no fade), or the container restyled. Watching those writes
         // catches an unknown cause as readily as a known one.
-        const reportReveal = (tag, rootEl) => {
+        //
+        // ⭐ .199 — THE MISSING AXIS: COVERED vs EXPOSED.
+        // .198 made the hold real (device: `hold 39-48ms via=paint`, was 1-2ms) and the
+        // flash SURVIVED. The report on the offending abort read `ROWS KEPT 0/36 fresh=36`
+        // with `sameNode=true` — every row replaced under a surviving controller. But the
+        // watch window is 1500ms and the ghost lifts at ~41ms, so that number could not
+        // say WHEN the churn landed, and that is the entire question: churn under the
+        // ghost is invisible and harmless, the SAME churn after it lifts IS the flash.
+        // Counting what changed was never going to answer it; only counting WHEN can.
+        // So every mutation is now stamped against the ghost-drop time. `EXPOSED` is the
+        // load-bearing half — anything non-zero there happened in front of the user.
+        const reportReveal = (tag, rootEl, cover) => {
           if (!window.PBDebug) return;
           if (revealWatch) { try { revealWatch(); } catch { /* already ended */ } }
           const before = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
@@ -630,20 +646,51 @@
             const pg = (node && node.nodeType === 1 && node.closest) ? node.closest('.browsepage') : null;
             return (pg && !pg.classList.contains('hidden')) ? vis : hid;
           };
+          // The COVERED/EXPOSED split, on the VISIBLE page only (a hidden sibling is
+          // never on screen, so "was it covered" is meaningless there).
+          const cov = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, rows: 0 };
+          const exp = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, rows: 0 };
+          // WHAT the user saw, not just how much: the first few exposed writes, each
+          // stamped ms-after-uncover, with the element that changed. A count says churn
+          // happened; this says what it was and whether it was one burst or a trickle.
+          const firsts = [];
+          const note = (kind, node, dt) => {
+            if (firsts.length >= 6) return;
+            const el = (node && node.nodeType === 1) ? node : null;
+            const cls = el && typeof el.className === 'string' ? el.className.trim().split(/\s+/)[0] : '';
+            firsts.push(`${kind}${cls ? ':' + cls : ''}@+${Math.round(dt)}`);
+          };
+          const countRows = (n) => (n.nodeType !== 1 ? 0
+            : ((n.classList && (n.classList.contains('book') || n.classList.contains('author'))) ? 1
+              : (n.querySelectorAll ? n.querySelectorAll('.book, .author').length : 0)));
           let obs = null;
           try {
             obs = new MutationObserver((muts) => {
+              // Sample the clock ONCE per batch: a MutationObserver delivers a batch at
+              // microtask time, so every record in it landed in the same task.
+              const now = performance.now();
+              const uncovered = cover.dropAt > 0 && now >= cover.dropAt;
+              const dt = uncovered ? now - cover.dropAt : 0;
               for (const mu of muts) {
                 const b = bucket(mu.target);
+                const t = (b === vis) ? (uncovered ? exp : cov) : null;   // timing only for the visible page
                 if (mu.type === 'childList') {
-                  for (const n of mu.addedNodes) b.add += countImgs(n);
-                  for (const n of mu.removedNodes) b.rem += countImgs(n);
+                  for (const n of mu.addedNodes) {
+                    b.add += countImgs(n);
+                    if (t) { t.add += countImgs(n); t.rows += countRows(n); if (t === exp && countRows(n)) note('row+', n, dt); }
+                  }
+                  for (const n of mu.removedNodes) {
+                    b.rem += countImgs(n);
+                    if (t) { t.rem += countImgs(n); if (t === exp && countRows(n)) note('row-', mu.target, dt); }
+                  }
                 } else if (mu.type === 'attributes' && mu.target.tagName === 'IMG') {
-                  if (mu.attributeName === 'src') { if (mu.target.getAttribute('src')) b.srcSet++; else b.srcClr++; }
-                  else {
+                  if (mu.attributeName === 'src') {
+                    if (mu.target.getAttribute('src')) { b.srcSet++; if (t) { t.srcSet++; if (t === exp) note('src+', mu.target, dt); } }
+                    else { b.srcClr++; if (t) { t.srcClr++; if (t === exp) note('src-', mu.target, dt); } }
+                  } else {
                     const c = String(mu.target.className || '');
-                    if (/art-done/.test(c)) b.fade++;
-                    else if (/art-instant/.test(c)) b.instant++;
+                    if (/art-done/.test(c)) { b.fade++; if (t) { t.fade++; if (t === exp) note('FADE', mu.target, dt); } }
+                    else if (/art-instant/.test(c)) { b.instant++; if (t) { t.instant++; if (t === exp) note('inst', mu.target, dt); } }
                   }
                 }
               }
@@ -673,9 +720,19 @@
                 + ` | sameNode=${now.node === revealBase.node} sameCtl=${now.ctl === revealBase.ctl}`
                 + ` src ${revealBase.src}→${now.src}`
                 + ` realized ${revealBase.realized}→${now.realized} state ${revealBase.state}→${now.state}`;
+            // COVERED = churned while the ghost still hid it (invisible, fine).
+            // EXPOSED = churned in front of the user. If the flash is a DOM write at
+            // all, it is in here; if EXPOSED is all-zero on a swipe the user saw flash,
+            // then nothing wrote to the visible page and the cause is not the DOM —
+            // it is the uncover itself (layer teardown / a repaint of unchanged
+            // content), which is a different fix and worth knowing without another
+            // round of guessing.
+            const fmt = (s) => `+img=${s.add} -img=${s.rem} rows+=${s.rows}`
+              + ` src+=${s.srcSet} src-=${s.srcClr} fade=${s.fade} inst=${s.instant}`;
+            const seen = firsts.length ? ` | first=[${firsts.join(' ')}]` : '';
             PBDebug.log('FLASH', `${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
-              + ` | VISIBLE +img=${vis.add} -img=${vis.rem} src+=${vis.srcSet} src-=${vis.srcClr}`
-              + ` fade=${vis.fade} inst=${vis.instant}`
+              + ` | COVERED ${fmt(cov)}`
+              + ` | EXPOSED ${fmt(exp)}${seen}`
               + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
               + ` | ${cmp}`
               + art + ` | win=${Math.round(performance.now() - t0)}ms`);
@@ -685,10 +742,14 @@
           const timer = setTimeout(finish, 1500);
           revealWatch = () => { clearTimeout(timer); revealWatch = null; if (obs) { try { obs.disconnect(); } catch { /* gone */ } } };
         };
+        // Shared between the watcher and the hold: `dropAt` is 0 while the ghost still
+        // covers the view and becomes the uncover timestamp the instant it lifts. One
+        // object per finalize, so overlapping gestures cannot cross-stamp each other.
+        const cover = { dropAt: 0 };
         if (commit && dest.v === 'home') {
           applyScreen(dest, { render: false, keepGhosts: true });
-          reportReveal('commit→home', $('home'));
-          holdGhostUntilPaintable($('home'));
+          reportReveal('commit→home', $('home'), cover);
+          holdGhostUntilPaintable($('home'), cover);
           return;
         }
         // ABORTING a browse→browse swipe is the SAME reveal, and had the ordering
@@ -701,15 +762,18 @@
         if (!commit && cur.clobbered) {
           applyScreen(dest, { render: true, resetScroll: false, keepGhosts: true });
           window.scrollTo(0, cur.scroll0);
-          reportReveal('abort→' + dest.v, $('browse'));
-          holdGhostUntilPaintable($('browse'));
+          reportReveal('abort→' + dest.v, $('browse'), cover);
+          holdGhostUntilPaintable($('browse'), cover);
           return;
         }
+        // No hold on this path — the panes go NOW, so the view is exposed from the
+        // first instant and every mutation below belongs in the EXPOSED bucket.
+        cover.dropAt = performance.now();
         dropPanes();
         // Measured on the plain paths too, so an abort's numbers have something to be
         // compared AGAINST — "covers reload on every transition" and "covers reload
         // only on aborts" call for completely different fixes.
-        reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'));
+        reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'), cover);
         if (commit) applyScreen(dest, { render: false });   // dest already rendered live → reconcile only
         else {
           // Aborted → restore the current screen (re-render only if its element was

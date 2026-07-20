@@ -214,6 +214,86 @@ test('the ghost outlives the reveal until a frame has PAINTED it, not just decod
   } finally { h.dispose(); }
 });
 
+/** Every FLASH line the real app logged, in order. */
+const flashLog = (h) => h.log.calls
+  .filter((c) => c.name === 'debug' && c.args[0] === 'FLASH')
+  .map((c) => c.args[1]);
+
+/**
+ * A visible `.browsepage` with one row in it. The reveal watcher attributes every
+ * mutation to its PAGE (app.js bucket()), so a node parented straight onto #browse
+ * counts as hidden and would never reach the covered/exposed split at all.
+ */
+function addPage(h) {
+  const page = h.document.createElement('div');
+  page.className = 'browsepage';
+  h.$('browse').appendChild(page);
+  return page;
+}
+function addRowTo(page, h) {
+  const row = h.document.createElement('div');
+  row.className = 'book';
+  page.appendChild(row);
+  return row;
+}
+
+// ⭐ .199 — the COVERED/EXPOSED split must actually split.
+//
+// This is a DIAGNOSTIC, and a diagnostic that misattributes is worse than none — it
+// was a mis-trusted instrument that produced four wrong explanations in this thread
+// already. The whole value of the new line is that "churned while hidden" and
+// "churned in front of the user" land in different buckets, so that is what this
+// pins: the SAME mutation, once on each side of the ghost drop, must be counted on
+// the side it actually happened.
+test('the reveal watcher splits churn by whether the ghost was still covering (.199)', async () => {
+  const h = boot({ fakeTimers: true, deferRaf: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const row = addRow(h);
+    const page = addPage(h);
+
+    h.touch.start(10, 300, row);
+    h.touch.move(80, 302);
+    await realSleep(12);
+    h.touch.move(200, 304);
+    await realSleep(12);
+    h.touch.move(30, 304);
+    await realSleep(12);
+    h.touch.end(30, 304);
+
+    for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();
+    await settle(h);
+    await h.clock.advance(400);
+    await settle(h);
+
+    const ghosts = () => h.document.querySelectorAll('.nav-ghost').length;
+    assert.equal(ghosts(), 1, 'fixture sanity: the ghost must still be covering here');
+
+    // While COVERED.
+    addRowTo(page, h);
+    await settle(h);
+
+    await h.raf.frame(); await h.raf.frame();          // paint gate → ghost lifts
+    assert.equal(ghosts(), 0, 'fixture sanity: the ghost must have lifted by now');
+
+    // While EXPOSED — the identical mutation.
+    addRowTo(page, h);
+    await settle(h);
+
+    await h.clock.advance(1600);                        // close the 1500ms watch window
+    await settle(h);
+
+    const line = flashLog(h).find((m) => /@reveal/.test(m));
+    assert.ok(line, `no @reveal line was logged — got ${JSON.stringify(flashLog(h))}`);
+    const covered = /COVERED [^|]*rows\+=(\d+)/.exec(line);
+    const exposed = /EXPOSED [^|]*rows\+=(\d+)/.exec(line);
+    assert.ok(covered && exposed, `line carries no covered/exposed split: ${line}`);
+    assert.equal(covered[1], '1', `the pre-drop row must be counted COVERED: ${line}`);
+    assert.equal(exposed[1], '1', `the post-drop row must be counted EXPOSED: ${line}`);
+    assert.match(line, /first=\[row\+/, `an exposed write must be named, not just counted: ${line}`);
+  } finally { h.dispose(); }
+});
+
 // ── the row hold ──────────────────────────────────────────────────────────────
 // While a gesture is live, Browse keeps the outgoing page's rows so an ABORT does
 // not rebuild the page. The hazard is a hold that is never released: hidden pages

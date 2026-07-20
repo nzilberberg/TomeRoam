@@ -235,6 +235,13 @@ function boot(opts = {}) {
     : (fn) => { fn(0); return 0; };
   global.requestAnimationFrame = raf; window.requestAnimationFrame = raf;
   global.cancelAnimationFrame = () => {}; window.cancelAnimationFrame = () => {};
+  // app.js reads MutationObserver as a BARE global, and node has none — so
+  // `new MutationObserver(...)` threw a ReferenceError that app.js's own defensive
+  // catch swallowed. The entire reveal-mutation diagnostic (app.js reportReveal, the
+  // thing every FLASH device reading comes from) was therefore DEAD in every test
+  // since .180, while looking merely optional. Same shape as the .154 navigator
+  // defect: a global that was never installed is invisible AND silent.
+  global.MutationObserver = window.MutationObserver;
   window.scrollTo = () => {};
   global.scrollTo = window.scrollTo;
   global.history = window.history;         // app.js uses the bare `history` global
