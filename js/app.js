@@ -699,7 +699,7 @@
       // flash survived a 120ms fade. Left as a constant rather than ripped out so the
       // whole motion experiment reverts by changing two numbers, not by restructuring
       // the settle path. The pane still leaves the DOM on the same timer.
-      const FADE_MS = 0;
+      const FADE_MS = 0;   // .210: still 0 — the ghost cross-fade IS a fade
       const fadePanes = () => {
         for (const m of cur.movers) {
           if (!m.remove || !m.el.parentNode) continue;

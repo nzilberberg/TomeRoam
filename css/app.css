@@ -763,37 +763,40 @@ html::-webkit-scrollbar, body::-webkit-scrollbar,
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ⭐ .209 DIAGNOSTIC — ALL MOTION DISABLED (temporary, remove in one block)
+   ⭐ .210 DIAGNOSTIC — FADES OFF (temporary, revert by deleting this block)
 
-   User-requested, to eliminate fades/animations as a cause of the swipe flash
-   in a single stroke rather than one candidate per build. This kills EVERY
-   animation and transition in the app at once:
+   Scope corrected from .209, which disabled ALL motion including the swipe's
+   own transform slides. That was wrong: it changes the gesture under test, and
+   it stops `transitionend` firing so the settle finalises through its 340ms
+   fallback instead — a different code path, so the result would not have been
+   readable.
 
-     page level   navInRight/navInLeft, the swipe's transform slides, overlay
-                  filmstrips, the JS-set `transition` on nav movers
-     bar level    dlpulse, spin, the scroll indicator's fade, toast fades,
-                  progress/peer line transitions
-     image level  artShimmer (the skeleton) and artFadeIn (the cover fade-in)
-     everywhere   any transition/animation added later is covered by the `*`
+   OFF here — anything that ramps OPACITY or the cover skeleton:
+     image   artFadeIn (the cover fade-in) and artShimmer (the skeleton), on
+             .cover / .authoravatar / .np-art and the virtual-list placeholder
+     bar     dlpulse (the queued-download opacity pulse)
+     page    the opacity ramps on scrims, the track sheet, the book menu,
+             the toast, the scroll indicator, and covertap
+   STILL RUNNING — every transform/movement the swipe depends on:
+     navInRight / navInLeft, the swipe's transform slides, overlay filmstrips,
+     the sheet's translateY, spin, and the small background/colour tints.
 
-   WHY A GLOBAL OVERRIDE and not commenting out 28 individual rules: one block
-   to revert, nothing missed, and it also neutralises the JS-assigned inline
-   transitions (js/app.js:619,706,730 · js/nav.js:168-175) which commenting out
-   CSS would leave running.
-
-   READING THE RESULT:
-     flash GONE      -> it is animation/fade related; re-enable in groups
-                        (image, then bar, then page) to find which
-     flash REMAINS   -> animation is conclusively eliminated. Stop pursuing it.
-                        Nothing here animates, so nothing here can flash.
-
-   TO REVERT: delete this block. Nothing else references it.
+   READING IT:
+     flash GONE    -> a fade is in it; re-enable image, then bar, then page
+     flash REMAINS -> fades are eliminated; nothing here ramps opacity, so
+                      nothing here can be what flashes
    ═══════════════════════════════════════════════════════════════════════════ */
-*, *::before, *::after {
+.cover, .authoravatar, .np-art,
+.cover.art-done, .authoravatar.art-done, .np-art.art-done,
+.cover:not(.art-done):not(.art-instant):not(.art-failed),
+.authoravatar:not(.art-done):not(.art-instant):not(.art-failed),
+.np-art:not(.art-done):not(.art-instant):not(.art-failed) {
   animation: none !important;
-  animation-duration: 0s !important;
-  animation-delay: 0s !important;
-  transition: none !important;
-  transition-duration: 0s !important;
-  transition-delay: 0s !important;
+  background-image: none !important;   /* the shimmer gradient itself */
+  opacity: 1 !important;
+}
+.virtual-list .vrows { animation: none !important; }
+.dlbadge.ring.queued, .dlbtn.ring.queued { animation: none !important; opacity: 1 !important; }
+.sheet-scrim, .bookmenu-scrim, .toast, #scrollind, .covertap .cover, .bookmenu {
+  transition-property: none !important;
 }

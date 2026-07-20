@@ -1,5 +1,5 @@
 {
-  "build": "2026-07-19.209",
+  "build": "2026-07-19.210",
   "nativeVersion": 5,
   "minNativeVersion": 1,
   "note": "App-host reachability probe + update manifest. Bump `build` on every deploy in lockstep with sw.js and js/debug.js. GitHub Pages serves this file; the app fetches it (no-store) to check for updates and to test whether the app host is reachable. It is NOT a runtime dependency — the app runs fully from cache when this fetch fails. `nativeVersion` (Android APK only): the native shell version this web build was validated with — bump it (+ the APK's NATIVE_VERSION + versionCode) when the native shell changes so the app OFFERS a dismissible one-tap APK self-update; leave it for web-only builds (those update silently OTA). `minNativeVersion` (Android APK only): the MINIMUM native shell this web build REQUIRES — bump it ONLY when a web build adds a hard native dependency an older APK cannot satisfy. When an installed APK's NATIVE_VERSION is below this floor the app refuses to auto-swap to this web build and shows an insistent 'update required' prompt; leaving it alone (the common case) never nags, since a freshly built APK always satisfies its own floor."
