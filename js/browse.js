@@ -208,6 +208,16 @@ const Browse = (() => {
     const se = document.scrollingElement || document.documentElement;
     const mine = beginRestore();
     window.scrollTo(0, clampY(y, se.scrollHeight, window.innerHeight));
+    // This is a DELIBERATE placement — the page's real entry position — which is the
+    // opposite of the transient scrolls the swipe freezes realization for (iOS
+    // granting a native scroll, or a shorter page clamping scrollY). So realize
+    // against it explicitly: while a gesture holds the freeze, the scroll event this
+    // fires is ignored, and the incoming page would be left scrolled to one place
+    // with its rows built for another. MEASURED: entering Books at y=11209 mid-swipe
+    // left 21 rows sitting 11,059px above the viewport — group shells reserving
+    // space with nothing in them, i.e. empty bars until the gesture ended.
+    const cur = activeEntry();
+    if (cur && cur.el._vctl && cur.el._vctl._realize) cur.el._vctl._realize();
     // Two frames: the scroll + any clamp it provokes must both land first.
     requestAnimationFrame(() => requestAnimationFrame(() => endRestore(mine)));
   }
