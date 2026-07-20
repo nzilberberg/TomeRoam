@@ -179,7 +179,7 @@ test('the ghost outlives the reveal until a frame has PAINTED it, not just decod
   try {
     await onAuthorsOverBooks(h);
     const row = addRow(h);
-    const ghosts = () => h.document.querySelectorAll('.nav-ghost').length;
+    const ghosts = () => h.document.querySelectorAll('.nav-ghost:not(.spent)').length;
 
     h.touch.start(10, 300, row);
     h.touch.move(80, 302);
@@ -211,6 +211,18 @@ test('the ghost outlives the reveal until a frame has PAINTED it, not just decod
 
     await h.raf.frame();                    // frame 2: the painted content is committed
     assert.equal(ghosts(), 0, 'once a frame has painted the reveal the ghost must go');
+
+    // .203 splits UNCOVER from REMOVAL: the pane stops covering (gains `.spent` and
+    // fades) at the moment above, and the NODE goes a few frames later. The removal is
+    // the probe's one real hazard — a pane left in the DOM is a full-viewport fixed
+    // element over the app, and the next gesture would trip the "leftover state on
+    // begin" hard reset that .178 exists to prevent.
+    assert.equal(h.document.querySelectorAll('.nav-ghost').length, 1,
+      'the pane should still exist mid-fade — otherwise this is not testing a fade at all');
+    await h.clock.advance(400);
+    await settle(h);
+    assert.equal(h.document.querySelectorAll('.nav-ghost').length, 0,
+      'the faded pane MUST be removed — a leaked full-viewport pane covers the app');
   } finally { h.dispose(); }
 });
 
@@ -266,7 +278,7 @@ test('the reveal watcher splits churn by whether the ghost was still covering (.
     await h.clock.advance(400);
     await settle(h);
 
-    const ghosts = () => h.document.querySelectorAll('.nav-ghost').length;
+    const ghosts = () => h.document.querySelectorAll('.nav-ghost:not(.spent)').length;
     assert.equal(ghosts(), 1, 'fixture sanity: the ghost must still be covering here');
 
     // While COVERED.

@@ -374,6 +374,11 @@
       // Leftover from an INTERRUPTED gesture (a 2nd touch mid-swipe, a missed
       // touchend, etc.) → hard-reset to known-good before starting fresh. This is
       // what stops corruption from accumulating over many swipes.
+      // A `.spent` pane is one that has already uncovered and is only finishing its
+      // .203 fade-out. It is NOT leftover state — but it IS still a `.nav-ghost`, so
+      // without this a swipe started during the fade would trip the hard reset below
+      // and re-introduce the wrong-page/wrong-tap failure .178 fixed. Clear them first.
+      document.querySelectorAll('.nav-ghost.spent').forEach((n) => n.remove());
       if (d || document.querySelector('.nav-ghost')) {
         if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');
         releaseGesture();   // never leave a dead gesture's listeners on a stale node
@@ -532,6 +537,39 @@
       });
       let done = false;
       const dropPanes = () => { for (const m of cur.movers) if (m.remove && m.el.parentNode) m.el.remove(); };
+      //
+      // ⭐ .203 PROBE — CROSS-FADE THE GHOST INSTEAD OF YANKING IT.
+      // Two consecutive device repros (.202 #8 and #10, both "flashed at the snap
+      // back") measured completely clean: ghostY == the revealed scroll, both scroll
+      // writes landing under cover at +14/+16ms, EXPOSED all-zero, LETTERS=0, ROWS KEPT
+      // n/n, sameNode + sameCtl. Nothing moved and nothing changed. Everything the DOM
+      // can express is eliminated, so what is left is the UNCOVER itself: a full-viewport
+      // composited layer destroyed in one frame over content iOS then has to
+      // re-rasterize.
+      //
+      // The probe tests exactly that and nothing else. If the flash is content being
+      // rasterized as it is exposed, a short cross-fade gives it time to rasterize while
+      // still covered and the flash goes. If the flash survives a fade, re-rasterization
+      // is dead too and the structural fix (never transform the real in-flow view) is
+      // the only explanation left standing.
+      // Deliberately NOT the .195/.196 approach of parking a transform to keep a layer
+      // alive: that is a proven dead end — a persistent transform on #browse makes it
+      // the containing block for position:fixed descendants and permanently breaks the
+      // A-Z strip.
+      const FADE_MS = 120;
+      const fadePanes = () => {
+        for (const m of cur.movers) {
+          if (!m.remove || !m.el.parentNode) continue;
+          const el = m.el;
+          // `spent` = uncovered, awaiting removal. begin() clears these on sight so a
+          // fading pane is never mistaken for a wedged gesture's leftover state.
+          el.classList.add('spent');
+          el.style.pointerEvents = 'none';
+          el.style.transition = 'opacity ' + FADE_MS + 'ms linear';
+          el.style.opacity = '0';
+          setTimeout(() => { if (el.parentNode) el.remove(); }, FADE_MS + 60);
+        }
+      };
       const runFinalize = () => {
         // `tgt=detached` means the node the finger started on was destroyed mid-drag
         // and the gesture settled anyway — i.e. the .178 target-binding did its job.
@@ -599,11 +637,14 @@
             // the ghost was hiding a different scroll position than the one revealed —
             // and that jump is the flash, with no DOM write anywhere.
             if (cover.mark) cover.mark('preDrop');
-            dropPanes();
+            // .203 probe: the uncover STARTS here (the fade begins); the node is removed
+            // a few frames later. dropAt stays the start, since that is the moment the
+            // user begins to see the real view.
+            fadePanes();
             if (cover.mark) cover.mark('postDrop');
             finishing = false;
             if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(cover.dropAt - t0)}ms `
-              + `covers=${covers.length} via=${why}`);
+              + `covers=${covers.length} via=${why} fade=${FADE_MS}ms`);
           };
           const gate = (why) => { if (decoded && painted) drop(why); };
           Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve())))
