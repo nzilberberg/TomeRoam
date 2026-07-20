@@ -336,6 +336,44 @@
       // Prefer the saved dataset.sl (survives display:none, where scrollLeft reads 0).
       s.forEach((el, i) => { if (c[i]) c[i].scrollLeft = (+el.dataset.sl || el.scrollLeft || 0); });
     }
+    // ⭐ …and cloneNode does not copy ANIMATION PHASE either. Exactly the same class of
+    // bug as copyScroll above — runtime state a clone silently loses, so the ghost is
+    // not the stand-in it claims to be and something visibly changes when the swipe
+    // settles — and the cure belongs right next to it.
+    //
+    // Every cover carries a CSS animation: an unloaded one shimmers
+    // (`artShimmer 1.25s infinite`, app.css:347) and a loaded one fades
+    // (`artFadeIn .3s both`, app.css:357). A CLONE RESTARTS BOTH FROM t=0, so for the
+    // whole gesture the ghost's covers run out of phase with the live page's, and at the
+    // swap every one of them jumps at once. On the reported device roughly 30 of 52
+    // images have no src (`imgs=52 withSrc=22`) — i.e. most of the screen is shimmering
+    // skeleton, which is what "all the bars flashed with all their contents" looks like.
+    //
+    // Why nothing caught it: it produces NO DOM mutation, NO position change (.204
+    // measured rects only — dy=0 dx=0 says elements are in the same PLACE, nothing about
+    // how they LOOK), and it survives a cross-fade (.203), because fading between two
+    // out-of-phase animations still shows the discontinuity.
+    //
+    // A negative animation-delay seeks the clone to the live element's current time:
+    // for the infinite shimmer that matches phase, and for a finished fade it lands past
+    // the end where `both` holds the final state.
+    function copyAnimPhase(src, dst) {
+      if (typeof Element === 'undefined' || !Element.prototype.getAnimations) return 0;
+      const s = src.querySelectorAll('.cover, .authoravatar, .np-art');
+      const c = dst.querySelectorAll('.cover, .authoravatar, .np-art');
+      let synced = 0;
+      s.forEach((el, i) => {
+        const twin = c[i];
+        if (!twin) return;
+        try {
+          const a = el.getAnimations();
+          if (!a || !a.length || a[0].currentTime == null) return;
+          twin.style.animationDelay = (-a[0].currentTime) + 'ms';
+          synced++;
+        } catch { /* an unsynced cover is the old behaviour, never a broken ghost */ }
+      });
+      return synced;
+    }
     // The fixed full-viewport pane both snapshot builders mount into.
     function ghostWrap() {
       const wrap = document.createElement('div');
@@ -364,8 +402,13 @@
       clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
       const wrap = ghostWrap();
       wrap.appendChild(clone);
+      // BEFORE insertion — the clone's animations start the moment it enters the
+      // document, so the phase has to be set while it is still detached or the first
+      // frames run unsynced.
+      const nSync = copyAnimPhase(document.querySelector('.app'), clone);
       document.body.appendChild(wrap);
       copyScroll(document.querySelector('.app'), clone);   // match carousel scroll to the live page
+      if (d) d.animSync = nSync;
       return wrap;
     }
 
@@ -431,7 +474,11 @@
       const lib = document.createElement('div'); lib.style.paddingTop = '46px'; lib.appendChild(clone);
       const box = document.createElement('div'); box.className = 'app'; box.style.margin = '0 auto'; box.appendChild(lib);
       const wrap = ghostWrap();
-      wrap.appendChild(box); document.body.appendChild(wrap);
+      wrap.appendChild(box);
+      // Home's tiles carry the same cover animations, so this snapshot needs the same
+      // phase sync as ghostApp's — set before insertion, for the same reason.
+      copyAnimPhase($('home'), clone);
+      document.body.appendChild(wrap);
       copyScroll($('home'), clone);   // match carousel scroll so the snapshot shows the same tiles as the live home
       return wrap;
     }
@@ -569,15 +616,28 @@
             const g = Array.from(pane.el.querySelectorAll(sel)).slice(0, 8);
             const r = Array.from(live.querySelectorAll(sel)).slice(0, 8);
             if (!g.length && !r.length) return `${sel.replace(/[.#]/g, '')} 0/0`;
-            let maxDy = 0, maxDx = 0;
+            let maxDy = 0, maxDx = 0, maxOp = 0, maxPhase = 0;
             const n = Math.min(g.length, r.length);
             for (let i = 0; i < n; i++) {
               const a = g[i].getBoundingClientRect(), b = r[i].getBoundingClientRect();
               maxDy = Math.max(maxDy, Math.abs(a.top - b.top));
               maxDx = Math.max(maxDx, Math.abs(a.left - b.left));
+              // ⭐ APPEARANCE, not just place. `dy=0 dx=0` says two elements are in the
+              // same POSITION and nothing whatever about how they LOOK — which is how a
+              // whole-screen animation phase difference went unmeasured for six builds.
+              try {
+                const ga = getComputedStyle(g[i]), rb = getComputedStyle(r[i]);
+                maxOp = Math.max(maxOp, Math.abs(parseFloat(ga.opacity || '1') - parseFloat(rb.opacity || '1')));
+                const gAn = g[i].getAnimations ? g[i].getAnimations() : [];
+                const rAn = r[i].getAnimations ? r[i].getAnimations() : [];
+                if (gAn.length && rAn.length && gAn[0].currentTime != null && rAn[0].currentTime != null) {
+                  maxPhase = Math.max(maxPhase, Math.abs(gAn[0].currentTime - rAn[0].currentTime));
+                }
+              } catch { /* computed style unavailable → the rect deltas still land */ }
             }
             return `${sel.replace(/[.#]/g, '')} ${g.length}/${r.length}`
-              + ` dy=${Math.round(maxDy)} dx=${Math.round(maxDx)}`;
+              + ` dy=${Math.round(maxDy)} dx=${Math.round(maxDx)}`
+              + ` op=${maxOp.toFixed(2)} phase=${Math.round(maxPhase)}ms`;
           };
           return [probe('.letterhead'), probe('.book'), probe('.author'), probe('.alphaindex')].join(' ');
         } catch { return 'err'; }

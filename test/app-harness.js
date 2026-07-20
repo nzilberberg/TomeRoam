@@ -242,6 +242,13 @@ function boot(opts = {}) {
   // since .180, while looking merely optional. Same shape as the .154 navigator
   // defect: a global that was never installed is invisible AND silent.
   global.MutationObserver = window.MutationObserver;
+  // THIRD time this exact defect: app.js reads `Element` as a bare global (feature-
+  // detecting Element.prototype.getAnimations), node has none, so the guard would
+  // silently take the unsupported path in every test and the ghost's animation-phase
+  // sync would be dead code under test. Same shape as navigator (.154) and
+  // MutationObserver (.199). When app.js touches a DOM global, install it here.
+  global.Element = window.Element;
+  global.getComputedStyle = window.getComputedStyle.bind(window);
   window.scrollTo = () => {};
   global.scrollTo = window.scrollTo;
   global.history = window.history;         // app.js uses the bare `history` global

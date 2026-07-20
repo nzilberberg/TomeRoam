@@ -408,6 +408,63 @@ test('the reveal reports the scroll trail across the uncover, both sides of it (
   } finally { h.dispose(); }
 });
 
+// ⭐ .205 — THE GHOST MUST INHERIT RUNTIME STATE A CLONE LOSES.
+//
+// This is the test that would have ended the whole 2026-07-19/20 saga on day one, and
+// the invariant is general rather than a patch for one symptom: the ghost is a
+// STAND-IN, so anything the live view carries that `cloneNode` does not copy makes it
+// a liar, and the difference becomes visible at the swap with NO DOM mutation, NO
+// position change and no way for any of the .199-.204 counters to see it.
+//
+// Two such things are known. `copyScroll` (carousel scrollLeft) was found the same way
+// years earlier and its comment says exactly this. ANIMATION PHASE is the second: every
+// cover runs `artShimmer 1.25s infinite` while unloaded or `artFadeIn .3s` once loaded,
+// a clone restarts both from t=0, and on the reported device ~30 of 52 images are
+// shimmering skeletons — so at the swap most of the screen jumps phase at once, which
+// is what "all the bars flashed with all their contents" describes.
+//
+// jsdom has no getAnimations, so it is installed here deliberately: the point is to
+// pin that app.js ASKS the live element for its phase and SEEDS the clone with it.
+test('the ghost inherits the live view’s animation phase, not a restarted one (.205)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+
+    // A realized row with a cover, exactly as browse.js builds one.
+    const row = h.document.createElement('div');
+    row.className = 'book';
+    const cover = h.document.createElement('img');
+    cover.className = 'cover';
+    row.appendChild(cover);
+    h.$('browse').appendChild(row);
+
+    // The live cover is 800ms into its shimmer. A clone would restart at 0.
+    const LIVE_PHASE = 800;
+    h.window.Element.prototype.getAnimations = function () {
+      return this.classList && this.classList.contains('cover') && this.isConnected
+        ? [{ currentTime: LIVE_PHASE }] : [];
+    };
+
+    let ghostCover = null;
+    const inner = h.browse.render;
+    h.browse.render = async (desc) => {
+      const g = h.document.querySelector('.nav-ghost .cover');
+      if (g && !ghostCover) ghostCover = g.style.animationDelay;
+      return inner(desc);
+    };
+
+    await edgeSwipe(h, row);
+
+    assert.ok(ghostCover !== null,
+      'fixture sanity: a ghost carrying a cover must exist during the drag');
+    // Seeded with a NEGATIVE delay equal to the live phase — that is what seeks a CSS
+    // animation forward to where the live one already is. Empty means the clone
+    // restarted from zero, i.e. the ghost is out of phase with what it stands in for.
+    assert.equal(ghostCover, `-${LIVE_PHASE}ms`,
+      `the ghost's cover must be seeded to the live phase, got ${JSON.stringify(ghostCover)}`);
+  } finally { h.dispose(); }
+});
+
 // ── the row hold ──────────────────────────────────────────────────────────────
 // While a gesture is live, Browse keeps the outgoing page's rows so an ABORT does
 // not rebuild the page. The hazard is a hold that is never released: hidden pages
