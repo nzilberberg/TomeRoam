@@ -550,27 +550,43 @@
         // the real home UNDERNEATH the still-covering snapshot, let it decode for a
         // couple frames, THEN drop the snapshot → no flash. (Swiping back from NP never
         // flashed because NP keeps home visible; this gives every path that behavior.)
-        // Keep the ghost covering until the revealed view's covers can actually paint
-        // (a fixed frame count guessed wrong). img.decode() resolves when the image is
-        // paintable without a flash — covering both a re-decode and a re-fetch.
-        // EVERY path that re-reveals an in-flow view the browser had at display:none
-        // needs this: hiding a view drops its decoded images, so showing it again
-        // re-decodes them in front of the user.
+        // Keep the ghost covering until the revealed view has actually been PAINTED.
+        //
+        // ⭐ .198: this function did not do what its name says, and the device logs
+        // proved it. Across every report the hold was 1-2ms — a frame is 16.7ms — and
+        // 16 of them held over `covers=0`, i.e. nothing whatsoever. The cause is that
+        // .179 and .194 cancel each other: .179 waits on `img.decode()`, and .194 parks
+        // the outgoing page instead of display:none'ing it precisely SO THAT its covers
+        // stay decoded. An already-decoded image resolves decode() on the microtask
+        // queue, so the ghost was lifted in the SAME FRAME as the reveal — before the
+        // browser had laid out and painted the restored page. That is consistent with
+        // every measurement we have: DOM untouched (ROWS KEPT 68/68), no image churn,
+        // and plain TEXT flashing — because what flashes is not the covers, it is the
+        // whole view being uncovered before it has painted.
+        //
+        // So there are TWO gates now and the ghost lifts only when BOTH have settled:
+        //   decode — the covers hold a paintable bitmap (still needed: a reveal from a
+        //            genuine display:none, e.g. commit→home, really can re-decode)
+        //   paint  — a frame containing the revealed content has been committed. Double
+        //            rAF is the signal: the first callback runs BEFORE the next paint,
+        //            the second AFTER it. Not a fixed delay — no frame count is assumed.
+        // `via=` names whichever gate settled LAST, so the next device report says
+        // plainly whether the hold became real and whether that was enough.
         const holdGhostUntilPaintable = (rootEl) => {
           const t0 = performance.now();
           const covers = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src'));
-          let dropped = false;
+          let dropped = false, decoded = false, painted = false;
           const drop = (why) => {
             if (dropped) return; dropped = true; dropPanes(); finishing = false;
-            // How long the cover actually held, and over how many images. A hold of
-            // ~0ms over 0 covers means this did NOTHING for that reveal — which is
-            // exactly what happens when the revealed rows are freshly materialized
-            // `img[data-art]` with no `src` yet (they are invisible to the filter
-            // above). Measured, so the next fix is not another guess.
             if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(performance.now() - t0)}ms `
               + `covers=${covers.length} via=${why}`);
           };
-          Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve()))).then(() => drop('decode'));
+          const gate = (why) => { if (decoded && painted) drop(why); };
+          Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve())))
+            .then(() => { decoded = true; gate('decode'); });
+          // rAF does not fire in a hidden tab (a known trap here) — the safety net below
+          // is what releases the ghost in that case, so it can never be stranded.
+          requestAnimationFrame(() => requestAnimationFrame(() => { painted = true; gate('paint'); }));
           setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever
         };
         // FLASH DIAGNOSTIC (.180). The reported "cover images flicker on every aborted

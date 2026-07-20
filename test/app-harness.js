@@ -220,9 +220,19 @@ function boot(opts = {}) {
   global.localStorage = window.localStorage;
   global.Audio = FakeAudio;
   window.Audio = FakeAudio;
-  // jsdom has no rAF/layout; run callbacks synchronously so paint-deferred work is
-  // observable in-test (the app only uses rAF to sequence, never to measure here).
-  const raf = (fn) => { fn(0); return 0; };
+  // jsdom has no rAF/layout. DEFAULT: run callbacks synchronously so paint-deferred
+  // work is observable in-test.
+  //
+  // ⭐ opts.deferRaf — QUEUE them instead, one frame per `h.raf.frame()`. A synchronous
+  // rAF is a fake KINDER than a browser: it collapses "the frame has not been painted
+  // yet" out of existence, so any test of code that waits for a painted frame would pass
+  // whether the wait was there or not. .198 needs exactly that state to be expressible
+  // (the ghost must still be covering the view UNTIL the paint frame lands), so a test
+  // written against the synchronous default could not fail and would prove nothing.
+  const rafQ = [];
+  const raf = opts.deferRaf
+    ? (fn) => { rafQ.push(fn); return rafQ.length; }
+    : (fn) => { fn(0); return 0; };
   global.requestAnimationFrame = raf; window.requestAnimationFrame = raf;
   global.cancelAnimationFrame = () => {}; window.cancelAnimationFrame = () => {};
   window.scrollTo = () => {};
@@ -714,6 +724,24 @@ function boot(opts = {}) {
           for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
         }
         vnow = target;
+      },
+    },
+    /**
+     * Deferred animation frames. Only meaningful under boot({ deferRaf: true }) —
+     * otherwise rAF ran synchronously and `pending()` is always 0.
+     */
+    raf: {
+      /** How many callbacks are waiting for a frame. */
+      pending: () => rafQ.length,
+      /**
+       * Run ONE frame's worth of callbacks. Callbacks queued BY those callbacks wait
+       * for the next frame, exactly as a browser schedules them — which is what makes
+       * a double-rAF genuinely take two frames here instead of collapsing into one.
+       */
+      async frame() {
+        const batch = rafQ.splice(0, rafQ.length);
+        for (const fn of batch) { try { fn(0); } catch { /* the app's business */ } }
+        for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
       },
     },
     /** Cancel anything still pending so node:test can exit. ALWAYS call in a finally. */

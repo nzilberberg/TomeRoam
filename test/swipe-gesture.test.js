@@ -161,6 +161,59 @@ test('an ABORTED browse→browse swipe re-renders UNDER the ghost, never bare (c
   } finally { h.dispose(); }
 });
 
+// ⭐ .198 — the ghost must outlive the reveal by a PAINTED FRAME, not by a decode.
+//
+// Grounded in device measurement, not in my model of the code: across every bug report
+// the shipped `FLASH hold` line read 1-2ms (a frame is 16.7ms) and sometimes covered
+// `covers=0`. .179's decode gate went inert the moment .194 stopped display:none'ing the
+// outgoing page — parking keeps the covers decoded, so decode() resolves on the microtask
+// queue and the ghost was lifted in the same frame as the reveal, uncovering a view the
+// browser had not painted yet.
+//
+// This asserts the ghost is STILL COVERING after the reveal and after the first frame,
+// and only goes when the second frame (the one carrying the painted content) lands.
+// Requires deferRaf — under the synchronous default the mid-state cannot exist and this
+// test could not fail.
+test('the ghost outlives the reveal until a frame has PAINTED it, not just decoded (.198)', async () => {
+  const h = boot({ fakeTimers: true, deferRaf: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const row = addRow(h);
+    const ghosts = () => h.document.querySelectorAll('.nav-ghost').length;
+
+    h.touch.start(10, 300, row);
+    h.touch.move(80, 302);
+    await realSleep(12);
+    h.touch.move(200, 304);
+    await realSleep(12);
+    h.touch.move(30, 304);
+    await realSleep(12);
+    h.touch.end(30, 304);
+
+    // settle() parks its transforms behind a rAF, so the animation needs frames to run
+    // before the 340ms finalize can fire. Drain them, then let the abort land.
+    for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();
+    await settle(h);
+    await h.clock.advance(400);
+    await settle(h);
+
+    assert.ok(swipeLog(h).some((m) => /^abort /.test(m)),
+      `fixture sanity: this gesture must ABORT — got ${JSON.stringify(swipeLog(h))}`);
+    // The reveal has happened. The decode gate has had every chance to settle (the
+    // awaits above drained the microtask queue many times over). If the ghost is gone
+    // here, nothing is covering the unpainted view — which is the bug.
+    assert.equal(ghosts(), 1,
+      'after the reveal the ghost must STILL cover the view — the decode gate alone lifted it in-frame');
+
+    await h.raf.frame();                    // frame 1: runs BEFORE the paint
+    assert.equal(ghosts(), 1,
+      'one frame is not enough — its callback runs before the paint it scheduled');
+
+    await h.raf.frame();                    // frame 2: the painted content is committed
+    assert.equal(ghosts(), 0, 'once a frame has painted the reveal the ghost must go');
+  } finally { h.dispose(); }
+});
+
 // ── the row hold ──────────────────────────────────────────────────────────────
 // While a gesture is live, Browse keeps the outgoing page's rows so an ABORT does
 // not rebuild the page. The hazard is a hold that is never released: hidden pages
