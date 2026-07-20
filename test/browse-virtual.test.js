@@ -87,7 +87,11 @@ test('swipe hold: showPage SUSPENDS the outgoing page (rows kept) instead of dem
     T.showPage('authors');                       // the mid-drag render
     assert.equal(a._vctl.state(), 'suspended', 'outgoing page suspended, not deactivated');
     assert.equal(a.querySelectorAll('.book').length, 5, 'ITS ROWS SURVIVE — nothing to rebuild on abort');
-    assert.ok(a.classList.contains('hidden'), 'and it is still hidden, exactly as before');
+    // Off screen, but PARKED rather than display:none'd for the gesture — iOS drops
+    // a display:none subtree's decoded covers, which is what made the whole list pop
+    // back in on abort. Either class means "not the visible page".
+    assert.ok(a.classList.contains('parked'), 'parked off-viewport for the gesture, not display:none');
+    assert.ok(!a.classList.contains('hidden'), 'and NOT display:none, or its covers get dropped');
 
     T.showPage('books');                         // the abort: back to where we started
     assert.equal(a.querySelectorAll('.book').length, 5, 'restored with no rebuild');

@@ -159,6 +159,14 @@ const Browse = (() => {
     // that was never suspended (swiping back to Home never hides it), so realize
     // explicitly — this is the ONE realization the gesture gets, against the
     // settled scroll.
+    // Parking is gesture-scoped: hand the pages back to display:none now, or every
+    // cached page stays painted for the rest of the session.
+    const stillShown = activeEntry();
+    for (const v of pageCache.values()) {
+      if (!v.el.classList.contains('parked')) continue;
+      v.el.classList.remove('parked');
+      if (v !== stillShown) v.el.classList.add('hidden');
+    }
     const shown = activeEntry();
     if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }
     for (const v of pageCache.values()) {
@@ -179,8 +187,11 @@ const Browse = (() => {
     if (VL && VL.setScrollSuspended) VL.setScrollSuspended(false);
   }
   const browseVisible = () => !!(o.mount && !o.mount.classList.contains('hidden'));
+  // A page is off screen when it is display:none'd OR parked off-viewport during a
+  // swipe. Testing only for `.hidden` would count a parked page as the visible one.
+  const offscreen = (el) => el.classList.contains('hidden') || el.classList.contains('parked');
   function activeEntry() {
-    for (const v of pageCache.values()) if (!v.el.classList.contains('hidden')) return v;
+    for (const v of pageCache.values()) if (!offscreen(v.el)) return v;
     return null;
   }
   if (typeof window !== 'undefined') {
@@ -271,7 +282,18 @@ const Browse = (() => {
       // anchor is captured HERE, before `.hidden` lands, for the reason above.
       if (c && k !== key) { if (holdRows && c.suspend) c.suspend(); else c.deactivate(); }
     }
-    for (const [k, v] of pageCache) v.el.classList.toggle('hidden', k !== key);
+    // While a swipe holds rows, the outgoing page is PARKED (off-viewport but still
+    // painted) rather than display:none'd. iOS drops the decoded cover images of a
+    // display:none subtree, so an aborted swipe re-decodes every cover at once and
+    // the whole list visibly pops back in — with the DOM completely untouched
+    // (measured on device: ROWS KEPT 68/68, src 22->22, +img 0). Same technique and
+    // the same reason as #home.parked. Gesture-scoped: endHold puts the pages back
+    // to display:none so cached pages do not stay painted for the session.
+    for (const [k, v] of pageCache) {
+      const away = k !== key;
+      v.el.classList.toggle('parked', away && holdRows);
+      v.el.classList.toggle('hidden', away && !holdRows);
+    }
     const shown = pageCache.get(key);
     if (shown && shown.el._vctl) {
       const c = shown.el._vctl;
@@ -347,7 +369,7 @@ const Browse = (() => {
     else if (desc.v === 'authorBooks') authorView(el, data.author, data.books);
     else if (desc.v === 'files') filesView(el, desc.book, data);
     // A rebuilt virtual page must resume realizing if it's the page on screen.
-    if (el._vctl && !el.classList.contains('hidden') && browseVisible()) el._vctl.activate();
+    if (el._vctl && !offscreen(el) && browseVisible()) el._vctl.activate();
   }
 
   // ---- in-place keyed reconcile (background-revalidate repaint) -------------
@@ -514,7 +536,7 @@ const Browse = (() => {
     // leaves the active page node WITHOUT .hidden — so the page check alone still let
     // a late fetch scroll the window while Home was on screen. showPage()/the virtual
     // controllers already combine these two the same way (see line ~258).
-    if (browseVisible() && !page.classList.contains('hidden')) positionOnEnter(desc, page, 0);
+    if (browseVisible() && !offscreen(page)) positionOnEnter(desc, page, 0);
   }
 
   // ---- grouping by first sort-letter --------------------------------------

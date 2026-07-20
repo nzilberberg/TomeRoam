@@ -80,6 +80,20 @@ body.has-player .app { padding-bottom: calc(var(--nav-pad) + 190px); }
    Trade-off: a little empty scroll room below the carousels. Tunable via 12vh. */
 body.home-tall .app { min-height: calc(100% + 12vh); }
 .hidden { display: none !important; }
+/* A browse page PARKED for the duration of a swipe: off-viewport but STILL
+   PAINTED, so iOS keeps its decoded cover bitmaps. display:none drops them, and
+   an aborted swipe then re-decodes every cover at once — the whole list visibly
+   pops back in with the DOM untouched. Exactly the reason #home.parked exists
+   below; this is the same technique for the browse pages. Out of flow, so the
+   document height comes from the page being swiped to, which is what the swipe
+   wants anyway. Gesture-scoped — browse.js parks on swipe start and returns the
+   page to display:none when the gesture ends. */
+.browsepage.parked {
+  position: fixed; top: 0; left: 0; right: 0;
+  max-width: 640px; margin: 0 auto;
+  transform: translateX(-101vw);
+  overflow: hidden; pointer-events: none; z-index: 0;
+}
 /* HOME while another view is active: parked OFF-SCREEN but STILL PAINTED (its own
    compositing layer via will-change) — NOT display:none, which makes iOS drop the
    decoded cover images so they flash/re-decode when home is shown again. Fixed +
