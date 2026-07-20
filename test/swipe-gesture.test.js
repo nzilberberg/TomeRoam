@@ -449,29 +449,43 @@ test('the ghost inherits the live view’s animation phase, not a restarted one 
     h.$('browse').appendChild(row);
 
     // The live cover is 800ms into its shimmer. A clone would restart at 0.
+    // Each cover gets its own animation object, so an assignment to the CLONE's is
+    // observable. The live one is mid-shimmer; a fresh clone starts at 0.
     const LIVE_PHASE = 800;
+    const anims = new Map();
     h.window.Element.prototype.getAnimations = function () {
-      return this.classList && this.classList.contains('cover') && this.isConnected
-        ? [{ currentTime: LIVE_PHASE }] : [];
+      if (!this.classList || !this.classList.contains('cover')) return [];
+      if (!anims.has(this)) {
+        const inGhost = !!(this.closest && this.closest('.nav-ghost'));
+        anims.set(this, { currentTime: inGhost ? 0 : LIVE_PHASE });
+      }
+      return [anims.get(this)];
     };
 
-    let ghostCover = null;
+    let ghostAnim = null;
     const inner = h.browse.render;
     h.browse.render = async (desc) => {
       const g = h.document.querySelector('.nav-ghost .cover');
-      if (g && !ghostCover) ghostCover = g.style.animationDelay;
+      if (g && !ghostAnim) ghostAnim = anims.get(g) || null;
       return inner(desc);
     };
 
     await edgeSwipe(h, row);
 
-    assert.ok(ghostCover !== null,
-      'fixture sanity: a ghost carrying a cover must exist during the drag');
-    // Seeded with a NEGATIVE delay equal to the live phase — that is what seeks a CSS
-    // animation forward to where the live one already is. Empty means the clone
-    // restarted from zero, i.e. the ghost is out of phase with what it stands in for.
-    assert.equal(ghostCover, `-${LIVE_PHASE}ms`,
-      `the ghost's cover must be seeded to the live phase, got ${JSON.stringify(ghostCover)}`);
+    assert.ok(ghostAnim, 'fixture sanity: a ghost carrying a cover must exist during the drag');
+    // .207: the clone's animation is SEEKED to the live element's time. .205 tried to
+    // express this as a negative animation-delay and it did not take — on device the
+    // covers stayed 1011ms (list) and 10111ms (home) out of phase while reporting
+    // animSync=28/38. Assigning currentTime says exactly what is meant.
+    assert.equal(ghostAnim.currentTime, LIVE_PHASE,
+      `the ghost's cover must be seeked to the live phase, got ${ghostAnim.currentTime}`);
+    // And the residual measured AT the sync must be zero, or the assignment silently
+    // failed — the exact failure .205 shipped and could not tell apart from "no help".
+    const line = flashLog(h).find((m) => /@reveal/.test(m));
+    if (line) {
+      assert.match(line, /animSync=[1-9]\d*\/res=0\b/,
+        `sync must report covers seeded with a zero residual: ${line}`);
+    }
   } finally { h.dispose(); }
 });
 

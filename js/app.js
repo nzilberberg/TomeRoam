@@ -357,21 +357,37 @@
     // A negative animation-delay seeks the clone to the live element's current time:
     // for the infinite shimmer that matches phase, and for a finished fade it lands past
     // the end where `both` holds the final state.
+    // ⭐ .207 — SET THE ANIMATION'S TIME, don't try to express it as a CSS delay.
+    // .205 wrote `animation-delay: -<currentTime>ms` before insertion. It RAN (device:
+    // animSync=28 and 38) and did NOT sync: covers stayed 1011ms out of phase on the
+    // book list and 10111ms on home, every comparable pair, against a 1.25s shimmer —
+    // i.e. nearly opposite phase, on both screens. My error was writing a value whose
+    // semantics I had not verified (a negative delay shifts the EFFECT; it is not the
+    // same thing as seeking the animation) and then reading back a number that may not
+    // be comparable between the two sides. The Web Animations API says exactly what is
+    // meant, so use it: assign currentTime on the clone's own animation.
+    // Must run AFTER insertion — a detached clone has no CSS animations to fetch.
+    let lastAnimResidual = 0;
     function copyAnimPhase(src, dst) {
       if (typeof Element === 'undefined' || !Element.prototype.getAnimations) return 0;
       const s = src.querySelectorAll('.cover, .authoravatar, .np-art');
       const c = dst.querySelectorAll('.cover, .authoravatar, .np-art');
-      let synced = 0;
+      let synced = 0, residual = 0;
       s.forEach((el, i) => {
         const twin = c[i];
         if (!twin) return;
         try {
-          const a = el.getAnimations();
-          if (!a || !a.length || a[0].currentTime == null) return;
-          twin.style.animationDelay = (-a[0].currentTime) + 'ms';
+          const a = el.getAnimations(), b = twin.getAnimations();
+          if (!a.length || !b.length || a[0].currentTime == null) return;
+          b[0].currentTime = a[0].currentTime;
+          // Verify AT THE POINT OF THE FIX rather than 500ms later in a reveal report.
+          // A residual here says the assignment did not take, which is the failure .205
+          // had and could not distinguish from "ran and did not help".
+          residual = Math.max(residual, Math.abs((b[0].currentTime || 0) - (a[0].currentTime || 0)));
           synced++;
         } catch { /* an unsynced cover is the old behaviour, never a broken ghost */ }
       });
+      lastAnimResidual = Math.round(residual);
       return synced;
     }
     // The fixed full-viewport pane both snapshot builders mount into.
@@ -402,13 +418,11 @@
       clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
       const wrap = ghostWrap();
       wrap.appendChild(clone);
-      // BEFORE insertion — the clone's animations start the moment it enters the
-      // document, so the phase has to be set while it is still detached or the first
-      // frames run unsynced.
-      const nSync = copyAnimPhase(document.querySelector('.app'), clone);
       document.body.appendChild(wrap);
       copyScroll(document.querySelector('.app'), clone);   // match carousel scroll to the live page
-      if (d) d.animSync = (d.animSync || 0) + nSync;
+      // AFTER insertion: a detached clone has no CSS animations to seek (.207).
+      const nSync = copyAnimPhase(document.querySelector('.app'), clone);
+      if (d) { d.animSync = (d.animSync || 0) + nSync; d.animRes = lastAnimResidual; }
       return wrap;
     }
 
@@ -477,9 +491,11 @@
       wrap.appendChild(box);
       // Home's tiles carry the same cover animations, so this snapshot needs the same
       // phase sync as ghostApp's — set before insertion, for the same reason.
-      if (d) d.animSync = (d.animSync || 0) + copyAnimPhase($('home'), clone);
       document.body.appendChild(wrap);
       copyScroll($('home'), clone);   // match carousel scroll so the snapshot shows the same tiles as the live home
+      // AFTER insertion, same reason as ghostApp (.207).
+      const nSync = copyAnimPhase($('home'), clone);
+      if (d) { d.animSync = (d.animSync || 0) + nSync; d.animRes = lastAnimResidual; }
       return wrap;
     }
 
@@ -616,7 +632,7 @@
             const g = Array.from(pane.el.querySelectorAll(sel)).slice(0, 8);
             const r = Array.from(live.querySelectorAll(sel)).slice(0, 8);
             if (!g.length && !r.length) return `${sel.replace(/[.#]/g, '')} 0/0`;
-            let maxDy = 0, maxDx = 0, maxOp = 0, maxPhase = 0, pairs = 0;
+            let maxDy = 0, maxDx = 0, maxOp = 0, maxPhase = 0, pairs = 0, bgDiff = 0;
             const n = Math.min(g.length, r.length);
             for (let i = 0; i < n; i++) {
               const a = g[i].getBoundingClientRect(), b = r[i].getBoundingClientRect();
@@ -628,6 +644,10 @@
               try {
                 const ga = getComputedStyle(g[i]), rb = getComputedStyle(r[i]);
                 maxOp = Math.max(maxOp, Math.abs(parseFloat(ga.opacity || '1') - parseFloat(rb.opacity || '1')));
+                // GROUND TRUTH: the shimmer animates background-position, so comparing
+                // the computed value compares what is actually PAINTED. currentTime
+                // depends on API semantics I have already been wrong about once.
+                if (ga.backgroundPosition !== rb.backgroundPosition) bgDiff++;
                 const gAn = g[i].getAnimations ? g[i].getAnimations() : [];
                 const rAn = r[i].getAnimations ? r[i].getAnimations() : [];
                 if (gAn.length && rAn.length && gAn[0].currentTime != null && rAn[0].currentTime != null) {
@@ -641,7 +661,7 @@
             // — the same false-reassurance that made the .205 reading look like a pass.
             return `${sel.replace(/[.#]/g, '')} ${g.length}/${r.length}`
               + ` dy=${Math.round(maxDy)} dx=${Math.round(maxDx)}`
-              + ` op=${maxOp.toFixed(2)} phase=${pairs ? Math.round(maxPhase) + 'ms/' + pairs : 'n/a'}`;
+              + ` op=${maxOp.toFixed(2)} phase=${pairs ? Math.round(maxPhase) + 'ms/' + pairs : 'n/a'} bg=${bgDiff}`;
           };
           // ⭐ .206 — probe the elements that actually CARRY the animation, and the ones
           // HOME is built from. The .205 reading was blind twice over: `commit→home`
@@ -963,8 +983,12 @@
           // How many covers the ghost builder actually phase-seeded. `animSync=0` means
           // the .205 fix did not run at all (no getAnimations, or nothing matched), which
           // is indistinguishable from "it ran and did not help" unless it is reported.
+          // `res=` is the residual measured AT the sync: 0 means the assignment took.
+          // A large res says the seek itself failed; res=0 with the flash still present
+          // says animation phase is not the mechanism after all.
           const ghostDiff = (cover.diff ? ` | ghostVsReal=[${cover.diff}]` : '')
-            + ` animSync=${cur.animSync == null ? '?' : cur.animSync}`;
+            + ` animSync=${cur.animSync == null ? '?' : cur.animSync}`
+            + `/res=${cur.animRes == null ? '?' : cur.animRes}`;
             // POSITION across the reveal — scrollY/documentHeight at each step, plus the
             // scroll the ghost was frozen at. A move between preDrop and postDrop, or a
             // reveal at a Y different from ghostY, IS the flash: the whole page jumping,
