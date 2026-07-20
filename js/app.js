@@ -211,15 +211,36 @@
     // need opposite fixes. Identity first: same node and same controller instance
     // means nothing was torn down, whatever the counters say.
     let revealBase = null;
-    const snapBrowse = () => {
+    // Row IDENTITY, not row counts. +img/-img totals cannot separate "the swipe
+    // rebuilt the page" from "something else in the 1.5s window touched it" — two
+    // device logs were read wrongly that way, one contaminated by the next gesture
+    // and one by a nav tap that legitimately dematerializes the page. Stamping the
+    // actual row nodes answers it outright: a row that is still the SAME element was
+    // never destroyed, whatever else happened meanwhile.
+    let stampGen = 0;
+    const snapBrowse = (stamp) => {
       const p = [...document.querySelectorAll('#browse .browsepage')].find((x) => !x.classList.contains('hidden'));
       if (!p) return null;
       const imgs = p.querySelectorAll('img');
-      return { node: p, ctl: p._vctl || null,
-        rows: p.querySelectorAll('.book, .author').length, imgs: imgs.length,
+      const rows = p.querySelectorAll('.book, .author');
+      // Stamp ONLY when capturing the gesture-start baseline. Stamping on the
+      // comparison snapshot as well relabels every row, which makes "kept" always
+      // read 0 — measured locally before this shipped.
+      const gen = stamp ? 'g' + (++stampGen) : null;
+      if (stamp) rows.forEach((r) => { r.dataset.swGen = gen; });
+      return { node: p, ctl: p._vctl || null, gen,
+        rows: rows.length, imgs: imgs.length,
         src: Array.from(imgs).filter((i) => i.getAttribute('src')).length,
         state: p._vctl && p._vctl.state ? p._vctl.state() : 'classic',
         realized: p._vctl && p._vctl.realizedCount ? p._vctl.realizedCount() : -1 };
+    };
+    // How many of `base`'s stamped rows are still in the document, and how many rows
+    // on screen are new since then.
+    const survivors = (base) => {
+      if (!base || !base.node) return null;
+      const rows = [...document.querySelectorAll('#browse .browsepage:not(.hidden) .book, #browse .browsepage:not(.hidden) .author')];
+      const kept = rows.filter((r) => r.dataset.swGen === base.gen).length;
+      return { kept, of: base.rows, fresh: rows.filter((r) => r.dataset.swGen !== base.gen).length };
     };
 
     // A live gesture's move/end listeners live on the NODE THE TOUCH STARTED ON, not
@@ -410,7 +431,7 @@
     // scroll-neutral) or a fixed snapshot — so scroll cannot change during a swipe.
     function start() {
       d.live = true;
-      revealBase = snapBrowse();   // BEFORE the mid-drag render clobbers #browse
+      revealBase = snapBrowse(true);   // BEFORE the mid-drag render clobbers #browse
       takeRowHold();   // from here the outgoing page keeps its rows until this gesture ends
       const fromV = d.from.v, toV = d.dest.v, off = d.dir === 'back' ? -d.w : d.w;
       const fromOv = isOverlay(fromV), toOv = isOverlay(toV);
@@ -626,9 +647,15 @@
             // instance means the page was never torn down, so any churn above is it
             // filling in, not being recreated.
             const now = snapBrowse();
+            // ROWS KEPT is the load-bearing number: how many of the row elements that
+            // were on screen when the gesture began are STILL the same elements. It is
+            // immune to whatever else lands in the window, which the +img/-img totals
+            // are not.
+            const surv = survivors(revealBase);
             const cmp = (!revealBase || !now) ? 'base n/a'
-              : `sameNode=${now.node === revealBase.node} sameCtl=${now.ctl === revealBase.ctl}`
-                + ` rows ${revealBase.rows}→${now.rows} src ${revealBase.src}→${now.src}`
+              : `ROWS KEPT ${surv ? surv.kept + '/' + surv.of + ' fresh=' + surv.fresh : '?'}`
+                + ` | sameNode=${now.node === revealBase.node} sameCtl=${now.ctl === revealBase.ctl}`
+                + ` src ${revealBase.src}→${now.src}`
                 + ` realized ${revealBase.realized}→${now.realized} state ${revealBase.state}→${now.state}`;
             PBDebug.log('FLASH', `${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
               + ` | VISIBLE +img=${vis.add} -img=${vis.rem} src+=${vis.srcSet} src-=${vis.srcClr}`
