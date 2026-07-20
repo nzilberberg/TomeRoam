@@ -137,18 +137,30 @@ const Browse = (() => {
   // with withSrc=0 and 17 covers refetched, while a swipe following another swipe
   // was perfectly clean. Deferring costs one gesture of data staleness.
   const heldRepaints = new Map();
-  function beginHold() { holdRows = true; heldRepaints.clear(); return ++holdGen; }
+  function beginHold() {
+    holdRows = true; heldRepaints.clear();
+    // Freeze scroll-driven realization too. Suspending the OUTGOING page's rows is
+    // not sufficient on its own: a page that is never hidden during the gesture
+    // (swiping back to Home moves the real #browse by transform, so showPage never
+    // runs) stays active and re-realizes on every transient scroll.
+    if (VL && VL.setScrollSuspended) VL.setScrollSuspended(true);
+    return ++holdGen;
+  }
   function endHold(token) {
     if (token !== holdGen || !holdRows) return;
     holdRows = false;                       // cleared FIRST, or the deferred repaints re-defer
+    if (VL && VL.setScrollSuspended) VL.setScrollSuspended(false);
     // Now do the teardown the hold deferred: any page still suspended is off screen
     // for good, so it goes to the normal dematerialized resting state. The VISIBLE
     // page is skipped — it is the one the gesture landed on.
-    // The page we landed on activates FIRST, now that the swipe has put the real
-    // scroll back — so its realize computes the right window and reuses the rows it
-    // kept, instead of releasing them against a clamped offset.
+    // It activates FIRST, now that the swipe has put the real scroll back, so its
+    // realize computes the right window and reuses the rows it kept instead of
+    // releasing them against a transient offset. activate() is a no-op for a page
+    // that was never suspended (swiping back to Home never hides it), so realize
+    // explicitly — this is the ONE realization the gesture gets, against the
+    // settled scroll.
     const shown = activeEntry();
-    if (shown && shown.el._vctl) shown.el._vctl.activate();
+    if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }
     for (const v of pageCache.values()) {
       const c = v.el._vctl;
       if (c && c.state && c.state() === 'suspended') c.deactivate();
@@ -162,7 +174,10 @@ const Browse = (() => {
   // Destructive cache operations invalidate any outstanding hold: their controllers
   // are being destroyed, and a hold surviving them would wrongly govern whatever
   // pages get built next.
-  function dropHold() { holdRows = false; holdGen++; heldRepaints.clear(); }
+  function dropHold() {
+    holdRows = false; holdGen++; heldRepaints.clear();
+    if (VL && VL.setScrollSuspended) VL.setScrollSuspended(false);
+  }
   const browseVisible = () => !!(o.mount && !o.mount.classList.contains('hidden'));
   function activeEntry() {
     for (const v of pageCache.values()) if (!v.el.classList.contains('hidden')) return v;

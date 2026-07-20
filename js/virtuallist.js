@@ -131,8 +131,18 @@ const VirtualList = (() => {
   // ---- shared scroll dispatch (leak-proof: one static listener) --------------
   let activeCtl = null;
   let rafPending = false;
+  // While a swipe gesture is in flight the document scroll is TRANSIENT: iOS grants
+  // a native scroll the moment a touchmove goes non-cancelable (app.js documents
+  // this), and rendering a shorter destination page clamps scrollY outright. Both
+  // snap back when the gesture settles. Realizing against those intermediate
+  // positions releases the rows on screen and recreates them as fresh nodes whose
+  // covers must reload — measured: a 600px excursion destroyed 6 of 33 rows and lost
+  // their covers; a full clamp destroyed all 33. Owner: browse.js (beginHold /
+  // endHold), which does one realize at the end, against the settled scroll.
+  let scrollSuspended = false;
+  const setScrollSuspended = (v) => { scrollSuspended = !!v; };
   function onDocScroll() {
-    if (!activeCtl || rafPending) return;
+    if (!activeCtl || rafPending || scrollSuspended) return;
     if (!activeCtl.isVisible()) return;   // browse hidden (Home/Options scrolling) → not our scroll
     rafPending = true;
     requestAnimationFrame(() => { rafPending = false; if (activeCtl) activeCtl._realize(); });
@@ -326,7 +336,7 @@ const VirtualList = (() => {
   }
 
   const api = {
-    FULL_RENDER_MAX, usesVirtual, setForceVirtual,
+    FULL_RENDER_MAX, usesVirtual, setForceVirtual, setScrollSuspended,
     buildModel, windowFor, anchorAt, yForAnchor,
     createController,
     _test: { activeController: () => activeCtl, setActive: (c) => { activeCtl = c; } },

@@ -188,6 +188,51 @@ test('swipe hold: a page returning from SUSPENDED waits for endHold to activate'
   } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
 });
 
+// The SECOND churn path, measured in a real browser: a scroll that happens DURING the
+// drag. iOS grants a native scroll the moment a touchmove goes non-cancelable
+// (app.js:374-377 documents exactly this), and the swipe snaps it back on settle.
+// Realizing against those intermediate positions releases the rows on screen and
+// recreates them as fresh nodes whose covers reload — a 600px excursion destroyed 6
+// of 33 rows and lost their covers. This path is NOT covered by suspending the
+// outgoing page: swiping back to Home never hides the browse page at all, so its
+// controller stays active and re-realizes on every transient scroll.
+test('swipe hold: scroll-driven realize is frozen for the gesture, then runs ONCE at the end', () => {
+  const prev = { strides: { header: 30, row: 80 }, overscan: 200,
+    metrics: { scrollY: () => view.scrollY, viewportH: () => view.viewportH, listTop: () => 0 },
+    scrollTo: (y) => { view.scrollY = y; } };
+  try {
+    global.VirtualList.setForceVirtual(true);
+    // The shared dispatcher skips a controller whose box does not render; jsdom has no
+    // layout, so state visibility has to be injected for the scroll path to be reachable.
+    T.setVlOpts(Object.assign({}, prev, { isVisible: () => true }));
+    T.pageCache.clear();
+    const a = page(); T.listView(a, 'Books', books(400), T.bookRow, false);
+    T.pageCache.set('books', { el: a, order: 1 });
+    T.showPage('books');
+    const atTop = a._vctl.realizedCount();
+    assert.ok(atTop > 0 && atTop < 400, `windowed at the top (${atTop})`);
+    const firstKeys = [...a.querySelectorAll('.book')].map((r) => r.getAttribute('aria-posinset')).join(',');
+
+    const tok = Browse.beginHold();
+    // A transient scroll lands mid-gesture — the native scroll iOS granted.
+    view.scrollY = 9000;
+    global.window.dispatchEvent(new global.window.Event('scroll'));
+    assert.equal([...a.querySelectorAll('.book')].map((r) => r.getAttribute('aria-posinset')).join(','), firstKeys,
+      'NOTHING may realize mid-gesture — that is what destroys the rows on screen');
+
+    // The swipe settles and puts the real scroll back before releasing the hold.
+    view.scrollY = 0;
+    Browse.endHold(tok);
+    assert.equal([...a.querySelectorAll('.book')].map((r) => r.getAttribute('aria-posinset')).join(','), firstKeys,
+      'and the one realize at the end lands on the SAME rows — nothing rebuilt, no cover refetch');
+  } finally {
+    global.VirtualList.setForceVirtual(false);
+    global.VirtualList.setScrollSuspended(false);
+    T.setVlOpts(prev);
+    T.pageCache.clear();
+  }
+});
+
 test('swipe hold: a STALE token cannot release a newer gesture hold', () => {
   try {
     global.VirtualList.setForceVirtual(true);
