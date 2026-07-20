@@ -38,6 +38,13 @@ const MUTATIONS = [
     from: "ms.setActionHandler('previoustrack', prevTrack);",
     to: "ms.setActionHandler('previoustrack', nextTrack);" },
   { name: 'foreground re-drives restoreLastPlayed (resume-kill shape)',
+    // BENIGN ALONE BY DESIGN — established at .158: the resume-kill only bites when
+    // foreground-restore re-fires AND PBLogic.shouldReloadOnRestore regresses. Either
+    // edit on its own is survivable because the app genuinely defends, so no test
+    // fails here and that is CORRECT. #6 is the two-part version and is caught.
+    // Flagged so tools/mutation-sweep.mjs does not report it as an undefended guard —
+    // a sweep that cries wolf gets ignored, which costs more than it saves.
+    benignAlone: 'needs #6\'s second edit to bite (.158)',
     from: '        Playback.onVisible();   // recover a lock-screen wedge deferred while backgrounded (js/playback.js)',
     to: '        Playback.onVisible();\n        restoreLastPlayed();' },
   { name: 'playReqGen supersede guard removed',
@@ -54,10 +61,14 @@ const MUTATIONS = [
   // ---- external review of .161, fixed in .162 --------------------------------
   { name: 'object URL: assign curObjUrl BEFORE useSrc (revokes the url it installs)',
     from: BLOB_FROM, to: BLOB_TO },
-  { name: 'browse: page-level .hidden only (drops browseVisible)',
+  // RE-ANCHORED: .194 replaced the page-level `.hidden` test with offscreen(), which
+  // also covers a PARKED page. The old anchor had silently stopped applying, so the
+  // .161 scroll-yank guard has been undefended since then — found by
+  // test/mutation-anchors.test.js, not by anyone running this file.
+  { name: 'browse: drop browseVisible from the scroll-yank guard (.161)',
     file: 'js/browse.js',
-    from: "    if (browseVisible() && !page.classList.contains('hidden')) positionOnEnter(desc, page, 0);",
-    to: "    if (!page.classList.contains('hidden')) positionOnEnter(desc, page, 0);" },
+    from: "    if (browseVisible() && !offscreen(page)) positionOnEnter(desc, page, 0);",
+    to: "    if (!offscreen(page)) positionOnEnter(desc, page, 0);" },
   // The ordering assertion the shared recorder made possible: claim ownership only
   // AFTER the element is loading. `.162`'s report claimed this lived here and it
   // did not — the tool had the two production fixes but never this one, so the
@@ -75,6 +86,17 @@ const MUTATIONS = [
     from: `    userPause(); invalidateMediaLoad(); Plex.signOut();`,
     to: `    userPause(); Plex.signOut();` },
 ];
+
+// Exported so a TEST can check every anchor still matches the source. A mutation
+// whose anchor has rotted silently stops testing anything — mutate.mjs exits nonzero
+// when you run it by hand, but nobody runs all eleven by hand, so the rot is
+// invisible until someone needs the mutation and finds it dead.
+export { MUTATIONS, DEFAULT_FILE };
+
+// Everything below is the CLI. Guarded so importing this file does not apply a
+// mutation to the working tree as a side effect of a test run.
+const isCli = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop());
+if (!isCli) { /* imported as a module — no CLI side effects */ } else {
 
 if (process.argv.includes('--restore')) {
   for (const f of new Set(MUTATIONS.map((m) => m.file || DEFAULT_FILE))) {
@@ -95,13 +117,23 @@ const FILE = m.file || DEFAULT_FILE;
 const BAK = bakOf(FILE);
 if (!fs.existsSync(BAK)) fs.copyFileSync(FILE, BAK);
 
-let src = fs.readFileSync(BAK, 'utf8');          // always from the PRISTINE copy
+// ⭐ NORMALISE LINE ENDINGS BEFORE MATCHING. Repo files are CRLF; multi-line anchors
+// here are built with '\n'.join, so they could NEVER match and the mutation was
+// silently unusable — mutation #7 (the object-URL blob block) had been dead for
+// exactly this reason until test/mutation-anchors.test.js found it. This is trap T6
+// in PLAN-swipe-reveal.txt, biting the tooling meant to catch such things.
+// The file is written back as LF for the duration of the mutation; --restore puts the
+// pristine CRLF copy back, so the working tree is unaffected either way.
+let src = fs.readFileSync(BAK, 'utf8').replace(/\r\n/g, '\n');   // PRISTINE copy, LF
 for (const part of [m, m.also].filter(Boolean)) {
-  if (!src.includes(part.from)) {
+  const from = part.from.replace(/\r\n/g, '\n');
+  if (!src.includes(from)) {
     console.error(`ANCHOR NOT FOUND for #${i} in ${FILE} — mutation NOT applied`);
     process.exit(1);
   }
-  src = src.replace(part.from, part.to);
+  src = src.replace(from, part.to.replace(/\r\n/g, '\n'));
 }
 fs.writeFileSync(FILE, src);
 console.log(`applied #${i} [${FILE}]: ${m.name}`);
+
+}   // end CLI guard

@@ -1,0 +1,28 @@
+SWIPE TRANSITION INVENTORY — GENERATED, DO NOT EDIT
+Regenerate: node tools/gen-transition-matrix.mjs
+Guarded by: test/transition-matrix.test.js
+
+app.js branch-region fingerprint: 2cf44185fe7497bc
+  (if this changes, the predicate in the generator must be RE-VERIFIED
+   against js/app.js before this file is trusted)
+
+registry: 12 screens, 132 ordered pairs
+  home     home
+  browse   books, authors, authorBooks, files
+  overlay  options, nowplaying, general, playback, buffering, downloads, diagnostics
+
+STRUCTURAL MATRIX (kind -> kind)
+  from     to        outgoing       incoming        pane   abort
+  -------  --------  -------------  --------------  -----  --------
+  home     browse    GHOST-pane     real-#browse    yes    none
+  home     overlay   real-view      real-overlay    no     none
+  browse   home      real-view      SNAPSHOT-pane   yes    none
+  browse   browse    GHOST-pane     real-#browse    yes    rerender
+  browse   overlay   real-view      real-overlay    no     none
+  overlay  home      real-overlay   SNAPSHOT-pane   yes    none
+  overlay  browse    real-overlay   real-#browse    no     none
+  overlay  overlay   real-overlay   real-overlay    no     none
+
+concrete pairs building a pane: 27 of 132
+concrete pairs re-rendering on abort: 12
+concrete pairs carrying the NP pill: 22
