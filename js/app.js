@@ -370,8 +370,30 @@
     let lastAnimResidual = 0;
     function copyAnimPhase(src, dst) {
       if (typeof Element === 'undefined' || !Element.prototype.getAnimations) return 0;
-      const s = src.querySelectorAll('.cover, .authoravatar, .np-art');
-      const c = dst.querySelectorAll('.cover, .authoravatar, .np-art');
+      // ⭐ .208 — MATCH THE PRUNED SHAPE, or index `i` means different elements on each
+      // side. ghostApp REMOVES `.hidden, .parked` from the clone, so the live `.app`
+      // still holds parked home and every hidden .browsepage while the clone holds only
+      // the visible page. Index-matching two lists of different shape paired covers with
+      // the wrong twins and mostly failed outright: device .207 reported animSync=6 on a
+      // book list carrying ~36 skeletons, phase=17126ms, bg=8 — while HOME, whose
+      // snapshot clones one subtree with nothing pruned, reached 38 and dropped to 48ms.
+      // Filtering the source to what SURVIVES the prune restores the correspondence.
+      // (Same latent trap as copyScroll's "index-matched" assumption directly above.)
+      // Mirror the prune EXACTLY: the clone drops `.hidden/.parked` nodes BELOW its
+      // root, and both builders strip those classes from the root itself. So walk up to
+      // the root and never test the root — snapshotHome's source IS `#home.parked`
+      // (home is parked while browse is showing), and testing it would filter away
+      // every cover and silently sync nothing. Caught by the .206 test, not by me.
+      const kept = (root) => (el) => {
+        let n = el;
+        while (n && n !== root) {
+          if (n.classList && (n.classList.contains('hidden') || n.classList.contains('parked'))) return false;
+          n = n.parentElement;
+        }
+        return true;
+      };
+      const s = Array.from(src.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(src));
+      const c = Array.from(dst.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(dst));
       let synced = 0, residual = 0;
       s.forEach((el, i) => {
         const twin = c[i];

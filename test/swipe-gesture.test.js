@@ -533,6 +533,81 @@ test('the HOME snapshot phase-syncs its covers, and the report says how many (.2
   } finally { h.dispose(); }
 });
 
+// ⭐ .208 — the phase sync must pair covers that CORRESPOND, not covers at the same
+// index in two differently-shaped trees.
+//
+// ghostApp removes `.hidden, .parked` from the clone, so the live `.app` still contains
+// parked home and every hidden .browsepage while the clone contains only the visible
+// page. Index-matching those two lists pairs a visible cover with whatever happened to
+// sit at that index in the FULL tree. Device .207: animSync=6 on a list carrying ~36
+// skeleton covers, phase=17126ms — while home, cloned with nothing pruned, reached 38
+// and 48ms. The failure is silent: it still reports a sync count and a zero residual.
+test('the phase sync pairs covers that correspond, not by raw index (.208)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+
+    // A HIDDEN page ahead of the visible one — exactly what a browse LRU cache holds,
+    // and exactly what the clone prunes away.
+    const hidden = h.document.createElement('div');
+    hidden.className = 'browsepage hidden';
+    for (let i = 0; i < 3; i++) {
+      const c = h.document.createElement('img');
+      c.className = 'cover';
+      c.setAttribute('data-which', 'hidden');
+      hidden.appendChild(c);
+    }
+    h.$('browse').appendChild(hidden);
+
+    const shown = h.document.createElement('div');
+    shown.className = 'browsepage';
+    const liveCover = h.document.createElement('img');
+    liveCover.className = 'cover';
+    liveCover.setAttribute('data-which', 'visible');
+    shown.appendChild(liveCover);
+    h.$('browse').appendChild(shown);
+
+    const HIDDEN_PHASE = 111, VISIBLE_PHASE = 800;
+    const anims = new Map();
+    h.window.Element.prototype.getAnimations = function () {
+      if (!this.classList || !this.classList.contains('cover')) return [];
+      if (!anims.has(this)) {
+        const inGhost = !!(this.closest && this.closest('.nav-ghost'));
+        // ONLY the visible page's cover carries VISIBLE_PHASE. index.html already
+        // contains four other `.cover` elements (player / now-playing) that sort BEFORE
+        // these in document order, and an earlier version of this fixture handed them
+        // VISIBLE_PHASE too — so a mispairing landed on a distractor that returned the
+        // right answer by accident and the mutation survived. Every non-target cover
+        // must be distinguishable, or the test cannot see the bug it exists for.
+        anims.set(this, {
+          currentTime: inGhost ? 0
+            : (this.getAttribute('data-which') === 'visible' ? VISIBLE_PHASE : HIDDEN_PHASE),
+        });
+      }
+      return [anims.get(this)];
+    };
+
+    let ghostAnim = null;
+    const inner = h.browse.render;
+    h.browse.render = async (desc) => {
+      const g = h.document.querySelector('.nav-ghost .cover');
+      if (g && !ghostAnim) ghostAnim = anims.get(g) || null;
+      return inner(desc);
+    };
+
+    await edgeSwipe(h, addRow(h));
+
+    assert.ok(ghostAnim, 'fixture sanity: the ghost must carry a cover');
+    // The clone keeps only the VISIBLE page's cover, so it must be seeded from the
+    // VISIBLE live cover. Getting HIDDEN_PHASE means it paired by raw index against the
+    // unpruned tree — the shipped defect, which reports a healthy sync while doing this.
+    assert.notEqual(ghostAnim.currentTime, HIDDEN_PHASE,
+      'the ghost cover was paired with a HIDDEN page\'s cover — index matching across differently-shaped trees');
+    assert.equal(ghostAnim.currentTime, VISIBLE_PHASE,
+      `the ghost cover must inherit the visible page's phase, got ${ghostAnim.currentTime}`);
+  } finally { h.dispose(); }
+});
+
 // ── the row hold ──────────────────────────────────────────────────────────────
 // While a gesture is live, Browse keeps the outgoing page's rows so an ABORT does
 // not rebuild the page. The hazard is a hold that is never released: hidden pages
