@@ -119,6 +119,36 @@ export function backReachable(top, below) {
 }
 
 /**
+ * Every screen NAME that appears in a production descriptor literal or nav control.
+ *
+ * ⚠️ WHY THIS EXISTS, stated honestly: registry() is only PARTLY derived. It reads the
+ * settings sub-screens from Nav.SETTINGS_SUBS, but home / books / authors / authorBooks
+ * / files / options / nowplaying are HAND-LISTED there. So a future browse-family or
+ * overlay screen could be added and the inventory would silently omit it — an external
+ * review of .218 pointed out that the gate's name claimed more than its implementation
+ * delivered. The honest fix at this stage is a PIN, not a claim of derivation: a real
+ * production screen registry exported by Nav would be the proper answer, but that is a
+ * production change and stages 1-2 deliberately touch no production code.
+ *
+ * Scans descriptor literals (`v: 'name'`) in app.js and nav.js and the bottom-nav
+ * controls in index.html. A new screen has to show up in at least one of these.
+ */
+// Names that match the scan but are NOT screens. Listed explicitly, with a reason, so
+// the exclusion is reviewable — a silent filter is how a census stops meaning anything.
+export const NOT_SCREENS = {
+  app: 'history.replaceState({ v: \'app\' }) — a history state, not a screen descriptor',
+};
+
+export function screenNameCensus() {
+  const names = new Set();
+  for (const rel of ['js/app.js', 'js/nav.js']) {
+    for (const m of read(rel).matchAll(/\bv:\s*'([A-Za-z][A-Za-z0-9]*)'/g)) names.add(m[1]);
+  }
+  for (const m of read('index.html').matchAll(/data-nav="([A-Za-z][A-Za-z0-9]*)"/g)) names.add(m[1]);
+  return [...names].filter((n) => !(n in NOT_SCREENS)).sort();
+}
+
+/**
  * Every line in js/app.js that APPENDS to or REBINDS navStack. Pinned by the test so a
  * newly added append site invalidates the reachability derivation loudly instead of
  * quietly making this document wrong.
@@ -236,8 +266,22 @@ export function render() {
   P(`  end/state-routing     ${gestureEndFingerprint()}`);
   P(`  begin/supersession    ${supersessionFingerprint()}`);
   P('');
-  P('1. REGISTRY (derived from Nav.SETTINGS_SUBS + the browse family)');
+  P('1. REGISTRY — PARTLY DERIVED, PARTLY PINNED (say which, and mean it)');
   P(`   ${screens.length} screens, ${screens.length * (screens.length - 1)} ordered name pairs.`);
+  P('   DERIVED  the settings sub-screens, read from Nav.SETTINGS_SUBS.');
+  P('   PINNED   home, books, authors, authorBooks, files, options, nowplaying are');
+  P('            hand-listed in the generator. A future browse-family or overlay screen');
+  P('            would NOT appear here on its own — so the screen-name census below is');
+  P('            what makes its absence loud. This is a pin, not a derivation, and an');
+  P('            external review of .218 was right that the earlier wording claimed');
+  P('            more than the implementation delivered. The proper fix is one screen');
+  P('            registry exported by Nav; that is a PRODUCTION change, and stages 1-2');
+  P('            touch no production code.');
+  P('   census (every screen name in a production descriptor literal or nav control):');
+  P(`     ${screenNameCensus().join(' ')}`);
+  for (const [n, why] of Object.entries(NOT_SCREENS)) P(`   excluded: ${n} — ${why}`);
+  P('   (settings subs are absent from the census by construction — openSub pushes');
+  P('    { v } from a VARIABLE, so they are covered by the SETTINGS_SUBS derivation.)');
   P('   The structural matrix lives in docs/transition-matrix.generated.txt and is');
   P('   imported here rather than restated — one derivation, one home.');
   P('');
@@ -310,15 +354,28 @@ export function render() {
   P('            gesture. I17(a) is the separate rule: while an active session is');
   P('            SETTLING / FINALIZING / REVEALING a new gesture does NOT arm, and');
   P('            that session\'s pane is NOT disposed to make room (I10 must hold).');
-  P('   [parity] The old session is recovered pre-stack and fully released BEFORE the');
-  P('            new one arms; movers are torn down BY OWNERSHIP (§3.2) — panes');
-  P('            disposed, decorations removed, borrowed real views RESTORED and');
-  P('            NEVER removed.');
-  P('   [policy] ⚠️ ONE DELIBERATE DIFFERENCE: today\'s hard reset does NOT restore the');
-  P('            starting scroll, so a superseded browse->browse drag can be left at');
-  P('            the DESTINATION\'s scroll (its mid-drag render ran positionOnEnter).');
-  P('            The rewrite restores it. This is a behaviour change and arguably a');
-  P('            bug fix — it needs its own device check, and it is NOT parity.');
+  P('   [parity] What today ACTUALLY does on supersession: releaseGesture, dropRowHold,');
+  P('            d = null, resetSwipeStyles, applyScreen(currentDesc(), {render:false}).');
+  P('            Listeners, row hold, panes and inline styles are all released; the nav');
+  P('            stack and navbar return to the source. Movers are torn down BY');
+  P('            OWNERSHIP (§3.2) — panes disposed, decorations removed, borrowed real');
+  P('            views restored and NEVER removed.');
+  P('');
+  P('   ⚠️ TWO SEPARATE DEFECTS live here, and BOTH are new policy. An earlier draft of');
+  P('   this document labelled the whole of supersession [parity]; that was wrong, and');
+  P('   an external review of .218 caught it. The pre-stack recovery row this section');
+  P('   leans on is itself [policy], so "recovered pre-stack" cannot be parity.');
+  P('');
+  P('   [policy] (1) SCROLL. Today\'s hard reset does NOT restore the starting scroll,');
+  P('            so a superseded browse->browse drag can be left at the DESTINATION\'s');
+  P('            scroll (its mid-drag render ran positionOnEnter).');
+  P('   [policy] (2) SOURCE CONTENT. `render:false` means nothing re-renders the source');
+  P('            into the shared #browse, so the host keeps the DESTINATION\'s content');
+  P('            while the stack and navbar say source. MEASURED at .218:');
+  P('            renders = ["books","authors","books"] after Authors->Books is');
+  P('            superseded. That is an I11 violation and the same wrong-page/wrong-tap');
+  P('            class as .178 — the nav says one screen and Browse shows another.');
+  P('            Both are covered by `{todo}` tests in test/swipe-invariants.test.js.');
   P('');
   P('6. TERMINATION REASONS (§3.7)');
   P('   reason                      basis     nav              screen        scroll              pane');
@@ -359,6 +416,9 @@ export function render() {
   P('    NEW POLICY, and only these:');
   P('      - the recovery table (§7 above), pre/post-stack, all reasons');
   P('      - restoring the starting scroll when a gesture is SUPERSEDED');
+  P('      - re-rendering the SOURCE into #browse when a gesture is SUPERSEDED');
+  P('        (added after an external review of .218 found the first draft of this');
+  P('         document had labelled it [parity] — it is not)');
   P('    Everything else in this document is preserved deliberately, including the');
   P('    1px Home entry scroll and the overlay->browse hidden-host side effect');
   P('    (abort leaves #browse holding the destination\'s content; canonicalizing it');

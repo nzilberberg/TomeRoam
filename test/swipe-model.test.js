@@ -94,6 +94,40 @@ test('the navStack append census is unchanged, so reachability still derives', a
     + 'Re-check the new site against that invariant before regenerating.');
 });
 
+// registry() is only PARTLY derived — SETTINGS_SUBS is read from nav.js, the other
+// seven screens are hand-listed. An external review of .218 was right that the gate's
+// wording claimed full derivation. Until a production screen registry exists (a
+// production change, out of scope for stages 1-2) this census is the honest substitute:
+// a new screen has to appear in a descriptor literal or a nav control, and that turns
+// this red.
+const VERIFIED_SCREEN_NAMES = ['authorBooks', 'authors', 'books', 'downloads', 'files', 'home', 'nowplaying', 'options'];
+
+test('the screen-name census is unchanged, so the PINNED half of the registry still holds', async () => {
+  const gen = await load();
+  assert.deepEqual(gen.screenNameCensus(), VERIFIED_SCREEN_NAMES,
+    'a screen name appeared or vanished in production. registry() hand-lists everything '
+    + 'except the settings subs, so it does NOT pick a new screen up on its own — '
+    + 're-check registry() against this census before regenerating.');
+});
+
+test('census exclusions are named and justified, never silent', async () => {
+  const gen = await load();
+  for (const [name, why] of Object.entries(gen.NOT_SCREENS)) {
+    assert.ok(why && why.length > 20, `exclusion "${name}" must carry a real reason, got: ${why}`);
+  }
+  // The exclusion must still be REACHABLE — an excuse that outlives what it excused is
+  // just a hole. If `app` stops appearing in production, delete the exclusion.
+  const raw = new Set();
+  const fs2 = require('node:fs');
+  for (const rel of ['js/app.js', 'js/nav.js']) {
+    const src = fs2.readFileSync(path.join(ROOT, rel), 'utf8');
+    for (const m of src.matchAll(/\bv:\s*'([A-Za-z][A-Za-z0-9]*)'/g)) raw.add(m[1]);
+  }
+  for (const name of Object.keys(gen.NOT_SCREENS)) {
+    assert.ok(raw.has(name), `exclusion "${name}" no longer matches anything — delete it`);
+  }
+});
+
 test('a malformed parameterized descriptor is REJECTED with a named reason, never planned', async () => {
   const { D, scenarioFor } = await load();
   const cases = [

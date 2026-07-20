@@ -24,6 +24,20 @@ const BLOB_FROM = [
 ].join('\n');
 const BLOB_TO = "          if (blob) { curObjUrl = URL.createObjectURL(blob); useSrc(curObjUrl, 'download'); }";
 
+// Multi-line swipe anchors, built by join for the same reason as BLOB_FROM: writing
+// them as escaped literals is how trap T6 (CRLF vs '\n') and a mangled heredoc both
+// produced anchors that silently never matched.
+const ABORT_STACK_FROM = [
+  '        if (commit) {',
+  "          if (cur.dir === 'back') fwdStack.push(navStack.pop());",
+].join('\n');
+const ABORT_STACK_TO = [
+  '        if (true) {',
+  "          if (cur.dir === 'back') fwdStack.push(navStack.pop());",
+].join('\n');
+const END_RELEASE_FROM = ['    function end() {', '      releaseGesture();'].join('\n');
+const END_RELEASE_TO = ['    function end() {', '      /* mutated */'].join('\n');
+
 const MUTATIONS = [
   { name: 'MS pause -> audio.pause() direct (bypasses userPause)',
     from: "ms.setActionHandler('pause', () => userPause());",
@@ -85,6 +99,38 @@ const MUTATIONS = [
   { name: 'sign-out no longer invalidates an in-flight media load',
     from: `    userPause(); invalidateMediaLoad(); Plex.signOut();`,
     to: `    userPause(); Plex.signOut();` },
+  // ── SWIPE / REVEAL, stages 1-2 of PLAN-swipe-reveal.md ─────────────────────────
+  // These were verified by hand in a scratchpad when .217/.218 shipped, which meant
+  // the evidence could not be re-run or audited later. An external review of .218
+  // called that out: this repo's mutation infrastructure exists precisely so a guard
+  // that was once verified cannot silently become undefended. Each entry names the
+  // test expected to go red.
+  { name: 'swipe: end() stops distinguishing ARMED from DRAGGING (-> I19 ARMED tests)',
+    from: 'if (!cur.live) return;', to: 'if (false) return;' },
+  { name: 'swipe: touchcancel no longer shares onEnd (-> I19 DRAGGING commit test)',
+    from: "target.addEventListener('touchcancel', onEnd, { passive: true });",
+    to: "target.addEventListener('touchcancel', () => {}, { passive: true });" },
+  { name: 'swipe: begin() stops hard-resetting a superseded session (-> I2/I20 pane test)',
+    from: "d = null; resetSwipeStyles(); applyScreen(currentDesc(), { render: false });",
+    to: '/* mutated: no hard reset */' },
+  { name: 'swipe: supersession stops releasing the old target listeners (-> I20 stale-callback test)',
+    from: "releaseGesture();   // never leave a dead gesture's listeners on a stale node",
+    to: '/* mutated: listeners left bound */' },
+  { name: 'swipe: abort stops restoring the starting scroll (-> I7)',
+    from: 'window.scrollTo(0, cur.scroll0);', to: '/* mutated: no scroll restore */' },
+  { name: 'swipe: abort mutates the nav stack like a commit (-> I11 abort test)',
+    from: ABORT_STACK_FROM, to: ABORT_STACK_TO },
+  // DEFENCE IN DEPTH — each half alone was MEASURED insufficient, so both must go or
+  // the sweep would wrongly report the guard as undefended.
+  { name: 'swipe: duplicate-end defence removed, BOTH guards (-> I13 duplicate-end test)',
+    from: END_RELEASE_FROM, to: END_RELEASE_TO,
+    also: { from: 'const cur = d; d = null;', to: 'const cur = d;' } },
+  { name: 'swipe: inline-style clearing removed, BOTH sites app.js+nav.js (-> I5)',
+    from: "for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }",
+    to: '/* mutated: styles left inline */',
+    also: { file: 'js/nav.js',
+      from: "for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }",
+      to: '/* mutated: resetSwipeStyles no longer clears */' } },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
@@ -99,7 +145,14 @@ const isCli = process.argv[1] && import.meta.url.endsWith(process.argv[1].replac
 if (!isCli) { /* imported as a module — no CLI side effects */ } else {
 
 if (process.argv.includes('--restore')) {
-  for (const f of new Set(MUTATIONS.map((m) => m.file || DEFAULT_FILE))) {
+  // Includes `also.file` — a two-part mutation can span two files, so restoring only
+  // the primary would leave the second file mutated in the working tree.
+  const touched = new Set();
+  for (const m of MUTATIONS) {
+    touched.add(m.file || DEFAULT_FILE);
+    if (m.also) touched.add(m.also.file || m.file || DEFAULT_FILE);
+  }
+  for (const f of touched) {
     if (fs.existsSync(bakOf(f))) { fs.copyFileSync(bakOf(f), f); fs.unlinkSync(bakOf(f)); }
   }
   console.log('restored');
@@ -124,16 +177,29 @@ if (!fs.existsSync(BAK)) fs.copyFileSync(FILE, BAK);
 // in PLAN-swipe-reveal.txt, biting the tooling meant to catch such things.
 // The file is written back as LF for the duration of the mutation; --restore puts the
 // pristine CRLF copy back, so the working tree is unaffected either way.
-let src = fs.readFileSync(BAK, 'utf8').replace(/\r\n/g, '\n');   // PRISTINE copy, LF
-for (const part of [m, m.also].filter(Boolean)) {
+// A two-part mutation may now span TWO FILES: `also` can carry its own `file`. Needed
+// because some guards are defence in depth across modules — the swipe's inline-style
+// clearing lives in BOTH app.js finalize and nav.js resetSwipeStyles, and removing
+// either alone leaves the suite green. A mutation that cannot express "remove both"
+// would report that guard as undefended when it is simply doubly defended.
+const parts = [m, m.also].filter(Boolean);
+const byFile = new Map();
+for (const part of parts) {
+  const f = part.file || FILE;
+  if (!byFile.has(f)) {
+    const bak = bakOf(f);
+    if (!fs.existsSync(bak)) fs.copyFileSync(f, bak);
+    byFile.set(f, fs.readFileSync(bak, 'utf8').replace(/\r\n/g, '\n'));   // PRISTINE, LF
+  }
   const from = part.from.replace(/\r\n/g, '\n');
+  const src = byFile.get(f);
   if (!src.includes(from)) {
-    console.error(`ANCHOR NOT FOUND for #${i} in ${FILE} — mutation NOT applied`);
+    console.error(`ANCHOR NOT FOUND for #${i} in ${f} — mutation NOT applied`);
     process.exit(1);
   }
-  src = src.replace(from, part.to.replace(/\r\n/g, '\n'));
+  byFile.set(f, src.replace(from, part.to.replace(/\r\n/g, '\n')));
 }
-fs.writeFileSync(FILE, src);
+for (const [f, src] of byFile) fs.writeFileSync(f, src);
 console.log(`applied #${i} [${FILE}]: ${m.name}`);
 
 }   // end CLI guard

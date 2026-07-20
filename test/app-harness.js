@@ -532,7 +532,17 @@ function boot(opts = {}) {
   // is never released — a fake that accepted any token would pass a leak.
   let holdSeq = 0;
   const browse = {
-    init: noop, render: async () => {}, reset: noop, clearCache: noop,
+    // RECORDED. An unrecorded no-op made "which descriptor is actually rendered into
+    // the shared #browse" invisible, so a gesture could leave the nav on one screen and
+    // the real Browse host showing another and no test could tell. That is the
+    // wrong-page/wrong-tap class this suite exists for. Records the descriptor's `v`
+    // plus its parameterizing payload, since authorBooks/files identity is what makes
+    // two same-named descriptors different screens.
+    init: noop,
+    render: async (desc) => {
+      log.calls.push({ name: 'browse.render', args: [desc && desc.v, (desc && (desc.author || desc.book)) || null] });
+    },
+    reset: noop, clearCache: noop,
     beginHold: () => { log.calls.push({ name: 'browse.beginHold', args: [] }); return ++holdSeq; },
     endHold: (t) => { log.calls.push({ name: 'browse.endHold', args: [t === holdSeq ? 'current' : 'stale'] }); },
     deactivate: log.rec('browse.deactivate'), showPage: noop,

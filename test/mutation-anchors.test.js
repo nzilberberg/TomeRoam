@@ -39,12 +39,15 @@ test('every mutation anchor still matches the source it targets', async () => {
 
   const rotted = [];
   MUTATIONS.forEach((m, i) => {
-    const file = m.file || DEFAULT_FILE;
-    const src = readFile(file);
     // Two-part mutations exist because some defects only bite in pairs; BOTH halves
     // must still anchor or the mutation applies half of itself and proves nothing.
+    // A part may target a DIFFERENT FILE from the primary — some guards are defence in
+    // depth across modules (the swipe's inline-style clearing lives in both app.js
+    // finalize and nav.js resetSwipeStyles). Resolving every part against the primary
+    // file reported a false rot the moment such a mutation was added.
     for (const part of [m, m.also].filter(Boolean)) {
-      if (!src.includes(lf(part.from))) rotted.push(`#${i} [${file}] ${m.name}`);
+      const file = part.file || m.file || DEFAULT_FILE;
+      if (!readFile(file).includes(lf(part.from))) rotted.push(`#${i} [${file}] ${m.name}`);
     }
   });
 

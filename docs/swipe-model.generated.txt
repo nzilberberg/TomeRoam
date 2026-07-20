@@ -14,8 +14,22 @@ before this document is trusted again. Never update a pinned constant alone.
   end/state-routing     f1d6b8391fa4ad57
   begin/supersession    a470962594518cb9
 
-1. REGISTRY (derived from Nav.SETTINGS_SUBS + the browse family)
+1. REGISTRY — PARTLY DERIVED, PARTLY PINNED (say which, and mean it)
    12 screens, 132 ordered name pairs.
+   DERIVED  the settings sub-screens, read from Nav.SETTINGS_SUBS.
+   PINNED   home, books, authors, authorBooks, files, options, nowplaying are
+            hand-listed in the generator. A future browse-family or overlay screen
+            would NOT appear here on its own — so the screen-name census below is
+            what makes its absence loud. This is a pin, not a derivation, and an
+            external review of .218 was right that the earlier wording claimed
+            more than the implementation delivered. The proper fix is one screen
+            registry exported by Nav; that is a PRODUCTION change, and stages 1-2
+            touch no production code.
+   census (every screen name in a production descriptor literal or nav control):
+     authorBooks authors books downloads files home nowplaying options
+   excluded: app — history.replaceState({ v: 'app' }) — a history state, not a screen descriptor
+   (settings subs are absent from the census by construction — openSub pushes
+    { v } from a VARIABLE, so they are covered by the SETTINGS_SUBS derivation.)
    The structural matrix lives in docs/transition-matrix.generated.txt and is
    imported here rather than restated — one derivation, one home.
 
@@ -110,15 +124,28 @@ before this document is trusted again. Never update a pinned constant alone.
             gesture. I17(a) is the separate rule: while an active session is
             SETTLING / FINALIZING / REVEALING a new gesture does NOT arm, and
             that session's pane is NOT disposed to make room (I10 must hold).
-   [parity] The old session is recovered pre-stack and fully released BEFORE the
-            new one arms; movers are torn down BY OWNERSHIP (§3.2) — panes
-            disposed, decorations removed, borrowed real views RESTORED and
-            NEVER removed.
-   [policy] ⚠️ ONE DELIBERATE DIFFERENCE: today's hard reset does NOT restore the
-            starting scroll, so a superseded browse->browse drag can be left at
-            the DESTINATION's scroll (its mid-drag render ran positionOnEnter).
-            The rewrite restores it. This is a behaviour change and arguably a
-            bug fix — it needs its own device check, and it is NOT parity.
+   [parity] What today ACTUALLY does on supersession: releaseGesture, dropRowHold,
+            d = null, resetSwipeStyles, applyScreen(currentDesc(), {render:false}).
+            Listeners, row hold, panes and inline styles are all released; the nav
+            stack and navbar return to the source. Movers are torn down BY
+            OWNERSHIP (§3.2) — panes disposed, decorations removed, borrowed real
+            views restored and NEVER removed.
+
+   ⚠️ TWO SEPARATE DEFECTS live here, and BOTH are new policy. An earlier draft of
+   this document labelled the whole of supersession [parity]; that was wrong, and
+   an external review of .218 caught it. The pre-stack recovery row this section
+   leans on is itself [policy], so "recovered pre-stack" cannot be parity.
+
+   [policy] (1) SCROLL. Today's hard reset does NOT restore the starting scroll,
+            so a superseded browse->browse drag can be left at the DESTINATION's
+            scroll (its mid-drag render ran positionOnEnter).
+   [policy] (2) SOURCE CONTENT. `render:false` means nothing re-renders the source
+            into the shared #browse, so the host keeps the DESTINATION's content
+            while the stack and navbar say source. MEASURED at .218:
+            renders = ["books","authors","books"] after Authors->Books is
+            superseded. That is an I11 violation and the same wrong-page/wrong-tap
+            class as .178 — the nav says one screen and Browse shows another.
+            Both are covered by `{todo}` tests in test/swipe-invariants.test.js.
 
 6. TERMINATION REASONS (§3.7)
    reason                      basis     nav              screen        scroll              pane
@@ -158,6 +185,9 @@ before this document is trusted again. Never update a pinned constant alone.
     NEW POLICY, and only these:
       - the recovery table (§7 above), pre/post-stack, all reasons
       - restoring the starting scroll when a gesture is SUPERSEDED
+      - re-rendering the SOURCE into #browse when a gesture is SUPERSEDED
+        (added after an external review of .218 found the first draft of this
+         document had labelled it [parity] — it is not)
     Everything else in this document is preserved deliberately, including the
     1px Home entry scroll and the overlay->browse hidden-host side effect
     (abort leaves #browse holding the destination's content; canonicalizing it

@@ -299,3 +299,111 @@ test('I20 — superseding a live drag restores the starting scroll',
         'a superseded gesture must restore the scroll it started from');
     } finally { h.dispose(); }
   });
+
+// ── REVIEW OF .218 — [HIGH] the real Browse host on supersession ────────────────────
+// The reviewer's claim, checked here by making it FAIL rather than by agreeing with it:
+// on a live browse->browse supersession the nav stack and navbar return to the SOURCE
+// while the shared #browse keeps the DESTINATION's content, because begin()'s hard
+// reset calls applyScreen(currentDesc(), { render: false }) and nothing re-renders the
+// source. That is an I11 violation of exactly the wrong-page/wrong-tap shape .178 fixed.
+const renders = (h) => h.log.calls.filter((c) => c.name === 'browse.render').map((c) => c.args[0]);
+
+test('supersession CONTROL — the mid-drag render really does put the destination in #browse', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    h.touch.start(10, 300, addRow(h));
+    await realSleep(12);
+    h.touch.move(120, 302);                        // live: Authors -> Books
+    assert.equal(renders(h).at(-1), 'books',
+      'fixture sanity: start() renders the DESTINATION into the shared #browse');
+  } finally { h.dispose(); }
+});
+
+// KNOWN RED #2 — MEASURED, not argued. Run as a plain test first, it failed with
+//   renders = ["books", "authors", "books"]
+// i.e. the mid-drag render put Books into the shared #browse and NOTHING put Authors
+// back, while applyScreen(currentDesc(), { render: false }) returned the stack and the
+// navbar to Authors. Stack and navbar say one screen, the Browse host shows another.
+//
+// This also CORRECTS the stage-1 model, which labelled supersession's source
+// restoration [parity]. It is not: begin()'s hard reset restores nav selection and
+// top-level visibility only, deliberately passing render:false. The pre-stack recovery
+// row it relies on is itself [policy], so this is new behaviour the rewrite must close.
+test('I11/I20 — superseding a live browse->browse drag re-renders the SOURCE into #browse',
+  { todo: 'NEW POLICY, not yet implemented. begin()\'s hard reset calls '
+        + 'applyScreen(currentDesc(), {render:false}), so the shared #browse keeps the '
+        + 'DESTINATION\'s content while the stack and navbar return to the source. '
+        + 'Measured: renders = ["books","authors","books"]. Same wrong-page/wrong-tap '
+        + 'class as .178. Distinct from the scroll todo above — two separate defects.' },
+  async () => {
+    const h = boot({ fakeTimers: true });
+    try {
+      await onAuthorsOverBooks(h);
+      h.touch.start(10, 300, addRow(h));
+      await realSleep(12);
+      h.touch.move(120, 302);                        // live: Authors -> Books
+      h.touch.start(10, 300, addRow(h));             // superseded by a new gesture
+      await settle(h);
+      assert.equal(renders(h).at(-1), 'authors',
+        `I11: nav returns to the source, so #browse must hold the source too. renders=${JSON.stringify(renders(h))}`);
+    } finally { h.dispose(); }
+  });
+
+// ── REVIEW OF .218 — [MED] stale callbacks from the SUPERSEDED gesture ───────────────
+// Draft 6 requires that old move/end callbacks arriving after the new session begins be
+// harmless. The .218 tests never dispatched to the original target after superseding —
+// and the harness's convenience API retargets on the second touch.start(), so its helper
+// calls could not have done it. Production's handlers close over no session object: they
+// call the shared move()/end(), which act on the current global `d`. If the hard reset
+// failed to release the old target's listeners, an old touchmove would drive the NEW
+// gesture. Dispatched manually at the retained node, the way the I13 test does it.
+test('I20 — stale move/end/cancel from the superseded gesture cannot touch the new session', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const first = addRow(h);
+    h.touch.start(10, 300, first);
+    await realSleep(12);
+    h.touch.move(120, 302);                        // first gesture live, owns a pane
+
+    const second = addRow(h);
+    h.touch.start(10, 300, second);                // supersedes
+    await realSleep(12);
+    h.touch.move(120, 302);                        // the NEW gesture goes live
+    const startsAfter = starts(h).length;
+    const settlesAfter = settles(h).length;
+    const scrollAfter = scrollCalls(h).length;
+    const rendersAfter = renders(h).length;
+    const ghostsAfter = ghosts(h);
+    // TRANSFORM is the assertion this test originally MISSED, and missing it made the
+    // whole test inert: a stale touchmove drives move(), which acts on the CURRENT
+    // global `d` — so it drags the NEW session's movers without logging anything.
+    const ghostEl = h.document.querySelector('.nav-ghost');
+    const transformAfter = ghostEl && ghostEl.style.transform;
+
+    // The superseded gesture's node now fires its whole tail, at the ORIGINAL target.
+    for (const type of ['touchmove', 'touchend', 'touchcancel']) {
+      const e = new h.window.Event(type, { bubbles: true, cancelable: type === 'touchmove' });
+      e.changedTouches = [{ clientX: 400, clientY: 302, identifier: 0, target: first }];
+      e.touches = type === 'touchmove' ? [{ clientX: 400, clientY: 302, identifier: 0, target: first }] : [];
+      first.dispatchEvent(e);
+    }
+    await settle(h);
+    // ⚠️ MUST advance the clock. settle() only writes its `#N abort|commit` line from
+    // runFinalize, which fires on transitionend or the 340ms fallback — so without
+    // this, a stale touchend really did settle the new gesture and the assertion below
+    // could not see it. That omission is exactly why the first version of this test
+    // passed under the mutation it was written to catch.
+    await h.clock.advance(400);
+    await settle(h);
+
+    assert.equal(starts(h).length, startsAfter, 'a stale event must not start a gesture');
+    assert.equal(settles(h).length, settlesAfter, 'a stale event must not settle the live gesture');
+    assert.equal(scrollCalls(h).length, scrollAfter, 'a stale event must not move the document');
+    assert.equal(renders(h).length, rendersAfter, 'a stale event must not re-render Browse');
+    assert.equal(ghosts(h), ghostsAfter, 'a stale event must not dispose the new session\'s pane');
+    assert.equal(ghostEl && ghostEl.style.transform, transformAfter,
+      'a stale touchmove must not drag the NEW session\'s movers');
+  } finally { h.dispose(); }
+});

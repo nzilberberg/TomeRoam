@@ -52,7 +52,11 @@ test('the predicate still mirrors the js/app.js branch region it was derived fro
     + 'commit — never update the constant alone.');
 });
 
-test('the registry is derived from the real source, not hand-listed', async () => {
+// NAME CORRECTED after an external review of .218: this checks the DERIVED half only.
+// The other seven screens are hand-listed in the generator; the screen-name census in
+// test/swipe-model.test.js is what guards those. The old name ('derived from the real
+// source, not hand-listed') claimed more than the implementation delivers.
+test('the SETTINGS-SUB half of the registry is derived from nav.js, not hand-listed', async () => {
   const gen = await load();
   const screens = gen.registry();
   const names = screens.map((s) => s.v);

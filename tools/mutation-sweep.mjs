@@ -12,6 +12,7 @@
 // Slow by nature (one full suite run per mutation), so it is a CI / on-demand tool,
 // not part of `npm test`. ALWAYS restores the working tree, including on Ctrl-C.
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -24,6 +25,32 @@ const restore = () => run([path.join('tools', 'mutate.mjs'), '--restore']);
 process.on('SIGINT', () => { restore(); process.exit(130); });
 
 const { MUTATIONS } = await import(pathToFileURL(path.join(ROOT, 'tools', 'mutate.mjs')).href);
+
+// SOURCE-TEXT GATES — excluded from the sweep, each with its reason. These assert on
+// the TEXT of production files rather than on behaviour, so under any mutation they
+// fail BY CONSTRUCTION: the mutation changed the very text they pin. Counting them
+// would mark a guard "caught" on evidence that has nothing to do with the guard — a
+// FALSE CAUGHT, which is worse than the false UNCAUGHT this sweep already produced
+// once. Found when mutation #4 (established benign-alone at .158) suddenly reported
+// STALE FLAG, and the only failing test was the anchors meta-test detecting #4 itself.
+const SOURCE_TEXT_GATES = {
+  'mutation-anchors.test.js': 'asserts every mutation anchor still matches the source; a mutation removes the text it targets, so this fails for EVERY mutation',
+  'swipe-model.test.js': 'fingerprints js/app.js regions (end, begin, navTo, nav-relation); a mutation inside one changes the hash by construction',
+  'transition-matrix.test.js': 'fingerprints the js/app.js transition-branch region, same reason',
+};
+
+function behaviourTests() {
+  const dir = path.join(ROOT, 'test');
+  const all = fs.readdirSync(dir).filter((f) => f.endsWith('.test.js'));
+  // Guard the exclusion list itself: an excuse must not outlive what it excused.
+  for (const name of Object.keys(SOURCE_TEXT_GATES)) {
+    if (!all.includes(name)) {
+      console.error(`SOURCE_TEXT_GATES names ${name}, which no longer exists — remove it`);
+      process.exit(2);
+    }
+  }
+  return all.filter((f) => !(f in SOURCE_TEXT_GATES)).map((f) => path.join('test', f));
+}
 
 const wanted = process.argv.slice(2).filter((a) => /^\d+$/.test(a)).map(Number);
 const indices = wanted.length ? wanted : MUTATIONS.map((_, i) => i);
@@ -40,10 +67,15 @@ try {
       restore();
       continue;
     }
-    const res = run(['--test', 'test/app-integration.test.js', 'test/swipe-gesture.test.js',
-      'test/browse-render-race.test.js', 'test/nowplaying.test.js', 'test/home-screen.test.js',
-      'test/browse-virtual.test.js', 'test/nav.test.js', 'test/scrollbar.test.js']);
-    const failures = (res.stdout.match(/^not ok /gm) || []).length;
+    // THE WHOLE SUITE minus the SOURCE-TEXT GATES. This used to name eight files, and
+    // the moment mutations were added for a NEW test file the sweep reported five
+    // genuinely-defended guards as UNCAUGHT — it was not running the tests that defend
+    // them. Same hand-maintained-inventory trap as everywhere else in this repo.
+    const res = run(['--test', ...behaviourTests()]);
+    // `# TODO` lines are KNOWN-RED tests, expected to fail — they are not evidence that
+    // a mutation was caught, and counting them would make every mutation look caught.
+    const failures = (res.stdout.match(/^not ok .*$/gm) || [])
+      .filter((l) => !/#\s*TODO/i.test(l)).length;
     restore();
     const benign = MUTATIONS[i].benignAlone;
     if (failures === 0 && benign) {
