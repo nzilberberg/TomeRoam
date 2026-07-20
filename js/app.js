@@ -290,7 +290,14 @@
     // re-rendered for the destination, so the outgoing state must be snapshotted).
     // Opaque gradient identical to the page background — a flat var(--bg) read as a
     // DARKER pane than the gradient-backed real page (visible on swipe begin).
-    const GHOST_BG = 'radial-gradient(140% 120% at 50% 0%, #262b34 0%, var(--bg) 55%)';
+    // Read the backdrop from CSS rather than carrying a third copy of the literal.
+    // Three copies (body, #options, here) is how the ghost and the page drifted apart:
+    // the page background scrolled away with the document and this one did not, so a
+    // swipe repainted a gradient that had not been on screen a moment earlier.
+    const GHOST_BG = (() => {
+      try { return getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)'; }
+      catch { return 'var(--bg)'; }
+    })();
     // Clones must NOT re-trigger the art loader: a cloned <img> that was never
     // scrolled into view (no src yet) would get adopted + fetched (= "loading all
     // images" during the slide). Strip data-art so loaded covers still show via
