@@ -337,6 +337,50 @@ test('two aborts in a row produce TWO reports — a superseded window is flushed
   } finally { h.dispose(); }
 });
 
+// ⭐ .201 — the reveal must report WHERE the page sat, on both sides of the uncover.
+//
+// Three device repros on .200, and they are NOT all the same symptom — do not merge
+// them, they may be two bugs:
+//   #4, #6  — the user saw IMAGES flash. src unchanged (4->4, 8->8), art loaded=0,
+//             FADED=0, inst=0 => the covers were neither refetched nor re-faded.
+//   #24     — the user saw the LETTERS flash. LETTERS=0 => the letterheads were not
+//             touched, and text cannot decode or refetch at all.
+// What they share is narrower than "the same bug": in every one, NO DOM write reached
+// the visible page at the uncover (EXPOSED clean at the ~30ms mark, ROWS KEPT n/n,
+// sameNode and sameCtl, clean windows). The two classes eliminate different mechanisms
+// — images rule out refetch, letters rule out decode — which together leave POSITION
+// as the unmeasured axis: the ghost is frozen at the scroll of gesture start, and if
+// the real view is revealed at a different Y the page jumps with no DOM write at all.
+//
+// This pins the WIRING, which is the part that can silently break — and nearly did:
+// the hold samples through `cover.mark`, and an earlier draft referenced it before it
+// was ever assigned, so preDrop/postDrop would have been missing from every report
+// while the line still looked complete.
+test('the reveal reports the scroll trail across the uncover, both sides of it (.201)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    await edgeSwipe(h, addRow(h));
+    await h.clock.advance(600);
+    await settle(h);
+
+    const line = flashLog(h).find((m) => /@reveal/.test(m));
+    assert.ok(line, `no @reveal line — got ${JSON.stringify(flashLog(h))}`);
+    assert.match(line, /scroll=\[/, `the report must carry a scroll trail: ${line}`);
+    // The uncover itself is the moment under investigation, so it must be sampled on
+    // BOTH sides — a single sample cannot show a jump.
+    assert.match(line, /preDrop=/, `must sample before the ghost is removed: ${line}`);
+    assert.match(line, /postDrop=/, `must sample after the ghost is removed: ${line}`);
+    assert.match(line, /final=/, `must sample once more when the window closes: ${line}`);
+    // A NUMBER, not the `?` placeholder — `/ghostY=/` alone passed even with the
+    // recording removed, which is a diagnostic that reports nothing while looking whole.
+    assert.match(line, /ghostY=\d/, `must report the ghost's frozen scroll: ${line}`);
+    // One `end=` only. The trail used to carry its own `end=`, colliding with the
+    // window's `end=<why>` and making the line ambiguous to parse.
+    assert.equal((line.match(/end=/g) || []).length, 1, `exactly one end= token: ${line}`);
+  } finally { h.dispose(); }
+});
+
 // ── the row hold ──────────────────────────────────────────────────────────────
 // While a gesture is live, Browse keeps the outgoing page's rows so an ABORT does
 // not rebuild the page. The hazard is a hold that is never released: hidden pages

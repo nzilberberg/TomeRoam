@@ -355,7 +355,13 @@
       clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());   // drop cached/hidden/parked panes — only the visible view matters
       freezeArt(clone);
       clone.style.margin = '0 auto';                                  // keep .app's centering (was '0' → left-aligned vs the real page)
-      clone.style.transform = 'translateY(' + (-(window.scrollY || 0)) + 'px)';
+      // The scroll this snapshot is FROZEN at. The ghost shows the page as it looked at
+      // this Y for the whole gesture; if the real view is revealed at a different Y the
+      // page appears to jump the instant the ghost goes — with no DOM write anywhere,
+      // which is precisely the state the .200 logs measured on a flashing abort.
+      const ghostY = window.scrollY || 0;
+      if (d) d.ghostY = ghostY;
+      clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
       const wrap = ghostWrap();
       wrap.appendChild(clone);
       document.body.appendChild(wrap);
@@ -589,7 +595,13 @@
             // pane, so the reveal watcher can split what churned while hidden from what
             // churned in front of the user. That split is the whole question.
             cover.dropAt = performance.now();
-            dropPanes(); finishing = false;
+            // Sample on BOTH sides of the removal. If the page moves between these two,
+            // the ghost was hiding a different scroll position than the one revealed —
+            // and that jump is the flash, with no DOM write anywhere.
+            if (cover.mark) cover.mark('preDrop');
+            dropPanes();
+            if (cover.mark) cover.mark('postDrop');
+            finishing = false;
             if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(cover.dropAt - t0)}ms `
               + `covers=${covers.length} via=${why}`);
           };
@@ -788,12 +800,23 @@
             const fmt = (s) => `+img=${s.add} -img=${s.rem} rows+=${s.rows} LETTERS=${s.heads}`
               + ` attr=${s.attr} src+=${s.srcSet} src-=${s.srcClr} fade=${s.fade} inst=${s.instant}`;
             const seen = firsts.length ? ` | first=[${firsts.join(' ')}]` : '';
+            // POSITION across the reveal — scrollY/documentHeight at each step, plus the
+            // scroll the ghost was frozen at. A move between preDrop and postDrop, or a
+            // reveal at a Y different from ghostY, IS the flash: the whole page jumping,
+            // invisible to every DOM counter above (all of which read zero on the aborts
+            // the user confirmed flashing).
+            // `final`, NOT `end` — the line already ends with `end=<why>`, and two
+            // different `end=` tokens in one log line is exactly the kind of ambiguity
+            // that makes a reading unparseable later. Caught by a surviving mutation.
+            mark('final');
+            const trail = cover.marks.length
+              ? ` | scroll=[${cover.marks.join(' ')}] ghostY=${cover.ghostY == null ? '?' : cover.ghostY}` : '';
             PBDebug.log('FLASH', `#${seq} ${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
               + ` | COVERED ${fmt(cov)}`
               + ` | EXPOSED ${fmt(exp)}${seen}`
               + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
               + ` | ${cmp}`
-              + art + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
+              + art + trail + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
           };
           // The flash happens within a few frames of the uncover, so the window only has
           // to outlive that. 1500ms was long enough to swallow the user's NEXT action and
@@ -812,7 +835,32 @@
         // Shared between the watcher and the hold: `dropAt` is 0 while the ghost still
         // covers the view and becomes the uncover timestamp the instant it lifts. One
         // object per finalize, so overlapping gestures cannot cross-stamp each other.
-        const cover = { dropAt: 0 };
+        //
+        // ⭐ .201 — `marks` is the LAST UNMEASURED AXIS: WHERE the page is sitting.
+        // Device build .200, the abort the user reported as flashing, read EXPOSED
+        // all-zero on a clean window (`win=502ms end=timeout`): no rows, no LETTERS, no
+        // attr, no src, ROWS KEPT 36/36, sameNode+sameCtl. Nothing wrote to the visible
+        // page and it still flashed — so the flash is not content changing, it is the
+        // view being repainted UNCHANGED. Every DOM cause is now eliminated by
+        // measurement rather than by argument.
+        // What is still untracked is POSITION. The ghost is a snapshot pinned at
+        // translateY(-scrollY) taken at gesture start; the abort restores the scroll
+        // separately, and the destination page rendered mid-drag changes the document
+        // height, which the browser CLAMPS. If the revealed view sits even slightly off
+        // where the ghost was showing, the whole page jumps at the uncover — visually
+        // identical to "everything flashed", letters included, with zero DOM writes and
+        // invisible to every counter above. So: sample scroll + document height at each
+        // step of the reveal and print the trail.
+        const cover = { dropAt: 0, marks: [] };
+        const mark = (label) => {
+          try {
+            const se = document.scrollingElement || document.documentElement;
+            cover.marks.push(`${label}=${Math.round(window.scrollY || 0)}/${se ? se.scrollHeight : 0}`);
+          } catch { /* a diagnostic must never break the reveal */ }
+        };
+        cover.mark = mark;   // the hold samples either side of the removal through this
+        cover.ghostY = (cur.ghostY == null) ? null : Math.round(cur.ghostY);
+        mark('finalize');
         if (commit && dest.v === 'home') {
           applyScreen(dest, { render: false, keepGhosts: true });
           reportReveal('commit→home', $('home'), cover);
@@ -828,7 +876,9 @@
         // .178 made aborts actually complete on every swipe.
         if (!commit && cur.clobbered) {
           applyScreen(dest, { render: true, resetScroll: false, keepGhosts: true });
+          mark('applied');
           window.scrollTo(0, cur.scroll0);
+          mark('restored');
           reportReveal('abort→' + dest.v, $('browse'), cover);
           holdGhostUntilPaintable($('browse'), cover);
           return;
