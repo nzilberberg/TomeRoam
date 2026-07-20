@@ -393,6 +393,12 @@ test('the reveal reports the scroll trail across the uncover, both sides of it (
     // .202: the abort's own restore is a scroll write, so the tracer must have caught
     // at least one — an empty trace would mean the patch never took.
     assert.match(line, /scrollWrites=\[/, `scroll writes must be traced: ${line}`);
+    // .204: the ghost-vs-real comparison must be TAKEN, and taken while the pane is
+    // still in the DOM. `no-pane` means it ran after the pane was gone and measured
+    // nothing — a diagnostic that reports a reassuring blank instead of an answer.
+    assert.match(line, /ghostVsReal=\[/, `ghost/real fidelity must be measured: ${line}`);
+    assert.ok(!/ghostVsReal=\[(no-pane|err)\]/.test(line),
+      `the comparison must run against a live pane: ${line}`);
     // And the patch MUST be removed. Leaving a wrapper on the global outlives the
     // diagnostic and becomes a real bug; every later swipe would stack another.
     assert.equal(h.window.scrollTo, h.window.scrollTo,

@@ -556,6 +556,32 @@
       // alive: that is a proven dead end — a persistent transform on #browse makes it
       // the containing block for position:fixed descendants and permanently breaks the
       // A-Z strip.
+      // Ghost-vs-real fidelity, measured at the instant of the swap. Compares the
+      // viewport rect of corresponding elements in the covering pane and in the live
+      // view. Zeros mean the ghost is a faithful stand-in and the swap is invisible;
+      // anything else is a difference the user sees at the uncover with no DOM write.
+      const ghostVsReal = (realRoot) => {
+        try {
+          const pane = cur.movers.find((m) => m.remove && m.el.parentNode);
+          if (!pane) return 'no-pane';
+          const live = realRoot.querySelector('.browsepage:not(.hidden):not(.parked)') || realRoot;
+          const probe = (sel) => {
+            const g = Array.from(pane.el.querySelectorAll(sel)).slice(0, 8);
+            const r = Array.from(live.querySelectorAll(sel)).slice(0, 8);
+            if (!g.length && !r.length) return `${sel.replace(/[.#]/g, '')} 0/0`;
+            let maxDy = 0, maxDx = 0;
+            const n = Math.min(g.length, r.length);
+            for (let i = 0; i < n; i++) {
+              const a = g[i].getBoundingClientRect(), b = r[i].getBoundingClientRect();
+              maxDy = Math.max(maxDy, Math.abs(a.top - b.top));
+              maxDx = Math.max(maxDx, Math.abs(a.left - b.left));
+            }
+            return `${sel.replace(/[.#]/g, '')} ${g.length}/${r.length}`
+              + ` dy=${Math.round(maxDy)} dx=${Math.round(maxDx)}`;
+          };
+          return [probe('.letterhead'), probe('.book'), probe('.author'), probe('.alphaindex')].join(' ');
+        } catch { return 'err'; }
+      };
       const FADE_MS = 120;
       const fadePanes = () => {
         for (const m of cur.movers) {
@@ -637,9 +663,27 @@
             // the ghost was hiding a different scroll position than the one revealed —
             // and that jump is the flash, with no DOM write anywhere.
             if (cover.mark) cover.mark('preDrop');
-            // .203 probe: the uncover STARTS here (the fade begins); the node is removed
-            // a few frames later. dropAt stays the start, since that is the moment the
-            // user begins to see the real view.
+            //
+            // ⭐ .204 — COMPARE THE GHOST TO THE REAL VIEW, the blind spot behind every
+            // clean reading so far. Every counter built in .199-.202 watches the REAL
+            // page, so a difference between the GHOST and the page it is swapped for is
+            // invisible to all of them: no mutation happens, nothing moves, and the user
+            // still sees a change — which is exactly the signature of #8, #10 and #5
+            // (EXPOSED all-zero, ghostY == revealed scroll, ROWS KEPT n/n), and it
+            // survives a 120ms cross-fade (.203) because a fade between two DIFFERENT
+            // renderings still shows the difference.
+            // The ghost is a CLONE with ids stripped and `transform: translateY(-scrollY)`
+            // applied, so id-based CSS and any position:fixed descendant resolve
+            // differently inside it than in the live document. Rather than enumerate
+            // which — the enumeration is what has been wrong every time — measure the
+            // OUTCOME: corresponding elements' viewport rects, ghost vs real. If the
+            // ghost is faithful they are identical and this prints zeros.
+            // Taken BEFORE the pane goes. ⚠️ Not mutation-verified, and labelled rather
+            // than left to imply coverage: while the .203 fade keeps the node alive for
+            // ~180ms, swapping these two lines changes nothing observable. It matters
+            // the moment the probe is reverted to an immediate dropPanes(), which is a
+            // one-line change, so the order stays correct by construction.
+            cover.diff = ghostVsReal(rootEl);
             fadePanes();
             if (cover.mark) cover.mark('postDrop');
             finishing = false;
@@ -846,6 +890,7 @@
             const seen = firsts.length ? ` | first=[${firsts.join(' ')}]` : '';
           const wrote = cover.writes && cover.writes.length
             ? ` | scrollWrites=[${cover.writes.join(' ')}]` : '';
+          const ghostDiff = cover.diff ? ` | ghostVsReal=[${cover.diff}]` : '';
             // POSITION across the reveal — scrollY/documentHeight at each step, plus the
             // scroll the ghost was frozen at. A move between preDrop and postDrop, or a
             // reveal at a Y different from ghostY, IS the flash: the whole page jumping,
@@ -862,7 +907,7 @@
               + ` | EXPOSED ${fmt(exp)}${seen}`
               + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
               + ` | ${cmp}`
-              + art + trail + wrote + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
+              + art + trail + wrote + ghostDiff + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
           };
           // The flash happens within a few frames of the uncover, so the window only has
           // to outlive that. 1500ms was long enough to swallow the user's NEXT action and
