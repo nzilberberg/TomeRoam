@@ -694,7 +694,12 @@
             probe('.author'), probe('.alphaindex')].join(' ');
         } catch { return 'err'; }
       };
-      const FADE_MS = 120;
+      // .209: 0 — the ghost cross-fade IS a fade, so it goes with the rest of them.
+      // Its hypothesis (re-rasterisation on exposure) was disproven at .203 anyway: the
+      // flash survived a 120ms fade. Left as a constant rather than ripped out so the
+      // whole motion experiment reverts by changing two numbers, not by restructuring
+      // the settle path. The pane still leaves the DOM on the same timer.
+      const FADE_MS = 0;
       const fadePanes = () => {
         for (const m of cur.movers) {
           if (!m.remove || !m.el.parentNode) continue;

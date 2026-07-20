@@ -761,3 +761,39 @@ html::-webkit-scrollbar, body::-webkit-scrollbar,
   background: repeating-linear-gradient(180deg, var(--card) 0 84px, transparent 84px 94px);
   border-radius: var(--radius);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⭐ .209 DIAGNOSTIC — ALL MOTION DISABLED (temporary, remove in one block)
+
+   User-requested, to eliminate fades/animations as a cause of the swipe flash
+   in a single stroke rather than one candidate per build. This kills EVERY
+   animation and transition in the app at once:
+
+     page level   navInRight/navInLeft, the swipe's transform slides, overlay
+                  filmstrips, the JS-set `transition` on nav movers
+     bar level    dlpulse, spin, the scroll indicator's fade, toast fades,
+                  progress/peer line transitions
+     image level  artShimmer (the skeleton) and artFadeIn (the cover fade-in)
+     everywhere   any transition/animation added later is covered by the `*`
+
+   WHY A GLOBAL OVERRIDE and not commenting out 28 individual rules: one block
+   to revert, nothing missed, and it also neutralises the JS-assigned inline
+   transitions (js/app.js:619,706,730 · js/nav.js:168-175) which commenting out
+   CSS would leave running.
+
+   READING THE RESULT:
+     flash GONE      -> it is animation/fade related; re-enable in groups
+                        (image, then bar, then page) to find which
+     flash REMAINS   -> animation is conclusively eliminated. Stop pursuing it.
+                        Nothing here animates, so nothing here can flash.
+
+   TO REVERT: delete this block. Nothing else references it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+*, *::before, *::after {
+  animation: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition: none !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
