@@ -823,9 +823,37 @@ const Browse = (() => {
     idx.addEventListener('pointermove', (e) => { if (e.buttons) jump(e.clientY); });
     idx.addEventListener('pointerup', clear);
     idx.addEventListener('pointerleave', clear);
-    idx.addEventListener('touchmove', (e) => { jump(e.touches[0].clientY); e.preventDefault(); }, { passive: false });
-    idx.addEventListener('touchend', clear);
-    idx.addEventListener('touchcancel', clear);
+    // The strip sits ON the forward-swipe edge band — measured on a 375px screen it
+    // covers 77% of that band and 80% of the screen height — so claiming every touch
+    // that lands on it meant a forward swipe almost never armed. It does not need to
+    // claim them: scrubbing is VERTICAL and the swipe is HORIZONTAL, so the same
+    // 8px direction lock the swipe already uses against page scrolling separates them.
+    //
+    // Deliberately complementary to app.js's rule (it proceeds only when |dx| > |dy|):
+    // this takes the gesture on |dy| >= |dx|, so exactly one of the two ever owns it.
+    // Nothing is claimed and nothing is preventDefault'ed until that is decided —
+    // preventing early would fight a swipe that turns out to be the real gesture.
+    // Taps are untouched: they jump via the `click` handler above, not on movement.
+    let t0 = null, owned = false;
+    idx.addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      t0 = { x: t.clientX, y: t.clientY }; owned = false;
+    }, { passive: true });
+    idx.addEventListener('touchmove', (e) => {
+      const t = e.touches[0];
+      if (!owned) {
+        if (!t0) return;                                   // already ceded to the swipe
+        const dx = t.clientX - t0.x, dy = t.clientY - t0.y;
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;   // direction not established yet
+        if (Math.abs(dx) > Math.abs(dy)) { t0 = null; return; }   // horizontal → the swipe's
+        owned = true;
+      }
+      jump(t.clientY);
+      e.preventDefault();                                   // only once this gesture is ours
+    }, { passive: false });
+    const endTouch = () => { t0 = null; owned = false; clear(); };
+    idx.addEventListener('touchend', endTouch);
+    idx.addEventListener('touchcancel', endTouch);
     return idx;
   }
 

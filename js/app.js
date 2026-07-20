@@ -351,7 +351,13 @@
         dropRowHold();      // …nor its row hold
         d = null; resetSwipeStyles(); applyScreen(currentDesc(), { render: false });
       }
-      if (target.closest && target.closest('#player, .alphaindex, input, .navbtn, .np-controls, .np-actions, .carousel')) return;
+      // NOTE: `.alphaindex` is deliberately NOT excluded. It sits on the forward-swipe
+      // edge band (measured: 77% of the band, 80% of the screen height), so excluding
+      // it meant a forward swipe almost never armed — the strip swallowed the touch.
+      // The two gestures are orthogonal (scrub is vertical, swipe is horizontal), so
+      // the direction lock below arbitrates instead, and the strip's own handler cedes
+      // on |dx| > |dy| — exactly the complement of this one's rule.
+      if (target.closest && target.closest('#player, input, .navbtn, .np-controls, .np-actions, .carousel')) return;
       const fromLeft = x <= EDGE, fromRight = x >= window.innerWidth - EDGE;
       if (!fromLeft && !fromRight) return;
       const from = currentDesc();

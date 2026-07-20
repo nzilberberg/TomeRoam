@@ -276,6 +276,65 @@ test('swipe hold: clearCache force-releases, so a hold cannot govern the NEXT pa
   } finally { global.VirtualList.setForceVirtual(false); T.pageCache.clear(); }
 });
 
+// ── A–Z strip vs the edge swipe (2026-07-19) ──────────────────────────────────
+// The strip sits on the forward-swipe edge band — measured on a 375px screen it
+// covers 77% of the band and 80% of the screen height — and it used to claim every
+// touch that landed on it, so a forward swipe almost never armed. The two gestures
+// are orthogonal (scrub is vertical, swipe is horizontal), so the strip now cedes
+// on |dx| > |dy|, the exact complement of the swipe's own rule in app.js.
+function touchOn(el, type, x, y) {
+  const e = new dom.window.Event(type, { bubbles: true, cancelable: true });
+  const t = { clientX: x, clientY: y, identifier: 0, target: el };
+  e.touches = type === 'touchend' ? [] : [t];
+  e.changedTouches = [t];
+  el.dispatchEvent(e);
+  return e;
+}
+
+test('A–Z strip: a HORIZONTAL drag is ceded to the swipe — no scrub, no preventDefault', () => {
+  dom.window.Element.prototype.scrollIntoView = function () {};
+  const m = page();
+  T.listView(m, 'Books', books(30), T.bookRow, false);
+  const idx = m.querySelector('.alphaindex');
+  assert.ok(idx, 'fixture sanity: the strip exists');
+
+  touchOn(idx, 'touchstart', 350, 300);
+  const moved = touchOn(idx, 'touchmove', 300, 302);   // 50px across, 2px down
+
+  assert.equal(idx.querySelectorAll('.alpha.on').length, 0,
+    'a horizontal drag must NOT scrub — it belongs to the swipe');
+  assert.equal(moved.defaultPrevented, false,
+    'and must not be preventDefault-ed, or it would fight the swipe that owns it');
+});
+
+test('A–Z strip: a VERTICAL drag still scrubs and claims the gesture', () => {
+  dom.window.Element.prototype.scrollIntoView = function () {};
+  const m = page();
+  T.listView(m, 'Books', books(30), T.bookRow, false);
+  const idx = m.querySelector('.alphaindex');
+  const r = { top: 0, height: 500 };
+  idx.getBoundingClientRect = () => ({ top: r.top, height: r.height, left: 340, right: 366, bottom: 500, width: 26 });
+
+  touchOn(idx, 'touchstart', 350, 100);
+  const moved = touchOn(idx, 'touchmove', 352, 260);    // 2px across, 160px down
+
+  assert.equal(idx.querySelectorAll('.alpha.on').length, 1, 'a vertical drag scrubs, as before');
+  assert.equal(moved.defaultPrevented, true, 'and claims the gesture once it owns it');
+});
+
+test('A–Z strip: the 8px direction lock — nothing happens before the direction is known', () => {
+  dom.window.Element.prototype.scrollIntoView = function () {};
+  const m = page();
+  T.listView(m, 'Books', books(30), T.bookRow, false);
+  const idx = m.querySelector('.alphaindex');
+
+  touchOn(idx, 'touchstart', 350, 300);
+  const tiny = touchOn(idx, 'touchmove', 353, 303);    // 3px — under the lock
+
+  assert.equal(idx.querySelectorAll('.alpha.on').length, 0, 'no scrub before the direction is established');
+  assert.equal(tiny.defaultPrevented, false, 'and no claim on the gesture yet');
+});
+
 test('threshold routing: exactly 600 items → the CLASSIC full renderer, byte-identical structure', () => {
   const m = page();
   T.listView(m, 'Books', books(MAXN), T.bookRow, false);
