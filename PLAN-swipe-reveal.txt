@@ -1,0 +1,648 @@
+PLAN — SWIPE / REVEAL REWRITE
+TomeRoam · draft 5 · 2026-07-20
+Revised against review of draft 4. All three corrections applied.
+STATUS: implementation-ready.
+=====================================================================
+
+CHANGE LOG FROM DRAFT 4
+
+  [HIGH] touchcancel routing DISAMBIGUATED (§3.1). Draft 4 listed it as a
+         cleanup reason in §3.1 while §3.7 routed it through the settle
+         decision — two incompatible implementation instructions. It is a
+         NORMAL gesture-ending input: settleSession() with the ordinary
+         travel-and-velocity decision, so it can COMMIT. That is parity
+         (touchend and touchcancel share onEnd, app.js:271).
+  [HIGH] RECOVERY GENERALISED (§3.7). Draft 4 made the pre/post-stack
+         distinction for finalize-threw ONLY, leaving lease-invalid and
+         destination-gone able to render the source under a stack whose top
+         is the destination — precisely the I11 violation the boundary
+         exists to prevent. Now ONE rule keyed on phase, covering
+         lease-invalid, destination-gone, finalize-threw and supersession.
+         Per-reason screen/scroll rules are gone.
+  [MED]  §3.4 concurrency wording now states the same rule as I17: reject
+         while an active session is SETTLING/FINALIZING/REVEALING, never
+         dispose that session's pane; dispose only an ORPHAN pane.
+  [DOC]  Stage 8 completion criterion sharpened — preexisting regression
+         tests unchanged and passing; every new invariant test active,
+         mutation-verified and green.
+
+CHANGE LOG FROM DRAFT 3
+
+  [HIGH] ABNORMAL-EXIT POLICY added (§3.7). Draft 3 named the exit reasons
+         but defined outcomes for none of them, leaving the rewrite free to
+         invent behaviour in the exact path that has caused most of the
+         trouble. Now a table, plus three distinct verbs:
+         settleSession / finishSession / recoverSession.
+         VERIFIED while writing it: `touchcancel` binds to the SAME onEnd
+         as touchend (app.js:271), so today it can settle as a COMMIT, not
+         an abort. Draft 3 implied it was an abort-style cleanup reason.
+  [MED]  I16 expanded from screen-name pairs to DESCRIPTOR SCENARIOS
+         (§4.3). VERIFIED: navTo (app.js:141) REPLACES the stack top when
+         `v` matches — unless the descriptor carries `author` or `book`,
+         which PUSHES. So authorBooks(A)→authorBooks(B) and files(A)→
+         files(B) have different stack effects from books→books, and 132
+         name pairs cannot express that.
+  [MED]  I17 split into active-session rejection vs orphan-pane disposal;
+         draft 3's prose conflated them and misstated current behaviour.
+  [LOW]  The 1px Home scroll is FROZEN for parity, not removed (§2.6.4,
+         T12, stage 1). This is a behaviour-preserving extraction; removing
+         it is an unrelated visible change in a path with a long history of
+         platform surprises. Separate commit after device parity.
+  [DOC]  §2.6.3 overlay→overlay reachability is ESTABLISHED, not deferred:
+         openSub() pushes a sub-screen over Options, so a left-edge swipe
+         yields general→options directly.
+  [DOC]  §2.4's overlay→browse side effect is now encoded in the plan as
+         `hiddenHostState`, and deliberately NOT fixed here.
+
+CHANGE LOG FROM DRAFT 2
+
+  [HIGH] The "14 of 30" matrix was still not the reachable space. Replaced
+         by a STRUCTURAL matrix (8 base combinations) plus explicit
+         modifiers, with the concrete screen set GENERATED from the real
+         registry (§2.4). Verified: the registry is 12 screens — home, 4
+         browse-family (books, authors, authorBooks, files), 7 overlays
+         (options, nowplaying + Nav.SETTINGS_SUBS = general, playback,
+         buffering, downloads, diagnostics) = 132 ordered pairs. Draft 2
+         enumerated 30 and called it exhaustive; I16 was untrue as written.
+  [MED]  planFor() no longer accepts derived facts alongside raw ones;
+         one normalization boundary, classifyTransition() (§3.3).
+  [MED]  `clobbered` removed from the target vocabulary entirely (§3.3).
+  [MED]  pane.release() vs pane.dispose(reason) split, with a stated
+         concurrency policy (§3.4).
+  [FACT] The Home `scrollTo(0,1)` description is CORRECTED (§2.6.4). The
+         reviewer is right and the code says so in nav.js:121-126: seating
+         is `body.home-tall`; the 1px is "a harmless remnant of the
+         abandoned scroll runway theory". Draft 2 called it an iOS-26
+         runway requirement. I repeated a myth that the code itself
+         corrects, in a comment I had already read.
+  [PROC] Stage 2 reclassified: tests are triaged green / known-red /
+         unobservable rather than required to pass (§7).
+  [PROC] The four unresolved behavioural rules are RESOLVED from code
+         (§2.6), so stage 1 can freeze.
+
+=====================================================================
+1. PURPOSE
+
+Not about fixing the swipe flash. About why the flash took ~20 hours and
+~35 builds and is still open: the swipe/reveal path's behaviour cannot be
+determined by reading it.
+
+Success criterion: a session with no memory of this work reads ONE
+document and ONE module header and correctly predicts what a swipe does —
+which nodes are created, covered, destroyed, and what state everything is
+in when the gesture ends.
+
+If the rewrite lands and the flash remains, it still succeeded.
+
+=====================================================================
+2. THE MODEL AS IT EXISTS TODAY
+
+2.1  TWO KINDS OF VIEW
+     IN-FLOW    #home, #browse — inside .app, SHARE the document scroll.
+                Two in-flow views cannot be on screen at once.
+     OVERLAY    fixed, outside .app's flow, own scroll box.
+     isOverlay(v) === options | nowplaying | Nav.SETTINGS_SUBS.
+     HOME IS NOT AN OVERLAY. Draft 1's error came from forgetting this.
+
+2.2  GESTURE LIFECYCLE (js/app.js bindSwipeBack)
+     begin()  arm within EDGE of an edge if a destination exists; hard-
+              reset leftover state; bind move/end to the TOUCHSTART TARGET.
+     move()   8px direction lock; vertical abandons; first horizontal move
+              calls start().
+     start()  builds movers, renders the destination.
+     end()    commit vs abort from travel + velocity.
+     settle() animates; runFinalize() on transitionend OR a 340ms fallback
+              (both can fire — I13).
+
+2.3  THE BRANCH CONDITIONS (verbatim, js/app.js:536-560)
+       incomingBrowse = !toOv && toV !== 'home'
+       OUTGOING:  fromOv         -> real overlay element
+                  incomingBrowse -> ghostApp()          [PANE]
+                  else           -> real in-flow view
+       INCOMING:  toOv           -> real overlay element
+                  toV === 'home' -> snapshotHome()      [PANE]
+                  else           -> real #browse, destination rendered
+                                    INTO it mid-drag
+
+2.4  STRUCTURAL MATRIX — the base plan
+
+     Kinds: home | browse | overlay. Eight reachable combinations
+     (home→home is not a transition):
+
+       from     to        outgoing        incoming        pane?
+       -------  --------  --------------  --------------  -----
+       home     browse    GHOST           real #browse    yes
+       home     overlay   real #home      real overlay    no
+       browse   home      real #browse    SNAPSHOT        yes
+       browse   browse    GHOST           real #browse    yes
+       browse   overlay   real #browse    real overlay    no
+       overlay  home      real overlay    SNAPSHOT        yes
+       overlay  browse    real overlay    real #browse    no
+       overlay  overlay   real overlay    real overlay    no
+
+     RULES, stated once:
+       GHOST     iff source is NOT an overlay AND destination kind is
+                 browse.
+       SNAPSHOT  iff destination kind is home, whatever the source.
+       A pane exists in 4 of the 8 base combinations.
+
+     ⚠️ NOTE on overlay→browse: no pane is built, but the destination IS
+     rendered into the real #browse mid-drag. An abort returns to the
+     overlay leaving #browse holding the destination's content.
+     DECIDED: preserve today's behaviour. Restoring the hidden host would
+     add a render during abort purely to clean state that is not visible
+     and is reconciled on the next real Browse entry — more work and
+     another chance to disturb images/controllers, fixing nothing the user
+     can see. Encoded explicitly rather than left implicit:
+       abort: { screen:'source', render:'none',
+                hiddenHostState:'destination-may-remain' }
+     Canonicalizing the hidden host is a SEPARATE cleanup after parity.
+
+2.5  CONCRETE SCREENS — GENERATED, NEVER HAND-LISTED
+     The registry is derived from the real sources of truth:
+       home                                          -> kind home
+       books, authors, authorBooks, files            -> kind browse
+       options, nowplaying, ...Nav.SETTINGS_SUBS     -> kind overlay
+     = 12 screens, 132 ordered pairs.
+
+     Prose must never enumerate the pairs (draft 2 did, and was wrong).
+     Instead, a test iterates the registry and asserts every ordered pair
+     either yields a plan or is rejected with a NAMED reason. Adding a
+     sixth settings sub-screen must not require editing this document.
+
+2.6  THE FOUR PREVIOUSLY-UNRESOLVED RULES — resolved from code
+
+     2.6.1 NOW PLAYING PILL
+       Cloned when NP is EITHER endpoint (app.js:544 fromV, :558 toV):
+         from NP -> pill mover at base 0, and body loses `np-locked`
+         to   NP -> pill mover at base off
+       It is a third mover alongside outgoing/incoming, with the same
+       creation/removal lifetime. In the target it is a `decorations`
+       entry in the plan, not a special case in start().
+
+     2.6.2 NAVIGATION RELATION
+       back           left edge, destination = navStack[len-2]
+       new-forward    right edge FROM nowplaying only -> filesDescForCurrent(),
+                      `newNav`; on commit PUSHES the destination and CLEARS
+                      fwdStack (app.js:479, :778)
+       forward-replay right edge otherwise, destination = fwdStack top;
+                      on commit pops fwdStack onto navStack
+       A back commit pushes the popped entry onto fwdStack.
+
+     2.6.3 OVERLAY→OVERLAY REACHABILITY  [ESTABLISHED]
+       Reachable, and no stack-state search is needed to prove it:
+       openSub() pushes a settings sub-screen ON TOP of Options, so a
+       left-edge swipe takes the previous navStack entry as its
+       destination and produces e.g. general→options or downloads→options
+       directly. Now Playing can also be stacked over an overlay.
+       Button navigation between overlays uses Nav.overlayFilmstrip(), a
+       DIFFERENT path this plan does not touch and must not assume shares
+       code.
+       Stage 1 adds representative NAVIGATION-ACTION tests, not an
+       enumeration of unbounded stack histories:
+         Options → sub-screen → swipe back
+         sub-screen → Now Playing → swipe back
+         forward replay between adjacent overlays
+         invalid same-screen / no-destination cases
+       The structural planner supports overlay→overlay regardless of which
+       navigation action produced the stack.
+
+     2.6.4 SCROLL POLICY  [CORRECTED]
+       Home entry uses `window.scrollTo(0, 1)` when resetScroll is set.
+       This is NOT an iOS-26 runway requirement. nav.js:121-126 states the
+       navbar seating is `body.home-tall` (real scroll height), and the
+       1px is "a harmless remnant of the abandoned scroll runway theory".
+       The saga's dead-end list agrees: the 1px/2px runway was tried three
+       times and failed; `body.home-tall` is the actual seater.
+       ⇒ FROZEN FOR PARITY. The plan carries the existing behaviour
+       forward as `scroll.onCommit: 'destination-entry'` with NO runway
+       justification. Stage 1 does NOT decide whether the 1px survives.
+       This is a behaviour-preserving extraction; removing the 1px is an
+       unrelated visible change in a path with a long history of
+       platform-specific surprises. Remove it AFTER device parity, in a
+       separate commit, with a focused Home-entry device test.
+       Overlays keep their own scrollTop; the document scroll is not
+       touched when the destination is an overlay.
+
+       The PLAN states policy; Browse resolves coordinates:
+         scroll: { onCommit: 'destination-entry',
+                   onAbort:  'restore-session-start',
+                   overlay:  'preserve-document',
+                   reveal:   'destination-final' }
+       Browse decides what 'destination-entry' means for a cached Books
+       page, an Authors page, or the current Files row. Swipe applies the
+       final document-scroll transaction in order. No raw Y values and no
+       Browse cache details enter planFor().
+
+=====================================================================
+3. TARGET DESIGN
+
+3.1  STATE MACHINE
+
+       IDLE -> ARMED -> DRAGGING -> SETTLING -> FINALIZING
+            -> REVEALING [only when a covering pane exists] -> IDLE
+
+     Vertical intent and hard reset are ABNORMAL TERMINATION reasons:
+     finishSession(reason).
+
+     ⚠️ touchcancel is NOT one of them. It is a NORMAL gesture-ending
+     input: it records endReason:'touch-cancel' and routes through
+     settleSession() using the ordinary travel-and-velocity decision, so
+     it can COMMIT. That is parity — touchend and touchcancel are bound to
+     the same onEnd (app.js:271). Draft 4 listed it as a cleanup reason
+     here while §3.7 routed it through the settle decision; the two
+     instructions were incompatible and this is the correct one.
+     finishSession() remains the common idempotent cleanup ENDPOINT, and
+     settleSession() calls it — but finishSession must never independently
+     decide what touchcancel means.
+     FINALIZING performs, as ONE transaction: commit/preserve the nav
+     stack; apply or restore the real screen; restore document scroll;
+     return the Browse lease and await its readiness; clear inline styles;
+     decide whether a delayed reveal is needed. The four no-pane base
+     combinations go FINALIZING -> IDLE directly.
+
+3.2  ONE SESSION OWNS EVERY RESOURCE
+       { id, state, plan, listeners, leaseToken, panes[], movers[],
+         transitionListener, settleTimer, revealTimer, revealFrames,
+         startScroll, endReason }
+     Acquired only through the session; every exit passes through one
+     idempotent finishSession(reason); every async callback captures
+     session.id and no-ops when superseded.
+
+3.3  classifyTransition() IS THE ONLY NORMALIZATION BOUNDARY
+
+       classifyTransition({ from, to, direction, navigationRelation })
+         -> { fromKind, toKind, sourceHost, destinationHost,
+              sameBrowseHost, decorations }
+
+       planFor(classification) -> immutable plan:
+         { outgoing, incoming, renderTarget,
+           commit: { screen, stackEffect, scroll },
+           abort:  { screen, render, scroll },
+           decorations, paneRemovalPolicy }
+
+     planFor() NEVER accepts raw descriptors alongside derived kinds.
+     Supplying both is what allows `{from:'home', sourceHost:'browse'}` to
+     exist, and removing states that can disagree is the entire point.
+     There is no default branch; an unhandled classification THROWS.
+
+     `clobbered` DOES NOT EXIST in the target vocabulary. Its only
+     consequence is expressed directly:
+       browse→browse   abort: { screen:'source', render:'rerender',
+                                scroll:'restore-start' }
+       overlay→browse  abort: { screen:'source', render:'none',
+                                scroll:'restore-start',
+                                hiddenHostState:'destination-may-remain' }
+       everything else abort: { screen:'source', render:'none',
+                                scroll:'restore-start' }
+     Nothing downstream asks whether the host was "clobbered".
+
+     DECORATIONS keep their mover nature explicit — the pill has a base
+     position, receives transforms, and needs session-owned cleanup:
+       decorations: [{ kind:'now-playing-pill', role:'mover',
+                       base:'outgoing' | 'incoming' }]
+     `decorations` is a plan-level CATEGORY, not a plugin system and not a
+     separate non-mover cleanup path. A list of one is preferable to
+     another hard-coded `if (nowplaying)` inside start().
+
+3.4  PANE RELEASE vs DISPOSAL
+     Two operations, because a normal visual release and an emergency
+     teardown have different obligations:
+
+       pane.release()        called ONLY by reveal(), only after under-view
+                             readiness AND the paint barrier. Obeys I10.
+       pane.dispose(reason)  idempotent emergency teardown. Bypasses I10
+                             deliberately. Permitted reasons ONLY:
+                               'superseded'      a newer session owns the UI
+                               'lease-invalid'   Browse invalidated the lease
+                               'finalize-threw'  finalization failed
+                               'hard-reset'      leftover pane found at begin()
+                               'destination-gone'
+
+     CONCURRENCY POLICY (states the same rule as I17 — draft 4's wording
+     here could be read as disposing the ACTIVE session's pane, which is
+     the opposite of what is intended):
+
+       begin() REJECTS whenever an active session is SETTLING, FINALIZING
+       or REVEALING. It NEVER disposes a resource owned by that session —
+       the active reveal is left to satisfy I10.
+
+       If NO active session exists and an ORPHAN pane is found, begin()
+       disposes that pane as 'hard-reset' before arming a new session.
+
+     This is parity: production returns immediately while `finishing` is
+     true (app.js:452), and leftover cleanup happens only once that guard
+     no longer applies. Without the split, "only reveal may remove a pane"
+     and "every exit must clean up panes" contradict each other, and the
+     implementation ends up either bypassing I10 or stranding a pane.
+
+3.5  BROWSE OWNS THE HOLD; SWIPE OWNS THE LEASE
+       const lease  = Browse.beginGestureHold();
+       const result = Browse.finishGestureHold(lease, {
+                        visibleDescriptor, settledScrollY });
+       // result: { status: 'ready' | 'invalidated', ready: Promise<void> }
+       await result.ready;     // SEMANTIC completion
+       await paintBarrier();   // VISUAL release requirement — Swipe's job
+
+     Browse's reconciliation is synchronous today (unpark, activate,
+     realize, deactivate, deferred repaints). An already-resolved `ready`
+     is therefore HONEST — and does not satisfy I10, because reveal() must
+     still await the paint barrier independently. Browse must NOT add a
+     requestAnimationFrame merely to look asynchronous; that would
+     reproduce .179's vacuous gate with better names.
+     A destructive Browse operation invalidates the lease explicitly.
+     Swipe never touches .browsepage classes or virtual controllers.
+
+3.6  PANES — ONE INTERFACE, TWO RECIPES
+       { kind:'app-ghost'|'home-snapshot', element, source, pin,
+         equivalence, release(), dispose(reason) }
+     Ownership, cleanup, runtime-state copying and instrumentation are
+     unified; the capture algorithms are not pretended to be identical.
+
+3.7  ABNORMAL EXITS — THREE VERBS, ONE POLICY TABLE
+
+     Draft 3 named the exit reasons and defined outcomes for none of them.
+     That leaves the rewrite free to invent behaviour in the path that has
+     caused most of the trouble. Three distinct verbs:
+
+       settleSession(decision)      NORMAL end: commit or abort, chosen by
+                                    travel + velocity in end().
+       finishSession(reason)        ABNORMAL termination.
+       recoverSession(failurePhase) finalization threw; phase-aware,
+                                    because "before" and "after" the stack
+                                    mutation are not the same situation.
+
+     ⚠️ VERIFIED, and it corrects draft 3: `touchcancel` binds to the SAME
+     onEnd as touchend (app.js:271). Today a cancelled touch does NOT
+     abort — it runs the normal settle decision and CAN COMMIT. The table
+     preserves that; changing it is a behaviour change and out of scope.
+
+     NORMAL AND TERMINATION REASONS
+     Reason                     Nav result       Screen         Scroll        Pane
+     -------------------------  ---------------  -------------  ------------  ------------
+     vertical-intent (pre-drag) unchanged        source         unchanged     none built
+     touch-cancel (dragging)    settle decision  from decision  commit/abort  normal settle
+     hard-reset (leftover)      unchanged        currentDesc()  none today    dispose orphan
+
+     These three PRESERVE today's behaviour (verified: vertical intent does
+     releaseGesture + d=null and returns; touchcancel shares onEnd with
+     touchend, app.js:271; hard reset does releaseGesture, dropRowHold,
+     resetSwipeStyles, applyScreen(currentDesc,{render:false}) with no
+     scroll restore — app.js:462-465).
+
+     RECOVERY — ONE RULE, KEYED ON THE AUTHORITY BOUNDARY
+     Draft 4 made pre/post-stack distinctions for finalize-threw ONLY. The
+     same boundary applies to every failure detected while finalization or
+     reveal is underway, and getting it wrong produces exactly the defect
+     I11 exists to forbid: commit mutates the stack, the destination then
+     disappears, "restore the source" renders the source UNDER a stack
+     whose top is the destination.
+
+       recoverSession({
+         reason: 'lease-invalid' | 'destination-gone' | 'finalize-threw'
+                 | 'superseded',
+         phase:  'pre-stack' | 'post-stack'
+       })
+
+       phase        Navigation           Screen                  Scroll
+       -----------  -------------------  ----------------------  --------------------
+       pre-stack    unchanged            restore source          restore session start
+       post-stack   stack authoritative  render current stack top  destination policy
+
+     Pane disposal and resource cleanup then follow normally in both
+     phases. There are NO per-reason screen/scroll rules — that is what
+     produced draft 4's underspecified 'lease-invalid' row ("authoritative
+     screen", without saying whether it is rendered, and "none" scroll,
+     which is wrong after a committed destination transition).
+
+     ALL RECOVERY ROWS ARE NEW POLICY, stated because today they are
+     UNDEFINED — finalization has a try/finally for the row hold and
+     nothing else. These are gaps the rewrite must CLOSE, not behaviour it
+     must reproduce.
+
+=====================================================================
+4. INVARIANTS
+
+  I1   When Browse is the active in-flow view, exactly one .browsepage is
+       neither .hidden nor .parked; when Browse is not active, none is
+       exposed. Separately: the visible page's controller is active, all
+       others inactive; during a live hold only explicitly held pages may
+       be suspended or parked.
+  I2   Every pane created is released or disposed exactly once, on every
+       exit path.
+  I3   A Browse lease taken in start() is returned on every exit path.
+  I4   Gesture listeners bound at touchstart are released on every exit.
+  I5   At end, no real view carries an inline transform/transition/
+       will-change.
+  I6   No page is left `suspended` after a gesture ends.
+  I7   After an ABORT, document scroll equals scroll at gesture start.
+  I8   Each pane builder emits an EQUIVALENCE MANIFEST (see 4.2).
+  I9   A gesture settles even if the DOM under the finger is destroyed
+       mid-drag.
+  I10  A covering pane may not be released in the same task or microtask
+       that exposes/prepares the under-view. Release requires under-view
+       readiness AND the paint barrier. (dispose() is exempt by design.)
+  I11  After every exit, nav-stack top, visible screen and destination
+       descriptor agree.
+  I12  Only one session owns resources; a stale callback cannot affect
+       another session.
+  I13  Finalization occurs exactly once despite transitionend AND the
+       340ms timeout both firing.
+  I14  Every acquired timer, listener, lease, pane and animation callback
+       is released or invalidated.
+  I15  Deferred Browse repaint work is applied exactly once after the hold
+       ends.
+  I16  Every DESCRIPTOR SCENARIO (§4.3) — not merely every screen-name
+       pair — either yields a plan or is rejected with a named reason. No
+       default branch.
+  I17  Two distinct rules, conflated in draft 3:
+       (a) While an active session is SETTLING, FINALIZING or REVEALING, a
+           new gesture does NOT arm. It is REJECTED. The active reveal is
+           left to satisfy I10 — its pane is NOT disposed to make room.
+       (b) An ORPHAN pane found while NO session owns it is disposed as
+           'hard-reset' before arming.
+       This preserves today's behaviour: begin() returns while `finishing`
+       is true (app.js:452); once the reveal drops the pane `finishing`
+       clears, and a later gesture may remove an already-uncovered
+       `.spent` pane and continue. Today does NOT hard-reset an actively
+       held reveal pane, and neither may the rewrite.
+  I18  Every exit reason in §3.7 produces its tabulated outcome for nav
+       stacks, visible screen, scroll, lease and pane. Recovery is keyed on
+       PHASE (pre-stack / post-stack), not on reason: after the stack has
+       been mutated the stack is authoritative and the screen is rendered
+       from its top, for lease-invalid, destination-gone, finalize-threw
+       and supersession alike.
+
+4.1  WHY I2 + I8 WERE NOT SUFFICIENT
+     The .179+.194 implementation removed the pane exactly once (I2 ok)
+     over an under-view already decoded and structurally identical (I8 ok)
+     and still removed it after one microtask, before any painted frame.
+     Only I10 forbids it.
+     I10 mutation plan:
+       1. make every decode() promise immediately resolved
+       2. remove one or both requestAnimationFrame gates
+       3. assert the pane is STILL PRESENT until the frame boundary
+       4. assert the timeout can still release it if frames never arrive
+       5. assert a superseded reveal cannot release the next session's pane
+
+4.2  I8 — EXHAUSTIVE OVER A DEFINED CANDIDATE SET, NEVER SAMPLED
+     Sampling would recreate .207 (six pairs checked, thirty missed).
+     Candidate classes the pane PROMISES to preserve:
+       animated art elements · horizontal scroll containers ·
+       fixed-position decorations · visible browse pages ·
+       explicitly pruned hidden/parked subtrees ·
+       any element whose inline or computed state is copied
+     Assertions:
+       every source candidate is exactly one of { paired, omitted-with-
+         named-reason }
+       no source appears twice; no clone target appears twice
+       every surviving clone candidate has a source
+       every pruned candidate appears in omitted[]
+       paired + omitted === sourceCandidates
+     Coupling this to the prune rule is DESIRABLE: if the prune rule
+     changes, the equivalence contract changed and must be re-reviewed.
+
+4.3  I16 — DESCRIPTOR SCENARIOS, NOT SCREEN NAMES
+     Two registry entries are PARAMETERIZED: authorBooks carries an
+     author, files carries a book (browse.js:22-23 keys them
+     'author:<rk>' / 'files:<rk>').
+
+     ⚠️ VERIFIED: navTo (app.js:141) REPLACES the stack top when `v`
+     matches — UNLESS the descriptor carries `author` or `book`, in which
+     case it PUSHES. So descriptor identity changes STACK EFFECTS, and 132
+     name pairs cannot express it. The structural planner will classify
+     all of the below as browse→browse; their stack effects, rerender
+     requirement and scroll restoration differ.
+
+     Generate scenarios, not names:
+       home() · books() · authors()
+       authorBooks('A') · authorBooks('B')
+       files('A') · files('B')
+       options() · nowplaying() · each of Nav.SETTINGS_SUBS
+
+     Explicitly cover:
+       different type                books()      -> authors()
+       same type, different identity authorBooks('A') -> authorBooks('B')
+                                     files('A')   -> files('B')
+       same semantic descriptor      books()      -> books()
+       identical descriptor object   d            -> d
+       two independently allocated but semantically equal descriptors
+       missing required payload      authorBooks() with no author
+                                     files() with no book
+     A malformed parameterized descriptor must be REJECTED with a named
+     reason, never silently planned.
+
+=====================================================================
+5. TRAPS — ENUMERATED BEFORE CODE
+
+  T1  cloneNode copies no runtime state: scrollLeft, animation phase,
+      decoded images; CSS animations RESTART from t=0 in a clone.
+  T2  ghostApp() PRUNES .hidden/.parked from the clone. Any pairing must
+      filter the source identically and must NOT test the root itself
+      (snapshotHome's source IS #home.parked).
+  T3  position:fixed inside a transformed clone re-anchors to the clone.
+      `.alphaindex` is fixed; in the ghost it lands scrollY px away.
+  T4  display:none drops decoded images on iOS; re-showing re-decodes.
+  T5  With transitions disabled, transitionend never fires; finalize then
+      depends entirely on the 340ms fallback. Motion-disabling experiments
+      change the code path under test.
+  T6  Touch events target the touchstart node for the gesture's life; once
+      detached they no longer reach `document`.
+  T7  DEAD END — pointer events + setPointerCapture (touch-action
+      intersects down the ancestor chain, kills the home carousels).
+  T8  DEAD END — floating the INCOMING page in a fixed pane.
+  T9  DEAD END — parking a transform to keep a layer alive (.195/.196).
+  T10 The A-Z strip covers ~77% of the forward-swipe edge band; it must
+      CEDE by direction, not be excluded from arming.
+  T11 app.js reads DOM globals bare (Element, MutationObserver,
+      navigator); a new one must be installed in the harness or its code
+      path is dead under test, silently.
+  T12 The 1px Home scroll is NOT an iOS-26 requirement (§2.6.4). Do not
+      preserve it under that label; `body.home-tall` is the seater.
+
+=====================================================================
+6. WHAT THIS DOES NOT DO
+
+  - It does not fix the flash. Everything observable from inside the page
+    is eliminated by device measurement: no DOM writes, no position
+    change, no appearance change, no animation (phase=n/a, animSync=0 with
+    fades disabled — still flashed), no main-thread frame cost (worst=17ms
+    on a user-confirmed flashing swipe). The remaining hypothesis is
+    compositor-level and JS cannot see it. Next diagnostic step is a 60fps
+    screen recording scrubbed frame by frame, NOT another instrument.
+  - It does not change the visual design of the transition.
+  - It does not touch nav stacks, Browse's cache, or the virtualizer.
+
+=====================================================================
+7. STAGED EXTRACTION
+
+   1. Freeze the structural matrix (§2.4), the generated registry (§2.5),
+      the descriptor scenarios (§4.3), the four rules (§2.6) and the
+      abnormal-exit policy (§3.7). overlay→overlay reachability is already
+      established (§2.6.3) — add the four navigation-action tests, do not
+      enumerate stack histories. The 1px Home scroll is FROZEN, not
+      revisited.
+   2. Add the tests that can be TRUTHFULLY specified from the frozen
+      model. Triage each:
+         GREEN NOW    mutation-verify immediately
+         KNOWN RED    keep as an explicit expected-failure with the exact
+                      current defect recorded; never invert an assertion
+                      to bless broken behaviour
+         UNOBSERVABLE add the instrumentation needed first
+      Stage 2 does NOT block on known-red invariants. Every one must be
+      active and green before stage 8; parity cannot be declared while any
+      remain.
+   3. Introduce the session/resource owner; pane builders and render calls
+      unchanged.
+   4. Extract classifyTransition() + planFor(); prove every registry pair.
+   5. Move pane builders unchanged into swipe.js.
+   6. Centralize finalization and reveal ordering (I10, I17).
+   7. Replace Browse hold calls with the lease interface.
+   8. All PREEXISTING regression tests remain unchanged and pass; every
+      new invariant test is ACTIVE, mutation-verified and green. (Stage 2
+      may start some as expected failures; none may remain so here.)
+   9. Device parity pass.
+  10. Only then remove old diagnostics and simplify.
+
+  DIAGNOSTICS RETAINED THROUGH MIGRATION. A structured trace stays behind
+  the Diagnostics toggle: session id · state transition · selected plan ·
+  resources acquired/released · pane created/released/disposed+reason ·
+  lease acquired/released · commit/abort/reset reason · final visible
+  descriptor · final scroll. Exposed as Swipe.debugSnapshot() /
+  Swipe.debugTrace(). Heavy mutation-observer and frame probes go only
+  after device parity.
+
+=====================================================================
+8. ROUND 4 — WHAT CHANGED AND WHAT REMAINS
+
+  All four required revisions from the round-3 review are applied:
+    1. abnormal-exit policy table + three verbs            §3.7, I18
+    2. I16 expanded to descriptor scenarios                §4.3
+    3. I17 split: reject active session / dispose orphan   I17
+    4. 1px Home scroll frozen for parity, not removed      §2.6.4, T12
+
+  Reviewer answers adopted verbatim: overlay→overlay reachability is
+  established via openSub (§2.6.3); the overlay→browse hidden-host side
+  effect is preserved and encoded (§2.4, §3.3); the pill stays a mover
+  under a decorations category (§3.3); Browse reports semantic readiness
+  while Swipe owns the paint barrier (§3.5); known-red tests do not block
+  stage 2 (§7).
+
+  TWO THINGS THE AUTHOR WANTS ON THE RECORD BEFORE CODING:
+
+  A. Rows 4-7 of §3.7 are NEW POLICY, not preserved behaviour. Today
+     lease-invalidation, destination-gone and both finalization-failure
+     phases are undefined — there is a try/finally for the row hold and
+     nothing else. Writing them down is the point, but it means the
+     extraction is NOT purely behaviour-preserving in those four rows.
+     Every other row, and every normal path, is parity.
+
+  B. Three drafts of this document each contained at least one confident
+     factual error about code the author had already read: the pane
+     inventory (twice), and the iOS-26 label on the 1px scroll. All three
+     were caught by review, none by the author. That is the same failure
+     mode as the .177-.213 cycle, reproduced inside the planning document,
+     and it is the reason stage 2 exists in the form it does — tests
+     against the CURRENT implementation, before any extraction, so the
+     model is checked against reality rather than against the author's
+     reading of it.
