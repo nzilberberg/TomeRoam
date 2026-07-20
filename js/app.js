@@ -211,6 +211,8 @@
     // need opposite fixes. Identity first: same node and same controller instance
     // means nothing was torn down, whatever the counters say.
     let revealBase = null;
+    // Numbers every reveal so a report can be tied to "the second-to-last swipe".
+    let revealSeq = 0;
     // Row IDENTITY, not row counts. +img/-img totals cannot separate "the swipe
     // rebuilt the page" from "something else in the 1.5s window touched it" — two
     // device logs were read wrongly that way, one contaminated by the next gesture
@@ -536,7 +538,12 @@
         const tgDesc = !tg ? 'none'
           : (tg.nodeName || '?').toLowerCase() + (tg.className && typeof tg.className === 'string'
             ? '.' + tg.className.trim().split(/\s+/).join('.') : '');
-        if (window.PBDebug) PBDebug.log('SWIPE', `${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`
+        // #N matches the FLASH line's #N for this same settle, so "the second-to-last
+        // swipe" resolves to one exact pair of lines instead of a guess from timestamps.
+        // Allocated HERE, once per settle, so the pairing cannot drift if a path ever
+        // returns without reporting.
+        const seq = ++revealSeq;
+        if (window.PBDebug) PBDebug.log('SWIPE', `#${seq} ${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`
           + ` tgt=${tg && tg.isConnected ? 'live' : 'detached'}:${tgDesc}`);
         for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }
         if (commit) {
@@ -620,9 +627,30 @@
         // Counting what changed was never going to answer it; only counting WHEN can.
         // So every mutation is now stamped against the ghost-drop time. `EXPOSED` is the
         // load-bearing half — anything non-zero there happened in front of the user.
+        //
+        // ⭐ .200 — THE WINDOW ITSELF WAS DESTROYING THE EVIDENCE. Two defects, both
+        // mine, both found by the user pointing at a specific swipe I then had no record
+        // of. (a) A new reveal CANCELLED the open one, and 1500ms is longer than the
+        // ~1400ms between back-to-back swipes — so of two consecutive aborts only the
+        // second was ever logged, and the flashing swipe is exactly the one you repeat.
+        // The user named the second-to-last abort; it had produced no line at all.
+        // (b) 1500ms swallows whatever you do NEXT: every large EXPOSED reading in that
+        // log had a TAP inside its window, and `row-:vrows@+1254` was a letter tap 1.25s
+        // after the uncover, not the swipe. So: a pending window is now FLUSHED, never
+        // cancelled; the window is short and ends at the first real user input; and every
+        // reveal carries a SEQ so "the second-to-last one" maps to an exact line.
         const reportReveal = (tag, rootEl, cover) => {
           if (!window.PBDebug) return;
-          if (revealWatch) { try { revealWatch(); } catch { /* already ended */ } }
+          // FLUSH the previous window instead of discarding it. Cancelling was silent
+          // data loss precisely when swipes come fast, which is when the bug shows.
+          // ⚠️ NOT MUTATION-VERIFIED, and labelled rather than left to imply coverage:
+          // every reveal reachable today is preceded by a touchstart/mousedown, so the
+          // input cutoff below always closes the previous window first and no test can
+          // distinguish this line's absence. It stays as a backstop — if a future path
+          // ever produces a reveal with no preceding user input, the alternative is
+          // silently losing the measurement again, which is what cost this session a
+          // whole round trip.
+          if (revealWatch) { try { revealWatch('superseded'); } catch { /* already ended */ } }
           const before = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
           const t0 = performance.now();
           const rows0 = rootEl.querySelectorAll('.book, .author').length;
@@ -648,8 +676,13 @@
           };
           // The COVERED/EXPOSED split, on the VISIBLE page only (a hidden sibling is
           // never on screen, so "was it covered" is meaningless there).
-          const cov = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, rows: 0 };
-          const exp = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, rows: 0 };
+          // `heads` = the DIVIDER LETTERS (.letterhead), tracked separately because they
+          // are what the user reports flashing and they are plain text — no image, no
+          // decode, no fetch. If heads churn while EXPOSED, the letters were genuinely
+          // rewritten; if they do not and the letters still flashed, no DOM write can
+          // explain it and the cause is the repaint itself.
+          const cov = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, rows: 0, heads: 0, attr: 0 };
+          const exp = { add: 0, rem: 0, srcSet: 0, srcClr: 0, fade: 0, instant: 0, rows: 0, heads: 0, attr: 0 };
           // WHAT the user saw, not just how much: the first few exposed writes, each
           // stamped ms-after-uncover, with the element that changed. A count says churn
           // happened; this says what it was and whether it was one burst or a trickle.
@@ -663,6 +696,9 @@
           const countRows = (n) => (n.nodeType !== 1 ? 0
             : ((n.classList && (n.classList.contains('book') || n.classList.contains('author'))) ? 1
               : (n.querySelectorAll ? n.querySelectorAll('.book, .author').length : 0)));
+          const countHeads = (n) => (n.nodeType !== 1 ? 0
+            : ((n.classList && n.classList.contains('letterhead')) ? 1
+              : (n.querySelectorAll ? n.querySelectorAll('.letterhead').length : 0)));
           let obs = null;
           try {
             obs = new MutationObserver((muts) => {
@@ -677,11 +713,19 @@
                 if (mu.type === 'childList') {
                   for (const n of mu.addedNodes) {
                     b.add += countImgs(n);
-                    if (t) { t.add += countImgs(n); t.rows += countRows(n); if (t === exp && countRows(n)) note('row+', n, dt); }
+                    if (t) {
+                      t.add += countImgs(n); t.rows += countRows(n); t.heads += countHeads(n);
+                      if (t === exp && countHeads(n)) note('LETTER+', n, dt);
+                      else if (t === exp && countRows(n)) note('row+', n, dt);
+                    }
                   }
                   for (const n of mu.removedNodes) {
                     b.rem += countImgs(n);
-                    if (t) { t.rem += countImgs(n); if (t === exp && countRows(n)) note('row-', mu.target, dt); }
+                    if (t) {
+                      t.rem += countImgs(n); t.heads += countHeads(n);
+                      if (t === exp && countHeads(n)) note('LETTER-', mu.target, dt);
+                      else if (t === exp && countRows(n)) note('row-', mu.target, dt);
+                    }
                   }
                 } else if (mu.type === 'attributes' && mu.target.tagName === 'IMG') {
                   if (mu.attributeName === 'src') {
@@ -692,14 +736,28 @@
                     if (/art-done/.test(c)) { b.fade++; if (t) { t.fade++; if (t === exp) note('FADE', mu.target, dt); } }
                     else if (/art-instant/.test(c)) { b.instant++; if (t) { t.instant++; if (t === exp) note('inst', mu.target, dt); } }
                   }
+                } else if (mu.type === 'attributes') {
+                  // A class/style change on a CONTAINER (.browsepage parked/hidden, a
+                  // group shell, the list itself) restyles everything inside it without
+                  // touching a single row — the one DOM cause that could repaint the
+                  // letters while every row-identity counter reads clean. Previously
+                  // ignored entirely: only IMG targets were examined.
+                  if (t) { t.attr++; if (t === exp) note('attr:' + String(mu.attributeName), mu.target, dt); }
                 }
               }
             });
+            // `style` joins the filter: a container restyle is invisible to a class
+            // watch, and it is precisely the kind of write that repaints unchanged text.
             obs.observe(rootEl, { childList: true, subtree: true, attributes: true,
-              attributeFilter: ['src', 'class'] });
+              attributeFilter: ['src', 'class', 'style'] });
           } catch { /* no MutationObserver → the ArtLoader deltas below still land */ }
-          const finish = () => {
+          let done = false;
+          const finish = (why) => {
+            if (done) return; done = true;
             revealWatch = null;
+            clearTimeout(timer);
+            try { document.removeEventListener('touchstart', onInput, true); } catch { /* gone */ }
+            try { document.removeEventListener('mousedown', onInput, true); } catch { /* gone */ }
             if (obs) { try { obs.disconnect(); } catch { /* already gone */ } }
             const a = (window.ArtLoader && ArtLoader.stats) ? ArtLoader.stats() : null;
             const art = (a && before)
@@ -727,20 +785,29 @@
             // it is the uncover itself (layer teardown / a repaint of unchanged
             // content), which is a different fix and worth knowing without another
             // round of guessing.
-            const fmt = (s) => `+img=${s.add} -img=${s.rem} rows+=${s.rows}`
-              + ` src+=${s.srcSet} src-=${s.srcClr} fade=${s.fade} inst=${s.instant}`;
+            const fmt = (s) => `+img=${s.add} -img=${s.rem} rows+=${s.rows} LETTERS=${s.heads}`
+              + ` attr=${s.attr} src+=${s.srcSet} src-=${s.srcClr} fade=${s.fade} inst=${s.instant}`;
             const seen = firsts.length ? ` | first=[${firsts.join(' ')}]` : '';
-            PBDebug.log('FLASH', `${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
+            PBDebug.log('FLASH', `#${seq} ${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
               + ` | COVERED ${fmt(cov)}`
               + ` | EXPOSED ${fmt(exp)}${seen}`
               + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
               + ` | ${cmp}`
-              + art + ` | win=${Math.round(performance.now() - t0)}ms`);
+              + art + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
           };
-          // ONE window per gesture. Rapid swipes used to overlap, so a later window
-          // counted the previous gesture's cleanup as its own.
-          const timer = setTimeout(finish, 1500);
-          revealWatch = () => { clearTimeout(timer); revealWatch = null; if (obs) { try { obs.disconnect(); } catch { /* gone */ } } };
+          // The flash happens within a few frames of the uncover, so the window only has
+          // to outlive that. 1500ms was long enough to swallow the user's NEXT action and
+          // report it as this swipe's churn — which is exactly what it did.
+          const timer = setTimeout(() => finish('timeout'), 500);
+          // …and end EARLY at the first real input. A tap or the next swipe is the user
+          // acting on a view that has already finished revealing; anything it causes
+          // belongs to that action, not to this one.
+          const onInput = () => finish('input');
+          try {
+            document.addEventListener('touchstart', onInput, true);
+            document.addEventListener('mousedown', onInput, true);
+          } catch { /* listener support is not optional in practice */ }
+          revealWatch = (why) => finish(why || 'superseded');
         };
         // Shared between the watcher and the hold: `dropAt` is 0 while the ghost still
         // covers the view and becomes the uncover timestamp the instant it lifts. One

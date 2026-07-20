@@ -102,7 +102,7 @@ test('control: a swipe whose row STAYS attached settles normally', async () => {
     const log = swipeLog(h);
     assert.ok(log.some((m) => /^start /.test(m)), `the gesture must actually engage — got ${JSON.stringify(log)}`);
     assert.ok(row.isConnected, 'fixture sanity: nothing detached the row in this case');
-    assert.ok(log.some((m) => /^(abort|commit) /.test(m)), `the gesture must settle — got ${JSON.stringify(log)}`);
+    assert.ok(log.some((m) => /^#\d+ (abort|commit) /.test(m)), `the gesture must settle — got ${JSON.stringify(log)}`);
   } finally { h.dispose(); }
 });
 
@@ -123,7 +123,7 @@ test('a swipe settles even when the row under the finger is DESTROYED mid-drag (
     const log = swipeLog(h);
     assert.ok(log.some((m) => /^start /.test(m)), `the gesture must actually engage — got ${JSON.stringify(log)}`);
     assert.equal(row.isConnected, false, 'fixture sanity: the row really was destroyed mid-gesture');
-    assert.ok(log.some((m) => /^(abort|commit) /.test(m)),
+    assert.ok(log.some((m) => /^#\d+ (abort|commit) /.test(m)),
       `a gesture whose start node was destroyed must STILL settle — got ${JSON.stringify(log)}`);
   } finally { h.dispose(); }
 });
@@ -152,7 +152,7 @@ test('an ABORTED browse→browse swipe re-renders UNDER the ghost, never bare (c
 
     await edgeSwipe(h, row);
 
-    assert.ok(swipeLog(h).some((m) => /^abort /.test(m)),
+    assert.ok(swipeLog(h).some((m) => /^#\d+ abort /.test(m)),
       `fixture sanity: this gesture must ABORT — got ${JSON.stringify(swipeLog(h))}`);
     assert.ok(ghostsAtRender.length >= 2,
       `render runs during the drag AND again on abort — got ${JSON.stringify(ghostsAtRender)}`);
@@ -197,7 +197,7 @@ test('the ghost outlives the reveal until a frame has PAINTED it, not just decod
     await h.clock.advance(400);
     await settle(h);
 
-    assert.ok(swipeLog(h).some((m) => /^abort /.test(m)),
+    assert.ok(swipeLog(h).some((m) => /^#\d+ abort /.test(m)),
       `fixture sanity: this gesture must ABORT — got ${JSON.stringify(swipeLog(h))}`);
     // The reveal has happened. The decode gate has had every chance to settle (the
     // awaits above drained the microtask queue many times over). If the ghost is gone
@@ -294,6 +294,49 @@ test('the reveal watcher splits churn by whether the ghost was still covering (.
   } finally { h.dispose(); }
 });
 
+// ⭐ .200 — BACK-TO-BACK SWIPES MUST BOTH BE REPORTED.
+//
+// Found by the user naming a specific swipe — "the second-to-last aborted swipe" —
+// that had produced NO log line at all. reportReveal CANCELLED any open window when a
+// new reveal began, and the window (1500ms) outlasted the gap between consecutive
+// swipes (~1400ms), so of two aborts in a row only the second was ever logged. The
+// swipe that flashes is exactly the one you repeat trying to reproduce it, which made
+// this lose the evidence precisely when it mattered. A superseded window is now
+// FLUSHED. Losing a measurement silently is worse than not taking it.
+test('two aborts in a row produce TWO reports — a superseded window is flushed, not dropped (.200)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+
+    await edgeSwipe(h, addRow(h));
+    // The SECOND swipe's touchstart ends the first window early (`end=input`) — that is
+    // the other half of the fix and it is why the first report exists at all here.
+    await edgeSwipe(h, addRow(h));
+    await h.clock.advance(600);        // outlast the 500ms window so the second closes
+    await settle(h);
+
+    const reveals = flashLog(h).filter((m) => /@reveal/.test(m));
+    assert.equal(reveals.length, 2,
+      `both aborts must be reported — got ${reveals.length}: ${JSON.stringify(flashLog(h))}`);
+    // WHICH mechanism closed it matters, and asserting only the count cannot tell.
+    // Mutation testing caught this: with just a count, removing the input cutoff still
+    // passed (the supersede flush closed it instead) and removing the flush still
+    // passed (the cutoff did) — the two fixes mask each other. Pinning the REASON makes
+    // the cutoff's own test able to fail. The first window must end because the user
+    // touched the screen again, BEFORE its timer, so the churn from that next action is
+    // never attributed to this swipe — the contamination that made every large EXPOSED
+    // reading in the device log unreadable.
+    assert.match(reveals[0], /end=input/,
+      `the next touch must close the first window, not its timer: ${reveals[0]}`);
+    // And each must be identifiable, or "the second-to-last one" is still a guess.
+    assert.match(reveals[0], /^#1 /, `first report must carry its seq: ${reveals[0]}`);
+    assert.match(reveals[1], /^#2 /, `second report must carry its seq: ${reveals[1]}`);
+    // The seq has to PAIR with the settle line, which is the whole point of numbering.
+    assert.ok(swipeLog(h).filter((m) => /^#\d+ abort /.test(m)).length === 2,
+      `both settles must be numbered too — got ${JSON.stringify(swipeLog(h))}`);
+  } finally { h.dispose(); }
+});
+
 // ── the row hold ──────────────────────────────────────────────────────────────
 // While a gesture is live, Browse keeps the outgoing page's rows so an ABORT does
 // not rebuild the page. The hazard is a hold that is never released: hidden pages
@@ -374,7 +417,7 @@ test('a FINISHED gesture stops listening — a stale node cannot end the next ge
     await onAuthorsOverBooks(h);
     const row1 = addRow(h);
     await edgeSwipe(h, row1);
-    const settledOnce = swipeLog(h).filter((m) => /^(abort|commit) /.test(m)).length;
+    const settledOnce = swipeLog(h).filter((m) => /^#\d+ (abort|commit) /.test(m)).length;
     assert.equal(settledOnce, 1, 'fixture sanity: the first gesture settled exactly once');
 
     // A second gesture is now live on a different row…
@@ -393,7 +436,7 @@ test('a FINISHED gesture stops listening — a stale node cannot end the next ge
     await settle(h);
     await h.clock.advance(400);
 
-    assert.equal(swipeLog(h).filter((m) => /^(abort|commit) /.test(m)).length, settledOnce,
+    assert.equal(swipeLog(h).filter((m) => /^#\d+ (abort|commit) /.test(m)).length, settledOnce,
       'the stale node must not settle the live gesture');
   } finally { h.dispose(); }
 });
