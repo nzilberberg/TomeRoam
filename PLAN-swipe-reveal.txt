@@ -1,8 +1,36 @@
 PLAN — SWIPE / REVEAL REWRITE
-TomeRoam · draft 5 · 2026-07-20
-Revised against review of draft 4. All three corrections applied.
+TomeRoam · draft 6 · 2026-07-20
+Revised against review of draft 5. All three corrections applied.
 STATUS: implementation-ready.
 =====================================================================
+
+CHANGE LOG FROM DRAFT 5
+
+  [HIGH] I11 was UNSATISFIABLE on an abort. It demanded that stack top,
+         visible screen and 'destination descriptor' agree — but on an
+         abort the stack and screen are the SOURCE and the destination is
+         the thing not navigated to. Now keyed to an AUTHORITATIVE SETTLED
+         DESCRIPTOR chosen by outcome. As written, an implementation could
+         satisfy real behaviour and fail the invariant, or mutate the stack
+         merely to satisfy the wording.
+  [MED]  Pre-drag cancellation had NO valid route. Draft 5 sent touchcancel
+         through settleSession() unconditionally, but a touch can be
+         cancelled while still ARMED, where there are no movers and no
+         travel decision. Gesture-ending inputs now route by STATE (§3.7,
+         I19). VERIFIED as parity: end() releases listeners then returns at
+         "if (!cur.live)" — no settle, no navigation.
+  [MED]  A new touchstart during ARMED/DRAGGING was undefined while
+         'superseded' was already listed as a recovery reason. Policy
+         frozen (§3.7, I20). VERIFIED that parity is SUPERSEDE, not reject:
+         begin() rejects only while "finishing" is true; otherwise it
+         hard-resets and arms the new gesture (app.js:452-465).
+         ⚠️ One deliberate difference is flagged in-place: today's hard
+         reset does NOT restore the starting scroll, so a superseded
+         browse→browse drag can be left at the DESTINATION's scroll. The
+         corrected rule restores it — new policy, not parity.
+  [DOC]  Stale §8 audit prose replaced with a sign-off state. It still said
+         'ROUND 4' and referenced table rows that no longer existed —
+         exactly the kind of drift this document exists to prevent.
 
 CHANGE LOG FROM DRAFT 4
 
@@ -377,6 +405,59 @@ If the rewrite lands and the flash remains, it still succeeded.
      abort — it runs the normal settle decision and CAN COMMIT. The table
      preserves that; changing it is a behaviour change and out of scope.
 
+     GESTURE-ENDING INPUTS, BY STATE
+     Draft 5 routed touchcancel through settleSession() unconditionally,
+     but a touch can be cancelled while still ARMED — before the 8px
+     direction lock — where there are no movers and no travel decision to
+     make. Route by STATE, not by input:
+
+       state              touchend / touchcancel
+       -----------------  -------------------------------------------------
+       ARMED              finish with NO navigation; release listeners;
+                          remain on source. (PARITY: end() releases
+                          listeners then returns at `if (!cur.live)`,
+                          app.js — no settle, no navigation.)
+       DRAGGING           ordinary travel-and-velocity decision through
+                          settleSession(). touchcancel CAN commit; that is
+                          parity (shared onEnd, app.js:271).
+       SETTLING or later  ignore as a stale duplicate event.
+
+     The cancellation reason is still recorded for diagnostics; it simply
+     cannot always enter the settle path.
+     REQUIRED TESTS: cancel before the direction lock; cancel after a
+     horizontal move BELOW the 8px threshold (still ARMED); a duplicate
+     end arriving during SETTLING.
+
+     SUPERSESSION — A NEW TOUCH DURING ARMED OR DRAGGING
+     I17 covers SETTLING/FINALIZING/REVEALING (reject). Draft 5 said
+     nothing about a new gesture arriving while a session is ARMED or
+     DRAGGING, yet listed 'superseded' as a recovery reason without stating
+     what causes it.
+
+     PARITY IS SUPERSEDE, NOT REJECT — verified: begin() rejects only while
+     `finishing` is true; otherwise, if a session or a leftover pane
+     exists, it hard-resets (releaseGesture, dropRowHold, d = null,
+     resetSwipeStyles, applyScreen(currentDesc, {render:false})) and then
+     arms the new gesture (app.js:452-465).
+
+     RULE: a new gesture beginning while a session is ARMED or DRAGGING
+     synchronously recovers the old session as superseded / pre-stack —
+     restore the source, return its Browse lease, dispose its panes and
+     movers, release its listeners — and only then arms the new session.
+
+     ⚠️ ONE DELIBERATE DIFFERENCE FROM PARITY, flagged rather than smuggled:
+     today's hard reset does NOT restore the starting scroll, so a
+     superseded browse→browse drag can leave the document at the
+     DESTINATION's scroll (its mid-drag render ran positionOnEnter). The
+     reviewer's rule restores it. That is a BEHAVIOUR CHANGE and arguably a
+     bug fix; it is listed here as new policy, not as extraction parity,
+     and it needs its own device check.
+
+     REQUIRED TESTS: new touch while armed but not dragging; new touch
+     during a partial drag WITH a pane; old move/end callbacks arriving
+     after the new session begins; only the new session may mutate
+     transforms, stacks, scroll or pane ownership.
+
      NORMAL AND TERMINATION REASONS
      Reason                     Nav result       Screen         Scroll        Pane
      -------------------------  ---------------  -------------  ------------  ------------
@@ -442,8 +523,19 @@ If the rewrite lands and the flash remains, it still succeeded.
   I10  A covering pane may not be released in the same task or microtask
        that exposes/prepares the under-view. Release requires under-view
        readiness AND the paint barrier. (dispose() is exempt by design.)
-  I11  After every exit, nav-stack top, visible screen and destination
-       descriptor agree.
+  I11  After every exit, the navigation-stack top, the visible screen and
+       the AUTHORITATIVE SETTLED DESCRIPTOR agree. The authoritative
+       descriptor is selected by the completed OUTCOME:
+         commit                -> the committed destination
+         abort                 -> the original source
+         pre-stack recovery    -> the original source
+         post-stack recovery   -> the current stack top
+         hard reset            -> currentDesc()
+       Draft 5 said "destination descriptor", which is IMPOSSIBLE on an
+       abort: the stack stays on the source, the screen returns to the
+       source, and the destination is the thing that was NOT navigated to.
+       An implementation could have satisfied real behaviour and failed the
+       invariant — or mutated the stack merely to satisfy the wording.
   I12  Only one session owns resources; a stale callback cannot affect
        another session.
   I13  Finalization occurs exactly once despite transitionend AND the
@@ -472,6 +564,13 @@ If the rewrite lands and the flash remains, it still succeeded.
        been mutated the stack is authoritative and the screen is rendered
        from its top, for lease-invalid, destination-gone, finalize-threw
        and supersession alike.
+  I19  Gesture-ending inputs route by STATE (§3.7): ARMED finishes with no
+       navigation; DRAGGING takes the travel-and-velocity decision;
+       SETTLING or later ignores the event as a stale duplicate.
+  I20  A new gesture during ARMED or DRAGGING supersedes: the old session
+       is recovered pre-stack and fully released BEFORE the new one arms,
+       and only the new session may thereafter mutate transforms, stacks,
+       scroll or pane ownership.
 
 4.1  WHY I2 + I8 WERE NOT SUFFICIENT
      The .179+.194 implementation removed the pane exactly once (I2 ok)
@@ -613,36 +712,42 @@ If the rewrite lands and the flash remains, it still succeeded.
   after device parity.
 
 =====================================================================
-8. ROUND 4 — WHAT CHANGED AND WHAT REMAINS
+8. SIGN-OFF STATE
 
-  All four required revisions from the round-3 review are applied:
-    1. abnormal-exit policy table + three verbs            §3.7, I18
-    2. I16 expanded to descriptor scenarios                §4.3
-    3. I17 split: reject active session / dispose orphan   I17
-    4. 1px Home scroll frozen for parity, not removed      §2.6.4, T12
+  Six review rounds. The architecture is settled; no further redesign is
+  expected. Draft 6 applies the last three control-flow corrections:
+    I11 uses an AUTHORITATIVE SETTLED DESCRIPTOR (it was unsatisfiable on
+        an abort as written)
+    gesture-ending inputs route by STATE, so a pre-drag cancel has a
+        defined outcome
+    a new gesture during ARMED/DRAGGING has an explicit supersession
+        policy, matching today's hard-reset parity
 
-  Reviewer answers adopted verbatim: overlay→overlay reachability is
-  established via openSub (§2.6.3); the overlay→browse hidden-host side
-  effect is preserved and encoded (§2.4, §3.3); the pill stays a mover
-  under a decorations category (§3.3); Browse reports semantic readiness
-  while Swipe owns the paint barrier (§3.5); known-red tests do not block
-  stage 2 (§7).
+  THREE THINGS THE IMPLEMENTER MUST KNOW:
 
-  TWO THINGS THE AUTHOR WANTS ON THE RECORD BEFORE CODING:
+  A. NOT EVERYTHING HERE IS PARITY. New policy, stated as such:
+       - the recovery table's pre/post-stack rules (today: undefined;
+         finalization has a try/finally for the row hold and nothing else)
+       - restoring the starting scroll when a gesture is superseded
+         (today's hard reset does not, so a superseded browse→browse drag
+         can be left at the DESTINATION's scroll)
+     Everything else, including the 1px Home entry and the hidden-host
+     side effect, is preserved deliberately.
 
-  A. Rows 4-7 of §3.7 are NEW POLICY, not preserved behaviour. Today
-     lease-invalidation, destination-gone and both finalization-failure
-     phases are undefined — there is a try/finally for the row hold and
-     nothing else. Writing them down is the point, but it means the
-     extraction is NOT purely behaviour-preserving in those four rows.
-     Every other row, and every normal path, is parity.
+  B. THE MODEL IN §2 WAS WRONG THREE TIMES BEFORE IT WAS RIGHT. The pane
+     inventory was wrong in drafts 1 and 2; the iOS-26 label on the 1px
+     scroll was wrong in drafts 2 and 3; touchcancel routing contradicted
+     itself in draft 4; I11 was unsatisfiable through draft 5. Every one
+     was caught by review, none by the author, and every one concerned code
+     the author had already read. Treat §2 as load-bearing but not
+     self-evidently correct: stage 2 exists to check it against the running
+     implementation before anything is extracted.
 
-  B. Three drafts of this document each contained at least one confident
-     factual error about code the author had already read: the pane
-     inventory (twice), and the iOS-26 label on the 1px scroll. All three
-     were caught by review, none by the author. That is the same failure
-     mode as the .177-.213 cycle, reproduced inside the planning document,
-     and it is the reason stage 2 exists in the form it does — tests
-     against the CURRENT implementation, before any extraction, so the
-     model is checked against reality rather than against the author's
-     reading of it.
+  C. DERIVE, DO NOT READ. The transition inventory must be GENERATED from
+     the branch conditions and diffed in CI, never hand-maintained in
+     prose. Reading produced two wrong inventories; a ten-line script
+     produced the right one in seconds. The same discipline applies to the
+     screen registry (from Nav.SETTINGS_SUBS) and the descriptor scenarios.
+     A first gate of this kind shipped in build .214
+     (test/harness-globals.test.js) and caught all three historical
+     harness-global defects plus two mistakes in its own first draft.
