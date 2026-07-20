@@ -542,7 +542,9 @@
           m.el.style.transition = '';
           // LAYER PROBE (.195) — see nav.js resetSwipeStyles. Keep the in-flow views'
           // compositing layer alive rather than demoting it at the end of the gesture.
-          m.el.style.transform = (m.el.id === 'home' || m.el.id === 'browse') ? 'translateZ(0)' : '';
+          // #browse only — an inline transform on #home overrides .parked's own
+          // transform and leaves parked Home visible over the active view.
+          m.el.style.transform = m.el.id === 'browse' ? 'translateZ(0)' : '';
           m.el.style.willChange = '';
         }
         if (commit) {

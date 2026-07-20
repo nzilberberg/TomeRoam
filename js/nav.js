@@ -118,7 +118,11 @@ const Nav = (() => {
       // NOT a fix: app.js:364 warns a permanently promoted in-flow view can nudge
       // the iOS fixed navbar. If the flash stops, the diagnosis is confirmed and we
       // decide properly; if the navbar shifts, that is the trade showing itself.
-      el.style.transform = KEEP_LAYER && (el.id === 'home' || el.id === 'browse') ? 'translateZ(0)' : '';
+      // #browse ONLY. NEVER #home: #home.parked positions itself with a STYLESHEET
+      // transform (translateX(-101vw)) and an inline transform overrides it, so parked
+      // Home stops being moved off-screen and renders on top of the active view. That
+      // is exactly what this probe did on its first outing.
+      el.style.transform = KEEP_LAYER && el.id === 'browse' ? 'translateZ(0)' : '';
       el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = '';
     }
   }
