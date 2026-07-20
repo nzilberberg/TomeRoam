@@ -99,32 +99,12 @@ const Nav = (() => {
   // swipe that gets interrupted mid-flight can never leave an element stuck
   // offscreen/half-transformed and corrupt later swipes (the "erratic after a
   // while" bug). Safe because applyScreen is NEVER called during an active drag.
-  // Single switch for the .195 layer probe — flip to false to restore the previous
-  // behaviour exactly (transform cleared to none, layer demoted).
-  const KEEP_LAYER = true;
   function resetSwipeStyles(keepGhosts) {
     if (!keepGhosts) document.querySelectorAll('.nav-ghost').forEach((n) => n.remove());
     document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone
     const els = ['home', 'browse', 'options', 'nowplaying', ...SETTINGS_SUBS].map((id) => d.byId(id));
     els.push(document.querySelector('#navbar .np-actions'));
-    for (const el of els) if (el) {
-      // LAYER PROBE (.195). A swipe puts a transform on the real in-flow view,
-      // which promotes it to its own compositing layer; clearing that transform to
-      // `none` DEMOTES it, and on iOS the whole view repaints — text included. That
-      // is the one explanation left for the divider letters flashing on an aborted
-      // swipe, since the DOM is provably untouched (ROWS KEPT 68/68, src unchanged,
-      // zero mutations) and a letterhead is a plain text div with nothing to reload.
-      // Parking the transform at translateZ(0) keeps the layer alive instead.
-      // NOT a fix: app.js:364 warns a permanently promoted in-flow view can nudge
-      // the iOS fixed navbar. If the flash stops, the diagnosis is confirmed and we
-      // decide properly; if the navbar shifts, that is the trade showing itself.
-      // #browse ONLY. NEVER #home: #home.parked positions itself with a STYLESHEET
-      // transform (translateX(-101vw)) and an inline transform overrides it, so parked
-      // Home stops being moved off-screen and renders on top of the active view. That
-      // is exactly what this probe did on its first outing.
-      el.style.transform = KEEP_LAYER && el.id === 'browse' ? 'translateZ(0)' : '';
-      el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = '';
-    }
+    for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }
   }
 
   // Render a screen descriptor.
