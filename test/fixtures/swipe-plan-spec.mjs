@@ -68,6 +68,52 @@ export const NP_DECORATION = {
   destination: { kind: 'now-playing-pill', role: 'mover', base: 'incoming' },
 };
 
+// DESCRIPTOR SCENARIOS — I16 / §4.3: the plan is proven over DESCRIPTOR scenarios, not
+// merely screen-NAME pairs. Two registry entries are PARAMETERIZED (authorBooks carries
+// an `author`, files carries a `book`; browse.js:22-23). The screen-name matrix above
+// cannot express descriptor identity, so these cover it explicitly.
+//
+// CONSTRUCTION-LEVEL note (stage 4): descriptor identity changes STACK EFFECTS (navTo
+// PUSHES a parameterized descriptor, REPLACES a bare one — app.js:141), which is
+// FINALIZATION and lands in stage 6. At the CONSTRUCTION level proven here, every
+// well-formed browse descriptor — identical, same-identity, or different-identity —
+// yields the same browse->browse construction plan. What stage 4 owes is that each
+// descriptor scenario either YIELDS that plan or is REJECTED with a named reason.
+//
+// SAME-DESTINATION is documented IMPOSSIBLE-BEFORE-THE-PLANNER (the §4.3 option), not
+// given a production branch: navTo REPLACES the stack top for a bare same-`v` descriptor
+// (app.js:141: `cur.v === desc.v && !desc.author && !desc.book`), so the nav stack can
+// never hold two adjacent bare same-`v` entries and the gesture's dest (navStack[-2] /
+// fwdStack top / files) is never the bare source. A production throw for it would be an
+// UNREACHABLE guard — the dead-code pattern this project forbids (the stage-3 review
+// removed such guards). The screen-name matrix documents it by skipping `f.v === t.v`.
+// A same-IDENTITY parameterized pair (authorBooks(A)->authorBooks(A)) IS reachable
+// (navTo pushes it) and IS a valid transition, so it yields a plan — it is NOT this case.
+const AUTHOR_A = { ratingKey: 'A', title: 'Author A' };
+const AUTHOR_B = { ratingKey: 'B', title: 'Author B' };
+const BOOK_A = { ratingKey: 'A', title: 'Book A' };
+const BOOK_B = { ratingKey: 'B', title: 'Book B' };
+const BROWSE_PLAN = { outgoing: 'app-ghost', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] };
+
+export const DESCRIPTOR_SCENARIOS = [
+  { name: 'different identity: authorBooks(A) -> authorBooks(B) is a browse->browse plan',
+    input: { from: { v: 'authorBooks', author: AUTHOR_A }, to: { v: 'authorBooks', author: AUTHOR_B } },
+    expectedConstruction: BROWSE_PLAN },
+  { name: 'different identity: files(A) -> files(B) is a browse->browse plan',
+    input: { from: { v: 'files', book: BOOK_A }, to: { v: 'files', book: BOOK_B } },
+    expectedConstruction: BROWSE_PLAN },
+  { name: 'same identity: authorBooks(A) -> authorBooks(A) is reachable (navTo pushes) and yields a plan',
+    input: { from: { v: 'authorBooks', author: AUTHOR_A }, to: { v: 'authorBooks', author: AUTHOR_A } },
+    expectedConstruction: BROWSE_PLAN },
+  { name: 'cross-identity: authorBooks(A) -> files(B) is a browse->browse plan',
+    input: { from: { v: 'authorBooks', author: AUTHOR_A }, to: { v: 'files', book: BOOK_B } },
+    expectedConstruction: BROWSE_PLAN },
+  { name: 'malformed source: authorBooks() with no author is rejected, never planned',
+    input: { from: { v: 'authorBooks' }, to: { v: 'books' } }, throws: true },
+  { name: 'malformed destination: files() with no book is rejected, never planned',
+    input: { from: { v: 'books' }, to: { v: 'files' } }, throws: true },
+];
+
 // Named, human-readable modifier cases. The two NP cases are also covered exhaustively
 // by the per-pair proof (via NP_DECORATION); kept here as readable examples and for the
 // REJECTION contract: a malformed/unknown descriptor must throw, never plan.

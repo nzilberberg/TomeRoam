@@ -157,3 +157,66 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   here; the memory hub points here; `project-hub-maintenance` was updated so the OPEN list is
   canonical on the board, not duplicated in the hub. Durable process lessons and deep per-bug
   sagas stay in memory (the board points to them) — 2026-07-20.
+
+- The frozen swipe model is a THREE-LAYER oracle (stage 4), superseding the fingerprint-pinned
+  app.js branch MIRROR: an independent hand-written contract (`test/fixtures/swipe-plan-spec.mjs`,
+  DATA) → production (`js/swipe.js`, `classifyTransition` + `constructionPlanFor`) → tests compare
+  real production output against the contract exhaustively. The old scheme reimplemented start()'s
+  branches in the generator and a hash proved the two copies had not drifted — "the one weak link"
+  (two copies a pin can only prove EQUAL, never CORRECT). Now there is one decision and one contract;
+  the generator RENDERS the contract and reimplements nothing, so there is nothing to fingerprint.
+  The app.js branch-fingerprint mirror is RETIRED; the navTo / nav-relation / gesture-end /
+  supersession fingerprint pins for OTHER app.js regions stay. Recorded now (owed from .227) —
+  2026-07-21.
+
+- Stage 4 ships the CONSTRUCTION subset of the plan-of-record §3.3 `planFor()` under the name
+  `constructionPlanFor()` — `{ outgoing, incoming, renderDestination, decorations }`, every field
+  consumed by `start()` today. The FINALIZATION half of §3.3 (`commit`/`abort`/`scroll`/
+  `stackEffect`/`paneRemovalPolicy`) is deferred to stage 6, which adds `finalizationPlanFor()` and
+  composes the rich §3.3 `planFor()` from both halves. This is a deliberate phase-split of §3.3/§7.4,
+  driven by the project's no-dead-fields rule (a finalization field with no consumer would be dead
+  until stage 6). Reconciles the .227 review finding F2 (the split had been recorded only in a commit
+  message, which the standards do not treat as the record) — 2026-07-21.
+
+- `classifyTransition()` ships WHOLE per §3.3 — `{ fromKind, toKind, sourceHost, destinationHost,
+  sameBrowseHost, decorations }` — NOT subset like `planFor()`. Reason: §3.3 defines it as THE ONE
+  normalization boundary whose fields "cannot disagree"; it is an atomic contract object, and its
+  `sourceHost`/`destinationHost`/`sameBrowseHost` are §3.3-specified output asserted by the boundary
+  test (`test/swipe-transition.test.js`) and consumed by stage-6 finalization (`sameBrowseHost` drives
+  the browse→browse abort re-render). They are therefore plan-mandated, tested, boundary output — not
+  dead fields. This resolves the .227 review finding F8: the commit's "no dead fields" rationale is
+  correctly scoped to `planFor()`'s DEFERRED finalization fields, not to the whole `classifyTransition`
+  boundary, which ships entire — 2026-07-21.
+
+- A SAME-DESTINATION swipe (a bare same-`v` source/destination pair, e.g. books→books) is documented
+  IMPOSSIBLE-BEFORE-THE-PLANNER, not given a production branch (the §4.3 option). `navTo` (app.js:141)
+  REPLACES the stack top for a bare same-`v` descriptor, so the nav stack never holds two adjacent bare
+  same-`v` entries and the gesture's destination (navStack[-2] / fwdStack top / files) is never the bare
+  source. A production throw would be an UNREACHABLE guard — the dead-code pattern this project forbids.
+  A same-IDENTITY parameterized pair (authorBooks(A)→authorBooks(A)) IS reachable (navTo pushes it) and
+  IS a valid browse→browse transition, so it yields a plan — it is not this case. Reconciles .227 review
+  finding F4's same-destination half — 2026-07-21.
+
+- A MALFORMED parameterized descriptor (a parameterized name — authorBooks/files — missing its required
+  payload: author/book) is REJECTED by `classifyTransition` with a named reason, never planned (plan
+  §4.3, I16). This is the normalization boundary's well-formedness contract, exercised directly by test
+  even though production never builds such a descriptor — distinct from an unreachable stateful guard.
+  The stage-4 structural proof now feeds WELL-FORMED descriptors (a representative payload attached to
+  the parameterized registry names) so the "screen-name not descriptor" gap the review named (F4) is
+  closed. Implemented in build .228 — 2026-07-21.
+
+- The .227 stage-4 code review (`Claude/Poirot/14257f2-swipe-stage4-classify-construct.md`) is closed.
+  Fixed in build .228 (each red-first + mutation-verified): F1 (a harness test proves `start()` builds
+  the NP pill mover from `plan.decorations`), F3+O1 (the classification boundary and the plan are
+  DEEP-frozen so a consumer's push cannot corrupt the shared decorations), F4 (the oracle covers §4.3
+  descriptor scenarios — identity-varying yields a plan, same-destination is documented impossible,
+  malformed is rejected), F5 (malformed-payload rejection), F6 (`constructionPlanFor` throws on an
+  unhandled source kind, not only destination), F7 (the test's plan projection now asserts EXACTLY the
+  four contract keys instead of whitelisting them, so an added/dead field reddens). F2 and F8 filed as
+  records above; no code deferred from this review — 2026-07-21.
+
+- Owed to stage 6 (from the .227 review's process note, recorded now so it is not lost): when the settle
+  requestAnimationFrame, the settle/reveal timers, or the transitionend listener are cancelled OR fire,
+  NULL their stored session handles (`cur.settleFrame = null`, etc.) so the session object describes LIVE
+  ownership rather than stale numeric handles. Not a .228 blocker — it is part of the stage-6
+  finalization-centralization work — 2026-07-21.

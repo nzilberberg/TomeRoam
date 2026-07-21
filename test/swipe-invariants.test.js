@@ -94,6 +94,39 @@ test('WIRING — an overlay-source back-swipe moves the real overlay and builds 
   } finally { h.dispose(); }
 });
 
+// ── WIRING (stage 4) — start() consumes the construction plan's DECORATIONS ─────────
+// swipe-transition.test.js proves the DECISION (js/swipe.js: an NP endpoint puts a
+// now-playing-pill mover on the plan, based at the outgoing slot when NP is the source).
+// This proves start() actually CONSUMES plan.decorations: it drives a real NP-source
+// back-swipe and asserts a .np-pill-float mover clone gets built. A mutation that ignores
+// plan.decorations (drops start()'s decorations loop, js/app.js) leaves NO pill and this
+// reddens — the same wiring-seam blind spot the OUTGOING test closed, left open for the
+// decoration seam (review of .227, F1). Without this, a stage-5 miswire of npPillClone()
+// ships green and is found only on device.
+const npFloats = (h) => h.document.querySelectorAll('.np-pill-float').length;
+
+test('WIRING — an NP-source back-swipe builds the Now Playing pill mover from plan.decorations', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await settle(h);
+    const cover = h.document.querySelector('[data-book="bookA"] .covertap');
+    assert.ok(cover, 'fixture sanity: a book tile is present to start playback from');
+    cover.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await settle(h);                          // book is playing → ctx is set
+    h.tap('#player');                         // the mini-player opens Now Playing (needs ctx)
+    await settle(h);                          // navStack top is now 'nowplaying'
+    assert.equal(npFloats(h), 0, 'no pill clone exists before the swipe');
+    h.touch.start(10, 300, h.$('nowplaying')); // left edge, on the NP overlay → back-swipe
+    h.touch.move(80, 302);                     // past the 8px lock, horizontal → start()
+    assert.equal(starts(h).length, 1, 'the NP-source back-swipe must go live');
+    assert.equal(npFloats(h), 1, 'start() must build the NP pill mover the plan decorations call for');
+    h.touch.end(80, 302);
+    await settle(h);
+    await h.clock.advance(400);
+    await settle(h);
+  } finally { h.dispose(); }
+});
+
 // ── I19 — gesture-ending inputs route by STATE, not by input ────────────────────────
 // Frozen model §4: ARMED finishes with NO navigation; DRAGGING takes the ordinary
 // travel+velocity decision (so touchcancel CAN commit); SETTLING or later ignores the

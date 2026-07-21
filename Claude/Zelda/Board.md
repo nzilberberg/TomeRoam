@@ -24,15 +24,16 @@ session. ⚠️ A new external review does NOT silently supersede this hold — 
 conflicts with it, ASK which wins; don't resolve toward coding because coding is the available move.
 
 ## ⛔ Active work — swipe/reveal rewrite (staged, review-per-stage)
-Stage 4 shipped + pushed, **awaiting the between-stages external review**; do NOT start stage 5
-without the user's go. Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the stages-gated-by-
-review policy → DecisionLog. **The headline flash bug is STILL OPEN** — depth, dead-ends, and the
-8 environment traps → `[[tomeroam-swipe-repaint-saga]]` (READ BEFORE TOUCHING THE SWIPE /
-VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is still live in `css/app.css` —
-remove once background movement is confirmed fixed. **Two decisions still owed to DecisionLog**
-(stage-4 scope: three-layer oracle / construction-only planFor / mirror retirement; and the
-stage-6 cleanup "null the stored session handles when timers cancel or fire") — content is in the
-swipe session's hub notes; the swipe session files them.
+Stage 4's between-stages review is **CLOSED** — the `.227` Poirot casebook
+(`Claude/Poirot/14257f2-swipe-stage4-classify-construct.md`) was processed in build **`.228`**:
+findings F1/F3/F4/F5/F6/F7 fixed (each red-first + mutation-verified), F2/F8 filed as records,
+nothing deferred. Disposition + the stage-4 scope decisions (three-layer oracle, construction-only
+`planFor`, mirror retirement) and the stage-6 cleanup debt are now all in DecisionLog. **Do NOT
+start stage 5 without the user's go.** Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the
+stages-gated-by-review policy → DecisionLog. **The headline flash bug is STILL OPEN** — depth,
+dead-ends, and the 8 environment traps → `[[tomeroam-swipe-repaint-saga]]` (READ BEFORE TOUCHING THE
+SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is still live in `css/app.css`
+— remove once background movement is confirmed fixed.
 
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |

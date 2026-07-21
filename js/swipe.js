@@ -43,7 +43,23 @@ const Swipe = (() => {
     throw new Error('Swipe: unknown screen "' + v + '" — not home, browse-family or an overlay');
   }
 
+  const KINDS = ['home', 'browse', 'overlay'];
   const HOST = { home: '#home', browse: '#browse', overlay: 'overlay' };
+
+  // The two PARAMETERIZED descriptors carry a required payload (browse.js:22-23 keys
+  // them by it): authorBooks needs `author`, files needs `book`. A descriptor whose
+  // name is parameterized but whose payload is missing is MALFORMED and is rejected
+  // here with a named reason, never silently planned (plan §4.3, I16). This is the
+  // normalization boundary's WELL-FORMEDNESS check — NOT the stack-effect USE of the
+  // payload (push vs replace), which joins the signature in stage 6.
+  const PARAM_REQUIRED = { authorBooks: 'author', files: 'book' };
+  function requirePayload(d, role) {
+    const key = PARAM_REQUIRED[d.v];
+    if (key && d[key] == null) {
+      throw new Error('Swipe: malformed ' + role + ' descriptor "' + d.v
+        + '" — missing required "' + key + '"');
+    }
+  }
 
   // classifyTransition — THE ONE NORMALIZATION BOUNDARY (plan §3.3). Raw descriptors in,
   // derived kinds/hosts/decorations out. Stage 4 reads only { v } from each descriptor
@@ -54,6 +70,8 @@ const Swipe = (() => {
   function classifyTransition({ from, to }) {
     const fromKind = kindOf(from.v);
     const toKind = kindOf(to.v);
+    requirePayload(from, 'source');
+    requirePayload(to, 'destination');
     // The Now Playing pill is cloned when NP is EITHER endpoint (app.js start(): the
     // fromV and toV nowplaying branches). It is a mover with the same lifetime as
     // outgoing/incoming — based at the outgoing slot when NP is the source, the incoming
@@ -62,13 +80,19 @@ const Swipe = (() => {
     let decorations = [];
     if (from.v === 'nowplaying') decorations = [{ kind: 'now-playing-pill', role: 'mover', base: 'outgoing' }];
     else if (to.v === 'nowplaying') decorations = [{ kind: 'now-playing-pill', role: 'mover', base: 'incoming' }];
-    return {
+    // Freeze the boundary DEEP (each decoration, the array, the object). The plan calls
+    // this "THE ONE NORMALIZATION BOUNDARY" whose fields "cannot disagree"; a shallow
+    // freeze would let a consumer push onto or edit a decoration and corrupt the shared
+    // classification (and, since constructionPlanFor passes the SAME array through, the
+    // plan too). A frozen array here makes the plan's decorations frozen for free.
+    decorations = Object.freeze(decorations.map((d) => Object.freeze(d)));
+    return Object.freeze({
       fromKind, toKind,
       sourceHost: HOST[fromKind],
       destinationHost: HOST[toKind],
       sameBrowseHost: fromKind === 'browse' && toKind === 'browse',
       decorations,
-    };
+    });
   }
 
   // constructionPlanFor — what start() must BUILD. Immutable. No default branch; an
@@ -86,6 +110,14 @@ const Swipe = (() => {
   //                                        Home snapshot needs no live render)
   //   decorations       the classification's decoration list, verbatim
   function constructionPlanFor(c) {
+    // No default branch on EITHER kind. The toKind else-throws below; the fromKind is
+    // read by the outgoing ternary, whose else would silently absorb a bad kind into
+    // 'real-source' — so validate it explicitly (plan §3.3: an unhandled classification
+    // THROWS, it does not default). Unreachable from classifyTransition (kindOf throws
+    // first); this is the pure function's own contract for a direct malformed call.
+    if (KINDS.indexOf(c.fromKind) === -1) {
+      throw new Error('Swipe.constructionPlanFor: unhandled source kind "' + c.fromKind + '"');
+    }
     const outgoing = c.fromKind === 'overlay' ? 'real-source'
       : (c.toKind === 'browse' ? 'app-ghost' : 'real-source');
     let incoming, renderDestination;
