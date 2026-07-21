@@ -10,10 +10,16 @@
 // a branch condition inside a fingerprinted region actually trips its gate. The .218
 // review asked for exactly that check and .219 missed it.
 //
-// This tool closes it the honest way: for each fingerprint, mutate a REAL branch
-// condition INSIDE its region and require the SPECIFIC gate test to fail (and, as a
-// negative control, require the behavioural swipe tests NOT to be the thing reporting
-// it — a fingerprint gate must catch a same-behaviour edit the behaviour tests cannot).
+// This tool closes it the honest way. For each fingerprint it does TWO things:
+//   (1) mutate a REAL branch condition inside its region and require the SPECIFIC gate
+//       test to go RED (keyed on a failing subtest whose title carries `mustSay`);
+//   (2) run the behavioural swipe suite UNDER THE SAME MUTATION as a negative control,
+//       and require it to stay GREEN. Each mutation here is an EQUIVALENT rewrite (or a
+//       log-string change), so if a behaviour test also caught it the mutation was not
+//       behaviour-neutral and the fingerprint's value is unproven — that is reported as
+//       a bad control, not glossed over. Both halves together prove the property that
+//       matters: the fingerprint gate catches same-behaviour source edits that no
+//       behavioural assertion can see.
 //
 //   node tools/source-gate-sweep.mjs
 //
@@ -65,7 +71,7 @@ const restore = () => { if (fs.existsSync(BAK)) { fs.copyFileSync(BAK, APP); fs.
 process.on('SIGINT', () => { restore(); process.exit(130); });
 
 const uncaught = [];
-const wrongGate = [];
+const notNeutral = [];
 try {
   for (const e of ENTRIES) {
     if (!fs.existsSync(BAK)) fs.copyFileSync(APP, BAK);
@@ -77,30 +83,49 @@ try {
       continue;
     }
     fs.writeFileSync(APP, pristine.replace(e.from, e.to));
-    const res = run(['--test', e.gate]);
+    // (1) THE FINGERPRINT GATE must go RED. Key on a FAILING (`not ok`) subtest, NOT on
+    // the mustSay string appearing anywhere in stdout: those phrases come from the test
+    // NAME / assertion message, which node prints on PASSING runs too — an early version
+    // used stdout.includes(mustSay) and would have reported "caught" for a no-op.
+    const gateRes = run(['--test', e.gate]);
+    const gateFails = (gateRes.stdout.match(/^not ok .*$/gm) || []).filter((l) => !/#\s*TODO/i.test(l));
+    // The failing subtest's NAME (the `not ok ... - <title>` line) must name the
+    // fingerprint concern. node prints the assertion body separately, so matching the
+    // `not ok` TITLE line — not the whole stdout — is what keeps a passing run from
+    // counting. mustSay is the per-entry phrase that title carries.
+    const caught = gateFails.some((l) => l.includes(e.mustSay));
+
+    // (2) THE BEHAVIOURAL NEGATIVE CONTROL. Each mutation here is meant to be an
+    // EQUIVALENT rewrite (or a log-string change), so it must be caught by the
+    // fingerprint and NOT by any behavioural assertion — that is what proves the
+    // fingerprint is load-bearing rather than redundant with a behaviour test. Run the
+    // behavioural swipe suite under the SAME mutation and require it to stay green
+    // (todos excepted). If a swipe test goes red, the mutation was not behaviour-neutral
+    // and the entry is a bad control — report it as such rather than quietly claiming
+    // the stronger property.
+    const behRes = run(['--test', 'test/swipe-invariants.test.js', 'test/swipe-gesture.test.js']);
+    const behFails = (behRes.stdout.match(/^not ok .*$/gm) || []).filter((l) => !/#\s*TODO/i.test(l));
     restore();
-    // ⚠️ MUST key on a FAILING (`not ok`) subtest, NOT on the mustSay string appearing
-    // anywhere in stdout. `mustSay` phrases are drawn from the test NAME / assertion
-    // message, and node prints those on PASSING runs too — an early version of this
-    // tool used stdout.includes(mustSay) and would have reported "caught" for a no-op
-    // mutation. The property under test is that the fingerprint gate goes RED, so only
-    // a `not ok` line naming this gate's fingerprint concern counts.
-    const failedLines = (res.stdout.match(/^not ok .*$/gm) || []).filter((l) => !/#\s*TODO/i.test(l));
-    // Both gates phrase their fingerprint failure with "fingerprint" or "mirror"; the
-    // subtest title carries it, so a `not ok` line for that subtest is the signal.
-    const caught = failedLines.some((l) => /fingerprint|mirror/i.test(l));
+
     if (!caught) {
       console.log(`UNCAUGHT — ${e.region}: ${e.gate} did not go RED on a fingerprint subtest`
-        + ` (failed: ${failedLines.map((l) => l.replace(/^not ok \d+ - /, '')).join('; ') || 'none'})`);
+        + ` (failed: ${gateFails.map((l) => l.replace(/^not ok \d+ - /, '')).join('; ') || 'none'})`);
       uncaught.push(e.region);
+    } else if (behFails.length) {
+      console.log(`NOT BEHAVIOUR-NEUTRAL — ${e.region}: caught by the fingerprint AND by`
+        + ` ${behFails.length} behavioural test(s): `
+        + behFails.map((l) => l.replace(/^not ok \d+ - /, '')).join('; '));
+      notNeutral.push(e.region);
     } else {
-      console.log(`caught — ${e.region}: ${e.gate} fingerprint moved`);
+      console.log(`caught — ${e.region}: fingerprint RED, behaviour GREEN (control holds)`);
     }
   }
 } finally {
   restore();
 }
 
-console.log(`\nswept ${ENTRIES.length} source-gate mutations: ${uncaught.length} uncaught`);
-if (uncaught.length) console.log('UNCAUGHT:\n  ' + uncaught.join('\n  '));
-process.exit(uncaught.length ? 1 : 0);
+console.log(`\nswept ${ENTRIES.length} source-gate mutations: `
+  + `${uncaught.length} uncaught, ${notNeutral.length} not-behaviour-neutral`);
+if (uncaught.length) console.log('UNCAUGHT (fingerprint did not fire):\n  ' + uncaught.join('\n  '));
+if (notNeutral.length) console.log('NOT NEUTRAL (a behaviour test also caught it — bad control):\n  ' + notNeutral.join('\n  '));
+process.exit(uncaught.length || notNeutral.length ? 1 : 0);
