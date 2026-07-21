@@ -604,8 +604,12 @@
       //                    styles at the end, NEVER remove the node.
       //   owned-pane       a ghost/snapshot this gesture built — released (paint-gated,
       //                    stage 6/I10) or disposed. Was `remove: true`.
-      //   owned-decoration the NP pill clone — removed. (Its removal still routes through
-      //                    resetSwipeStyles today; consolidating that is stage 6.)
+      //   owned-decoration the NP pill clone. ⚠️ This tag is DECORATIVE today — NO
+      //                    consumer reads it (dropPanes/fadePanes/ghostVsReal/paneKindOf
+      //                    all key on 'owned-pane'); the pill is removed by
+      //                    resetSwipeStyles, not by a mover consumer. Kept, not dropped,
+      //                    so every mover stays typed for the stage-6 teardown
+      //                    consolidation (review of .223, finding 5).
       if (fromOv) {
         out = { el: overlayEl(fromV), base: 0, own: 'borrowed-real' };
         if (fromV === 'nowplaying') { document.body.classList.remove('np-locked'); pill = { el: npPillClone(), base: 0, own: 'owned-decoration' }; }
@@ -684,7 +688,12 @@
       const inTo = commit ? 0 : off;                            // committed: incoming lands; else it retreats
       const tr = 'transform .2s cubic-bezier(.2,.7,.2,1)';
       for (const m of cur.movers) m.el.style.transition = tr;
-      requestAnimationFrame(() => {
+      // The settle rAF is a session-owned RESOURCE, not fire-and-forget (review of .223,
+      // finding 1a): while the tab is hidden rAF pauses but the 340ms finalize timer
+      // still fires, so an uncancelled frame runs on foreground AFTER finalize cleared
+      // the transforms — writing a stale translateX onto the real Home/Browse/overlay
+      // (borrowed-real movers). Stored on the session and cancelled in finalize.
+      cur.settleFrame = requestAnimationFrame(() => {
         for (const m of cur.movers) m.el.style.transform = 'translateX(' + (m.base === 0 ? outTo : inTo) + 'px)';
       });
       let done = false;
@@ -1276,10 +1285,19 @@
       const endOwnership = () => { if (!revealPending) sessionDone(cur); };   // held paths end in drop()
       const finalize = () => {
         if (done) return; done = true;
+        // Cancel the paused settle rAF so it cannot write a stale transform on foreground
+        // after this finalize clears them (review of .223, finding 1a).
+        cancelAnimationFrame(cur.settleFrame);
         // Order matters: dropRowHold reads session.hold, so it must run BEFORE
-        // endOwnership clears the session. A throw in runFinalize still releases the
-        // hold and ends ownership (a stranded session is exactly what finding #2 forbids).
-        try { runFinalize(); } finally { dropRowHold(); endOwnership(); }
+        // endOwnership clears the session. `finishing` is restored ONLY on a throw
+        // (review of .223, finding 2): the no-pane path already cleared it in
+        // runFinalize, and the held path must KEEP it true until drop() — clearing it
+        // here would let a new gesture arm while the ghost still covers the view.
+        let ok = false;
+        try { runFinalize(); ok = true; } finally {
+          dropRowHold(); endOwnership();
+          if (!ok) finishing = false;   // a throw in applyScreen must never wedge every future swipe
+        }
       };
       const anchor = cur.movers[0] && cur.movers[0].el;
       if (anchor) anchor.addEventListener('transitionend', finalize, { once: true });

@@ -229,12 +229,18 @@ function boot(opts = {}) {
   // whether the wait was there or not. .198 needs exactly that state to be expressible
   // (the ghost must still be covering the view UNTIL the paint frame lands), so a test
   // written against the synchronous default could not fail and would prove nothing.
+  // Entries carry a monotonic id so cancelAnimationFrame can remove one after the queue
+  // has been spliced — a bare index would shift. cancel must be REAL, not a no-op: the
+  // .223 review's finding 1a is about a settle rAF that app.js now cancels in finalize;
+  // a no-op cancel would let the cancelled frame still fire and hide the fix.
   const rafQ = [];
+  let rafSeq = 0;
   const raf = opts.deferRaf
-    ? (fn) => { rafQ.push(fn); return rafQ.length; }
+    ? (fn) => { const id = ++rafSeq; rafQ.push({ id, fn }); return id; }
     : (fn) => { fn(0); return 0; };
+  const cancelRaf = (id) => { const i = rafQ.findIndex((e) => e.id === id); if (i >= 0) rafQ.splice(i, 1); };
   global.requestAnimationFrame = raf; window.requestAnimationFrame = raf;
-  global.cancelAnimationFrame = () => {}; window.cancelAnimationFrame = () => {};
+  global.cancelAnimationFrame = cancelRaf; window.cancelAnimationFrame = cancelRaf;
   // app.js reads MutationObserver as a BARE global, and node has none — so
   // `new MutationObserver(...)` threw a ReferenceError that app.js's own defensive
   // catch swallowed. The entire reveal-mutation diagnostic (app.js reportReveal, the
@@ -772,7 +778,7 @@ function boot(opts = {}) {
        */
       async frame() {
         const batch = rafQ.splice(0, rafQ.length);
-        for (const fn of batch) { try { fn(0); } catch { /* the app's business */ } }
+        for (const e of batch) { try { e.fn(0); } catch { /* the app's business */ } }
         for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
       },
     },

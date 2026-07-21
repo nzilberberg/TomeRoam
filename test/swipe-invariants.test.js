@@ -515,18 +515,88 @@ test('endpoint — a VERTICAL abandon leaves no active owner', async () => {
   } finally { h.dispose(); }
 });
 
-test('endpoint — a HELD reveal (commit→home) relinquishes only after the pane drops', async () => {
-  const h = boot({ fakeTimers: true });
+// ⚠️ REWORKED per the .223 review, finding 4. The prior version asserted only that the
+// owner was null 700ms later — but a mutation that clears the session AT FINALIZE
+// (ignoring revealPending) reaches that same end state and survived. So this pins the
+// INTERMEDIATE ownership: with deferRaf the held reveal's paint gate stays pending, so
+// after finalize the ghost is still covering and the owner MUST still be active; only
+// once the paint frames fire and drop() runs may it be null.
+test('endpoint — a HELD reveal keeps the owner THROUGH finalize, releasing it only at drop', async () => {
+  const h = boot({ fakeTimers: true, deferRaf: true });
   try {
     // Authors → Home is a commit→home held reveal (snapshot pane held until paintable).
     h.tap('.navbtn[data-nav="authors"]');
     await settle(h);
-    // Drag Authors → Home to commit.
     h.touch.start(10, 300, addRow(h));
     h.touch.move(80, 302);
     await realSleep(12); h.touch.move(600, 304); await realSleep(12); h.touch.end(600, 304);
-    await settle(h); await h.clock.advance(700); await settle(h);
-    assert.equal(activeSession(h), null,
-      'after the held reveal drops its pane, the owner must be gone (drop() ends it, not finalize)');
+    await settle(h);
+    await h.clock.advance(400);   // fire the 340ms finalize; the 600ms backstop stays unfired
+    await settle(h);
+    // finalize ran and STARTED the held reveal; the paint gate (double-rAF) is queued,
+    // not fired, so the pane still covers — the owner must survive.
+    assert.ok(activeSession(h),
+      `the owner must survive finalize while the reveal pane is held; got ${JSON.stringify(activeSession(h))}`);
+    // Fire the paint frames → drop() → owner ends.
+    for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();
+    await settle(h);
+    assert.equal(activeSession(h), null, 'once the held pane drops, the owner must be gone');
+  } finally { h.dispose(); }
+});
+
+// ── .223 review, finding 1a — the paused settle rAF must not write a stale transform ──
+// Hidden mid-settle, rAF pauses but the 340ms finalize timer still fires; finalize
+// clears the transforms and (the fix) cancels the settle rAF, so when the frame later
+// runs on foreground it must NOT re-shift the real #browse. Without the cancel the rAF
+// writes translateX(±innerWidth) onto the live Browse view — "the list shoved sideways".
+const nonZeroShift = (t) => /translateX\(\s*-?[1-9]/.test(t || '');   // translateX(0px)/'' do not match
+test('1a — a cancelled settle rAF cannot re-shift the real #browse after finalize', async () => {
+  const h = boot({ fakeTimers: true, deferRaf: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const row = addRow(h);
+    // Abort browse→browse: the incoming mover is the real #browse (borrowed-real).
+    h.touch.start(10, 300, row);
+    h.touch.move(80, 302); await realSleep(12);
+    h.touch.move(200, 304); await realSleep(12);
+    h.touch.move(30, 304); await realSleep(12);
+    h.touch.end(30, 304);
+    await h.clock.advance(400);   // finalize: cancels the settle rAF + clears transforms
+    assert.ok(!nonZeroShift(h.$('browse').style.transform),
+      `#browse must not carry a stale shift right after finalize; got "${h.$('browse').style.transform}"`);
+    for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();   // fire queued frames
+    assert.ok(!nonZeroShift(h.$('browse').style.transform),
+      `a cancelled settle rAF must not re-shift #browse on a later frame; got "${h.$('browse').style.transform}"`);
+  } finally { h.dispose(); }
+});
+
+// ── .223 review, finding 2 — a throw during finalize must not wedge future swipes ──────
+// runFinalize's applyScreen can throw; finishing was set false only at runFinalize's
+// last line, so a throw left it stuck true and begin()'s `if (finishing) return`
+// rejected every future swipe until reload. The fix restores finishing in the finally,
+// on a throw only.
+test('2 — a throw in finalize restores finishing, so the next swipe still engages', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    // A SYNC-throwing Browse.render makes runFinalize's applyScreen throw synchronously
+    // (showAppView calls Browse.render un-awaited; an async throw would be a rejected
+    // promise, not a sync throw, and would not exercise the finally).
+    const realRender = h.browse.render;
+    h.browse.render = () => { throw new Error('boom in render'); };
+    const swipeAbort = async (r) => {
+      h.touch.start(10, 300, r);
+      h.touch.move(80, 302); await realSleep(12);
+      h.touch.move(200, 304); await realSleep(12);
+      h.touch.move(30, 304); await realSleep(12);
+      h.touch.end(30, 304);
+      await settle(h); await h.clock.advance(400); await settle(h);
+    };
+    await swipeAbort(addRow(h));            // this finalize throws (swallowed by the timer runner)
+    h.browse.render = realRender;           // stop throwing
+    const before = starts(h).length;
+    await swipeAbort(addRow(h));            // a fresh swipe
+    assert.ok(starts(h).length > before,
+      'after a throw in finalize, a new swipe must engage — finishing must not stay stuck true');
   } finally { h.dispose(); }
 });

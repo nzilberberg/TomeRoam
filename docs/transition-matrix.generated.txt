@@ -2,7 +2,7 @@ SWIPE TRANSITION INVENTORY — GENERATED, DO NOT EDIT
 Regenerate: node tools/gen-transition-matrix.mjs
 Guarded by: test/transition-matrix.test.js
 
-app.js branch-region fingerprint: 55f4d0411e8e301f
+app.js branch-region fingerprint: 38f9eeabefc34a3f
   (if this changes, the predicate in the generator must be RE-VERIFIED
    against js/app.js before this file is trusted)
 

@@ -89,12 +89,18 @@ kept — the cross-session memory serves that view for the implementation sessio
   transitionend listener, global-session cleanup helpers) fall inside the stage-6 deferral
   and are NOT reopened — 2026-07-20.
 
-- OPEN: the uncancelled settle `requestAnimationFrame` can write a stale transform onto a
-  real Home/Browse/overlay element after finalize when the page was hidden during settle.
-  This is a same-gesture stale write; the stage-6 timer/listener deferral rationale (the
-  `finishing` flag blocks a superseding gesture) does not address it. Waiting on: a ruling
-  to accept the interim risk through stage 6 or pull the rAF cancellation forward —
-  2026-07-20.
+- The uncancelled settle `requestAnimationFrame` (a same-gesture stale write onto a real
+  Home/Browse/overlay element after finalize when the page was hidden during settle) is
+  PULLED FORWARD and fixed: the settle rAF is stored on the session and cancelled in
+  finalize (build .226). Ruling: it is not covered by the stage-6 deferral rationale and
+  it has a real user-facing failure mode, so it is closed now, not deferred — 2026-07-20.
+
+- The .223 review is closed. Fixed now (build .226): finding 2 (finishing restored on a
+  throw, throw-path only), finding 1a (settle rAF cancelled), finding 4 (the held-reveal
+  test pins intermediate ownership, not just the endpoint), finding 5 (the decorative
+  pill tag is noted in-code as unread). Deferred to stage 6, unchanged: the settle timer,
+  the transitionend listener (finding 1b), and the global-session cleanup helpers
+  (finding 3) — 2026-07-20.
 
 - Records division of responsibility: settled decisions and code reviews are canonical in
   this repo tree — decisions here, reviews in `Claude/Poirot/`, plans in the repo `PLAN-*.md`.

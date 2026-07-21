@@ -29,13 +29,12 @@ const GENERATED = path.join(ROOT, 'docs', 'transition-matrix.generated.txt');
 
 // The app.js branch region as it stood when the predicate was verified against it,
 // line by line, on 2026-07-20. Update ONLY together with a re-verification.
-// Re-verified 2026-07-20 for stage 3 (completed): start()'s movers gained typed
-// `own:` fields (replacing the `remove: true` convention). The generator mirrors the
-// branch CONDITIONS (fromOv/toOv/incomingBrowse), not the mover flags, and those
-// conditions are unchanged — `own: 'owned-pane'` expresses exactly the ghost/snapshot
-// distinction the predicate already computes. Pin moves, predicate stands.
-// Was '2cf44185fe7497bc'.
-const VERIFIED_FINGERPRINT = '55f4d0411e8e301f';
+// Re-verified 2026-07-20: the mover region's typed `own:` fields (stage 3) and now the
+// review-of-.223 finding-5 COMMENT clarifying the decorative pill tag. The generator
+// mirrors the branch CONDITIONS (fromOv/toOv/incomingBrowse), not comments or mover
+// flags, and those conditions are unchanged. Pin moves, predicate stands.
+// Was '2cf44185fe7497bc' (pre-stage-3), then '55f4d0411e8e301f' (before the finding-5 note).
+const VERIFIED_FINGERPRINT = '38f9eeabefc34a3f';
 
 const load = () => import(pathToFileURL(path.join(ROOT, 'tools', 'gen-transition-matrix.mjs')).href);
 const lf = (s) => s.replace(/\r\n/g, '\n');

@@ -163,10 +163,22 @@ const MUTATIONS = [
     from: 'releaseGesture(); sessionDone(d); d = null; return;',
     to:   'releaseGesture(); d = null; return;' },
   { name: 'stage3: finalize does not end ownership (-> endpoint completed-and-gone test)',
-    from: 'try { runFinalize(); } finally { dropRowHold(); endOwnership(); }',
-    to:   'try { runFinalize(); } finally { dropRowHold(); }' },
+    // Re-anchored: finding 2's throw-restore turned the finally into a block; the
+    // ownership end is now this line.
+    from: 'dropRowHold(); endOwnership();',
+    to:   'dropRowHold();' },
   { name: 'stage3: held reveal drop does not end ownership (-> endpoint held-reveal test)',
     from: DROP_SESSIONDONE_FROM, to: DROP_SESSIONDONE_TO },
+  // ── .223 review fixes (sanctioned: findings 1a, 2, and 4's stronger test) ──────
+  { name: 'r223 1a: settle rAF not cancelled → stale transform on real #browse (-> 1a test)',
+    from: 'cancelAnimationFrame(cur.settleFrame);',
+    to:   '/* mutated: settle rAF left uncancelled */' },
+  { name: 'r223 2: finishing not restored on a throw → swipe wedge (-> throw-in-finalize test)',
+    from: 'if (!ok) finishing = false;   // a throw in applyScreen must never wedge every future swipe',
+    to:   'if (false) finishing = false;' },
+  { name: 'r223 4: endOwnership clears at finalize, ignoring revealPending (-> held-reveal intermediate-ownership test)',
+    from: 'const endOwnership = () => { if (!revealPending) sessionDone(cur); };   // held paths end in drop()',
+    to:   'const endOwnership = () => { sessionDone(cur); };' },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
