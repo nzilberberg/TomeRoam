@@ -256,6 +256,21 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   family list (inputs derived, expectations hand-authored per §16). These gates were built at the
   maintainer's direction after the tooling was flagged-and-ignored across three builds — 2026-07-21.
 
+- The Engineering Contract is replaced by the DURABLE ENGINEERING CONTRACT v2
+  (`Claude/EngineeringContract.md`) — a three-layer living system: CORE (architecture-
+  independent §4 rules), SUBSYSTEM CONTRACTS (`Claude/Subsystems/<name>.md`, the §5 template),
+  and the DECISION LEDGER (this file). Precedence when sources conflict: approved plan > active
+  ledger > verified production (for parity claims) > subsystem contract > core > history. The
+  first subsystem addendum, `Claude/Subsystems/swipe-reveal.md`, is authored; others are written
+  when their subsystem is next touched (§6 triggers). Newly MECHANIZED this build (.231): §4.9
+  (`test/no-silent-coverage-exit-gate.test.js` — the canonical `if (!x) return;` skip in a test
+  body; the mutation sweep is the semantic backstop) and §4.11 clone-before-freeze (the §14 gate
+  now asserts a contract function CLONES a caller-owned array rather than freezing it in place).
+  Still NOT gated, flagged honestly: §4.19 structured policy-ledger assertion (needs a machine-
+  readable ledger — the DecisionLog is prose); §3/§6/§7/§10 procedures; §8 report wording; §4.14
+  is enforced structurally (the generator renders the spec, never calls the planner) not by a
+  gate (the planner names appear in its doc-comments, so a text gate would false-positive) — 2026-07-21.
+
 - Owed to stage 6 (from the .227 review's process note, recorded now so it is not lost): when the settle
   requestAnimationFrame, the settle/reveal timers, or the transitionend listener are cancelled OR fire,
   NULL their stored session handles (`cur.settleFrame = null`, etc.) so the session object describes LIVE

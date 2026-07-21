@@ -14,17 +14,21 @@ const { ROOT } = require('./dom-fixture.js');
 
 const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
 
-// Each contract function: a hand-built input and the EXACT key set its output must carry.
+// Each contract function: a hand-built input (a FACTORY, so every run gets a fresh object
+// no prior run could have frozen), the EXACT key set its output must carry, and — where the
+// input carries a caller-owned array — the input key that must NOT be frozen in place
+// (clone-before-freeze, §4.11).
 const CONTRACT = {
   classifyTransition: {
-    input: { from: { v: 'nowplaying' }, to: { v: 'books' } },   // NP source => a decoration to freeze
+    input: () => ({ from: { v: 'nowplaying' }, to: { v: 'books' } }),   // NP source => a decoration to freeze
     keys: ['decorations', 'fromKind', 'toKind'],
   },
   constructionPlanFor: {
     // A HAND-CONSTRUCTED classification — NOT via classifyTransition — so the freeze is the
     // function's own (the gap .230 F-i closed), and the decorations array is caller-owned.
-    input: { fromKind: 'home', toKind: 'browse', decorations: [{ kind: 'now-playing-pill', role: 'mover', base: 'incoming' }] },
+    input: () => ({ fromKind: 'home', toKind: 'browse', decorations: [{ kind: 'now-playing-pill', role: 'mover', base: 'incoming' }] }),
     keys: ['decorations', 'incoming', 'outgoing', 'renderDestination'],
+    callerArray: 'decorations',   // must be CLONED, not frozen in place
   },
 };
 // Exports that are NOT contract-object factories, each with the reason it is exempt.
@@ -55,7 +59,8 @@ for (const [name, spec] of Object.entries(CONTRACT)) {
   test(`§14 — ${name}() is exact-keyed and deep-immutable on a direct call`, () => {
     const fn = Swipe[name];
     assert.equal(typeof fn, 'function', `${name} must be an exported function`);
-    const out = fn(spec.input);
+    const input = spec.input();
+    const out = fn(input);
 
     // (a) Exact keys — no missing, no dead/extra field.
     assert.deepEqual(Object.keys(out).sort(), [...spec.keys].sort(),
@@ -63,6 +68,13 @@ for (const [name, spec] of Object.entries(CONTRACT)) {
 
     // (b) Deep immutability — the whole reachable graph is frozen…
     assertDeepFrozen(out, `${name}()`);
+
+    // …and a caller-owned input array is CLONED, not frozen in place (§4.11): freezing the
+    // caller's array would mutate state the caller still owns.
+    if (spec.callerArray) {
+      assert.ok(!Object.isFrozen(input[spec.callerArray]),
+        `${name}() must CLONE the caller-owned "${spec.callerArray}" array before freezing, not freeze it in place`);
+    }
 
     // …and a push / nested write genuinely cannot take effect (not just isFrozen()).
     for (const k of Object.keys(out)) {

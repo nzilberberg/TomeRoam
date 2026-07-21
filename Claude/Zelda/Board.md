@@ -39,14 +39,17 @@ pass, mutations verified); W11 (O1, low) + W8 (stage-5 scope) stay OPEN. Disposi
 decisions + stage-6 cleanup debt are all in DecisionLog. **Do NOT start stage 5 without the user's
 go.**
 
-**Contract mechanization (.230, at the maintainer's direction):** the Engineering Contract's
-mechanizable sections are now GATES, not vigilance — item 11: the nine .228–.230 mutations registered
-in `tools/mutate.mjs` + the durable sweep (`node tools/mutation-sweep.mjs`) + the anchor gate; item 14:
-`test/contract-function-gate.test.js` (exported contract fns exact-keyed + deep-immutable on a direct
-call, new-export meta-check); item 15: `test/descriptor-coverage-gate.test.js` (all seven §15 cases
-tagged; scenarios generated per §22). Details in DecisionLog. ⚠️ These landed with .230, whose earlier
-commit had silently failed (`git commit` chained after a no-match `grep` in an `&&` sequence) and was
-falsely reported shipped — see [[git-commit-verify]]. Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the
+**Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
+`Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
+subsystem addendum; this DecisionLog is the Ledger. **Mechanized sections (gates, not vigilance):**
+§4.10 mutations registered in `tools/mutate.mjs` + `tools/mutation-sweep.mjs` + `test/mutation-
+anchors.test.js`; §4.11 `test/contract-function-gate.test.js` (exact-keyed, deep-immutable, clone-
+before-freeze, new-export meta-check); §4.9 `test/no-silent-coverage-exit-gate.test.js`; §4.14/§4.20
+`test/descriptor-coverage-gate.test.js` (all seven §15 cases; scenarios generated per §22). NOT yet
+gated (honest): §4.19 structured policy-ledger (needs a machine-readable ledger), §3/§6/§7/§10
+procedures, §8 report wording. ⚠️ The .230 batch landed only after its first commit silently failed
+(`git commit` chained after a no-match `grep` in `&&`) and was falsely reported shipped — see
+[[git-commit-verify]]. Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the
 stages-gated-by-review policy → DecisionLog. **The headline flash bug is STILL OPEN** — depth,
 dead-ends, and the 8 environment traps → `[[tomeroam-swipe-repaint-saga]]` (READ BEFORE TOUCHING THE
 SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is still live in `css/app.css`

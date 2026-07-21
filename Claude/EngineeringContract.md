@@ -1,239 +1,364 @@
-# TomeRoam Engineering Contract
+# TomeRoam Durable Engineering Contract
 
-Standing requirements for all TomeRoam implementation, testing, planning, and review
-work — not suggestions. Authored by the maintainer 2026-07-21. The goal is not merely to
-make a requested test pass; it is to avoid repeating the bug classes found during the
-`.90–.228` review cycle.
+Treat this as a living engineering system, not a fixed list of historical rules.
 
-This contract is a per-project standard layered on the global `StandardsDocument.md`. It
-is committed so a blind reviewer session and every future implementation session are
-governed by the same rules. Per this project's own hard-won lesson (`tomeroam-
-maintainability-gates`), a filed rule is only as strong as its loading/gating mechanism —
-mechanizable items below should be turned into gates, not trusted to memory.
+Its purpose is to preserve sound reasoning, ownership, testing, and review practices as
+TomeRoam's architecture grows or changes. Do not blindly apply a rule whose architectural
+assumptions are no longer true. Instead, identify the mismatch and update the appropriate
+contract layer before implementation.
 
----
+> **Where the three layers live in this repo** (see §1):
+> - **Core contract** — this file (§4 rules + the meta sections).
+> - **Subsystem contracts** — `Claude/Subsystems/<subsystem>.md` (addenda, §5 template).
+> - **Decision ledger** — `Claude/Decisions/DecisionLog.md` (the ledger, §1.C fields).
+>
+> **Mechanized rules (gates, not vigilance — the project's rules-vs-gates law):**
+> - §4.10 mutation verification → `tools/mutate.mjs` + `tools/mutation-sweep.mjs` + `test/mutation-anchors.test.js` (behavioral vs source-text sweeps separated via `SOURCE_TEXT_GATES`).
+> - §4.11 exact schema + deep immutability + clone-before-freeze + direct-call contract → `test/contract-function-gate.test.js`.
+> - §4.9 no silent coverage exits → `test/no-silent-coverage-exit-gate.test.js`.
+> - §4.14 / §4.20 descriptor-scenario coverage + generation → `test/descriptor-coverage-gate.test.js` (+ generated scenarios in `test/fixtures/swipe-plan-spec.mjs`).
+> - Build-stamp coherence → `test/build.test.js`; source-fingerprint pins → `test/transition-matrix.test.js`, `test/swipe-model.test.js`.
+> - **Not yet gated (process or needs design):** §4.19 structured policy-ledger assertion (needs a machine-readable ledger); §3/§6/§7/§10 procedures; §8 report-claim wording. Flagged honestly rather than claimed.
 
-## 1. Verify the real interface before designing a fake or fix
-Before changing a dependency, inspect its production signature and behavior. Record:
-sync vs async; whether it returns a value/promise/status/sentinel/nothing; whether it
-throws or converts failures to return values; whether completion can occur out of order;
-whether callbacks have side effects beyond their return value. Do not create a fake
-kinder or harsher than production. Prohibited: making a synchronous Presence method
-deferrable; making an adapter throw when it returns `0`/`null`; making `audio.play()`
-resolve immediately when the scenario depends on it staying pending; resolving a fake
-promise without reproducing the real completion side effect. When only one method is
-async, control that method only.
+======================================================================
+## 1. CONTRACT STRUCTURE
+======================================================================
 
-## 2. Trace the complete production path before modifying it
-For every requested behavior identify: the public entry point; the real production
-modules it calls; the resources it acquires; the state/identity that owns those
-resources; every async continuation; every cleanup path; every alternate entry point for
-the same action; the final externally observable state. Do not test an internal helper in
-place of the public action. Drive the real DOM event; invoke the actual registered Media
-Session handler; use the real stack/descriptor flow; use the real `app.js` coordination
-path.
+Maintain three separate layers.
 
-## 3. Distinguish identity, namespace, storage location, and ordering
-Never assume one identifier proves another. For every identifier used as a key, equality
-test, ownership claim, or ordering signal, document: who creates it; entropy/collision
-behavior; whether it survives reinstall/reload/recreation/migration/partial storage loss;
-whether it is globally unique, locally unique, or a namespace hint; whether it can
-regress/repeat/be reused; what happens if two entities share it. Specifics: `dev8` may be
-a namespace but is not proof of device identity; a Plex `ratingKey` identifies a current
-library object, not permanent content identity; object identity ≠ semantic descriptor
-identity; a timestamp is not a total order unless monotonicity is established across all
-writers; a board/rating key is a storage location, not necessarily the payload's
-identity; destructive actions must verify full identity, not a shortened namespace.
+### A. CORE ENGINEERING CONTRACT
 
-## 4. Use one global comparison rule everywhere records compete
-Centralize the comparator. The same rule must be used in live-board merging, replica
-adoption, archive/shard collapse, publication selection, reset arbitration, purge
-arbitration, and diagnostics that report the winner. No separate UI vs durability
-comparator. It must be observer-independent — never prefer "my" record differently per
-device. If two distinct same-origin writes can share a timestamp, add a real
-discriminator rather than relying on input order.
+Contains architecture-independent principles that should remain valid across: playback,
+navigation, synchronization, persistence, downloads, service workers, native wrappers,
+future subsystems, and future framework or platform changes.
 
-## 5. Separate wall-clock time from logical ordering
-If a value controls durable ordering, reset/purge floors, or LWW decisions, do not rely
-solely on a clock that can repeat or move backward. Use a logical or hybrid monotonic
-stamp that advances when the device: issues a new durable record; restores its own
-previous durable records; observes a newer foreign record; observes a reset; observes a
-purge; loads replica/shard state. A new local write must be greater than every relevant
-value the device has OBSERVED, not merely every value it previously issued.
+Examples: inspect the real interface before designing a fake; explicit resource ownership;
+stale-continuation protection; independent test oracles; truthful coverage claims;
+intermediate-state assertions; mutation verification; exact contract schemas; separation of
+identity, namespace, storage location, and ordering; parity versus policy classification.
 
-## 6. One owner must own every asynchronous resource
-A session/operation that acquires a resource retains its handle and retires it explicitly.
-Resources: event listeners; timers; animation frames; deferred promises/request tokens;
-panes and synthetic DOM nodes; borrowed real DOM nodes with temporary styles; Browse hold
-leases; transition listeners; retry/watchdog callbacks. Do not divide ownership between a
-session object, module-level booleans, closure-local timers, global cleanup functions,
-CSS classes, or unrelated module state. Cleanup functions accept the owner explicitly
-(`releaseGesture(session)`, `finishBrowseLease(session)`, `retireSettleResources(session)`).
-No stale callback may act through "whatever session is globally current."
+Core rules must not mention specific current implementation objects such as: Browse leases,
+swipe panes, `dev8`, Plex playlist boards, Media Session handlers, particular build stages,
+or specific screen names. Those belong in subsystem contracts.
 
-## 7. Distinguish borrowed and owned resources
-Every movable DOM resource declares ownership: `{ element, ownership: 'borrowed-real' |
-'owned-pane' | 'owned-decoration', role }`. Borrowed real nodes have temporary styles
-removed but are never deleted; owned decorations are removed; owned panes are released
-after readiness + the paint barrier, or disposed for a specifically allowed emergency
-reason. Never use one vague "dispose movers" operation.
+### B. SUBSYSTEM CONTRACTS
 
-## 8. Define the active-owner endpoint
-A session id is not enough — define exactly when the session stops owning live UI
-resources. ARMED end: after listeners released. Vertical abandonment: after listeners and
-acquired resources released. Commit/abort without a pane: after finalization completes.
-Held reveal: only after the pane is actually released. Emergency recovery: after every
-owned resource is disposed/invalidated. `activeSession !== null` must mean the session
-currently owns live resources. Do not retain completed sessions as the active owner for
-logging convenience.
+Each major subsystem has its own addendum describing its current architecture, invariants,
+identities, ownership, asynchronous boundaries, recovery rules, public entry points, and
+test strategy (examples: swipe and reveal; playback and Media Session; progress replication;
+presence; downloads; navigation; service worker and caching; Android wrapper).
 
-## 9. Guard every stale continuation by owner and phase
-Every async callback captures the operation/session identity and, before acting, verifies:
-the owner is still current; the operation is in a phase where the callback is legal; the
-resource has not been retired; finalization has not happened; it is not acting on a
-successor session. A numeric generation check is insufficient if a session can complete
-while remaining globally current. Tests must deliver stale callbacks after supersession,
-pause, book switch, source change, sign-out, finalization, reveal completion, and a
-successor session beginning.
+Subsystem rules may change when the architecture changes. They must be reviewed rather than
+silently carried forward.
 
-## 10. Test dangerous intermediate states, not only eventual outcomes
-An eventual green endpoint hides incorrect ownership/ordering. When a requirement says
-"until," "before," "after," "only once," or "while pending," assert both sides of the
-boundary. Examples: session stays active while the reveal pane remains; the pane remains
-through the paint barrier; the old Browse source is restored before the replacement
-gesture arms; the transition listener is removed when the fallback timer wins; an old
-animation frame cannot restore transforms after finalization; finalization runs once when
-both `transitionend` and timeout fire; the outgoing progress commit occurs exactly once
-before the incoming track becomes current. Do not name a test "only after" when it checks
-only the final state.
+### C. DECISION LEDGER
 
-## 11. Mutation verification must target the actual claim
-A green test proves little until a precise defect turns it red. For every important test,
-record the mutation, the exact expected failing test, and the detecting assertion.
-Mutation examples must include MISATTRIBUTION, not only omission. Weak: remove the session
-id from a log. Strong: log the successor session's id instead of the superseded one's.
-Weak: remove all listener cleanup. Strong: leave only the old target's move listener
-attached and prove it mutates the successor. Mutation tooling must preserve and rerun the
-evidence — manual mutation checks must not disappear into a commit message. Source-
-fingerprint mutations and behavioral mutations use separate sweeps so a source-text gate
-cannot falsely claim it detected runtime behavior.
+Contains temporary or product-specific decisions: known-red behavior; behavior intentionally
+preserved for parity; deliberate bug fixes inside an extraction; new recovery policy;
+temporary staged exceptions; deferred risks; migration decisions; rejected alternatives and
+why they were rejected.
 
-## 12. Test claims may not exceed what the test proves
-Before naming/documenting a test, ask: what exact counterexample would still pass?
-Overclaims to avoid: "registry is fully derived" when half is hand-maintained; "all
-transitions" when same-screen parameterized transitions are skipped; "deeply immutable"
-when only the outer object is frozen; "ordering proven" when audio and Presence use
-separate logs; "async refresh covered" when the test returns early if no request exists;
-"failure isolation covered" when the fake completion has no production side effect. Use
-narrower names when the proof is narrow.
+Ledger items must have stable IDs and must state: subsystem; decision; reason; status;
+introduced build or date; expected removal or review trigger; tests that enforce it.
 
-## 13. No silent early returns in coverage tests
-A test must not treat "the operation never happened" as success. Prohibited:
-`const op = findOperation(); if (!op) return;`. Required: `const op = findOperation();
-assert.ok(op, 'the production trigger must start this operation');`. A test that can pass
-without reaching its subject is worse than no test.
+Do not put temporary decisions into the permanent core contract.
 
-## 14. Exact schema checks for contract objects
-For plans, classifications, records, diagnostics, and state-machine outputs: assert exact
-keys; validate every enum; reject unknown values; reject missing required payloads; reject
-impossible combinations; deeply freeze immutable output; clone caller-owned arrays and
-objects before freezing. Do not use a projection helper that silently discards unexpected
-fields when the requirement is "no dead fields." Test direct calls to each exported
-function — one function's correctness must not compensate for another's incomplete
-contract.
+======================================================================
+## 2. PRECEDENCE AND CONFLICT HANDLING
+======================================================================
 
-## 15. Parameterized descriptors require semantic scenarios
-Do not reduce navigation coverage to screen names. Include: same type, different identity;
-same semantic identity with separately allocated objects; the identical descriptor object
-at both endpoints; malformed parameterized descriptors; missing identity payload; unknown
-screen type; no-op/same-destination behavior. Semantic equality must be explicit — do not
-accidentally use object reference equality.
+When instructions conflict, use this precedence:
 
-## 16. Keep the frozen oracle independent
-Production must not generate its own expected output. Three layers: (1) independent
-declarative scenario-and-expectation DATA; (2) production implementation; (3) tests and
-doc generators that compare/render the independent data. Do not reimplement production
-branching in the generator, call production `planFor()` to generate the frozen
-expectation, or make production consume the test expectation table. Share enums,
-registries, and validation schemas; do not share expected decisions. An intentional policy
-change requires BOTH a production change AND an explicit frozen-spec + policy-ledger
-change.
+1. The current explicit user-approved assignment or plan.
+2. The current active decision ledger.
+3. The verified current production interface and behavior, for claims of parity.
+4. The relevant subsystem contract.
+5. The core engineering contract.
+6. Historical examples, commit messages, and old review notes.
 
-## 17. Do not create dead fields for future stages
-Implement only fields consumed in the current stage. Staging: Stage 4 = construction
-fields only; Stage 5 = pane builders and typed mover resources; Stage 6 = finalization,
-commit/abort, scroll, recovery, reveal policy. Do not return the final rich object early
-merely because the plan eventually calls for it. When adding a field, identify its current
-production consumer and a test proving that consumer uses it.
+Production behavior does not automatically define desired policy. It is authoritative only
+when the work claims to preserve current behavior. If an approved plan intentionally changes
+production behavior, the approved plan wins and the difference must be recorded as new policy
+or a known-red repair.
 
-## 18. Avoid duplicate sources of truth
-Do not return both a cause and a separately stored derived answer unless both are
-independently necessary. Avoid: `clobbered` plus `abort.render`; raw descriptors plus
-caller-supplied source/destination hosts; timestamp winner plus a separately implemented
-diagnostic winner; resource ownership in both a session and module globals; `hasPane` plus
-outgoing/incoming pane kinds. Derive the convenience result at the use site.
+If any two sources still conflict: do not silently choose one; identify the exact conflict;
+state the consequences of each interpretation; request or make an explicit policy decision
+before implementation. Never resolve a contradiction merely by creating a vague "sanctioned
+exception."
 
-## 19. Separate normal release from emergency disposal
-Normal visual release honors under-view semantic readiness, the paint barrier, single
-ownership, and exact-once removal. Emergency disposal may bypass the paint barrier only for
-named reasons. A new gesture must not dispose a pane owned by an active SETTLING,
-FINALIZING, or REVEALING session. An orphan pane with no owner is a different condition.
+======================================================================
+## 3. START-OF-TASK PROCEDURE
+======================================================================
 
-## 20. Recovery must be phase-aware
-Once the navigation stack has changed, the stack is authoritative. One rule: pre-stack
-failure restores source and starting scroll; post-stack failure renders the current stack
-top and applies destination scroll policy. Apply consistently to lease invalidation,
-destination disappearance, finalization exceptions, supersession during finalization, and
-other failures crossing the authority boundary. Do not restore the source beneath a stack
-that already names the destination.
+Before changing code:
 
-## 21. Separate parity from new policy
-Classify every change as: behavior-preserving extraction; known-red repair; new recovery
-policy; or unrelated cleanup. Do not smuggle a bug fix into a parity refactor. Maintain a
-structured exact policy ledger and assert its full contents; adding/removing a new-policy
-item requires an explicit ledger change.
+1. Identify the subsystem or subsystems involved.
+2. Read the relevant subsystem contracts and active ledger entries.
+3. Inspect the real current production interfaces.
+4. Trace the complete public production path.
+5. State the exact stage or implementation slice being attempted.
+6. Identify which behavior is: parity; known-red repair; new policy; unrelated cleanup.
+7. Identify which contract fields will have real consumers in this slice.
+8. Identify every resource acquired and who owns it.
+9. Identify every asynchronous continuation and stale-completion risk.
+10. Identify the independent test oracle.
+11. Identify the exact mutations that should turn new tests red.
 
-## 22. Mechanical derivation beats confident reading
-Where inventories can be generated, generate them: registered screen types; settings
-sub-screens; descriptor scenarios; transition combinations; source append sites; required
-harness globals. Do not hand-maintain exhaustive prose lists. When full derivation is
-impossible, describe the mechanism honestly as "partly derived and partly pinned," and
-fingerprint the pinned sources.
+Do not begin implementation based only on old review summaries, comments, or architectural
+memory.
 
-## 23. Do not widen the scope in response to a finding
-Fix the violated invariant, not nearby architecture. Do not: run `sw.js` in Node merely
-because app integration needs SW failure coverage; make sync methods async to create race
-tests; redesign download storage keys merely to detect stale rating keys; widen a shard
-namespace when full-id validation can contain the risk; restore a hidden Browse host
-during abort as part of a behavior-preserving extraction. Record adjacent cleanup
-separately.
+======================================================================
+## 4. CORE ENGINEERING RULES
+======================================================================
 
-## 24. Staged extraction must preserve reviewable deltas
-Each stage has: a narrow production change; explicit fields newly consumed; unchanged
-legacy behavior outside the stage; stage-specific tests; mutation evidence; an honest
-completion statement. Do not call a stage complete when only its first bookkeeping slice
-has landed. Name partial owner stages honestly (e.g. "Stage 3a: session identity").
+### 4.1 VERIFY REAL INTERFACES
+Before designing a fake, test, or failure path, inspect the real production contract. Record:
+synchronous vs asynchronous; return values; thrown exceptions vs status/sentinel returns;
+callbacks and completion side effects; whether operations can complete out of order; whether
+cancellation exists; whether retry is internal or external. A fake must not be materially
+kinder or harsher than the real dependency. Do not: make synchronous methods asynchronous
+merely to create a race; make a status-returning method throw; make a genuinely asynchronous
+operation resolve immediately when pending behavior matters; settle a fake promise without
+performing the real completion side effect the test claims to cover.
 
-## 25. Before reporting completion
-Answer all of: (1) which exact public paths are exercised; (2) which dependencies remain
-fake; (3) which fake behaviors match the production interface; (4) which intermediate
-states are asserted; (5) which resources are owned and explicitly retired; (6) which stale
-callbacks were delivered after supersession; (7) which exact mutation turns each new test
-red; (8) which required scenarios remain missing; (9) which fields are present but not
-consumed; (10) which claims are narrower than the original assignment; (11) which behavior
-is parity, known-red repair, or new policy; (12) did the full suite, lint, typecheck,
-build coherence, behavioral mutation sweep, and source-gate sweep pass. Do not describe
-work as complete when any required item remains deferred. State the completed slice
-precisely.
+### 4.2 DRIVE REAL PUBLIC ENTRY POINTS
+Integration tests must use the real public path whenever the defect concerns wiring (click
+the real UI control; invoke the real captured Media Session handler; dispatch the real
+visibility event; use the real navigation action; trigger the real playback coordinator; use
+the real production module with controlled boundary dependencies). Do not call an internal
+invalidation helper in place of testing whether the public action invokes it.
 
----
+### 4.3 EXPLICIT OWNERSHIP
+Every asynchronous or temporary resource must have one explicit owner (listeners; timers;
+animation frames; transition callbacks; deferred requests; retries; watchdogs; panes;
+synthetic DOM nodes; temporary styles on borrowed real nodes; lifecycle leases; temporary
+storage transactions). The owner must store the resource handle and retire it explicitly.
+Cleanup functions should receive the owner (`retireTimers(session)`, `releaseListeners(session)`,
+`finishLease(session)`, `disposeOwnedNodes(session)`). Do not operate through "whatever object
+is currently global."
 
-## Required implementation-report format
-At the end of each build, report: exact stage and slice completed; files changed;
-production behavior changed; production behavior deliberately unchanged; contracts
-introduced or modified; resources moved under explicit ownership; public paths tested;
-intermediate states tested; mutations run and the test each triggered; known-red tests
-still open; deferred work and the stage where it belongs; full verification results; any
-assignment claim that was narrowed after inspecting the real code. The report must be
-auditable against the repository. Avoid "fully covered," "exhaustive," "deeply immutable,"
-or "complete owner" unless the tests establish those exact claims.
+### 4.4 BORROWED VERSUS OWNED RESOURCES
+Every resource that may be cleaned up must state whether it is borrowed, owned, shared, or
+externally managed. Borrowed real DOM nodes have temporary state removed but are not deleted.
+Owned synthetic nodes are removed or disposed. Shared resources require a defined lease or
+reference policy. Do not use a broad cleanup verb that can delete borrowed objects.
+
+### 4.5 OWNER ENDPOINT
+Define exactly when an operation or session stops being active. An active owner must mean it
+still controls live resources or externally visible state. Do not retain a completed owner
+merely for logging convenience. Diagnostics may retain an immutable ID or snapshot after
+ownership ends.
+
+### 4.6 STALE CONTINUATIONS
+Every asynchronous continuation must capture: owner identity; operation identity where
+needed; lifecycle phase; immutable arguments required for retry or completion. Before acting,
+verify: the owner remains valid; the phase still permits the action; the resource has not
+already been retired; finalization has not already occurred; a successor has not taken
+ownership. Tests must deliberately deliver stale callbacks after supersession, source change,
+navigation change, pause, seek, sign-out, finalization, retry cancellation, and successor
+session startup.
+
+### 4.7 ASSERT INTERMEDIATE STATES
+Do not test only eventual outcomes when the contract contains words such as before, after,
+until, while, pending, exactly once, only after. Assert both sides of the boundary (owner
+remains active while a pane remains; pane remains before the paint barrier and disappears
+after it; old source is restored before a successor arms; timeout winner removes the
+transition listener; stale frame cannot rewrite transforms after finalization; outgoing
+progress commits before incoming ownership becomes current). A test named "only after" must
+contain an assertion before and after the event.
+
+### 4.8 TRUTHFUL TEST CLAIMS
+The name and documentation of a test may not exceed what the test proves. Before accepting a
+test, ask: what counterexample would still pass? Do not claim exhaustive coverage while
+skipping parameterized cases; deep immutability while freezing only the outer object;
+ordering while dependencies use separate logs; failure isolation when fake completion has no
+real side effect; derived registries when part of the list is hand-maintained; an async path
+covered when the test can return before reaching it.
+
+### 4.9 NO SILENT COVERAGE EXITS
+A coverage test must fail if its intended operation never occurs. Prohibited:
+`const op = findOperation(); if (!op) return;`. Required:
+`const op = findOperation(); assert.ok(op, 'the production trigger must start this operation');`.
+*(Gated: `test/no-silent-coverage-exit-gate.test.js` fails on the canonical `if (!x) return;`
+form in a test body; the mutation sweep is the semantic backstop — a test that silently skips
+its subject shows as UNCAUGHT in `tools/mutation-sweep.mjs`.)*
+
+### 4.10 MUTATION VERIFICATION
+Every important new assertion must be mutation-verified. Record: exact mutation; target file;
+intended failing test; intended failing assertion. Mutations must test misattribution and
+wrong ordering, not only total omission (wrong owner ID rather than no owner ID; old listener
+mutates successor rather than all cleanup removed; older write assigned to newer entity
+rather than write removed; wrong handler rather than missing handler). Mutation evidence must
+remain runnable in repository tooling. Separate behavioral mutation sweeps from source-contract
+or fingerprint sweeps; a source-text gate must not claim it caught runtime behavior.
+*(Gated: `tools/mutate.mjs` registry, `tools/mutation-sweep.mjs` sweep, `test/mutation-anchors.test.js`.)*
+
+### 4.11 EXACT CONTRACT SCHEMAS
+For classifications, plans, records, diagnostics, and state outputs: validate exact keys;
+validate every enum; reject missing required identity payloads; reject unknown fields when the
+contract is closed; reject impossible combinations; deeply freeze immutable output; clone
+caller-owned objects before freezing. Do not use a projection function that discards
+unexpected fields when the requirement is "no dead fields." Every exported pure function must
+satisfy its own contract when called directly; it must not depend silently on another function
+having sanitized its input first. *(Gated: `test/contract-function-gate.test.js`.)*
+
+### 4.12 IDENTITY DISCIPLINE
+For every identifier used as a key, proof of identity, an ownership claim, a deletion target,
+an ordering value, or a storage location, document: who creates it; collision behavior;
+persistence lifetime; recreation behavior; migration behavior; whether it can repeat, regress,
+or be reused; consequences if two entities share it. Never treat these as interchangeable:
+identity; namespace; storage location; content identity; ordering value; object reference. A
+shortened ID may be a namespace without being proof of identity. A storage key may locate a
+payload without proving who owns it. Object identity is not semantic identity.
+
+### 4.13 ORDERING DISCIPLINE
+When records compete, use one centralized comparator everywhere they compete (live merge;
+replica adoption; archive collapse; publication; reset; purge; diagnostics). The comparator
+must produce the same winner for every observer; do not include observer-relative preferences
+such as "my record wins." If timestamps can repeat or regress, use a logical or hybrid
+ordering value; a logical clock must advance when issuing or observing relevant durable values.
+
+### 4.14 INDEPENDENT TEST ORACLES
+Use three separate layers: (1) independent declarative specification; (2) production
+implementation; (3) tests and documentation tools that compare or render the specification. Do
+not duplicate production branch logic in the generator; generate expected output from
+production output; or make production consume the test expectation table. Enums, validation
+schemas, and production registries may be shared; expected decisions must remain independent.
+
+### 4.15 NO DEAD FIELDS
+Do not introduce a field until the same implementation slice contains a real production
+consumer and a test proving that consumer uses it. A future stage is not a consumer. A field
+may exist temporarily only when ALL of: the boundary must ship atomically; splitting would
+create more risk than the temporary field; the exception is explicit; the field is
+time-bounded; the next scheduled stage consumes or removes it; an exact test prevents it from
+becoming permanent. This exception should be rare — do not create permanent "sanctioned
+exceptions." When adding a field, report its production consumer; its test; its removal or
+consumption stage if temporarily unused. *(Gated for contract objects: the exact-key check in
+`test/contract-function-gate.test.js`.)*
+
+### 4.16 NO DUPLICATE SOURCES OF TRUTH
+Do not store both a cause and a separately mutable derived consequence unless both are
+independently required (raw descriptor plus separately supplied host classification;
+`clobbered` plus abort rerender policy; short identity plus assumption it proves full identity;
+comparator result plus separate diagnostic arbitration; ownership in a session plus ownership
+in globals; pane kinds plus a separately mutable `hasPane`). Derive convenience values at the
+use site.
+
+### 4.17 PHASE-AWARE RECOVERY
+Identify the authority boundary for every transaction. Before authority changes: preserve
+authoritative state; restore the source; restore starting position as policy requires. After
+authority changes: the new authoritative state wins; render from that authority; do not restore
+a source that now contradicts it. Recovery policy must be centralized rather than separately
+invented per failure reason.
+
+### 4.18 NORMAL RELEASE VERSUS EMERGENCY DISPOSAL
+Normal completion and emergency teardown may have different obligations. Normal release must
+honor readiness; ordering; ownership; paint or visibility barriers where required;
+exactly-once behavior. Emergency disposal may bypass normal visual ordering only for named
+reasons. A successor may not dispose resources still owned by a valid active operation unless
+the policy explicitly defines supersession at that phase.
+
+### 4.19 PARITY VERSUS POLICY
+Classify every production change as behavior-preserving extraction; known-red repair; new
+policy; migration; or unrelated cleanup. Do not hide a bug fix inside a parity extraction. Do
+not preserve a known defect merely because it exists unless parity was explicitly chosen.
+Maintain an exact structured policy ledger; tests must assert its complete active contents.
+*(Not yet gated — needs a machine-readable ledger artifact; the DecisionLog is prose today.)*
+
+### 4.20 MECHANICAL DERIVATION
+Generate inventories where possible (screen registries; descriptor scenarios; transition
+combinations; required globals; event-handler registrations; schema members; source append
+sites). When a list cannot be fully derived, describe it honestly as derived; pinned; or
+partly derived and partly pinned. Do not call a hand-maintained list exhaustive.
+
+### 4.21 NARROW SCOPE
+Fix the violated invariant without redesigning adjacent systems. Do not change a synchronous
+API into asynchronous for testing; broaden a platform test boundary without evidence; redesign
+durable storage to solve a diagnostic issue; migrate an identity namespace when full-identity
+validation contains the risk; alter unrelated visible behavior during an extraction. Record
+adjacent cleanup separately.
+
+### 4.22 REVIEWABLE STAGES
+Each implementation stage must state: exact slice completed; production fields consumed;
+production behavior changed; behavior deliberately unchanged; tests added; mutations run;
+deferred work; why the stage is complete. Do not call a stage complete when only bookkeeping
+or identity scaffolding has landed. Use explicit names (e.g. "Stage 3a — session identity",
+"Stage 3b — resource ownership") when the full stage is incomplete.
+
+======================================================================
+## 5. SUBSYSTEM CONTRACT TEMPLATE
+======================================================================
+
+Every new major subsystem must have an addendum (`Claude/Subsystems/<name>.md`) answering:
+
+1. Purpose and boundaries. 2. Public entry points. 3. Authoritative state. 4. State machine or
+lifecycle phases. 5. Identities used and their guarantees. 6. Ordering model. 7. Resources
+acquired. 8. Resource owner. 9. Ownership endpoint. 10. Asynchronous operations. 11. Possible
+stale completions. 12. Normal completion behavior. 13. Recovery authority boundary.
+14. Emergency disposal rules. 15. Persistence model. 16. External side effects. 17. Independent
+test oracle. 18. Invariants. 19. Mutation cases. 20. Known-red behavior. 21. Current
+policy-ledger references. 22. Explicitly out-of-scope behavior. 23. Conditions requiring this
+addendum to be revised.
+
+Do not build a substantial new subsystem without creating this addendum.
+
+======================================================================
+## 6. CONTRACT UPDATE TRIGGERS
+======================================================================
+
+Review and, where necessary, revise the relevant contract whenever TomeRoam adds or changes: a
+persistence mechanism; a device or process writer; a synchronization transport; a durable
+identifier; an ordering field; a retry mechanism; a lifecycle or background state; a navigation
+entry point; a playback entry point; a test fake; a recovery path; a native-platform boundary;
+a service-worker boundary; a framework; a storage schema; a public planner or contract object;
+a new subsystem. Do not allow architecture-specific rules to remain normative after their
+architecture disappears. When a subsystem is removed or replaced: retire its addendum; migrate
+still-valid principles into the core only if genuinely general; close or migrate its ledger
+entries; remove stale examples.
+
+======================================================================
+## 7. END-OF-TASK CONTRACT MAINTENANCE
+======================================================================
+
+At the end of every significant implementation: (1) compare the resulting architecture with the
+relevant subsystem contract; (2) update the contract if a verified assumption changed; (3)
+update the decision ledger for new policy, resolved known-reds, new temporary exceptions,
+retired exceptions; (4) remove fields or rules that became dead; (5) add update triggers for new
+architectural dependencies; (6) ensure examples are labeled non-normative; (7) ensure no
+build-specific workaround has silently become a permanent core rule. A contract update is
+required when the code has changed the truth of the contract.
+
+======================================================================
+## 8. COMPLETION REPORT
+======================================================================
+
+At the end of each build, report: exact stage and slice completed; files changed; public paths
+exercised; production behavior changed; production behavior deliberately unchanged; parity
+repairs; new policy; contracts introduced or modified; identities introduced or reinterpreted;
+resources moved under ownership; ownership endpoints; asynchronous continuations controlled;
+intermediate states asserted; exact mutation evidence; known-red tests still open; dead fields
+introduced, consumed, or removed; temporary exceptions and expiration stage; deferred work and
+assigned stage; full test, lint, typecheck, build-coherence, behavioral-mutation, and
+source-gate results; any statement from the assignment that had to be narrowed after inspecting
+production. Do not use claims such as complete, exhaustive, fully derived, deeply immutable,
+fully owned, or all paths covered unless the tests prove those exact claims.
+
+======================================================================
+## 9. REQUIRED RESPONSE TO CONTRACT CONFLICTS
+======================================================================
+
+When a task conflicts with this contract, do not simply refuse or silently violate it. Respond
+with: (1) the exact conflicting rule; (2) the current code or assignment that conflicts with it;
+(3) whether the conflict is a stale subsystem rule, an intentional new policy, a temporary
+staged exception, or an implementation mistake; (4) the smallest safe resolution; (5) whether a
+core rule, subsystem addendum, or ledger entry must change; (6) the tests and expiration
+condition for any temporary exception. The contract exists to improve decisions, not to
+prohibit updating the architecture.
+
+======================================================================
+## 10. FIRST ACTION ON EVERY NEW TASK
+======================================================================
+
+Before coding, state internally: which core rules apply; which subsystem addenda apply; which
+ledger entries apply; which assumptions were verified against current code; whether the
+requested change requires a contract update. Then perform the task.

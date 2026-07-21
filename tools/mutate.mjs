@@ -224,6 +224,12 @@ const MUTATIONS = [
     file: 'test/fixtures/swipe-plan-spec.mjs',
     from: "sec15: 'unknown-screen-type',",
     to:   "sec15: 'same-type-different-identity'," },
+  // §14 clone-before-freeze — freezing the caller's array in place (instead of cloning) is
+  // still deep-frozen output, so ONLY the clone-before-freeze assertion catches it.
+  { name: 'swipe4 §4.11: constructionPlanFor freezes the caller decorations in place (-> §14 clone-before-freeze)',
+    file: 'js/swipe.js',
+    from: '    const decorations = Object.freeze((c.decorations || []).map((d) => Object.freeze({ ...d })));',
+    to:   '    const decorations = Object.freeze(c.decorations);' },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
