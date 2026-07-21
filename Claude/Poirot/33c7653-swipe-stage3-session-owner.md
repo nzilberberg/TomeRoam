@@ -3,7 +3,7 @@
 - **Subject:** build `2026-07-19.223`, commit `33c7653` ("complete Stage 3 — resource ownership + the ownership endpoint"), production change confined to `js/app.js`. Code unchanged through `.225` (`.224`/`.225` are records-only), so this review holds against current HEAD.
 - **Reviewed against:** `PLAN-swipe-reveal.md` §3.2 ("one session owns every resource": `transitionListener`, `settleTimer`, `revealTimer`, `revealFrames`) and invariant I12 ("a stale callback cannot affect a newer session").
 - **Date:** 2026-07-20
-- **Verdict:** fix-then-ship. The ownership *model* is sound and behaviour-preserving, but stage 3 captured only the cleanup-critical resources and left the settle-scheduled ones outside the session — a reduced version of §3.2. Do not start stage 4 until findings 1–3 are closed.
+- **Verdict:** fix-then-ship. The ownership *model* is sound and behaviour-preserving, but stage 3 captured only the cleanup-critical resources and left the settle-scheduled ones outside the session — a reduced version of §3.2. Close findings 2 and 4 before stage 4; rule on 1a. See *Reconciliation* below — the ownership-class findings are already deferred to stage 6 by a standing decision, and this review does not reopen it.
 - **Provenance:** consolidated from two independent review passes; every finding below verified against the code and the plan. Finding 2 was found by pass A; findings 1, 3, 4 by pass B.
 
 ## Findings
@@ -17,6 +17,17 @@
 | 3 | Minor (forward-fragility) | Cleanup helpers act on the global `session`, not the owner. `releaseGesture`/`dropRowHold` read the module `session` rather than a passed owner. Safe today under the `finishing` gate — but stage 6 retires that gate, making this a scheduled break. | 325, 337 | `releaseGesture(s)`/`dropRowHold(s)`; call with `cur` at finalize and the superseded session at hard reset. |
 | 4 | Significant (test) | Held-reveal test proves the endpoint, not intermediate ownership. It asserts only `session == null` 700ms later; a mutation that clears the session at finalize (ignoring `revealPending`) reaches that same end state and survives. | `test/swipe-invariants.test.js` | Make the decode/paint gate controllably pending; assert the session is still active after finalize while the pane is held, then null after drop. Add the surviving mutation to the sweep. |
 | 5 | Observation | The NP pill is tagged `own:'owned-decoration'` but is never placed in `cur.movers`, so no consumer reads the tag — dead metadata (documented; harmless until stage 6 consolidates pill teardown). | mover build ~605 | Drop the tag or note it is decorative. |
+
+## Reconciliation with the decision log (2026-07-20)
+
+A settled decision predates this review: *cancellation ownership of the settle and reveal timers and the transitionend listener is deferred to stage 6* (DecisionLog, 2026-07-20), on the ground that stage 6 centralizes finalization. It disposes of the ownership-class findings here, so this review does not reopen it:
+
+- **Findings 1, 1b, 3** (settle timer / transitionend listener / global-session helpers) fall inside the deferred class — known and accepted as deferred to stage 6, not new must-fix work.
+- **Finding 2** (`finishing` not restored on a throw) is a throw-safety defect, not a cancellation-ownership question — outside every deferral, and it **stands** (one-line fix; a throw permanently wedges the swipe).
+- **Finding 4** (held-reveal test admits a surviving mutation) is a test-adequacy gap — outside every deferral, and it **stands**.
+- **Finding 1a** (uncancelled settle *rAF* writes a stale transform onto a real element when the page was hidden during settle) is the one item the deferral may not have weighed. The deferral names the settle/reveal *timers* and the transitionend listener; its rationale (the `finishing` flag blocks a *superseding* gesture) addresses a *new* gesture, not this *same-gesture* stale write after finalize. **Open for the implementation session:** is the rAF within the stage-6-deferred "settle timers," and is its interim stale-write-when-hidden risk accepted until stage 6, or pulled forward?
+
+**Revised gate:** close 2 and 4 before stage 4; rule on 1a; 1/1b/3 remain deferred to stage 6 per the standing decision.
 
 ## Root vs surface
 

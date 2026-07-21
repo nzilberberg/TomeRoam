@@ -79,3 +79,19 @@ kept — the cross-session memory serves that view for the implementation sessio
   app code at .225 is identical to .223. The numbers are not reclaimed, because OTA build
   comparison is monotonic and a device already on .225 must not be sent a lower number.
   The next product change is .226 — 2026-07-20.
+
+- The .223 stage-3 code review is filed at `Claude/Poirot/33c7653-swipe-stage3-session-owner.md`.
+  Two findings stand outside every standing deferral and are the gate before stage 4:
+  (a) `finishing` is not restored in `runFinalize`'s `finally`, so a throw in `applyScreen`
+  permanently wedges the swipe until reload — a one-line fix; (b) the held-reveal test
+  asserts only the endpoint, so a mutation clearing the session at finalize survives — the
+  test must pin intermediate ownership. The review's ownership-class findings (settle timer,
+  transitionend listener, global-session cleanup helpers) fall inside the stage-6 deferral
+  and are NOT reopened — 2026-07-20.
+
+- OPEN: the uncancelled settle `requestAnimationFrame` can write a stale transform onto a
+  real Home/Browse/overlay element after finalize when the page was hidden during settle.
+  This is a same-gesture stale write; the stage-6 timer/listener deferral rationale (the
+  `finishing` flag blocks a superseding gesture) does not address it. Waiting on: a ruling
+  to accept the interim risk through stage 6 or pull the rAF cancellation forward —
+  2026-07-20.
