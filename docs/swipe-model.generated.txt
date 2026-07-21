@@ -28,8 +28,11 @@ before this document is trusted again. Never update a pinned constant alone.
    census (every screen name in a production descriptor literal or nav control):
      authorBooks authors books downloads files home nowplaying options
    excluded: app — history.replaceState({ v: 'app' }) — a history state, not a screen descriptor
-   (settings subs are absent from the census by construction — openSub pushes
-    { v } from a VARIABLE, so they are covered by the SETTINGS_SUBS derivation.)
+   (A settings sub-screen may still SHOW UP in the census when some other literal
+    or nav control names it — `downloads` does, via the book-menu control. But the
+    census does not RELY on that: every sub is derived from SETTINGS_SUBS, so one
+    that appears in no literal is still in the registry. openSub pushes { v } from
+    a VARIABLE, which is why the subs cannot be counted on to appear here.)
    The structural matrix lives in docs/transition-matrix.generated.txt and is
    imported here rather than restated — one derivation, one home.
 
@@ -182,12 +185,13 @@ before this document is trusted again. Never update a pinned constant alone.
    destination is precisely the thing NOT navigated to.
 
 10. PARITY vs NEW POLICY LEDGER (§8A) — the short answer
-    NEW POLICY, and only these:
-      - the recovery table (§7 above), pre/post-stack, all reasons
+    NEW POLICY, and only these (derived from NEW_POLICIES, asserted exactly by
+    the gate so none can be silently dropped):
+      - the recovery table (§7), pre/post-stack, all reasons
       - restoring the starting scroll when a gesture is SUPERSEDED
-      - re-rendering the SOURCE into #browse when a gesture is SUPERSEDED
-        (added after an external review of .218 found the first draft of this
-         document had labelled it [parity] — it is not)
+      - re-rendering the SOURCE into #browse when a gesture is
+      SUPERSEDED (added after review of .218 found the first draft had
+      labelled it [parity])
     Everything else in this document is preserved deliberately, including the
     1px Home entry scroll and the overlay->browse hidden-host side effect
     (abort leaves #browse holding the destination's content; canonicalizing it

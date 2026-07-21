@@ -224,6 +224,24 @@ export const RECOVERY_REASONS = ['lease-invalid', 'destination-gone', 'finalize-
 /** §3.4 — the only reasons a pane may be disposed rather than released. */
 export const DISPOSE_REASONS = ['superseded', 'lease-invalid', 'finalize-threw', 'hard-reset', 'destination-gone'];
 
+/**
+ * §8A — the COMPLETE set of new-policy repairs, as structured data. Everything NOT in
+ * this list is preserved deliberately (parity). The §10 ledger and the render() prose
+ * are both derived from here, so they cannot drift apart — and the gate asserts this
+ * EXACT set, so silently dropping one (e.g. reverting the .219 source-content repair
+ * back to [parity]) fails the test rather than quietly regenerating a clean document.
+ * That drift is exactly what the .219 review caught by hand; this makes it mechanical.
+ */
+export const NEW_POLICIES = [
+  { id: 'phase-aware-recovery',
+    text: 'the recovery table (§7), pre/post-stack, all reasons' },
+  { id: 'supersession-restore-scroll',
+    text: 'restoring the starting scroll when a gesture is SUPERSEDED' },
+  { id: 'supersession-rerender-source',
+    text: 're-rendering the SOURCE into #browse when a gesture is SUPERSEDED '
+        + '(added after review of .218 found the first draft had labelled it [parity])' },
+];
+
 /** §2.6 — the four previously-unresolved rules, resolved from code. */
 export const RESOLVED_RULES = [
   { rule: 'NP pill', statement: 'cloned when nowplaying is EITHER endpoint; a third mover with the same lifetime as outgoing/incoming; from NP -> base 0 and body loses np-locked; to NP -> base off',
@@ -280,8 +298,11 @@ export function render() {
   P('   census (every screen name in a production descriptor literal or nav control):');
   P(`     ${screenNameCensus().join(' ')}`);
   for (const [n, why] of Object.entries(NOT_SCREENS)) P(`   excluded: ${n} — ${why}`);
-  P('   (settings subs are absent from the census by construction — openSub pushes');
-  P('    { v } from a VARIABLE, so they are covered by the SETTINGS_SUBS derivation.)');
+  P('   (A settings sub-screen may still SHOW UP in the census when some other literal');
+  P('    or nav control names it — `downloads` does, via the book-menu control. But the');
+  P('    census does not RELY on that: every sub is derived from SETTINGS_SUBS, so one');
+  P('    that appears in no literal is still in the registry. openSub pushes { v } from');
+  P('    a VARIABLE, which is why the subs cannot be counted on to appear here.)');
   P('   The structural matrix lives in docs/transition-matrix.generated.txt and is');
   P('   imported here rather than restated — one derivation, one home.');
   P('');
@@ -413,12 +434,9 @@ export function render() {
   P('   destination is precisely the thing NOT navigated to.');
   P('');
   P('10. PARITY vs NEW POLICY LEDGER (§8A) — the short answer');
-  P('    NEW POLICY, and only these:');
-  P('      - the recovery table (§7 above), pre/post-stack, all reasons');
-  P('      - restoring the starting scroll when a gesture is SUPERSEDED');
-  P('      - re-rendering the SOURCE into #browse when a gesture is SUPERSEDED');
-  P('        (added after an external review of .218 found the first draft of this');
-  P('         document had labelled it [parity] — it is not)');
+  P('    NEW POLICY, and only these (derived from NEW_POLICIES, asserted exactly by');
+  P('    the gate so none can be silently dropped):');
+  for (const p of NEW_POLICIES) for (const line of wrap('- ' + p.text, 66)) P(`      ${line}`);
   P('    Everything else in this document is preserved deliberately, including the');
   P('    1px Home entry scroll and the overlay->browse hidden-host side effect');
   P('    (abort leaves #browse holding the destination\'s content; canonicalizing it');

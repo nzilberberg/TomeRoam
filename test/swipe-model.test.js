@@ -186,8 +186,36 @@ test('descriptors are compared by VALUE — two independently allocated equals c
   assert.deepEqual(a, b, 'object identity must not affect classification');
 });
 
-test('§8A ledger — the ONLY new-policy rows are recovery and the supersession scroll', async () => {
+// The §8A ledger is a PRIMARY stage-1 guarantee: it is the contract that says which
+// behaviours are being preserved (parity) and which are deliberately changed (policy).
+// An earlier version of this test only checked that the rendered document MENTIONED the
+// scroll repair, so this regression would have passed silently: drop the source-content
+// repair from the generator, regenerate, exact-document test passes, ledger test passes,
+// and the model reverts to the exact misclassification the .219 review had just found.
+// The fix (external review of .219): assert the EXACT set of new policies as data.
+test('§8A ledger — the EXACT set of new policies, asserted as data not prose', async () => {
   const gen = await load();
+  const ids = gen.NEW_POLICIES.map((p) => p.id).sort();
+  assert.deepEqual(ids, [
+    'phase-aware-recovery',
+    'supersession-rerender-source',   // the .219 finding — must never fall out silently
+    'supersession-restore-scroll',
+  ], 'the set of new-policy repairs changed. If that is intended, update this assertion '
+   + 'IN THE SAME COMMIT and say which classification moved and why — do not let the '
+   + 'exact-document test bless a silent regeneration.');
+
+  // Every new policy must actually appear in the rendered ledger, so the document and
+  // the data cannot drift (the whole point of deriving §10 from NEW_POLICIES). Match on
+  // a short stable head — the renderer word-wraps at 66 cols, so the full text is split
+  // across lines and would never be a single substring.
+  const out = gen.render().replace(/\s+/g, ' ');
+  for (const p of gen.NEW_POLICIES) {
+    const head = p.text.split(' ').slice(0, 4).join(' ');
+    assert.ok(out.includes(head), `the §8A ledger must render the "${p.id}" policy; missing: ${head}`);
+  }
+  assert.ok(/1px Home entry scroll/.test(out),
+    'the §8A ledger must still record the 1px Home scroll as deliberately preserved');
+
   // Recovery is entirely new policy: today finalization has a try/finally for the row
   // hold and nothing else.
   assert.ok(gen.RECOVERY.length > 0);
@@ -201,12 +229,6 @@ test('§8A ledger — the ONLY new-policy rows are recovery and the supersession
     assert.ok(row.where && row.where.length > 10,
       `a [parity] row must name the region it was verified at; ${row.state || row.reason || row.rule} does not`);
   }
-  // The rendered ledger must still say exactly this, so the document and the data agree.
-  const out = gen.render();
-  assert.ok(out.includes('restoring the starting scroll when a gesture is SUPERSEDED'),
-    'the §8A ledger must still name the supersession scroll change as new policy');
-  assert.ok(/1px Home entry scroll/.test(out),
-    'the §8A ledger must still record the 1px Home scroll as deliberately preserved');
 });
 
 test('the permitted pane-dispose reasons are a closed set', async () => {
