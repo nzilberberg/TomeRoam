@@ -95,3 +95,11 @@ kept — the cross-session memory serves that view for the implementation sessio
   `finishing` flag blocks a superseding gesture) does not address it. Waiting on: a ruling
   to accept the interim risk through stage 6 or pull the rAF cancellation forward —
   2026-07-20.
+
+- Records division of responsibility: settled decisions and code reviews are canonical in
+  this repo tree — decisions here, reviews in `Claude/Poirot/`, plans in the repo `PLAN-*.md`.
+  The maintainer's private cross-session memory (outside the repo) holds orientation, deep
+  lessons, and non-repo projects, and it POINTS to these records rather than restating them.
+  A decision restated in both places is a second copy that drifts; each fact has one home,
+  and for decisions and reviews that home is the repo. New decisions and reviews are written
+  here, not into the private memory — 2026-07-20.
