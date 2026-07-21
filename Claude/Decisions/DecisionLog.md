@@ -215,6 +215,14 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   four contract keys instead of whitelisting them, so an added/dead field reddens). F2 and F8 filed as
   records above; no code deferred from this review — 2026-07-21.
 
+- The TomeRoam Engineering Contract (`Claude/EngineeringContract.md`) is adopted as a standing,
+  committed per-project standard governing all implementation, testing, planning, and review work —
+  25 rules generalized from the `.90–.228` review cycle, plus a required implementation-report
+  format. It layers on the global `StandardsDocument.md`. Per the project's rules-vs-gates lesson a
+  filed rule needs a loading/gating mechanism to hold; the mechanizable items (exact-schema checks,
+  no-silent-early-return, dead-field detection, separated source-fingerprint vs behavioral-mutation
+  sweeps, derived inventories) are gate candidates, not memory candidates — 2026-07-21.
+
 - Owed to stage 6 (from the .227 review's process note, recorded now so it is not lost): when the settle
   requestAnimationFrame, the settle/reveal timers, or the transitionend listener are cancelled OR fire,
   NULL their stored session handles (`cur.settleFrame = null`, etc.) so the session object describes LIVE
