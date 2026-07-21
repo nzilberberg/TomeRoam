@@ -16,7 +16,3 @@ android/build/
 .DS_Store
 Thumbs.db
 node_modules/
-
-# Local project records (persona scheme) — kept off the public repo by choice.
-# The decision log is a private working record for this machine, not a shipped artifact.
-Claude/
