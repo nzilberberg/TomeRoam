@@ -293,6 +293,15 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   rules are the judgment/process ones (§3/§6/§7/§10, §8 wording), which stay with the independent
   review — 2026-07-21.
 
+- `tools/mutation-sweep.mjs --affected` runs only the mutations whose TARGET file changed vs
+  HEAD — the fast local pre-commit check, so "affected-only locally, full sweep in CI" is a tool
+  default rather than a per-turn judgment. It prints what it does NOT cover (§4.20: a partial run
+  must not read as complete — mutations in unchanged files, and, if a test changed, a mutation
+  that a test edit made inert in an unchanged file), with the full CI sweep as the backstop. This
+  mechanizes one of the three dev-speed shortcuts; the other two are honestly un-mechanizable
+  (batching independent tool calls is in-turn judgment; running the cheap path at all is still my
+  choice, only made easier) — 2026-07-21.
+
 - Owed to stage 6 (from the .227 review's process note, recorded now so it is not lost): when the settle
   requestAnimationFrame, the settle/reveal timers, or the transitionend listener are cancelled OR fire,
   NULL their stored session handles (`cur.settleFrame = null`, etc.) so the session object describes LIVE

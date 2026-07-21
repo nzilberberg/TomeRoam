@@ -6,12 +6,15 @@
 // that applies cleanly and leaves the suite green marks a guard nothing defends — the
 // same false reassurance as an inert test, one level up.
 //
-//   node tools/mutation-sweep.mjs          # all
-//   node tools/mutation-sweep.mjs 3 7      # a subset
+//   node tools/mutation-sweep.mjs             # all
+//   node tools/mutation-sweep.mjs 3 7         # a subset by index
+//   node tools/mutation-sweep.mjs --affected  # only mutations whose TARGET file changed vs
+//                                             # HEAD — a fast local pre-check. It prints what
+//                                             # it does NOT cover; CI runs the full sweep.
 //
 // Slow by nature (one full suite run per mutation), so it is a CI / on-demand tool,
 // not part of `npm test`. ALWAYS restores the working tree, including on Ctrl-C.
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -24,7 +27,7 @@ const restore = () => run([path.join('tools', 'mutate.mjs'), '--restore']);
 
 process.on('SIGINT', () => { restore(); process.exit(130); });
 
-const { MUTATIONS } = await import(pathToFileURL(path.join(ROOT, 'tools', 'mutate.mjs')).href);
+const { MUTATIONS, DEFAULT_FILE } = await import(pathToFileURL(path.join(ROOT, 'tools', 'mutate.mjs')).href);
 
 // SOURCE-TEXT GATES — excluded from the sweep, each with its reason. These assert on
 // the TEXT of production files rather than on behaviour, so under any mutation they
@@ -52,8 +55,38 @@ function behaviourTests() {
   return all.filter((f) => !(f in SOURCE_TEXT_GATES)).map((f) => path.join('test', f));
 }
 
-const wanted = process.argv.slice(2).filter((a) => /^\d+$/.test(a)).map(Number);
-const indices = wanted.length ? wanted : MUTATIONS.map((_, i) => i);
+// Repo-relative paths changed vs HEAD (staged + unstaged + untracked), from porcelain status.
+function changedFiles() {
+  const out = execSync('git status --porcelain', { cwd: ROOT }).toString();
+  const files = new Set();
+  for (const line of out.split('\n')) {
+    if (!line.trim()) continue;
+    let p = line.slice(3).trim();                       // "XY path"
+    if (p.includes(' -> ')) p = p.split(' -> ').pop().trim();   // rename → the new path
+    files.add(p.replace(/^"|"$/g, ''));                 // git quotes paths with odd chars
+  }
+  return files;
+}
+const targetsOf = (m) => [m.file || DEFAULT_FILE, m.also && (m.also.file || m.file || DEFAULT_FILE)].filter(Boolean);
+
+let indices;
+if (process.argv.includes('--affected')) {
+  const changed = changedFiles();
+  indices = MUTATIONS.map((_, i) => i).filter((i) => targetsOf(MUTATIONS[i]).some((f) => changed.has(f)));
+  const changedTests = [...changed].filter((f) => f.startsWith('test/'));
+  console.log(`--affected: ${changed.size} changed file(s); ${indices.length} of ${MUTATIONS.length} mutation(s) target them.`);
+  // §4.20 — a partial run must NOT read as complete. State exactly what it does not cover.
+  console.log('NOT covered locally: mutations whose target file is unchanged.'
+    + (changedTests.length
+      ? ' A changed TEST can make a mutation in an UNCHANGED file go inert — only the FULL'
+        + ' sweep (no args) or CI catches that.'
+      : '')
+    + ' CI runs the full sweep on every push.');
+  if (!indices.length) { console.log('No affected mutations — nothing to sweep locally.'); process.exit(0); }
+} else {
+  const wanted = process.argv.slice(2).filter((a) => /^\d+$/.test(a)).map(Number);
+  indices = wanted.length ? wanted : MUTATIONS.map((_, i) => i);
+}
 
 const uncaught = [];
 const unapplied = [];
