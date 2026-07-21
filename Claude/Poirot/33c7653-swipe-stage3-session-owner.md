@@ -1,7 +1,7 @@
 # Code review — swipe stage 3 (session / resource owner)
 
 - **Subject:** build `2026-07-19.223`, commit `33c7653` ("complete Stage 3 — resource ownership + the ownership endpoint"), production change confined to `js/app.js`. Code unchanged through `.225` (`.224`/`.225` are records-only), so this review holds against current HEAD.
-- **Reviewed against:** `PLAN-swipe-reveal.md` §3.2 ("one session owns every resource": `transitionListener`, `settleTimer`, `revealTimer`, `revealFrames`) and invariant I12 ("a stale callback cannot affect a newer session").
+- **Reviewed against:** `Claude/Plans/PLAN-swipe-reveal.md` §3.2 ("one session owns every resource": `transitionListener`, `settleTimer`, `revealTimer`, `revealFrames`) and invariant I12 ("a stale callback cannot affect a newer session").
 - **Date:** 2026-07-20
 - **Verdict:** fix-then-ship. The ownership *model* is sound and behaviour-preserving, but stage 3 captured only the cleanup-critical resources and left the settle-scheduled ones outside the session — a reduced version of §3.2. Close findings 2 and 4 before stage 4; rule on 1a. See *Reconciliation* below — the ownership-class findings are already deferred to stage 6 by a standing decision, and this review does not reopen it.
 - **Provenance:** consolidated from two independent review passes; every finding below verified against the code and the plan. Finding 2 was found by pass A; findings 1, 3, 4 by pass B.

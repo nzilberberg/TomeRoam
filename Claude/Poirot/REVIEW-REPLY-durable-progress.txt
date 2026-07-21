@@ -1,0 +1,228 @@
+# Reply to your review of the TomeRoam durable-progress plan
+
+Thank you — this was materially better than the plan it reviewed. Your first point
+alone was worth the exercise, and your shard answer resolved the question I'd flagged
+as unresolvable. All seven of your approval conditions are met in v2.
+
+Two notes before the point-by-point:
+
+**Workstreams are renamed.** v1's `P-A`…`P-G` are now descriptive: STOP-DELETING,
+RECOVER, FORMAT, SHARD, OLD-APPS, SURFACE, CROSSAPP. Same items, in your order.
+
+**New measurements have landed since your review**, and one of them changes your
+biggest objection. They're first, because they're the only place I disagree with you.
+
+---
+
+## New measurements (post-review)
+
+### 1. Plex's own positions ARE readable — and I hid this from you by accident
+
+Your point 1 ("apparently no sanctioned HTTP way to read music-track viewOffset") was
+correct given what you were told, but the premise was wrong. A **per-library Plex
+setting**, `enableTrackOffsets` ("Store track progress"), **defaults to OFF** and gates
+the API read. It was off. With it on:
+
+    virgin track:  before → {}
+      /:/timeline?…&time=987654   → HTTP 200
+      read back +500ms            → {"off":987654}    exact round trip
+      /:/unscrobble               → {}                clears cleanly
+
+It is **retroactive** — a 58-track album read 0/58 with the setting off and 2/58 with
+it on, nothing replayed. The setting gates the *read*, not the recording. The app has
+always written these via `/:/timeline`, and already parses `viewOffset` back out — it
+simply never consumed it. 18 books on the test account had positions sitting there.
+
+Your separate point stands and is now recorded as a fragility risk: plex.tv
+account-level watch-state sync excludes music and in-progress positions. That means
+same-server only, and signals Plex doesn't treat music resume as first-class.
+
+### 2. Your point 2 is half-superseded — native DOES have a clock
+
+You wrote that native appears to be `{trackId, viewOffset}` with no modification time,
+and therefore cannot join an LWW selection. Measured:
+
+| question                                    | measured                          |
+|---------------------------------------------|-----------------------------------|
+| does `lastViewedAt` appear on a write?      | yes                               |
+| precision                                   | unix **seconds** (board uses ms)  |
+| does it advance on a later write?           | yes — 1784266326 → 1784266330     |
+| does it advance on a **backward** seek?     | **yes** — rewinds order correctly |
+| does `unscrobble` clear it?                 | yes, with the offset. No ghost.   |
+
+So your worked example (board: ch20 @ 10:00 yesterday; Plex: ch5 @ 03:00 — abandoned
+or a deliberate restart?) is actually resolvable.
+
+### 3. …but the real defect is worse than the one you named
+
+**Plex will not persist ANY offset below ~60 seconds into a track**, while still
+advancing `lastViewedAt`. Binary-searched on two tracks of very different length:
+
+| track duration | smallest offset that persists | as % of track |
+|----------------|-------------------------------|---------------|
+| 4,324s         | ~61s                          | 1.41%         |
+| 1,427s         | ~61s                          | 4.27%         |
+
+Same seconds, wildly different percentages ⇒ **absolute, not proportional**. (One
+server, one version — treated per your own "empirical, may vary" rule.)
+
+The consequence is not imprecision, it's ambiguity. Plex cannot distinguish:
+
+- "I tapped chapter 3 for 20 seconds to check something"
+- "I moved to chapter 3 and stopped 45 seconds in"
+
+Both are exactly `viewCount 0, lastViewedAt set, no offset`. **Any rule picking one
+strands the other in the wrong chapter** — not 60 seconds off. This is a state native
+cannot represent, and it's why your conclusion (use native only when it adds
+information) is adopted, for a different reason than you gave.
+
+The resulting arbitration rule:
+
+- native has an **offset** + newer `lastViewedAt` → native may win
+- native has **`viewCount > 0`** for chapters we don't know → usable (tells us which
+  chapter you're past)
+- native has **`lastViewedAt` but no offset and no viewCount** → **uninterpretable;
+  contributes nothing, ever**
+- board has a record for the **same track** and native doesn't → **board wins**
+  (strictly more precise)
+
+### 4. A request body is not an escape — and it fails silently
+
+You noted no supported endpoint accepts an arbitrary user-scoped body. Confirmed, and
+worse. Tested with a 600-char payload (pure mechanism test, far under any cap), each
+attempt preceded by a reset to a sentinel:
+
+| variant                                      | HTTP | read-back                        |
+|----------------------------------------------|------|----------------------------------|
+| `PUT …?summary.value=<s>` (today)            | 200  | matches                          |
+| `PUT` + form-urlencoded body                 | 400  | rejected                         |
+| `POST` + form body                           | 404  | wrong method                     |
+| `PUT ?summary.locked=1` + value in body      | 200  | **UNCHANGED — silently ignored** |
+
+The last row matters: Plex returns **200 while discarding the write**. A body-based
+implementation would report success on every write and lose all of them. This is now
+the plan's canonical argument for your point 9's "never mark synced on HTTP 200."
+
+---
+
+## Your points, dispositioned
+
+**1. STOP-DELETING is not coupled to the publisher fix; ship it first.**
+**Accepted — your single best catch.** Your `saveMine` / `makeLegacyProjection` sketch
+is adopted verbatim in spirit: `trim()` never runs against the local store again; any
+temporary limit runs against a cloned publication snapshot. Board size, transport risk
+and format all unchanged; no dependency on compression, sharding or Plex settings.
+Your revised order (emergency → recover → format → native → cleanup) is now the plan's
+order. What stings is that v1's own design principles drew exactly the
+local-vs-published distinction that decouples them, and then the workstream section
+welded them together anyway.
+
+**2. Native freshness.** See above — half-superseded, conclusion adopted, reason
+replaced. Your list of things to measure was the right list; the answers are §3.5 of
+the plan.
+
+**3. Old readers.** **Accepted, gap acknowledged.** v1 said new readers must accept the
+legacy format indefinitely and never asked what an *old* client does with a compressed
+shard. Adopted as specified: legacy `pb_prog_<device>` board kept as a small recent
+head (verbose, book-level only), authoritative v2 shards under `pb_prog2_`, new clients
+dual-write and merge both, old clients keep receiving recent progress. Your observation
+that the legacy head also solves read locality is adopted — it's now the read cache in
+the shard design.
+
+**4. Never drop durable `bk`.** **Accepted; stronger invariant adopted.** "Surface
+truncation" is withdrawn as a goal. A full shard splits; it never truncates. Failed
+splits/writes leave records locally queued and surface as **degraded synchronisation**.
+Only `tr` chapter detail is subject to retention. You're right that this is easier to
+test — the harness now asserts "no `bk` ever dropped" rather than "truncation is
+signposted."
+
+**5. Shard key.** **Accepted in full.** Extendible hashing — split only the overflowing
+shard by prefix, no global `N`, discovered titles as the routing table — resolves what
+v1 called its biggest open question, and it's better than either option v1 posed
+(pure hash vs recency-ordered). The two-layer split (authoritative archive + recent
+head) is the part I'd missed: I'd framed it as a choice, and it was a layering.
+
+**6. Keep publishing when native is enabled.** **Accepted; your counter-argument is
+right.** v1 argued native "buys nothing structural" if boards keep publishing. But the
+board must exist for shared-library users regardless, so not writing it deletes no
+architecture — it only opens the dead-device hole you describe. The ~60s floor now adds
+an independent reason: native **structurally cannot hold a sub-60s position**, so the
+board is the only home for those. A reduced recent-only board is rejected on your
+reasoning.
+
+**7. Recovery migration.** **Accepted.** Now its own workstream, second in order, with
+your 7-step sequence including read-back verification before any cleanup. Your
+authorship point is the sharpest thing in the review and is now the plan's only
+decision-blocking open question: the local store means "records authored by this
+device", and importing recovered records from dead devices silently changes that.
+We will pick one of your two options explicitly rather than blur it.
+
+**8. gzip over deflate-raw.** **Accepted.** 24 characters (0.8%) is not worth losing
+framing and CRC on a durable blob crossing an undocumented path. v1 chose deflate-raw
+on size alone, which was the wrong axis. Feature-detection of both compression and
+decompression, with a fallback to uncompressed base64url, is adopted.
+
+**9. Same-device write serialization.** **Accepted.** You independently rediscovered
+this codebase's oldest recurring bug class — a delayed async finalizer clobbering a
+newer operation has caused most of its worst defects. One write in flight per shard,
+later state replaces queued earlier, write newest pending on completion, verify by
+read-back. And §4 above is why "never mark synced on 200" is not paranoia here.
+
+**10. Tri-state, per-library detection.** **Accepted.** Your ambiguity list was
+incomplete through no fault of yours — add **"position under the 60s floor"** to it,
+which is the case that would have made a boolean probe report `confirmed-unreadable`
+for a user whose feature works perfectly. The probe now requires a track comfortably
+above any plausible floor and resolves to `unknown`, never `off`. Your
+owner-agnostic wording is adopted verbatim and removes v1's requirement to establish
+ownership before prompting. A deliberate probe write is rejected: it would scribble a
+play into the user's Plex history and risk clearing a real position if cleanup failed.
+
+**Additional requirements.** All accepted: tombstones, atomic migration, corruption
+handling (an undecodable shard must not read as empty), full request-target byte length
+rather than source JSON length, adaptive-400 handling (not every 400 means "too
+large"), and the local-durability wording. That last one lands harder than you knew:
+we established the same day that **removing an iOS home-screen icon deletes the entire
+storage container** — so the local store isn't merely evictable, it's one gesture from
+gone. That makes your recovery migration and full-`bk` publication more load-bearing,
+not less.
+
+---
+
+## Your seven approval conditions
+
+| condition                                      | status |
+|------------------------------------------------|--------|
+| 1. Decouple and ship the emergency fix first    | done   |
+| 2. Define native freshness/arbitration          | done — measured; rule above |
+| 3. Bidirectional mixed-version migration        | done   |
+| 4. `bk` publication no-drop                     | done   |
+| 5. Hash-prefix archive shards + recent head     | done — as specified |
+| 6. Keep publishing full `bk` when native on     | done   |
+| 7. Serialized, verified writes + tombstones     | done   |
+
+---
+
+## Still open (down from v1)
+
+1. **Local-store authorship semantics** — your point 7. The only decision blocking a
+   workstream.
+2. **Relay's ceiling** — still unmeasured. Your tunnel argument (E2E, not terminated,
+   therefore cannot parse the URI) is better than anything we found and is recorded as
+   plausible-unverified. Unmeasurable from the server's own network: the endpoint
+   rotates per lookup and TCP won't connect from inside the LAN. Needs a device
+   actually on relay.
+3. **Per-user isolation of native offsets** on a shared library — tested only with an
+   owner token. Affects cross-app only.
+4. **Dual-write lifetime** — "indefinite" is honest but unbounded. Is there any trigger
+   that could ever retire the legacy head?
+
+## One thing worth your attention if you have appetite
+
+You called migration compatibility the largest data-loss risk and native freshness the
+largest blocker. With the measurements above, I'd nominate a third: **the shard-split
+path will fire perhaps once every several years per user** — a position costs ~20
+compressed characters, so a shard holds several hundred books, which is thousands of
+listening hours. Code that runs that rarely is code nobody notices is broken until it
+runs. It cannot be exercised by hand or by the maintainer's own library, so it lives or
+dies on a synthetic harness. That seems to me the riskiest thing in the plan precisely
+because it's the rarest.

@@ -1,0 +1,164 @@
+# TomeRoam — Fill-to-Budget Library Scaling — Plan for Review
+
+**Status:** proposal, for external review/approval. Nothing here is built.
+**Author context:** the app currently assumes a modest library (author's own is ~145 books). As a public app it cannot control other users' library sizes; some will have tens of thousands. This plan makes the app degrade gracefully at any size **without changing the experience for small libraries at all.**
+
+---
+
+## 1. Design principle: one mechanism, fill-to-budget (no "small vs large mode")
+
+There is **no mode switch.** There is one code path whose behaviour is governed by **budgets derived from the library's size N.** Every budget is set high enough that for a small library (say < ~500–800 books) *no budget is ever reached*, so the new machinery is inert and the output is byte-for-byte today's behaviour.
+
+- A small library isn't "sacrificing" anything to support large ones — it simply runs under ceilings generous enough to be invisible.
+- There is no cliff at a magic number: because it's continuous, a 480-book and a 520-book library behave almost identically; the budgets just *start mattering* gradually as N climbs past them.
+- The common path (small library) is the constantly-exercised path; large-library behaviour is purely additive. This is much safer than a two-mode design where the rare branch silently rots.
+
+**"Fill to budget" concretely:** the resident window is `min(N, budget)`. For small N the window is the whole library → render everything, hold everything, evict nothing — identical to now. For large N the window is the budget, and recycling/eviction engage.
+
+---
+
+## 2. What exists today (grounding for the reviewer)
+
+| Concern | Where | Current behaviour | Scales? |
+|---|---|---|---|
+| Rendered browse pages | `js/browse.js` `pageCache` (Map, `MAX_PAGES = 12`, LRU via `evictLRU`) | Each visited screen kept as a hidden `.browsepage` node; LRU-capped to 12 **pages** | Pages are capped ✔ **but each page renders _all_ its rows** ✗ |
+| Rows within a list page | `js/browse.js` `listView` / `authorView` | Builds a DOM row for **every** book/author, grouped by letter, plus an A–Z index | ✗ 20k books → 20k row nodes in one page |
+| Cover images | `js/artloader.js` | `data-art` + IntersectionObserver (`NEAR=400px`) + concurrency cap 3; only near-viewport covers ever fetch/decode; cache-hit paints instantly (`art-instant`) | ✔ already windowed — decode/network already bounded |
+| Cover disk cache | `sw.js` `IMG_CACHE = 'tomeroam-img-v1'` (build-independent, cache-first) | Every fetched cover cached forever; no eviction | ✗ unbounded on disk |
+| Library metadata fetch | `js/plex.js` `getBooks`/`getAuthors` via `withCache`, header `BIG = {Container-Size: 20000}` | Whole library in **one** request; SWR + IDB; `booksCache` session copy | Works once even when large, but **silently truncates at 20,000** and is one big slow-relay request |
+| Background warmer | `js/warmer.js` `buildWork` | Queues **every** author's books+bio and **every** book's tracks; throttled (AIMD + foreground/playback gates) | Won't crash (throttled) but **never finishes**, pointlessly hammers a slow relay |
+| Home carousels | `loadHomeData` → derived from `getBooks` | Top-N recent/continue only | ✔ already bounded |
+
+**Key realisation:** images are *already* windowed (artloader). Home is *already* bounded. So the actual unbounded resources are narrower than "everything":
+
+- **A. DOM rows per list page** — the phone-killer (memory/layout grows with N). *Hard failure.*
+- **B. Warmer work list** — grows with N; wasteful but throttled. *Soft.*
+- **C. Cover disk cache** — grows with N over time. *Soft-ish (disk, not RAM).*
+- **D. Metadata fetch** — one big request; silently caps at 20k. *Soft, plus an existing correctness cap to surface.*
+
+---
+
+## 3. The budget model
+
+One input, learned cheaply at load: **N = library size** (already available as `getBooks().length`; a `totalSize` probe is only needed if we adopt ranged fetch — see WS4). Everything downstream reads a budget off N. Proposed starting budgets (all comfortably above a ~500-book library):
+
+| Budget | Symbol | Proposed start | Small-library proof |
+|---|---|---|---|
+| Resident list rows | `LIST_ROW_BUDGET` | 800 | 500 ≤ 800 → all rows render, recycler never fires |
+| Warmed books (full enrichment) | `WARM_BOOK_BUDGET` | 1500 | 500 ≤ 1500 → warms whole library, as today |
+| Cover cache entries | `COVER_CACHE_MAX` | ~4000 (or ~300 MB) | 500 covers (~7.5 MB) → never evicts |
+| Single-fetch listing size | `FETCH_ALL_BELOW` | 20000 (unchanged) | small library fetched in one request, as today |
+
+Budgets are constants we can tune from real-device evidence; the plan is about the *mechanism*, not the exact numbers.
+
+---
+
+## 4. Workstreams
+
+Ordered by value. WS1 is the only one that fixes a *hard* failure; it's the core. WS2–WS3 are cheap guards. WS4 is deferred.
+
+### WS1 — Windowed (virtualized) list rendering  ⟵ the core change
+
+**Problem:** `listView` renders every row. **Goal:** render only a window of `min(N, LIST_ROW_BUDGET)` rows + overscan, recycling nodes as the user scrolls, so DOM/memory stay flat regardless of N — while a small library renders 100% of rows exactly as now.
+
+**Enabling simplification:** book/author rows are **uniform height** (`.book` rows). Uniform height makes offset math and a spacer-based virtual list straightforward (no per-row measurement).
+
+**The hard part — preserve the A–Z letter index and grouping.** Today `listView` builds letter groups (`.lettergroup[data-sec=L]` + `.letterhead`) and `buildIndex` jumps via `scrollIntoView` on the target group. Naive virtualization breaks this (target rows may not exist). Proposed approach:
+
+- **Keep all letter-group headers permanently materialised** (there are ≤ 27; negligible). They are the stable scroll anchors and carry the group's row count + pixel height.
+- **Window only the rows inside groups.** Total scroll height = Σ(header heights + groupRowCount × rowHeight). Maintain a top/bottom spacer (or absolute-position translate) so the scrollbar is correctly sized and every letter's offset is known.
+- **Jump-to-letter** scrolls to the (always-present) header offset; the scroll handler then materialises the window around the new position. The existing `buildIndex` haptics/highlight stay; only its `scrollTo` target changes from a row to a known offset.
+- **Overscan:** render viewport ± a generous band (e.g. ~1.5 screens) so normal scrolling never exposes a blank row; a hard fling shows a skeleton row for ≤ 1–2 frames (the accepted, imperceptible-in-motion degradation). Reuse the existing `.skrow`/`.skel` skeleton markup for recycled-but-not-yet-bound rows.
+
+**Fill-to-budget framing:** this is *one* renderer. When `N ≤ LIST_ROW_BUDGET` the window equals the whole list, all rows are resident, the scroll handler has nothing to recycle, and output is identical to today's `listView`. (Implementation may short-circuit to the current all-rows path when `N ≤ budget` — same result, less active machinery — but conceptually it's the single windowed mechanism with the window ≥ N.)
+
+**Integration points that must keep working:**
+- **Cover loading** — unchanged; artloader already adopts any `data-art` img via MutationObserver, so materialised rows load covers exactly as now (and cancel naturally when recycled off-screen since `img.isConnected` is false).
+- **Presence tick** (`o.onRender`, updates resume/peer numbers on `[data-book]` rows) — now only visible rows exist, which is fine (off-screen numbers aren't shown); must re-apply live numbers when a row is materialised, not only on tick.
+- **SWR in-place reconcile** (`patchRows`, matches `[data-key]`) — must change from "patch all N rows" to "update the backing data model, then re-render the current window." Only visible rows get patched; off-screen changes apply when they scroll in. This preserves the no-flash property for the visible set.
+- **`pageCache`** stays as-is (per-screen node reuse, LRU 12). Virtualization is *within* a page; caching *of* pages is orthogonal and already bounded.
+
+**Files:** `js/browse.js` (primary), CSS (spacer/positioning, reuse skeleton classes), `js/app.js` (only if the scroll container/ownership needs a hook — likely none, browse owns its pages).
+
+**Risk:** medium-high. The letter-index + grouped layout is the real complexity; uniform row height contains it. Scroll-anchoring jank on fast fling is the thing to tune. This is a bigger change than WS2–WS3 combined.
+
+### WS2 — Warmer scope cap
+
+**Change:** cap `buildWork` (or its inputs) to the first `WARM_BOOK_BUDGET` books by recency (recently-played first — reuse the same ordering home uses), plus on-demand warming of the current screen's neighbourhood. Beyond the budget, do **not** enqueue every book's tracks.
+
+- Small library: `N ≤ WARM_BOOK_BUDGET` → warms everything, exactly as today.
+- Large library: warms what the user is likely to touch; the rest loads on visit (still instant-ish via cache-first once fetched).
+- Emit a `log()` breadcrumb of how many were skipped (per the "no silent caps" discipline).
+
+**Files:** `js/warmer.js` (`buildWork`, `start`). Low risk; pure list-trimming. Add a unit test alongside the existing `test/warmer.test.js` (buildWork cap).
+
+### WS3 — Cover cache LRU cap
+
+**Change:** bound `IMG_CACHE` in `sw.js`. On cover cache write, if entry count (or approx bytes) exceeds `COVER_CACHE_MAX`, evict oldest. Simplest robust approach: maintain insertion/access order (e.g. a small IDB/`caches` key list or re-put on hit) and trim on write.
+
+- Small library: 500 covers ≪ cap → never evicts; identical to today.
+- Large library: disk stays flat; an evicted cover simply re-fetches on next view (already the cache-miss path).
+
+**Files:** `sw.js` (cover cache put path near `IMG_CACHE`). Low risk. Note the interaction with the existing `EVICT_IMG` message (poisoned-entry eviction) — LRU eviction is additive to that.
+
+### WS4 — Ranged metadata fetch  ⟵ DEFERRED (only if a real user hits it)
+
+Today `getBooks`/`getAuthors` fetch the whole library in one request and **silently truncate at `Container-Size: 20000`.** Two separable improvements, both deferred:
+
+1. **Surface/raise the 20k cap** — at minimum log when the listing hits the cap so truncation isn't silent (a library > 20k books currently loses books with no signal). Cheap; arguably worth doing even before the rest.
+2. **Range/paginate** — capture `totalSize`, render a correctly-sized virtual list from the count, and fetch metadata in pages near the viewport (`X-Plex-Container-Start`/`X-Plex-Container-Size`), evicting far pages. This improves *first paint* on a huge library (avoids one giant slow-relay request) but is **not required to avoid a crash** — WS1 already bounds memory. Metadata for even 50k books is ~25 MB, which IDB can hold once fetched.
+
+**Recommendation:** ship item (1) as a tiny standalone log; hold item (2) until evidence a real user has a painful cold open. Reviewer input welcome on whether to pull item (2) forward.
+
+---
+
+## 5. What explicitly does NOT change
+
+- Small-library UX (rendering, warming, covers, memory) — provably identical (no budget tripped).
+- `pageCache` per-screen reuse and its LRU-12 cap.
+- artloader's lazy/concurrency-capped cover pipeline and `art-instant` cache-hit paint.
+- Home carousels (already bounded).
+- The two standing architecture decisions: tile/line engine + playback core stay in `app.js`; **no PlaybackController.**
+- Deploy discipline: push, user tests live on github.io; APK self-updates via OTA (these are all web-layer JS/CSS + one `sw.js` change → no native rebuild needed).
+
+---
+
+## 6. Verification plan
+
+**Unit (Node test suite, keep green):**
+- `warmer.test.js`: `buildWork` respects `WARM_BOOK_BUDGET` (cap + ordering).
+- New `browse` windowing tests: window index math, spacer height Σ, letter-offset resolution, `N ≤ budget` short-circuits to full render (identical row set).
+- Cover-cache LRU trim (if unit-testable without a real SW; else manual).
+
+**On-device (the real verdict — can't be reproduced locally):**
+- **Small library (author's ~145):** confirm zero visible change — covers, scroll, letter index, progress bars, resume, presence numbers all as before. This is the acceptance gate for "small libraries sacrifice nothing."
+- **Synthetic large library** (if obtainable, or a padded fixture): confirm flat memory while scrolling A→Z, letter-jump lands correctly, hard fling shows at most a brief skeleton then fills, playback never starves (warmer gates hold), disk cover cache stays under cap.
+- Per project rule: **no "fixed" claim until on-device evidence.** Keep a diagnostic breadcrumb (resident row count, evictions, warmer-skipped count) so confirmation is objective, not assumed.
+
+---
+
+## 7. Rollout order (incremental, independently shippable)
+
+1. **WS3** (cover LRU) + **WS4.1** (log the 20k truncation) — smallest, safe guards, ship first.
+2. **WS2** (warmer cap) — small, unit-tested.
+3. **WS1** (windowed list) — the core; ship after 1–2 are proven inert on the author's own library.
+4. **WS4.2** (ranged fetch) — only if evidence demands it.
+
+Each step is a no-op for the author's own library, so each can be pushed and verified live without regressing the day-to-day experience.
+
+---
+
+## 8. Open questions for the reviewer
+
+1. Starting budget values (§3) — reasonable, or tune? They only need to sit above a "small" library; exact values are evidence-driven.
+2. WS4.2 (ranged fetch): pull forward, or defer until a real large-library user appears? (WS1 alone prevents the crash; WS4.2 only improves cold-open latency.)
+3. Windowing complexity vs. the A–Z index: is preserving the letter index + grouped layout (WS1's hard part) worth it, or is a flat virtualized list with a simpler jump acceptable? (Recommendation: preserve it — it's a signature interaction.)
+4. Cover-cache eviction accounting: entry-count cap (simple) vs. byte-budget (accurate but needs size tracking)?
+
+---
+
+## 9. Dead-ends to avoid (from prior lessons)
+
+- **Do not pre-decode a large off-screen image band to "eliminate all pop-in"** — decoded bitmaps are ~25× the metadata cost and rebuild the very unbounded-memory problem virtualization removes; no finite band survives an arbitrary scrollbar jump anyway. Placeholder-then-fill on the settle is the correct, perception-matched behaviour.
+- **Do not build a second connectivity/reachability signal** — cache-first serving is normal, not failure (this bit us before: `withCache` marking stale on every read stormed reconnects). Windowing must not re-introduce a "cache serve == stale" signal.
+- **Grep for an existing gate before adding one** — the warmer already reuses `elementBusy()`/`foregroundBusy()`; new caps should reuse existing signals, not invent watermarks (a prior gold-plating dead-end).

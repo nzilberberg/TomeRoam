@@ -1,0 +1,132 @@
+# Reply to your v3 review — TomeRoam durable-progress plan
+
+All four wording changes are made. Two of them corrected me rather than clarified me,
+and one caught a bug I would have written. Details below, then the one thing I'd still
+flag.
+
+---
+
+## 1. `splitId` replaces `generation` — and your reasoning found a real bug
+
+Accepted, including the point that a prefix splits **at most once** (`1` → `10`/`11`;
+later splits happen to a child), so no ordering counter is needed at all. I had kept
+`generation` purely because a monotonic marker on a commit record *felt* right, which is
+exactly the wrong reason to keep a field.
+
+**Your failure case is the part that matters, and I had not seen it:**
+
+    attempt A writes child 10, crashes
+    records accumulate on the still-authoritative parent 1
+    attempt B computes fresh children
+    → an implementation pairs A's STALE 10 with B's NEW 11
+    → every record added in step 2 is silently lost
+
+That is a real, reachable, silent-data-loss path in the protocol as I wrote it, and it
+survives read-back verification — both children decode perfectly and validate
+individually. Only a shared transaction id makes the *pairing* invalid. This is now
+specified as four reader checks (both exist · both decode · both name the expected
+parent · both carry the redirect's `splitId`), and the plan says plainly why it is not
+optional.
+
+Random over monotonic accepted, for your reason: no separately durable counter. `rev`
+noted as a distinct concept if per-shard revisions are ever wanted; not added
+speculatively.
+
+## 2. A fully viewed book is "finished" — my justification was simply wrong
+
+Accepted, and this is the correction I'm most glad you made. I wrote:
+
+> *A genuine restart would have produced an offset or a board record.*
+
+**False, and my own measurement proves it.** A restart in another app that stops under
+Plex's ~60s floor produces neither: no board record (we weren't playing) and no native
+offset (below the floor). We had already measured that writing `time=50000` yields
+`lastViewedAt` set with no offset — I had the evidence in hand and reasoned past it to
+make an inconvenient edge go away.
+
+The ambiguity is irreducible, so it's now policy rather than inference:
+
+| situation                                          | behaviour |
+|----------------------------------------------------|-----------|
+| passive resume, every chapter viewed               | **finished — no resume candidate** |
+| user explicitly opens/replays                      | chapter 1, position 0 |
+| a board record or interpretable offset exists      | higher rank; this never applies |
+
+And the rule you gave: never manufacture an active position at the end of a book from
+completion evidence.
+
+## 3. Redirects are permanent — I was optimising the wrong thing
+
+Accepted. My argument was that deletion is safe because longest-prefix routing still
+finds the children. True, and beside the point, as you say: the redirect is not a
+routing aid, it is **the durable commit record** — proof both children replaced the
+parent, the binding of those children to one transaction, and a fence against stale code
+resurrecting the parent as a data shard. Without it, `10` and `11` existing does not
+prove they are a committed pair rather than debris.
+
+I was trading away the thing that makes the protocol work to save a playlist count that
+is negligible at any realistic scale. The plan now says: if the count ever becomes a
+real problem, the answer is a designed manifest/compaction protocol — **not deleting
+commit records because routing happens to still work.**
+
+One consequence I've noted rather than left implicit: permanence eliminates two of the
+partial states by construction ("parent gone", "stale parent that failed to delete").
+The harness still covers them defensively — neither our own older builds nor a user
+meddling in Plex is bound by this protocol.
+
+## 4. Interrupted splits restart from the parent
+
+Accepted verbatim: parent data authoritative until the redirect verifies · partial
+children are disposable preparation state, never data · after a crash recompute **both**
+children from the authoritative parent under a **new** `splitId` · never merge partial
+children back into the parent · post-commit writes route to children · a write queued
+during the split applies after commit to the correct child.
+
+The new-`splitId`-on-retry rule is what makes your step-1 bug unreachable rather than
+merely unlikely, so the two edits are really one mechanism.
+
+---
+
+## Replication
+
+Accepted, and the invariant you named is now stated explicitly as the thing the scheme
+rests on: **republishing must not change the timestamp or the origin.** If replication
+re-stamped a record, an old record would look newly authored and would incorrectly win
+last-write-wins — silently overwriting a newer position with a stale one. That is the
+one way this design could eat data, and it deserved to be written down rather than
+assumed.
+
+Unique-records-versus-stored-replicas is now a diagnostics requirement, so the
+amplification stays a known cost rather than a future mystery.
+
+---
+
+## The one thing I'd still flag
+
+Nothing in your review, and not a blocker — but it is now the largest remaining
+unknown, and it is unmeasurable from here.
+
+**Plex's ~60s floor is a single data point.** One server (PMS 1.43.2, Windows), two
+tracks, binary-searched. It is treated throughout as empirical rather than guaranteed,
+per your own rule about the ~32KB ceiling. But unlike the URL ceiling — where
+conservative sizing and adaptive reduction make the exact number operationally
+irrelevant — **the floor's value has semantic consequences**: it decides which states are
+uninterpretable, and therefore what the cross-app feature may and may not conclude. If
+another server version uses a different floor, or a proportional one, the arbitration
+rules stay correct in shape but the ambiguity window moves.
+
+I don't think this changes any decision. It does mean the cross-app feature should
+degrade toward "contribute nothing" when uncertain rather than toward a guess, which is
+how it is now specified.
+
+---
+
+## Status
+
+Architecture approved across two review rounds; all required edits made. The split
+protocol is the highest implementation risk and, as you say, is now simple enough for
+the harness to test deterministically rather than inferring intent from ambiguous
+playlist states.
+
+The emergency fix — stop the deleting — remains independent of all of this and ships
+alone.

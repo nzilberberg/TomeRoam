@@ -1,0 +1,119 @@
+# Reply to your review of v2 — TomeRoam durable-progress plan
+
+Both required edits are made. v3 is written. This reply is short because we mostly
+agree; it covers one confirmation you'd want, three things I'd add, and one open
+question back to you.
+
+---
+
+## Your two required edits — done
+
+**1. `viewCount` narrowed to completion evidence.** You're right and v2 was sloppy: I
+wrote that completion "tells you which chapter you're past", which conflates *a chapter
+was finished at some point* with *this is where you are*. It says nothing about
+revisits, restarts, or a next chapter entered for under a minute. It is now a **weak
+rank-4 fallback** — contiguous completed prefix only, reached solely when ranks 2 and 3
+are empty — and it never enters the same candidate pool as `{track, offset, timestamp}`
+records. Your five-level hierarchy is adopted as written.
+
+**2. Split authority protocol specified.** Adopted essentially verbatim: parent stays
+authoritative → compute both children → write child 0, verify by decoded read-back →
+write child 1, verify → replace the **parent's payload** with the versioned redirect →
+verify → children authoritative. Your framing is the part that made it click: *every
+partial state must have exactly one unambiguous authoritative copy*, and the parent's
+own payload is the commit point because a single summary write either lands or doesn't.
+Crash safety then falls out of the ordering rather than being bolted on. Reader rules,
+the degraded-sync state for a corrupt child, and queuing a mid-split write for the
+correct child are all in.
+
+---
+
+## A confirmation you'd want: your timestamp rule is sound, and here's why
+
+You proposed `native.lastViewedAt > floor(board.ts / 1000)` without knowing whether the
+two clocks were even comparable. **They are, and it's load-bearing:** the board stamps
+records with `Plex.serverNow()` — the *server's* clock, not the device's — and
+`lastViewedAt` is server time as well. Same clock, two precisions. So truncating the
+board's milliseconds is a valid comparison rather than a hopeful one, and your
+same-second tie-break to the board is right on both counts (better time precision, and
+usually better position precision given the ~60s floor).
+
+Had the board used device time, your rule would have been comparing clocks that drift
+against each other and the whole arbitration would need rethinking. Worth stating
+explicitly in case it ever changes.
+
+---
+
+## Your other points
+
+**Two local stores (`authored` / `replica`).** Adopted. This resolves what v2 called
+its only decision-blocking question. The properties you list are the reason it works —
+immutable records carrying `originDeviceId`, republishable without transferring
+authorship, so a later local play produces a genuinely new authored record with a newer
+timestamp and wins on merge. No recovery-device election, idempotent replication,
+duplicates merging harmlessly. Tombstones get identical treatment and are retained
+indefinitely.
+
+**Injectable budget.** Adopted, and it's the most valuable idea in this round. v2's
+worst risk — a split path firing once every few years, broken by the time anyone reaches
+it — is not mitigated by more tests around a production-only branch; it's *dissolved* by
+making the budget a parameter. At 350 bytes ordinary fixtures split recursively on every
+run, and the same production code runs at 8–12KB in the field. The rarest path becomes
+the most-exercised one, with no special mock to drift out of sync with reality. Your
+full partial-state list and the property-based tests against a reference model are both
+in.
+
+**Dual-write lifetime.** Adopted as settled: indefinite is the default, no safe
+automatic retirement exists (offline-for-years is indistinguishable from gone), and the
+alternatives are recorded as explicit compromises rather than dressed up as safe.
+
+**Relay ceiling.** Adopted as downgraded — conservative sizing plus adaptive reduction
+plus read-back verification make the exact number operationally unimportant.
+
+**Shared-user isolation.** Adopted as scoped: it gates the cross-app feature only, and
+until it's verified with two accounts against one library, native offsets must not
+override board records for shared-library users.
+
+---
+
+## Three things I'd add
+
+**1. An edge in the completion-prefix fallback.** A fully re-listened book has *every*
+chapter viewed, so the contiguous prefix yields no unviewed chapter and resolves to
+"finished" — which may be right (you did finish it) or wrong (you restarted it and
+stopped under the 60s floor). I've accepted it as tolerable because rank 4 is only
+reached when ranks 2 and 3 are both empty, and a genuine restart would have produced an
+offset or a board record. Flagging in case you disagree.
+
+**2. Replication multiplies storage across boards.** If several devices each republish
+the same recovered records, those records exist on several boards. Correct under
+last-write-wins, and sharding absorbs the size — but it is real multiplication, and it's
+the price of keeping single-writer boards. Recorded as a consequence rather than a
+surprise. (No contention risk: each device splits only its own shards, so two devices
+never split the same one.)
+
+**3. Permanent redirects build a tree.** Keeping every redirect forever means a binary
+tree of playlists — roughly 2N−1 for N leaves. Irrelevant at realistic scale (a shard
+holds several hundred books, so most users never reach two), but worth naming. Deleting
+a redirect after both children verify is safe **provided routing is longest-prefix-match
+over discovered titles**, which is how it's specified — the children are still found
+without the parent.
+
+---
+
+## One question back
+
+What is `generation` for in the redirect payload? I've kept it, since a monotonic marker
+on the commit record is obviously useful, but I don't want to implement it from a guess.
+Is it to let a reader detect a stale cached redirect, to order repeated splits of the
+same prefix, or something else? If it's load-bearing for a partial state I haven't
+enumerated, I'd rather know now than discover it in the harness.
+
+---
+
+## Status
+
+Architecture approved at v3. Not implementation-ready until you've read the split
+protocol as written. Everything above the split — stop the deleting, recover the lost
+history, the compact format — is unaffected by that gate, and the first of those still
+ships alone and depends on nothing.
