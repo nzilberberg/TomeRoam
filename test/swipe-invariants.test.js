@@ -407,3 +407,40 @@ test('I20 — stale move/end/cancel from the superseded gesture cannot touch the
       'a stale touchmove must not drag the NEW session\'s movers');
   } finally { h.dispose(); }
 });
+
+// ── STAGE 3 — the session owner has observable IDENTITY ─────────────────────────────
+// Stage 3 introduces a session owner with a monotonic `id`, set at arm and dropped on a
+// superseding hard reset. Enforcement (callbacks no-op when superseded) is deliberately
+// deferred to stage 6 — see the `session` note in app.js. What stage 3 delivers and is
+// tested HERE is that identity is real and observable: every completed gesture logs a
+// distinct `sid=`, and a superseded gesture's id surfaces on the hard-reset line.
+const finalizeSids = (h) => swipeLog(h)
+  .map((m) => /#\d+ (?:abort|commit) .* sid=(\d+)/.exec(m)).filter(Boolean).map((m) => Number(m[1]));
+
+test('stage 3 — two sequential completed gestures carry DISTINCT session ids', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    await abortingSwipe(h, addRow(h));
+    await abortingSwipe(h, addRow(h));
+    const sids = finalizeSids(h);
+    assert.equal(sids.length, 2, `two gestures should each log a sid; got ${JSON.stringify(swipeLog(h))}`);
+    assert.notEqual(sids[0], sids[1], 'each gesture must own a distinct session id');
+    assert.ok(sids[1] > sids[0], 'session ids are monotonic');
+  } finally { h.dispose(); }
+});
+
+test('stage 3 — a superseding hard reset reports the SUPERSEDED session id', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    h.touch.start(10, 300, addRow(h));   // arms session #k
+    await realSleep(12);
+    h.touch.move(120, 302);              // live
+    h.touch.start(10, 300, addRow(h));   // supersedes → hard reset
+    await settle(h);
+    const hr = swipeLog(h).find((m) => /leftover state on begin/.test(m));
+    assert.ok(hr, 'the supersession must log a hard-reset line');
+    assert.ok(/sid=\d+/.test(hr), `the hard-reset line must name the superseded session id; got: ${hr}`);
+  } finally { h.dispose(); }
+});

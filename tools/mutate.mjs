@@ -37,6 +37,12 @@ const ABORT_STACK_TO = [
 ].join('\n');
 const END_RELEASE_FROM = ['    function end() {', '      releaseGesture();'].join('\n');
 const END_RELEASE_TO = ['    function end() {', '      /* mutated */'].join('\n');
+// stage 3: the superseded-session id on the hard-reset log line spans two source lines.
+const HARDRESET_SID_FROM = [
+  "        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset'",
+  "          + (session ? ' sid=' + session.id : ''));",
+].join('\n');
+const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');";
 
 const MUTATIONS = [
   { name: 'MS pause -> audio.pause() direct (bypasses userPause)',
@@ -131,6 +137,15 @@ const MUTATIONS = [
     also: { file: 'js/nav.js',
       from: "for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }",
       to: '/* mutated: resetSwipeStyles no longer clears */' } },
+  // ── SWIPE stage 3: session owner identity (PLAN-swipe-reveal.md) ────────────────
+  { name: 'stage3: session id not stamped on the finalize line (-> distinct-sids test)',
+    from: ' tgt=${tg && tg.isConnected ? \'live\' : \'detached\'}:${tgDesc} sid=${cur.id}`)',
+    to:   ' tgt=${tg && tg.isConnected ? \'live\' : \'detached\'}:${tgDesc}`)' },
+  { name: 'stage3: sessionSeq frozen so every gesture shares an id (-> distinct-sids test)',
+    from: 'd = { id: ++sessionSeq,',
+    to:   'd = { id: sessionSeq,' },
+  { name: 'stage3: hard reset drops the superseded sid from its log (-> superseded-sid test)',
+    from: HARDRESET_SID_FROM, to: HARDRESET_SID_TO },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

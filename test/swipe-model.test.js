@@ -37,7 +37,13 @@ const VERIFIED = {
   navTo: '0e84abdf6d072586',
   navRelation: 'ac356cd1a669c2a3',
   gestureEnd: 'f1d6b8391fa4ad57',
-  supersession: 'a470962594518cb9',
+  // Re-verified 2026-07-20 for stage 3 (session owner). The region text changed —
+  // begin()'s hard reset gained `session = null`, the log gained `sid=`, and its
+  // comment was corrected — but the SEMANTICS the model mirrors did NOT: supersession
+  // is still reject-while-finishing, else hard-reset-and-arm (frozen model §5). So the
+  // parity claim stands and only the pin moves. Was 'a470962594518cb9' (pre-stage-3),
+  // then 'd455d0d197ea3af8' (before the comment fix).
+  supersession: 'c70d4ed49257af8e',
 };
 
 // Every line in js/app.js that appends to or rebinds navStack, as it stood when the

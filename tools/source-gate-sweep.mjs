@@ -62,8 +62,11 @@ const ENTRIES = [
   { region: 'begin/supersession (swipe-model)',
     gate: 'test/swipe-model.test.js',
     mustSay: 'mirrored js/app.js region',
-    from: "PBDebug.log('SWIPE', 'leftover state on begin → hard reset');",
-    to:   "PBDebug.log('SWIPE', 'leftover state on begin → hard-reset');" },
+    // Behaviour-neutral rewrite of a line INSIDE the region (the .spent sweep), so it
+    // is the fingerprint that catches it. (Re-anchored for stage 3: the old anchor was
+    // the hard-reset log line, which stage 3 edited to add `sid=`.)
+    from: "document.querySelectorAll('.nav-ghost.spent').forEach((n) => n.remove());",
+    to:   "[...document.querySelectorAll('.nav-ghost.spent')].forEach((n) => n.remove());" },
 ];
 
 const run = (args) => spawnSync(NODE, args, { cwd: ROOT, encoding: 'utf8' });

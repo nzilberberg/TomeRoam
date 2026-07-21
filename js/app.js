@@ -204,6 +204,31 @@
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
   function bindSwipeBack() {
     let d = null, finishing = false, unbindGesture = null, revealWatch = null;
+    // ── SESSION OWNER (PLAN-swipe-reveal.md stage 3) ──────────────────────────────
+    // `session` is the single object that owns one gesture's whole lifecycle (arm →
+    // drag → settle → finalize → reveal) and carries a monotonic `id`. `d` remains the
+    // ACTIVE-DRAG handle (nulled at end() so move()/touchstart see "no drag in
+    // progress"); `session` outlives it through the settle/finalize phase, where the
+    // captured `cur` IS this same object. A new gesture REPLACES `session`; a
+    // superseding hard reset nulls it before re-arming.
+    //
+    // ⚠️ STAGE 3 IS THE OWNER + IDENTITY, NOT ENFORCEMENT. The plan's "every async
+    // callback captures session.id and no-ops when superseded" (§3.2, I12) is
+    // DELIBERATELY NOT added here, and the reason is measured, not lazy: today
+    // `finishing` already rejects every new gesture for the entire settle→finalize
+    // window (begin()'s first line), and it is set false only INSIDE the completion
+    // path — so a new session cannot exist until the old one's finalize has already
+    // run. The post-finishing deferred timers (fadePanes, the 600ms backstop,
+    // watchFrames) are each scoped by their captured locals (the `dropped` flag,
+    // `el.parentNode`). So a `cur === session` guard on those callbacks is
+    // UNREACHABLE BY CONSTRUCTION right now, and guarding runFinalize's top would risk
+    // skipping its own `finishing = false` cleanup. That guard becomes reachable,
+    // load-bearing and testable only once STAGE 6 retires the `finishing` gate in
+    // favour of the state machine — so it lands there, with the test that can fail.
+    // What IS delivered and tested now: identity is observable — the hard-reset log and
+    // the `#N` finalize line both carry `sid=`, so a superseded gesture is tied to its
+    // id and two sequential gestures show distinct ids.
+    let session = null, sessionSeq = 0;
     // Snapshot of the browse page the gesture STARTED on, taken before the mid-drag
     // render touches anything. Compared at reveal, it is the one measurement that
     // separates "the page was rebuilt" from "the page was preserved and is still
@@ -459,9 +484,18 @@
       // and re-introduce the wrong-page/wrong-tap failure .178 fixed. Clear them first.
       document.querySelectorAll('.nav-ghost.spent').forEach((n) => n.remove());
       if (d || document.querySelector('.nav-ghost')) {
-        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');
+        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset'
+          + (session ? ' sid=' + session.id : ''));
         releaseGesture();   // never leave a dead gesture's listeners on a stale node
         dropRowHold();      // …nor its row hold
+        // Drop the superseded session's IDENTITY before re-arming (stage 3). Teardown
+        // of its resources is unchanged — releaseGesture/dropRowHold above and
+        // resetSwipeStyles below already do it; this only clears the owner ref so the
+        // superseded id can never be mistaken for current. It is the hook stage 6's
+        // state machine will consult once `finishing` is retired; today it is pure
+        // bookkeeping. If the new gesture does not arm (not an edge, no destination),
+        // session stays null, which is the correct "no active owner" state.
+        session = null;
         d = null; resetSwipeStyles(); applyScreen(currentDesc(), { render: false });
       }
       // NOTE: `.alphaindex` is deliberately NOT excluded. It sits on the forward-swipe
@@ -480,9 +514,10 @@
       else if (fwdStack.length) { dir = 'fwd'; dest = fwdStack[fwdStack.length - 1]; }
       else return;
       if (!dest) return;
-      d = { dir, from, dest, newNav, x0: x, y0: y, dx: 0, w: window.innerWidth, live: false, locked: false,
+      d = { id: ++sessionSeq, dir, from, dest, newNav, x0: x, y0: y, dx: 0, w: window.innerWidth, live: false, locked: false,
             lastX: x, lastT: performance.now(), vx: 0, scroll0: window.scrollY || 0, movers: [], clobbered: false,
             tgt: target };
+      session = d;   // this gesture is now the owner (stage 3); id is observable now, gates callbacks in stage 6
       bindGesture(target);
     }
 
@@ -771,7 +806,7 @@
         // returns without reporting.
         const seq = ++revealSeq;
         if (window.PBDebug) PBDebug.log('SWIPE', `#${seq} ${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`
-          + ` tgt=${tg && tg.isConnected ? 'live' : 'detached'}:${tgDesc}`);
+          + ` tgt=${tg && tg.isConnected ? 'live' : 'detached'}:${tgDesc} sid=${cur.id}`);
         for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }
         if (commit) {
           if (cur.dir === 'back') fwdStack.push(navStack.pop());
