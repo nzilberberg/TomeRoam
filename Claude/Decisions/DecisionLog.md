@@ -7,14 +7,17 @@ the entry to current truth (git holds the history). Detail lives in the plan-of-
 (`PLAN-swipe-reveal.md`, `PLAN-durable-progress.md`) and the cross-session memory; this
 file holds only the settled conclusions.
 
-Records home: this tree is committed to the repo (see `Claude/README.md`). No separate
-tactical board is kept — the cross-session memory hub serves that view for the
-implementation sessions.
+Records home: this project's own records tree, `<project-root>/Claude/`, committed to the
+repo. Per the scheme, records are per-project; the persona specs and conventions are
+global (`~/.claude/personas/`) and are not restated here. No separate tactical board is
+kept — the cross-session memory serves that view for the implementation sessions.
 
 ---
 
-- Any commit gets a new build number, including docs, plans, tests, and tooling — the
-  build number labels a tree state for review, not a deploy decision — 2026-07-20.
+- A change to the PRODUCT (code, assets, tests, tooling, plans, docs in the repo) gets a
+  new app build number, which labels a product tree state for review. The `Claude/`
+  persona-records tree is scheme housekeeping, not product, and its commits do not bump
+  the build — 2026-07-20.
 
 - The swipe/reveal rewrite plan (`PLAN-swipe-reveal.md`, draft 7) is the plan-of-record,
   approved after seven review rounds — 2026-07-20.
@@ -71,3 +74,8 @@ implementation sessions.
 - Each code review is filed to `Claude/Poirot/` by the reviewing session and committed;
   the implementation session pulls and reads it. A review relayed only as pasted text is
   not a filed artifact and is lost once the conversation ends — 2026-07-20.
+
+- Builds .224 and .225 bumped the app version for scheme-records commits in error; the
+  app code at .225 is identical to .223. The numbers are not reclaimed, because OTA build
+  comparison is monotonic and a device already on .225 must not be sent a lower number.
+  The next product change is .226 — 2026-07-20.
