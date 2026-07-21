@@ -266,10 +266,21 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   (`test/no-silent-coverage-exit-gate.test.js` — the canonical `if (!x) return;` skip in a test
   body; the mutation sweep is the semantic backstop) and §4.11 clone-before-freeze (the §14 gate
   now asserts a contract function CLONES a caller-owned array rather than freezing it in place).
-  Still NOT gated, flagged honestly: §4.19 structured policy-ledger assertion (needs a machine-
-  readable ledger — the DecisionLog is prose); §3/§6/§7/§10 procedures; §8 report wording; §4.14
-  is enforced structurally (the generator renders the spec, never calls the planner) not by a
-  gate (the planner names appear in its doc-comments, so a text gate would false-positive) — 2026-07-21.
+  NOT gated (process, not mechanizable): §3/§6/§7/§10 procedures; §8 report wording. §4.14 is
+  enforced structurally (the generator renders the spec, never calls the planner) not by a gate
+  (the planner names appear in its doc-comments, so a text gate would false-positive) — 2026-07-21.
+
+- §4.19 (parity vs policy — "maintain an exact structured policy ledger; tests must assert its
+  complete active contents") is now MECHANIZED (build .232). `Claude/Decisions/PolicyLedger.mjs`
+  is the machine-readable ledger (each entry carries the §1.C fields: id, subsystem, decision,
+  reason, status, introduced, removalTrigger, tests). `test/policy-ledger-gate.test.js`
+  reconciles it against the suite: every known-red (`{ todo }`) test must be declared (no
+  untracked policy), every declared known-red must still be red (no exception outliving its
+  cause), every referenced test name must exist, and every entry must carry the required fields
+  with a unique id. Seeded with the two stage-2 swipe known-reds. The prose DecisionLog remains
+  the ledger for decisions without a test signature; the two are complementary, not duplicated
+  (the structured ledger holds only test-enforced items). Mutation #41 (dangle a ledger test
+  reference) reddens the gate; registered in the sweep — 2026-07-21.
 
 - Owed to stage 6 (from the .227 review's process note, recorded now so it is not lost): when the settle
   requestAnimationFrame, the settle/reveal timers, or the transitionend listener are cancelled OR fire,

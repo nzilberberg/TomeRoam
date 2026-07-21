@@ -230,6 +230,12 @@ const MUTATIONS = [
     file: 'js/swipe.js',
     from: '    const decorations = Object.freeze((c.decorations || []).map((d) => Object.freeze({ ...d })));',
     to:   '    const decorations = Object.freeze(c.decorations);' },
+  // §4.19 policy ledger — a known-red ledger reference that no longer matches its test must be
+  // caught (untracked known-red / stale exception / dangling reference).
+  { name: '§4.19: a policy-ledger known-red test reference is dangled (-> policy-ledger gate)',
+    file: 'Claude/Decisions/PolicyLedger.mjs',
+    from: "restores the starting scroll'],",
+    to:   "restores the starting scroll DANGLED']," },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

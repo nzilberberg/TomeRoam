@@ -45,9 +45,11 @@ subsystem addendum; this DecisionLog is the Ledger. **Mechanized sections (gates
 §4.10 mutations registered in `tools/mutate.mjs` + `tools/mutation-sweep.mjs` + `test/mutation-
 anchors.test.js`; §4.11 `test/contract-function-gate.test.js` (exact-keyed, deep-immutable, clone-
 before-freeze, new-export meta-check); §4.9 `test/no-silent-coverage-exit-gate.test.js`; §4.14/§4.20
-`test/descriptor-coverage-gate.test.js` (all seven §15 cases; scenarios generated per §22). NOT yet
-gated (honest): §4.19 structured policy-ledger (needs a machine-readable ledger), §3/§6/§7/§10
-procedures, §8 report wording. ⚠️ The .230 batch landed only after its first commit silently failed
+`test/descriptor-coverage-gate.test.js` (all seven §15 cases; scenarios generated per §22); §4.19
+`test/policy-ledger-gate.test.js` reconciles `Claude/Decisions/PolicyLedger.mjs` against the suite's
+known-red set (no untracked/stale/dangling policy) + §1.C fields. NOT gated (process, not mechanizable):
+§3/§6/§7/§10 procedures, §8 report wording; §4.14 oracle-independence enforced structurally. ⚠️ The
+.230 batch landed only after its first commit silently failed
 (`git commit` chained after a no-match `grep` in `&&`) and was falsely reported shipped — see
 [[git-commit-verify]]. Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the
 stages-gated-by-review policy → DecisionLog. **The headline flash bug is STILL OPEN** — depth,

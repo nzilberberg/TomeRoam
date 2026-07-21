@@ -17,8 +17,9 @@ contract layer before implementation.
 > - §4.11 exact schema + deep immutability + clone-before-freeze + direct-call contract → `test/contract-function-gate.test.js`.
 > - §4.9 no silent coverage exits → `test/no-silent-coverage-exit-gate.test.js`.
 > - §4.14 / §4.20 descriptor-scenario coverage + generation → `test/descriptor-coverage-gate.test.js` (+ generated scenarios in `test/fixtures/swipe-plan-spec.mjs`).
+> - §4.19 structured policy-ledger assertion → `test/policy-ledger-gate.test.js` reconciles `Claude/Decisions/PolicyLedger.mjs` against the suite's known-red set (no untracked known-red, no stale exception, every referenced test exists) + the §1.C required fields.
 > - Build-stamp coherence → `test/build.test.js`; source-fingerprint pins → `test/transition-matrix.test.js`, `test/swipe-model.test.js`.
-> - **Not yet gated (process or needs design):** §4.19 structured policy-ledger assertion (needs a machine-readable ledger); §3/§6/§7/§10 procedures; §8 report-claim wording. Flagged honestly rather than claimed.
+> - **Not gated (process, not mechanizable):** §3/§6/§7/§10 procedures; §8 report-claim wording. §4.14 oracle-independence is enforced structurally (the generator renders the spec, never calls the planner) rather than by a text gate that would false-positive on its doc-comments. Flagged honestly rather than claimed.
 
 ======================================================================
 ## 1. CONTRACT STRUCTURE
@@ -263,7 +264,10 @@ Classify every production change as behavior-preserving extraction; known-red re
 policy; migration; or unrelated cleanup. Do not hide a bug fix inside a parity extraction. Do
 not preserve a known defect merely because it exists unless parity was explicitly chosen.
 Maintain an exact structured policy ledger; tests must assert its complete active contents.
-*(Not yet gated — needs a machine-readable ledger artifact; the DecisionLog is prose today.)*
+*(Gated: `Claude/Decisions/PolicyLedger.mjs` is the machine-readable ledger;
+`test/policy-ledger-gate.test.js` reconciles it against the suite — an untracked known-red, a
+stale exception, or a dangling test reference fails CI. Decisions without a test signature stay
+in the prose DecisionLog.)*
 
 ### 4.20 MECHANICAL DERIVATION
 Generate inventories where possible (screen registries; descriptor scenarios; transition
