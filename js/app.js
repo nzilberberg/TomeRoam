@@ -203,7 +203,12 @@
   // the underlying page never scrolls); two in-flow views can't coexist, so an
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
   function bindSwipeBack() {
-    let d = null, finishing = false, unbindGesture = null, revealWatch = null;
+    let d = null, finishing = false;
+    // revealWatch is DELIBERATELY module-scoped, not a session resource: a new reveal
+    // flushes the PREVIOUS session's watch (reportReveal below), so it must outlive its
+    // session. Moving it onto `session` would sever that cross-session flush. (It is a
+    // diagnostic slated for removal in stage 10 regardless.)
+    let revealWatch = null;
     // ── SESSION OWNER (PLAN-swipe-reveal.md stage 3) ──────────────────────────────
     // `session` is the single object that owns one gesture's whole lifecycle (arm →
     // drag → settle → finalize → reveal) and carries a monotonic `id`. `d` remains the
@@ -229,6 +234,16 @@
     // the `#N` finalize line both carry `sid=`, so a superseded gesture is tied to its
     // id and two sequential gestures show distinct ids.
     let session = null, sessionSeq = 0;
+    // Relinquish ownership: clear `session` iff it is still the given session, so a
+    // completed gesture's endpoint can never null a NEWER gesture that has since armed.
+    // This is what makes IDLE mean "no active owner" rather than "the last gesture" —
+    // called at every exit once the session's last live resource is released (stage 3,
+    // finding #2 of the .222 review). A stale diagnostic timer keeps only the numeric
+    // sid in its own closure and does not need the session to remain the owner.
+    const sessionDone = (s) => { if (session === s) session = null; };
+    // Observable owner state, for tests asserting no session survives an exit (and for
+    // device diagnostics). Pure read of the real var — not a parallel implementation.
+    if (typeof window !== 'undefined') window.PBSwipeSession = () => (session ? { id: session.id, dragging: !!d } : null);
     // Snapshot of the browse page the gesture STARTED on, taken before the mid-drag
     // render touches anything. Compared at reveal, it is the one measurement that
     // separates "the page was rebuilt" from "the page was preserved and is still
@@ -294,14 +309,20 @@
       target.addEventListener('touchmove', onMove, { passive: false });
       target.addEventListener('touchend', onEnd, { passive: true });
       target.addEventListener('touchcancel', onEnd, { passive: true });
-      unbindGesture = () => {
+      // The listeners are owned by THIS gesture's session (stage 3). Capture the session
+      // so the release fn tears down its OWN listeners even after `session` has moved on
+      // to a newer gesture (supersession), and never touches the module ref.
+      const s = session;
+      s.releaseListeners = () => {
         target.removeEventListener('touchmove', onMove);
         target.removeEventListener('touchend', onEnd);
         target.removeEventListener('touchcancel', onEnd);
-        unbindGesture = null;
+        s.releaseListeners = null;
       };
     }
-    const releaseGesture = () => { if (unbindGesture) unbindGesture(); };
+    // Releases the CURRENT session's listeners. Null-safe: leftover-cleanup at begin()
+    // may run with no active session, whose gesture already released these at its exit.
+    const releaseGesture = () => { if (session && session.releaseListeners) session.releaseListeners(); };
 
     // While a gesture is live, Browse keeps the outgoing page's rows instead of
     // dematerializing them, so an ABORT restores the page instead of rebuilding it
@@ -312,11 +333,13 @@
     // the hard reset, and a throwing finalize. A leaked hold is bounded (it degrades
     // to what the classic renderer already does — keep every hidden page's rows) but
     // it is still a leak, so every path is covered rather than most of them.
-    let holdTok = 0;
-    const takeRowHold = () => { if (window.Browse && Browse.beginHold) holdTok = Browse.beginHold(); };
+    // The Browse hold is owned by the session (stage 3). Stored as session.hold; its
+    // full LEASE interface is stage 7. Null-safe like releaseGesture, for the same
+    // leftover-cleanup reason. (takeRowHold runs in start(), where session is current.)
+    const takeRowHold = () => { if (session && window.Browse && Browse.beginHold) session.hold = Browse.beginHold(); };
     const dropRowHold = () => {
-      if (!holdTok) return;
-      const t = holdTok; holdTok = 0;
+      if (!session || !session.hold) return;
+      const t = session.hold; session.hold = 0;
       if (window.Browse && Browse.endHold) Browse.endHold(t);
     };
     const navPill = () => $('navbar').querySelector('.np-actions');
@@ -574,13 +597,22 @@
 
       // ── OUTGOING (base 0) FIRST ── the ghost must snapshot the current #browse
       // BEFORE the incoming render (below) clobbers it (browse→browse).
+      // TYPED MOVER OWNERSHIP (stage 3, replacing the old `remove: true` convention).
+      // Each mover declares which of three resource classes it is, so teardown is by
+      // TYPE, not by an implicit flag:
+      //   borrowed-real    a real #home/#browse/overlay element — clear its transient
+      //                    styles at the end, NEVER remove the node.
+      //   owned-pane       a ghost/snapshot this gesture built — released (paint-gated,
+      //                    stage 6/I10) or disposed. Was `remove: true`.
+      //   owned-decoration the NP pill clone — removed. (Its removal still routes through
+      //                    resetSwipeStyles today; consolidating that is stage 6.)
       if (fromOv) {
-        out = { el: overlayEl(fromV), base: 0 };
-        if (fromV === 'nowplaying') { document.body.classList.remove('np-locked'); pill = { el: npPillClone(), base: 0 }; }
+        out = { el: overlayEl(fromV), base: 0, own: 'borrowed-real' };
+        if (fromV === 'nowplaying') { document.body.classList.remove('np-locked'); pill = { el: npPillClone(), base: 0, own: 'owned-decoration' }; }
       } else if (incomingBrowse) {
-        out = { el: ghostApp(), base: 0, remove: true };  // incoming needs the real #browse → freeze outgoing as a ghost
+        out = { el: ghostApp(), base: 0, own: 'owned-pane' };  // incoming needs the real #browse → freeze outgoing as a ghost
       } else {
-        out = { el: appViewEl(fromV), base: 0 };           // incoming is overlay/snapshot → move the real view (scroll-neutral)
+        out = { el: appViewEl(fromV), base: 0, own: 'borrowed-real' };   // incoming is overlay/snapshot → move the real view (scroll-neutral)
       }
 
       // ── INCOMING (base off) ──
@@ -589,14 +621,14 @@
         if (toV === 'nowplaying') { renderNowPlaying(); document.body.classList.remove('np-locked'); }
         else renderScreen(toV);   // 'options' or any settings sub-screen
         el.classList.remove('hidden');
-        incoming = { el, base: off };
-        if (toV === 'nowplaying') pill = { el: npPillClone(), base: off };
+        incoming = { el, base: off, own: 'borrowed-real' };
+        if (toV === 'nowplaying') pill = { el: npPillClone(), base: off, own: 'owned-decoration' };
       } else if (toV === 'home') {
-        incoming = { el: snapshotHome(), base: off, remove: true };   // static snapshot at top, .app untouched
+        incoming = { el: snapshotHome(), base: off, own: 'owned-pane' };   // static snapshot at top, .app untouched
       } else {
         showAppView(d.dest, true);                      // render dest into the real #browse (outgoing already ghosted)
         d.clobbered = !fromOv && appViewEl(fromV) === $('browse');   // browse→browse → abort re-renders
-        incoming = { el: $('browse'), base: off };
+        incoming = { el: $('browse'), base: off, own: 'borrowed-real' };
       }
 
       d.movers = [out, incoming];
@@ -617,7 +649,7 @@
         if (ev && ev.cancelable) ev.preventDefault();
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
         d.locked = true;
-        if (Math.abs(dx) <= Math.abs(dy)) { releaseGesture(); d = null; return; }   // vertical intent → abandon (native scroll resumes)
+        if (Math.abs(dx) <= Math.abs(dy)) { releaseGesture(); sessionDone(d); d = null; return; }   // vertical intent → abandon; owner ends (no drag resources were taken)
         start();
       }
       if (!d.live) return;
@@ -638,7 +670,7 @@
       // the abort would rebuild the page after all. Released in finalize / hard reset only.
       if (!d) return;
       const cur = d; d = null;
-      if (!cur.live) return;
+      if (!cur.live) { sessionDone(cur); return; }   // ARMED end: listeners released above, owner ends — no settle
       const prog = Math.abs(cur.dx) / cur.w;                    // how much of the incoming page is on screen
       const flickGo = cur.dir === 'back' ? cur.vx > FLICK_V : cur.vx < -FLICK_V;
       const flickNo = cur.dir === 'back' ? cur.vx < -FLICK_V : cur.vx > FLICK_V;
@@ -656,7 +688,12 @@
         for (const m of cur.movers) m.el.style.transform = 'translateX(' + (m.base === 0 ? outTo : inTo) + 'px)';
       });
       let done = false;
-      const dropPanes = () => { for (const m of cur.movers) if (m.remove && m.el.parentNode) m.el.remove(); };
+      // A held reveal (holdGhostUntilPaintable) keeps an owned-pane covering the view
+      // past finalize; the session must stay the owner until that pane is released.
+      // finalize clears the session only when NO reveal is pending; a held reveal's
+      // drop() clears it instead. Set true by the two held branches below.
+      let revealPending = false;
+      const dropPanes = () => { for (const m of cur.movers) if (m.own === 'owned-pane' && m.el.parentNode) m.el.remove(); };
       //
       // ⭐ .203 PROBE — CROSS-FADE THE GHOST INSTEAD OF YANKING IT.
       // Two consecutive device repros (.202 #8 and #10, both "flashed at the snap
@@ -682,7 +719,7 @@
       // anything else is a difference the user sees at the uncover with no DOM write.
       const ghostVsReal = (realRoot) => {
         try {
-          const pane = cur.movers.find((m) => m.remove && m.el.parentNode);
+          const pane = cur.movers.find((m) => m.own === 'owned-pane' && m.el.parentNode);
           if (!pane) return 'no-pane';
           const live = realRoot.querySelector('.browsepage:not(.hidden):not(.parked)') || realRoot;
           const probe = (sel) => {
@@ -737,7 +774,7 @@
       const FADE_MS = 0;   // .210: still 0 — the ghost cross-fade IS a fade
       const fadePanes = () => {
         for (const m of cur.movers) {
-          if (!m.remove || !m.el.parentNode) continue;
+          if (m.own !== 'owned-pane' || !m.el.parentNode) continue;
           const el = m.el;
           // `spent` = uncovered, awaiting removal. begin() clears these on sight so a
           // fading pane is never mistaken for a wedged gesture's leftover state.
@@ -784,7 +821,7 @@
       // ghostApp() (browse→browse) and snapshotHome() (→home); every other transition
       // slides REAL elements and covers nothing. That is the correlation to test.
       const paneKindOf = () => {
-        const p = cur.movers.filter((m) => m.remove);
+        const p = cur.movers.filter((m) => m.own === 'owned-pane');
         if (!p.length) return 'none';
         return cur.dest && cur.dest.v === 'home' ? 'snapshot' : 'ghost';
       };
@@ -880,6 +917,7 @@
             if (cover.mark) cover.mark('postDrop');
             watchFrames(paneKindOf());   // .213: objective flash proxy, held paths
             finishing = false;
+            sessionDone(cur);   // the held pane is released → this session's owner ends (terminal for held paths)
             if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(cover.dropAt - t0)}ms `
               + `covers=${covers.length} via=${why} fade=${FADE_MS}ms`);
           };
@@ -1188,6 +1226,7 @@
         if (commit && dest.v === 'home') {
           applyScreen(dest, { render: false, keepGhosts: true });
           reportReveal('commit→home', $('home'), cover);
+          revealPending = true;   // the ghost still owns the view; drop() ends the session
           holdGhostUntilPaintable($('home'), cover);
           return;
         }
@@ -1204,6 +1243,7 @@
           window.scrollTo(0, cur.scroll0);
           mark('restored');
           reportReveal('abort→' + dest.v, $('browse'), cover);
+          revealPending = true;   // the ghost still owns the view; drop() ends the session
           holdGhostUntilPaintable($('browse'), cover);
           return;
         }
@@ -1233,9 +1273,13 @@
       // run if applyScreen or Browse.render throws. A finally covers every return AND
       // the throw. It lands after the SYNCHRONOUS applyScreen, which is the part that
       // must still see the hold; the deferred ghost drop does not need it.
+      const endOwnership = () => { if (!revealPending) sessionDone(cur); };   // held paths end in drop()
       const finalize = () => {
         if (done) return; done = true;
-        try { runFinalize(); } finally { dropRowHold(); }
+        // Order matters: dropRowHold reads session.hold, so it must run BEFORE
+        // endOwnership clears the session. A throw in runFinalize still releases the
+        // hold and ends ownership (a stranded session is exactly what finding #2 forbids).
+        try { runFinalize(); } finally { dropRowHold(); endOwnership(); }
       };
       const anchor = cur.movers[0] && cur.movers[0].el;
       if (anchor) anchor.addEventListener('transitionend', finalize, { once: true });

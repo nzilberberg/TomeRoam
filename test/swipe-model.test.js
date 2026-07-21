@@ -36,7 +36,11 @@ const lf = (s) => s.replace(/\r\n/g, '\n');
 const VERIFIED = {
   navTo: '0e84abdf6d072586',
   navRelation: 'ac356cd1a669c2a3',
-  gestureEnd: 'f1d6b8391fa4ad57',
+  // Re-verified 2026-07-20 for stage 3 (completed): end()'s ARMED branch gained the
+  // ownership-endpoint clear (sessionDone). The I19 routing SEMANTICS are unchanged —
+  // ARMED still finishes with NO navigation; the clear is ownership bookkeeping, not a
+  // routing change. Pin moves, model §4 stands. Was 'f1d6b8391fa4ad57'.
+  gestureEnd: '9a82592f5d21db7b',
   // Re-verified 2026-07-20 for stage 3 (session owner). The region text changed —
   // begin()'s hard reset gained `session = null`, the log gained `sid=`, and its
   // comment was corrected — but the SEMANTICS the model mirrors did NOT: supersession

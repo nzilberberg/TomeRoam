@@ -42,6 +42,8 @@ const HARDRESET_SID_FROM = [
   "        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset'",
   "          + (session ? ' sid=' + session.id : ''));",
 ].join('\n');
+const DROP_SESSIONDONE_FROM = "sessionDone(cur);   // the held pane is released → this session's owner ends (terminal for held paths)";
+const DROP_SESSIONDONE_TO = '/* mutated: owner not ended on held reveal */';
 const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');";
 
 const MUTATIONS = [
@@ -112,7 +114,11 @@ const MUTATIONS = [
   // that was once verified cannot silently become undefended. Each entry names the
   // test expected to go red.
   { name: 'swipe: end() stops distinguishing ARMED from DRAGGING (-> I19 ARMED tests)',
-    from: 'if (!cur.live) return;', to: 'if (false) return;' },
+    // Re-anchored for stage 3: the ARMED branch gained the ownership-endpoint clear, so
+    // it is now a block, not a bare `return`. This mutation still sends ARMED down the
+    // DRAGGING path (drops the whole guard); the endpoint clear is a SEPARATE mutation.
+    from: 'if (!cur.live) { sessionDone(cur); return; }   // ARMED end: listeners released above, owner ends — no settle',
+    to: 'if (false) { sessionDone(cur); return; }' },
   { name: 'swipe: touchcancel no longer shares onEnd (-> I19 DRAGGING commit test)',
     from: "target.addEventListener('touchcancel', onEnd, { passive: true });",
     to: "target.addEventListener('touchcancel', () => {}, { passive: true });" },
@@ -146,6 +152,21 @@ const MUTATIONS = [
     to:   'd = { id: sessionSeq,' },
   { name: 'stage3: hard reset drops the superseded sid from its log (-> superseded-sid test)',
     from: HARDRESET_SID_FROM, to: HARDRESET_SID_TO },
+  // ── SWIPE stage 3 (completed): resource ownership + endpoint (review of .222) ───
+  { name: 'stage3: hard reset logs the SUCCESSOR id, not the superseded one (-> misattribution test)',
+    from: "+ (session ? ' sid=' + session.id : '')",
+    to:   "+ (session ? ' sid=' + (sessionSeq + 1) : '')" },
+  { name: 'stage3: ARMED end does not relinquish ownership (-> endpoint armed-cancel test)',
+    from: 'if (!cur.live) { sessionDone(cur); return; }   // ARMED end: listeners released above, owner ends — no settle',
+    to:   'if (!cur.live) { return; }' },
+  { name: 'stage3: vertical abandon does not relinquish ownership (-> endpoint abandon test)',
+    from: 'releaseGesture(); sessionDone(d); d = null; return;',
+    to:   'releaseGesture(); d = null; return;' },
+  { name: 'stage3: finalize does not end ownership (-> endpoint completed-and-gone test)',
+    from: 'try { runFinalize(); } finally { dropRowHold(); endOwnership(); }',
+    to:   'try { runFinalize(); } finally { dropRowHold(); }' },
+  { name: 'stage3: held reveal drop does not end ownership (-> endpoint held-reveal test)',
+    from: DROP_SESSIONDONE_FROM, to: DROP_SESSIONDONE_TO },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

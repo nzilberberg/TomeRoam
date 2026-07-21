@@ -57,8 +57,10 @@ const ENTRIES = [
   { region: 'end/state-routing (swipe-model)',
     gate: 'test/swipe-model.test.js',
     mustSay: 'mirrored js/app.js region',
-    from: 'if (!cur.live) return;',
-    to:   'if (cur.live !== true) return;' },
+    // Re-anchored for stage 3: the ARMED branch gained the ownership clear, so the old
+    // `if (!cur.live) return;` line no longer exists. Equivalent rewrite of the new one.
+    from: 'if (!cur.live) { sessionDone(cur); return; }',
+    to:   'if (cur.live !== true) { sessionDone(cur); return; }' },
   { region: 'begin/supersession (swipe-model)',
     gate: 'test/swipe-model.test.js',
     mustSay: 'mirrored js/app.js region',

@@ -430,17 +430,103 @@ test('stage 3 — two sequential completed gestures carry DISTINCT session ids',
   } finally { h.dispose(); }
 });
 
-test('stage 3 — a superseding hard reset reports the SUPERSEDED session id', async () => {
+// The hard-reset sid, as a number. Distinct from the finalize sids.
+const hardResetSids = (h) => swipeLog(h)
+  .map((m) => /leftover state on begin.*\bsid=(\d+)/.exec(m)).filter(Boolean).map((m) => Number(m[1]));
+
+// ⚠️ REVIEW OF .222/.223 [LOW] — an earlier version of this test only checked that the
+// hard-reset line contained `sid=<digits>`. A constant, the NEXT session's id, or any
+// wrong number would have passed it. The relationship has to be observable, so three
+// gestures are used: complete A, arm+drag B, supersede B with C, complete C. Then
+// sid(A) < hardResetSid(B) < sid(C) and all three differ pins that the logged id
+// belongs to the SUPERSEDED session, not a constant or the successor.
+test('stage 3 — the hard-reset sid is the SUPERSEDED session, not a constant or the successor', async () => {
   const h = boot({ fakeTimers: true });
   try {
     await onAuthorsOverBooks(h);
-    h.touch.start(10, 300, addRow(h));   // arms session #k
+    await abortingSwipe(h, addRow(h));       // A completes → finalize sid(A)
+
+    h.touch.start(10, 300, addRow(h));       // B arms
     await realSleep(12);
-    h.touch.move(120, 302);              // live
-    h.touch.start(10, 300, addRow(h));   // supersedes → hard reset
+    h.touch.move(120, 302);                  // B live (drags)
+    const rowC = addRow(h);
+    h.touch.start(10, 300, rowC);            // C supersedes B → hard reset logs sid(B)
+    h.touch.move(80, 302);                   // C engages (start)
+    await realSleep(12);
+    h.touch.move(200, 304);                  // C out to the extreme
+    await realSleep(12);
+    h.touch.move(30, 304);                   // C retreats → aborts
+    await realSleep(12);
+    h.touch.end(30, 304);                    // C completes → finalize sid(C)
+    await settle(h); await h.clock.advance(400); await settle(h);
+    const fin = finalizeSids(h);
+    const hr = hardResetSids(h);
+    assert.ok(fin.length >= 2, `expected at least two finalize sids (A and C); got ${JSON.stringify(fin)}`);
+    assert.equal(hr.length, 1, `expected exactly one hard reset (B); got ${JSON.stringify(hr)}`);
+    const sidA = fin[0], sidB = hr[0], sidC = fin[fin.length - 1];
+    assert.ok(sidA < sidB && sidB < sidC,
+      `superseded id must sit BETWEEN the completed ones: A=${sidA} B=${sidB} C=${sidC}`);
+    assert.equal(new Set([sidA, sidB, sidC]).size, 3, 'all three session ids must differ');
+  } finally { h.dispose(); }
+});
+
+// ── STAGE 3 — the ownership ENDPOINT (review of .222 [MED] finding #2) ───────────────
+// IDLE must mean "no active owner", not "the last gesture". `PBSwipeSession()` is a pure
+// read of the real `session` var. Every exit type must leave it null.
+const activeSession = (h) => (h.window.PBSwipeSession ? h.window.PBSwipeSession() : 'no-accessor');
+
+test('endpoint — during a live drag an owner EXISTS, and after it completes it is gone', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    h.touch.start(10, 300, addRow(h));
+    await realSleep(12);
+    h.touch.move(120, 302);                        // live
+    assert.ok(activeSession(h) && activeSession(h).dragging,
+      `a live drag must have an active owning session; got ${JSON.stringify(activeSession(h))}`);
+    // finish it (aborting)
+    await realSleep(12); h.touch.move(30, 304); await realSleep(12); h.touch.end(30, 304);
+    await settle(h); await h.clock.advance(400); await settle(h);
+    assert.equal(activeSession(h), null, 'after a completed abort, no session may remain active');
+  } finally { h.dispose(); }
+});
+
+test('endpoint — an ARMED cancel leaves no active owner', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    h.touch.start(10, 300, addRow(h));
+    h.touch.cancel(10, 300);
+    await settle(h); await h.clock.advance(400);
+    assert.equal(activeSession(h), null, 'an armed-then-cancelled gesture must relinquish ownership');
+  } finally { h.dispose(); }
+});
+
+test('endpoint — a VERTICAL abandon leaves no active owner', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    h.touch.start(10, 300, addRow(h));
+    await realSleep(12);
+    h.touch.move(14, 360);                         // vertical → abandon
+    await realSleep(12); h.touch.end(14, 360);
+    await settle(h); await h.clock.advance(400);
+    assert.equal(activeSession(h), null, 'a vertical abandon must relinquish ownership');
+  } finally { h.dispose(); }
+});
+
+test('endpoint — a HELD reveal (commit→home) relinquishes only after the pane drops', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    // Authors → Home is a commit→home held reveal (snapshot pane held until paintable).
+    h.tap('.navbtn[data-nav="authors"]');
     await settle(h);
-    const hr = swipeLog(h).find((m) => /leftover state on begin/.test(m));
-    assert.ok(hr, 'the supersession must log a hard-reset line');
-    assert.ok(/sid=\d+/.test(hr), `the hard-reset line must name the superseded session id; got: ${hr}`);
+    // Drag Authors → Home to commit.
+    h.touch.start(10, 300, addRow(h));
+    h.touch.move(80, 302);
+    await realSleep(12); h.touch.move(600, 304); await realSleep(12); h.touch.end(600, 304);
+    await settle(h); await h.clock.advance(700); await settle(h);
+    assert.equal(activeSession(h), null,
+      'after the held reveal drops its pane, the owner must be gone (drop() ends it, not finalize)');
   } finally { h.dispose(); }
 });
