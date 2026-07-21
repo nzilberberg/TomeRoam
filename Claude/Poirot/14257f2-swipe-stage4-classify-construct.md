@@ -1,7 +1,9 @@
 # Code Review — .227 swipe stage 4 (classifyTransition + constructionPlanFor)
 
+Type: code-review
+Prior-review: 33c7653-swipe-stage3-session-owner.md
 Commit: 14257f2 — "swipe stage 4 — extract classifyTransition() + constructionPlanFor(), retire the branch mirror"
-Reviewer: Poirot (between-stages blind review, per the staged-extraction process)
+Reviewer: Poirot (between-stages review, per the staged-extraction process)
 Date: 2026-07-21
 Plan of record: Claude/Plans/PLAN-swipe-reveal.md — stage 4 (§7.4: "Extract classifyTransition() + planFor(); prove every registry pair")
 
@@ -101,3 +103,26 @@ built at the wrong base) ships green and is found only on device — the failure
 rewrite exists to end. Cost to close now: one harness test driving a `home→nowplaying` (or
 `nowplaying→home`) swipe that asserts a pill mover exists at the correct base, mutation-verified
 by dropping the decorations loop.
+
+## Watch-list
+
+The bounded continuity artifact — the distilled arc a fresh review reads INSTEAD of the full
+series of casebooks. It holds only what is LIVE; "what changed / what was learned" lives in its
+own homes (the diff, git + the plan's change log, the decision log, the traps section and
+disciplines). The next review of this subsystem (stage 5) MUST forward every OPEN item below —
+marking it still-open, `resolved: <how>`, or `dropped: <why>` — never silently omit it. Marking
+an item resolved/dropped is a FILING event: its resolution and any durable lesson graduate to
+their permanent home (a settled question → Claude/Decisions/DecisionLog.md; a review-craft lesson
+→ the Poirot disciplines; a design change → the plan) BEFORE it falls off, so the list stays
+bounded without losing history. New concerns get the next free id. Enforced by
+`test/poirot-casebook-gate.test.js`.
+
+- [W1] (resolved: .228 — a WIRING test in swipe-invariants drives a real NP-source back-swipe and asserts the `.np-pill-float` mover is built; mutation-verified by dropping start()'s decorations loop) F1 — the NP-pill decoration wiring seam had no running test.
+- [W2] (resolved: .228 — filed in Claude/Decisions/DecisionLog.md as a deliberate §3.3/§7.4 phase-split driven by the no-dead-fields rule; the stage-6 handle-cancellation cleanup also filed) F2 — the phase-split was recorded only in the commit message.
+- [W3] (resolved: .228 — the spec and per-pair proof now cover identity-varying `authorBooks(A)->(B)`, same-identity, and a documented same-destination policy) F4 — the proof was screen-name exhaustive, not descriptor exhaustive.
+- [W4] (resolved: .228 — `classifyTransition` rejects a payload-less `authorBooks()`/`files()` with a named reason via requirePayload) F5 — malformed parameterized descriptors were planned, not rejected.
+- [W5] (resolved: .228 — `constructionPlanFor` now throws on an unhandled source kind) F6 — `fromKind` was unvalidated while `toKind` threw.
+- [W6] (resolved: .228 — the projection asserts EXACTLY the four contract keys, so an added/dead field is drift) F7 — `projectStablePlan` dropped extra fields before the compare.
+- [W7] (resolved: .228 — dispositioned in the decision log: the host fields are §3.3-specified boundary outputs asserted by the classifyTransition tests, not dead) F8 — `sourceHost`/`destinationHost`/`sameBrowseHost` looked dead in .227.
+- [W8] (open) Stage 5 scope — the pane builders (ghostApp/snapshotHome/overlayEl/appViewEl/npPillClone) move into swipe.js. Watch the builder-move for behaviour drift on the seams this review could check only by decision, not by a moved builder. Stage 5 is gated on the user's go.
+- [W9] (resolved: .228 — each static-only finding became a committed, mutation-verified test; suite 635 pass, which supersedes the one-off probes) F4–F8 had been confirmed by static reading only, `node` being absent on the review host.
