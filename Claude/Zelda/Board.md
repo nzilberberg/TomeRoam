@@ -30,9 +30,23 @@ findings F1/F3/F4/F5/F6/F7 fixed (each red-first + mutation-verified), F2/F8 fil
 nothing deferred. **`.229`** then corrected F8 to conform to the new Engineering Contract item 17:
 `classifyTransition` now emits only current-slice fields `{fromKind,toKind,decorations}` — the three
 unconsumed `§3.3` host fields were removed (reintroduced each when first consumed), guarded by an
-exact-key test. Disposition + the stage-4 scope decisions (three-layer oracle, construction-only
-`planFor`, mirror retirement) and the stage-6 cleanup debt are all in DecisionLog. **Do NOT start
-stage 5 without the user's go.** Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the
+exact-key test. **`.230`** then closed the `.228` review (`Claude/Poirot/f3ddd77-…`, which an
+independent second pass had corrected with 3 gaps): F-i `constructionPlanFor` independently
+deep-immutable (clone+freeze at its own boundary), F-ii §4.3 enumeration completed (identical-object
+`d→d`, independently-allocated-equal, `files(A)→files(A)`), F-iii swipe.js header corrected. Watch-list
+now: W13/W14/W15 CLOSED (.230); W10 MOOT (.229 removed the host fields); W12 satisfied (suite ran, 636
+pass, mutations verified); W11 (O1, low) + W8 (stage-5 scope) stay OPEN. Disposition + stage-4 scope
+decisions + stage-6 cleanup debt are all in DecisionLog. **Do NOT start stage 5 without the user's
+go.**
+
+**Contract mechanization (.230, at the maintainer's direction):** the Engineering Contract's
+mechanizable sections are now GATES, not vigilance — item 11: the nine .228–.230 mutations registered
+in `tools/mutate.mjs` + the durable sweep (`node tools/mutation-sweep.mjs`) + the anchor gate; item 14:
+`test/contract-function-gate.test.js` (exported contract fns exact-keyed + deep-immutable on a direct
+call, new-export meta-check); item 15: `test/descriptor-coverage-gate.test.js` (all seven §15 cases
+tagged; scenarios generated per §22). Details in DecisionLog. ⚠️ These landed with .230, whose earlier
+commit had silently failed (`git commit` chained after a no-match `grep` in an `&&` sequence) and was
+falsely reported shipped — see [[git-commit-verify]]. Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the
 stages-gated-by-review policy → DecisionLog. **The headline flash bug is STILL OPEN** — depth,
 dead-ends, and the 8 environment traps → `[[tomeroam-swipe-repaint-saga]]` (READ BEFORE TOUCHING THE
 SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is still live in `css/app.css`

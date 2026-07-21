@@ -4,11 +4,15 @@
 // (plan §1): the pane inventory was hand-written wrong twice, the branch conditions
 // were mirrored in a generator behind a fingerprint pin the generator itself called
 // "the one weak link". Stage 4 closes that weak link by making the decision live in
-// ONE place — here — that both production (start()) and the frozen model derive from,
-// instead of two hand-kept copies that a fingerprint can only prove have not drifted.
+// ONE place — here — that production (start()) derives from and that an INDEPENDENT
+// frozen spec (test/fixtures/swipe-plan-spec.mjs) is CHECKED AGAINST. The spec is
+// hand-written and reviewed; the generator RENDERS it; the tests compare this production
+// output to it. Production never generates the expectation and the spec never mirrors
+// production's branches — that circular oracle is exactly what this replaces (the old
+// two hand-kept copies a fingerprint could only prove EQUAL, never CORRECT).
 //
 // SCOPE — CONSTRUCTION ONLY (plan §7.4, phase-split). classifyTransition() normalizes a
-// transition into kinds/hosts/decorations; constructionPlanFor() says what start() must
+// transition into kinds + decorations; constructionPlanFor() says what start() must
 // BUILD: which representation the outgoing/incoming movers take, whether the destination
 // is rendered into the #browse host, and the Now Playing decoration. That is every field
 // start() consumes today and nothing more. The FINALIZATION half — commit/abort/scroll/
@@ -107,7 +111,7 @@ const Swipe = (() => {
   //   renderDestination 'browse-host'     render the destination INTO #browse mid-drag
   //                    'none'             no #browse render (overlay renders itself; a
   //                                        Home snapshot needs no live render)
-  //   decorations       the classification's decoration list, verbatim
+  //   decorations       an independent deep-frozen COPY of the classification's list
   function constructionPlanFor(c) {
     // No default branch on EITHER kind. The toKind else-throws below; the fromKind is
     // read by the outgoing ternary, whose else would silently absorb a bad kind into
@@ -124,7 +128,13 @@ const Swipe = (() => {
     else if (c.toKind === 'home') { incoming = 'home-snapshot'; renderDestination = 'none'; }
     else if (c.toKind === 'browse') { incoming = 'real-destination'; renderDestination = 'browse-host'; }
     else throw new Error('Swipe.constructionPlanFor: unhandled destination kind "' + c.toKind + '"');
-    return Object.freeze({ outgoing, incoming, renderDestination, decorations: c.decorations });
+    // Independently immutable: CLONE the caller's decorations and freeze the copy, so the
+    // plan's "Immutable" contract holds on a DIRECTLY-built classification too — it does not
+    // ride on classifyTransition having frozen the input first (the composed path shares no
+    // ref now). Clone, not freeze-in-place, so a caller-owned array is never mutated
+    // (Engineering Contract item 14: clone caller-owned arrays/objects before freezing).
+    const decorations = Object.freeze((c.decorations || []).map((d) => Object.freeze({ ...d })));
+    return Object.freeze({ outgoing, incoming, renderDestination, decorations });
   }
 
   return { classifyTransition, constructionPlanFor, BROWSE_FAMILY };

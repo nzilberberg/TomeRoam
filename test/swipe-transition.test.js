@@ -136,19 +136,33 @@ test('the construction plan is frozen — a consumer cannot mutate a shared plan
   assert.equal(p.outgoing, 'real-source', 'a write to the frozen plan must not take effect');
 });
 
-// F3 / O1 — the freeze is DEEP, and the classification behind it cannot be corrupted
-// through the plan. A shallow freeze left plan.decorations as the classification's own
-// unfrozen array: a consumer's push/edit corrupted BOTH.
-test('the plan and classification decorations are deep-frozen — a push cannot corrupt them', () => {
+// F3 / O1 — classifyTransition's own output is DEEP-frozen (array + each decoration). A
+// shallow freeze left the decorations array mutable: a consumer push/edit corrupted it.
+test('the classification decorations are deep-frozen — a push cannot corrupt them', () => {
   const c = Swipe.classifyTransition({ from: { v: 'nowplaying' }, to: { v: 'books' } });
-  const p = Swipe.constructionPlanFor(c);
-  assert.ok(Object.isFrozen(p.decorations), 'the decorations array must be frozen');
-  assert.ok(Object.isFrozen(p.decorations[0]), 'each decoration must be frozen');
-  assert.equal(p.decorations, c.decorations, 'the plan passes the classification array THROUGH (same ref)');
+  assert.ok(Object.isFrozen(c.decorations), 'the decorations array must be frozen');
+  assert.ok(Object.isFrozen(c.decorations[0]), 'each decoration must be frozen');
+  try { c.decorations.push({ kind: 'x' }); } catch (_) { /* strict throws; non-strict no-op */ }
+  try { c.decorations[0].base = 'tampered'; } catch (_) { /* idem */ }
+  assert.equal(c.decorations.length, 1, 'a push onto the frozen array must not take effect');
+  assert.equal(c.decorations[0].base, 'outgoing', 'the decoration must not have been corrupted');
+});
+
+// F-i (.228 review) — constructionPlanFor is INDEPENDENTLY deep-immutable: its contract
+// holds on a DIRECTLY-built classification, not only on the composed path where
+// classifyTransition already froze the input. It clones the caller's decorations, so the
+// caller's own array is never frozen in place and the plan cannot be mutated through.
+test('constructionPlanFor is independently deep-immutable, without leaning on classifyTransition', () => {
+  const callerDecos = [{ kind: 'now-playing-pill', role: 'mover', base: 'outgoing' }];
+  const p = Swipe.constructionPlanFor({ fromKind: 'home', toKind: 'browse', decorations: callerDecos });
+  assert.ok(Object.isFrozen(p.decorations), 'the plan decorations array must be frozen');
+  assert.ok(Object.isFrozen(p.decorations[0]), 'each plan decoration must be frozen');
+  assert.notEqual(p.decorations, callerDecos, 'the plan must clone, not share, the caller array');
+  assert.ok(!Object.isFrozen(callerDecos), 'and must NOT freeze the caller-owned array in place');
   try { p.decorations.push({ kind: 'x' }); } catch (_) { /* strict throws; non-strict no-op */ }
   try { p.decorations[0].base = 'tampered'; } catch (_) { /* idem */ }
-  assert.equal(p.decorations.length, 1, 'a push onto the frozen array must not take effect');
-  assert.equal(c.decorations[0].base, 'outgoing', 'and the classification must not have been corrupted');
+  assert.equal(p.decorations.length, 1, 'a push onto the frozen plan array must not take effect');
+  assert.equal(p.decorations[0].base, 'outgoing', 'the plan decoration must not have been corrupted');
 });
 
 // F4 / I16 — DESCRIPTOR scenarios, not just screen names. The 132-pair proof above skips
@@ -156,16 +170,20 @@ test('the plan and classification decorations are deep-frozen — a push cannot 
 // cases are invisible to it; §4.3 requires them covered explicitly.
 test('every descriptor scenario (§4.3) yields the plan it fixes, or is rejected with a named reason', async () => {
   const { DESCRIPTOR_SCENARIOS } = await loadSpec();
+  let ran = 0;
   for (const s of DESCRIPTOR_SCENARIOS) {
+    if (s.documentedImpossible) continue;   // a ruling, not a runnable input (§15 gate pins it)
     if (s.throws) {
       assert.throws(() => Swipe.constructionPlanFor(Swipe.classifyTransition(s.input)),
-        /malformed .* descriptor/, s.name);
+        /malformed .* descriptor|unknown screen/, s.name);
     } else {
       assert.deepEqual(
         projectStablePlan(Swipe.constructionPlanFor(Swipe.classifyTransition(s.input))),
         s.expectedConstruction, s.name);
     }
+    ran++;
   }
+  assert.ok(ran >= 8, `the scenario fixture must exercise real inputs, not only rulings (ran ${ran})`);
 });
 
 // F6 / §3.3 — no default branch on EITHER kind. classifyTransition guards toKind via its

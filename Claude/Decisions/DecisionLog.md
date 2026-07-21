@@ -225,6 +225,37 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   no-silent-early-return, dead-field detection, separated source-fingerprint vs behavioral-mutation
   sweeps, derived inventories) are gate candidates, not memory candidates — 2026-07-21.
 
+- The .228 review (`Claude/Poirot/f3ddd77-swipe-stage4-review-closure.md`, corrected by an
+  independent second pass) is closed. Fixed in build .230 (each reproduced against the code,
+  red-first + mutation-verified): F-i / W13 — `constructionPlanFor` is now independently
+  deep-immutable (clones and freezes the caller's decorations at its own boundary, so its
+  "Immutable" contract holds on a directly-built classification, not only the composed path;
+  clone-not-freeze-in-place per Engineering Contract item 14); F-ii / W14 — the §4.3 descriptor
+  enumeration is completed (identical descriptor object `d->d` same ref, independently-allocated
+  semantically-equal for both parameterized names, `files(A)->files(A)`); F-iii / W15 — the
+  swipe.js module header is corrected to say production is CHECKED AGAINST the independent frozen
+  spec, not that the frozen model derives from production. W10 (the F8 forward-check) is MOOT —
+  build .229 removed `sourceHost`/`destinationHost`/`sameBrowseHost` entirely under Engineering
+  Contract item 17, so there are no host fields left to be stage-6-dead. W12 (run the suite +
+  mutations) is satisfied: node was available this session — 638 tests, 636 pass, 0 fail, 2 todo
+  (the pre-existing known-red stage-2 NEW-POLICY items), and each new/changed test was
+  mutation-verified. W11 (O1, wrap the malformed-live-descriptor throw in start()) stays OPEN,
+  low priority. W8 (stage-5 scope) stays OPEN, gated on the user's go — 2026-07-21.
+
+- The Engineering Contract's mechanizable sections are enforced by gates, not trusted to
+  vigilance (the project's rules-vs-gates law). Item 11: the nine .228–.230 swipe-boundary
+  mutations, verified by hand at the time, are now registered in `tools/mutate.mjs` — the
+  durable behavioral-mutation sweep (`node tools/mutation-sweep.mjs`) re-runs them and
+  `test/mutation-anchors.test.js` fails if an anchor rots. Item 14: `test/contract-function-
+  gate.test.js` requires every exported contract function of js/swipe.js (`classifyTransition`,
+  `constructionPlanFor`) to be exact-keyed and deep-immutable on a DIRECT hand-built call, and
+  fails on any new export that is neither registered nor exempt — the standing form of the .228
+  F7 / .230 F-i findings. Item 15: `test/descriptor-coverage-gate.test.js` fails unless the
+  descriptor-scenario fixture tags at least one scenario for each of the seven enumerated §15
+  cases (`SEC15_CASES`); the parameterized-identity scenarios are now GENERATED per §22 from the
+  family list (inputs derived, expectations hand-authored per §16). These gates were built at the
+  maintainer's direction after the tooling was flagged-and-ignored across three builds — 2026-07-21.
+
 - Owed to stage 6 (from the .227 review's process note, recorded now so it is not lost): when the settle
   requestAnimationFrame, the settle/reveal timers, or the transitionend listener are cancelled OR fire,
   NULL their stored session handles (`cur.settleFrame = null`, etc.) so the session object describes LIVE

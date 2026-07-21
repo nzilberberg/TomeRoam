@@ -89,29 +89,72 @@ export const NP_DECORATION = {
 // removed such guards). The screen-name matrix documents it by skipping `f.v === t.v`.
 // A same-IDENTITY parameterized pair (authorBooks(A)->authorBooks(A)) IS reachable
 // (navTo pushes it) and IS a valid transition, so it yields a plan — it is NOT this case.
-const AUTHOR_A = { ratingKey: 'A', title: 'Author A' };
-const AUTHOR_B = { ratingKey: 'B', title: 'Author B' };
-const BOOK_A = { ratingKey: 'A', title: 'Book A' };
-const BOOK_B = { ratingKey: 'B', title: 'Book B' };
 const BROWSE_PLAN = { outgoing: 'app-ghost', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] };
 
+// The SEVEN enumerated §15 (Engineering Contract) descriptor-scenario cases. This list is
+// the single source; test/descriptor-coverage-gate.test.js fails if the fixture below does
+// not tag at least one scenario for each, or tags one that is not in this list (a typo).
+export const SEC15_CASES = [
+  'same-type-different-identity',
+  'same-semantic-separately-allocated',
+  'identical-descriptor-object',
+  'malformed-parameterized',
+  'missing-identity-payload',
+  'unknown-screen-type',
+  'no-op-same-destination',
+];
+
+// The two PARAMETERIZED families (browse.js:22-23 keys them by their payload). The
+// parameterized-identity scenarios are GENERATED from this list per Contract §22 (derive
+// the inventory, do not hand-repeat it per family) — while the EXPECTED outcome stays the
+// hand-written BROWSE_PLAN, so the independent oracle is not generated from production (§16).
+const PARAM_FAMILIES = [
+  { v: 'authorBooks', payload: 'author' },
+  { v: 'files', payload: 'book' },
+];
+const idOf = (rk) => ({ ratingKey: rk, title: rk });                 // a fresh payload object
+const desc = (fam, rk) => ({ v: fam.v, [fam.payload]: idOf(rk) });   // a fresh descriptor
+
+const GENERATED = PARAM_FAMILIES.flatMap((fam) => {
+  const shared = desc(fam, 'A');   // ONE object, used at both endpoints → the d -> d case
+  return [
+    { name: `${fam.v}: same type, different identity (A -> B)`, sec15: 'same-type-different-identity',
+      input: { from: desc(fam, 'A'), to: desc(fam, 'B') }, expectedConstruction: BROWSE_PLAN },
+    { name: `${fam.v}: same semantic identity, separately allocated (A -> A, distinct objects)`,
+      sec15: 'same-semantic-separately-allocated',
+      input: { from: desc(fam, 'A'), to: desc(fam, 'A') }, expectedConstruction: BROWSE_PLAN },
+    { name: `${fam.v}: identical descriptor object (d -> d, same reference)`, sec15: 'identical-descriptor-object',
+      input: { from: shared, to: shared }, expectedConstruction: BROWSE_PLAN },
+    // A parameterized name with no payload is BOTH "malformed parameterized" and "missing
+    // identity payload" — in this codebase those two §15 cases are one mechanism, so this
+    // one scenario legitimately carries both tags (there is no other malformation to model).
+    { name: `${fam.v}: malformed / missing required payload is rejected, never planned`,
+      sec15: ['malformed-parameterized', 'missing-identity-payload'],
+      input: { from: { v: fam.v }, to: { v: 'books' } }, throws: true },
+  ];
+});
+
+// Every §4.3 / §15 descriptor scenario. Parameterized-identity + malformed cases are
+// GENERATED above (one set per family); the remaining §15 cases are explicit below. All
+// well-formed browse descriptors yield the same browse->browse CONSTRUCTION plan — the
+// differences §4.3 names (referential vs semantic identity, stack effect) are FINALIZATION
+// (stage 6); enumerating them now freezes them so stage 6 cannot silently treat referential
+// identity where semantic identity is meant.
 export const DESCRIPTOR_SCENARIOS = [
-  { name: 'different identity: authorBooks(A) -> authorBooks(B) is a browse->browse plan',
-    input: { from: { v: 'authorBooks', author: AUTHOR_A }, to: { v: 'authorBooks', author: AUTHOR_B } },
+  ...GENERATED,
+  { name: 'unknown screen type is rejected, never planned', sec15: 'unknown-screen-type',
+    input: { from: { v: 'not-a-screen' }, to: { v: 'books' } }, throws: true },
+  // No-op / same-destination (a bare same-`v` pair, e.g. books->books) is documented
+  // IMPOSSIBLE-BEFORE-THE-PLANNER, not a production branch: navTo REPLACES the stack top for
+  // a bare same-`v` descriptor (app.js:141), so the stack never holds adjacent bare same-`v`
+  // and the gesture's dest is never the bare source; a production throw would be dead code.
+  // This entry is a documented RULING, not a runnable input — the scenario runner skips it.
+  { name: 'no-op / same-destination (bare same-v) is impossible-before-the-planner, not a branch',
+    sec15: 'no-op-same-destination', documentedImpossible: true },
+  // Cross-TYPE (not a §15 category; extra coverage that a parameterized pair need not share v).
+  { name: 'cross-type: authorBooks(A) -> files(B) is a browse->browse plan',
+    input: { from: desc(PARAM_FAMILIES[0], 'A'), to: desc(PARAM_FAMILIES[1], 'B') },
     expectedConstruction: BROWSE_PLAN },
-  { name: 'different identity: files(A) -> files(B) is a browse->browse plan',
-    input: { from: { v: 'files', book: BOOK_A }, to: { v: 'files', book: BOOK_B } },
-    expectedConstruction: BROWSE_PLAN },
-  { name: 'same identity: authorBooks(A) -> authorBooks(A) is reachable (navTo pushes) and yields a plan',
-    input: { from: { v: 'authorBooks', author: AUTHOR_A }, to: { v: 'authorBooks', author: AUTHOR_A } },
-    expectedConstruction: BROWSE_PLAN },
-  { name: 'cross-identity: authorBooks(A) -> files(B) is a browse->browse plan',
-    input: { from: { v: 'authorBooks', author: AUTHOR_A }, to: { v: 'files', book: BOOK_B } },
-    expectedConstruction: BROWSE_PLAN },
-  { name: 'malformed source: authorBooks() with no author is rejected, never planned',
-    input: { from: { v: 'authorBooks' }, to: { v: 'books' } }, throws: true },
-  { name: 'malformed destination: files() with no book is rejected, never planned',
-    input: { from: { v: 'books' }, to: { v: 'files' } }, throws: true },
 ];
 
 // Named, human-readable modifier cases. The two NP cases are also covered exhaustively
