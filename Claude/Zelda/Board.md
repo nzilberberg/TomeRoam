@@ -27,9 +27,12 @@ conflicts with it, ASK which wins; don't resolve toward coding because coding is
 Stage 4's between-stages review is **CLOSED** — the `.227` Poirot casebook
 (`Claude/Poirot/14257f2-swipe-stage4-classify-construct.md`) was processed in build **`.228`**:
 findings F1/F3/F4/F5/F6/F7 fixed (each red-first + mutation-verified), F2/F8 filed as records,
-nothing deferred. Disposition + the stage-4 scope decisions (three-layer oracle, construction-only
-`planFor`, mirror retirement) and the stage-6 cleanup debt are now all in DecisionLog. **Do NOT
-start stage 5 without the user's go.** Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the
+nothing deferred. **`.229`** then corrected F8 to conform to the new Engineering Contract item 17:
+`classifyTransition` now emits only current-slice fields `{fromKind,toKind,decorations}` — the three
+unconsumed `§3.3` host fields were removed (reintroduced each when first consumed), guarded by an
+exact-key test. Disposition + the stage-4 scope decisions (three-layer oracle, construction-only
+`planFor`, mirror retirement) and the stage-6 cleanup debt are all in DecisionLog. **Do NOT start
+stage 5 without the user's go.** Plan of record → `Claude/Plans/PLAN-swipe-reveal.md`; the
 stages-gated-by-review policy → DecisionLog. **The headline flash bug is STILL OPEN** — depth,
 dead-ends, and the 8 environment traps → `[[tomeroam-swipe-repaint-saga]]` (READ BEFORE TOUCHING THE
 SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is still live in `css/app.css`

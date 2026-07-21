@@ -44,7 +44,6 @@ const Swipe = (() => {
   }
 
   const KINDS = ['home', 'browse', 'overlay'];
-  const HOST = { home: '#home', browse: '#browse', overlay: 'overlay' };
 
   // The two PARAMETERIZED descriptors carry a required payload (browse.js:22-23 keys
   // them by it): authorBooks needs `author`, files needs `book`. A descriptor whose
@@ -62,11 +61,17 @@ const Swipe = (() => {
   }
 
   // classifyTransition — THE ONE NORMALIZATION BOUNDARY (plan §3.3). Raw descriptors in,
-  // derived kinds/hosts/decorations out. Stage 4 reads only { v } from each descriptor
+  // derived kinds + decorations out. Stage 4 reads only { v } from each descriptor
   // (kinds are kind-level; descriptor identity — authorBooks(A) vs (B) — matters only to
   // the stage-6 stack effect, so `direction`/`navigationRelation` join the signature
-  // then). No field here can disagree with another, which is the point: the plan is
-  // derived from these, never from raw descriptors alongside them.
+  // then). The output exposes ONLY the fields a current-slice consumer reads: `fromKind`/
+  // `toKind` (constructionPlanFor) and `decorations` (start()). §3.3 also lists
+  // sourceHost/destinationHost/sameBrowseHost, but no stage-4 consumer reads them, so
+  // per the no-dead-fields rule they are NOT emitted here — they are reintroduced in the
+  // stage that first consumes them (sameBrowseHost with the stage-6 abort re-render;
+  // the hosts with the stage-5 pane/mover construction that reads them), each with its
+  // consumer and test in the same commit. This is a staging-contract correction, not a
+  // behaviour or product-policy change.
   function classifyTransition({ from, to }) {
     const fromKind = kindOf(from.v);
     const toKind = kindOf(to.v);
@@ -86,13 +91,7 @@ const Swipe = (() => {
     // classification (and, since constructionPlanFor passes the SAME array through, the
     // plan too). A frozen array here makes the plan's decorations frozen for free.
     decorations = Object.freeze(decorations.map((d) => Object.freeze(d)));
-    return Object.freeze({
-      fromKind, toKind,
-      sourceHost: HOST[fromKind],
-      destinationHost: HOST[toKind],
-      sameBrowseHost: fromKind === 'browse' && toKind === 'browse',
-      decorations,
-    });
+    return Object.freeze({ fromKind, toKind, decorations });
   }
 
   // constructionPlanFor — what start() must BUILD. Immutable. No default branch; an

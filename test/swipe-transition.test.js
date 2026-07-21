@@ -50,22 +50,25 @@ const planFrom = (fv, tv) => projectStablePlan(
 
 // ---- classifyTransition: the normalization boundary --------------------------------
 
-test('classifyTransition derives kinds, hosts and same-browse-host from the raw names', () => {
+// The classification exposes ONLY the fields a stage-4 consumer reads: fromKind/toKind
+// (constructionPlanFor) and decorations (start()). §3.3's sourceHost/destinationHost/
+// sameBrowseHost are NOT emitted until the stage that first consumes them (no-dead-fields
+// rule) — assert the exact key set so re-adding one before its consumer reddens here.
+const CLASSIFICATION_KEYS = ['decorations', 'fromKind', 'toKind'];
+
+test('classifyTransition derives kinds from the raw names and exposes only consumed fields', () => {
   // Well-formed parameterized descriptors: authorBooks needs an author, files a book
   // (a payload-less one is malformed — see the §4.3 rejection tests below).
   const c = Swipe.classifyTransition({ from: { v: 'authorBooks', author: { ratingKey: 'A' } }, to: { v: 'files', book: { ratingKey: 'B' } } });
   assert.equal(c.fromKind, 'browse');
   assert.equal(c.toKind, 'browse');
-  assert.equal(c.sourceHost, '#browse');
-  assert.equal(c.destinationHost, '#browse');
-  assert.equal(c.sameBrowseHost, true, 'browse->browse shares the #browse host');
+  assert.deepEqual(Object.keys(c).sort(), CLASSIFICATION_KEYS,
+    'the classification must expose EXACTLY its consumed fields — a dead field for a future stage reddens here');
 
   const d = Swipe.classifyTransition({ from: { v: 'home' }, to: { v: 'options' } });
   assert.equal(d.fromKind, 'home');
   assert.equal(d.toKind, 'overlay');
-  assert.equal(d.sourceHost, '#home');
-  assert.equal(d.destinationHost, 'overlay');
-  assert.equal(d.sameBrowseHost, false);
+  assert.deepEqual(Object.keys(d).sort(), CLASSIFICATION_KEYS);
 });
 
 test('classifyTransition places the Now Playing decoration by which endpoint is NP', async () => {

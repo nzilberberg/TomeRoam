@@ -178,15 +178,17 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   until stage 6). Reconciles the .227 review finding F2 (the split had been recorded only in a commit
   message, which the standards do not treat as the record) — 2026-07-21.
 
-- `classifyTransition()` ships WHOLE per §3.3 — `{ fromKind, toKind, sourceHost, destinationHost,
-  sameBrowseHost, decorations }` — NOT subset like `planFor()`. Reason: §3.3 defines it as THE ONE
-  normalization boundary whose fields "cannot disagree"; it is an atomic contract object, and its
-  `sourceHost`/`destinationHost`/`sameBrowseHost` are §3.3-specified output asserted by the boundary
-  test (`test/swipe-transition.test.js`) and consumed by stage-6 finalization (`sameBrowseHost` drives
-  the browse→browse abort re-render). They are therefore plan-mandated, tested, boundary output — not
-  dead fields. This resolves the .227 review finding F8: the commit's "no dead fields" rationale is
-  correctly scoped to `planFor()`'s DEFERRED finalization fields, not to the whole `classifyTransition`
-  boundary, which ships entire — 2026-07-21.
+- `classifyTransition()` emits ONLY the fields a current-slice consumer reads: `{ fromKind, toKind,
+  decorations }` (fromKind/toKind → constructionPlanFor; decorations → start()). §3.3 also lists
+  `sourceHost`/`destinationHost`/`sameBrowseHost`, but no stage-4 consumer reads them, so per the
+  no-dead-fields rule (Engineering Contract item 17) they are NOT emitted; each is reintroduced in the
+  commit that first consumes it, with its consumer and test — `sameBrowseHost` in stage 6 (abort
+  re-render), the two hosts in the stage-5 pane/mover construction that reads them. Build .229 removed
+  all three (none had a stage-4 consumer, and .229 is not the stage-5 commit). This SUPERSEDES the
+  earlier .228 disposition that kept the three fields as "the whole §3.3 boundary ships atomically" —
+  that was too permissive: "a later stage may use them" is not a current consumer, and a boundary test
+  asserting a field is not a production consumer of it. This is a STAGING-CONTRACT correction, not a
+  behaviour or product-policy change, so it is NOT a new-policy ledger item — 2026-07-21.
 
 - A SAME-DESTINATION swipe (a bare same-`v` source/destination pair, e.g. books→books) is documented
   IMPOSSIBLE-BEFORE-THE-PLANNER, not given a production branch (the §4.3 option). `navTo` (app.js:141)
