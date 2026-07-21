@@ -1,9 +1,10 @@
 # Dev-side checks only. This runs on GitHub's servers when code is pushed; the
 # app never contacts it and gains no runtime dependency on it. It exists to catch,
-# before a deploy goes live, the two mistakes that have actually bitten this repo:
-# a failing test/lint slipping in, and the build stamp drifting between files
-# (stale index.html + fresh JS). It needs no secrets and touches nothing outside
-# the repo checkout.
+# before a deploy goes live, the mistakes that have actually bitten this repo:
+# a failing test/lint slipping in, the build stamp drifting between files
+# (stale index.html + fresh JS), and — via the mutation-sweep job — a guard going
+# UNDEFENDED (a test that no longer fails when its target is broken). It needs no
+# secrets and touches nothing outside the repo checkout.
 name: CI
 
 on:
@@ -25,5 +26,22 @@ jobs:
         run: npm run lint
       - name: Typecheck (no-build; // @ts-check files only)
         run: npm run typecheck
-      - name: Tests
+      - name: Tests (includes every gate — npm test runs test/*.test.js)
         run: npm test
+
+  # The EXPENSIVE half of the mutation contract (Engineering Contract §4.10): npm test's
+  # mutation-anchors gate proves each mutation still APPLIES; this proves each is still
+  # CAUGHT — it runs the behavioural suite once per registered mutation and fails if any
+  # mutation leaves the suite green (a guard nothing defends). Slow by nature, so it is its
+  # own job here rather than part of `npm test`; CI is exactly where it should run so the
+  # evidence re-runs on every push without anyone remembering to.
+  mutation-sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Every registered mutation is still caught by a test
+        run: node tools/mutation-sweep.mjs

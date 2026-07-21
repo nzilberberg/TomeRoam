@@ -282,6 +282,17 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   (the structured ledger holds only test-enforced items). Mutation #41 (dangle a ledger test
   reference) reddens the gate; registered in the sweep — 2026-07-21.
 
+- CI (`.github/workflows/ci.yml`) now runs the mutation SWEEP as its own job, not only the
+  anchors gate. `npm test` (which CI runs) proves each mutation still APPLIES; the new job runs
+  `tools/mutation-sweep.mjs` to prove each is still CAUGHT — a guard going undefended (a test that
+  no longer fails when its target breaks) now fails CI on every push, server-side, independent of
+  anyone remembering to run it. Confirmed green before enabling: the full sweep passed 42/42 (0
+  uncaught / 0 unapplied / 0 stale) on the current tree. The ci.yml change is CI infrastructure,
+  not app/test/tooling-under-test, so it does not bump the build number (same category as records).
+  This closes the enforcement gap where a false-green could pass CI; the remaining un-enforceable
+  rules are the judgment/process ones (§3/§6/§7/§10, §8 wording), which stay with the independent
+  review — 2026-07-21.
+
 - Owed to stage 6 (from the .227 review's process note, recorded now so it is not lost): when the settle
   requestAnimationFrame, the settle/reveal timers, or the transitionend listener are cancelled OR fire,
   NULL their stored session handles (`cur.settleFrame = null`, etc.) so the session object describes LIVE
