@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gen-transition-matrix.mjs — DERIVE the swipe transition inventory. Never hand-write it.
+// gen-transition-matrix.mjs — RENDER the swipe transition inventory. Never hand-write it.
 //
 // WHY THIS EXISTS. The inventory was written by hand twice in PLAN-swipe-reveal.txt and
 // was wrong both times: draft 1 said "exactly two transition shapes", draft 2 said
@@ -11,22 +11,33 @@
 //   node tools/gen-transition-matrix.mjs            # write docs/transition-matrix.generated.txt
 //   node tools/gen-transition-matrix.mjs --print    # stdout only
 //
-// The predicate below MIRRORS js/app.js's branch conditions. That mirroring is the one
-// weak link, so it is PINNED: sourceFingerprint() hashes the exact region of app.js the
-// predicate was derived from, and test/transition-matrix.test.js fails if that region
-// changes. A failure there does not mean the code is wrong — it means this predicate
-// must be re-verified against it before the generated file can be trusted again.
+// STAGE 4 CHANGE — THE MIRROR IS RETIRED. This generator used to REIMPLEMENT js/app.js's
+// branch conditions and a fingerprint hash proved the two copies had not drifted. Its own
+// header called that mirror "the one weak link": two copies the pin can only prove are
+// EQUAL, never CORRECT. Now there is one decision (js/swipe.js, classifyTransition +
+// constructionPlanFor) and one independent contract (test/fixtures/swipe-plan-spec.mjs).
+// This file RENDERS the contract; test/swipe-transition.test.js checks the real
+// production functions against it. Nothing here reimplements the branch logic, so there
+// is nothing to fingerprint. The registry is still DISCOVERED from production
+// (Nav.SETTINGS_SUBS) — that discovery is genuine and stays pinned by the test.
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { STRUCTURAL_CASES, paneOf, NP_SCREEN, NP_DECORATION } from '../test/fixtures/swipe-plan-spec.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
-// ---- the registry, itself derived ------------------------------------------------
+// The browse-family list is OWNED by production (js/swipe.js). Import it so the registry
+// cannot re-list it differently — drafts 1/2 of the plan omitted authorBooks by hand.
+const require = (await import('node:module')).createRequire(import.meta.url);
+const BROWSE_FAMILY = require('../js/swipe.js').BROWSE_FAMILY;
+
+// ---- the registry, itself derived --------------------------------------------------
 // Settings sub-screens come from nav.js's SETTINGS_SUBS so that adding a sixth one
-// cannot leave this inventory stale.
+// cannot leave this inventory stale. home / browse-family / options / nowplaying are
+// hand-listed (a production screen registry would be the proper source; the screen-name
+// census in the frozen-model test pins their absence in the meantime).
 export function registry() {
   const nav = read('js/nav.js');
   const m = /const SETTINGS_SUBS = \[([^\]]*)\]/.exec(nav);
@@ -34,40 +45,25 @@ export function registry() {
   const subs = m[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
   return [
     { v: 'home', kind: 'home', host: '#home' },
-    ...['books', 'authors', 'authorBooks', 'files'].map((v) => ({ v, kind: 'browse', host: '#browse' })),
+    ...BROWSE_FAMILY.map((v) => ({ v, kind: 'browse', host: '#browse' })),
     ...['options', 'nowplaying', ...subs].map((v) => ({ v, kind: 'overlay', host: 'overlay' })),
   ];
 }
 
-// ---- the predicate, mirroring js/app.js's start() --------------------------------
-//   incomingBrowse = !toOv && toV !== 'home'
-//   OUT: fromOv -> real overlay | incomingBrowse -> ghostApp() | else real in-flow view
-//   IN:  toOv   -> real overlay | toV==='home'   -> snapshotHome() | else real #browse
-export function planFor(from, to) {
-  const fromOv = from.kind === 'overlay';
-  const toOv = to.kind === 'overlay';
-  const incomingBrowse = !toOv && to.kind !== 'home';
-  const outgoing = fromOv ? 'real-overlay' : (incomingBrowse ? 'GHOST-pane' : 'real-view');
-  const incoming = toOv ? 'real-overlay' : (to.kind === 'home' ? 'SNAPSHOT-pane' : 'real-#browse');
-  // Abort must re-render only when the source's own host was overwritten mid-drag,
-  // i.e. source lives in #browse AND the incoming took that same host.
-  const rerenderOnAbort = !fromOv && from.host === '#browse' && incoming === 'real-#browse';
-  const decorations = [from.v, to.v].includes('nowplaying') ? 'np-pill' : '-';
+// ---- the frozen construction outcome for one kind pair, from the spec ---------------
+const STRUCTURAL = new Map(STRUCTURAL_CASES.map((c) => [c.from + '->' + c.to, c]));
+function outcomeFor(from, to) {
+  const c = STRUCTURAL.get(from.kind + '->' + to.kind);
+  if (!c) throw new Error(`the spec has no structural case for ${from.kind}->${to.kind}`);
+  const np = from.v === NP_SCREEN ? NP_DECORATION.source : to.v === NP_SCREEN ? NP_DECORATION.destination : null;
   return {
-    outgoing, incoming, decorations,
-    pane: /pane/i.test(outgoing + incoming),
-    abortRender: rerenderOnAbort ? 'rerender' : 'none',
+    outgoing: c.expectedConstruction.outgoing,
+    incoming: c.expectedConstruction.incoming,
+    renderDestination: c.expectedConstruction.renderDestination,
+    pane: paneOf(c.expectedConstruction),
+    abortRender: c.expectedFinalization.abortRender,
+    decoration: np ? 'np-pill' : '-',
   };
-}
-
-/** Hash of the app.js region this predicate mirrors. Drift here invalidates the file. */
-export function sourceFingerprint() {
-  const src = read('js/app.js');
-  const a = src.indexOf('const incomingBrowse =');
-  const b = src.indexOf('d.movers = [out, incoming]');
-  if (a < 0 || b < 0 || b <= a) throw new Error('branch region not found in js/app.js');
-  const region = src.slice(a, b).replace(/\s+/g, ' ').trim();
-  return crypto.createHash('sha256').update(region).digest('hex').slice(0, 16);
 }
 
 export function render() {
@@ -77,34 +73,32 @@ export function render() {
   const L = [];
   L.push('SWIPE TRANSITION INVENTORY — GENERATED, DO NOT EDIT');
   L.push('Regenerate: node tools/gen-transition-matrix.mjs');
-  L.push('Guarded by: test/transition-matrix.test.js');
-  L.push('');
-  L.push(`app.js branch-region fingerprint: ${sourceFingerprint()}`);
-  L.push('  (if this changes, the predicate in the generator must be RE-VERIFIED');
-  L.push('   against js/app.js before this file is trusted)');
+  L.push('Guarded by:  test/transition-matrix.test.js');
+  L.push('Contract:    test/fixtures/swipe-plan-spec.mjs   (the frozen expectations)');
+  L.push('Production:   js/swipe.js   (classifyTransition + constructionPlanFor)');
   L.push('');
   L.push(`registry: ${screens.length} screens, ${screens.length * (screens.length - 1)} ordered pairs`);
   for (const k of kinds) {
     L.push(`  ${k.padEnd(8)} ${screens.filter((s) => s.kind === k).map((s) => s.v).join(', ')}`);
   }
   L.push('');
-  L.push('STRUCTURAL MATRIX (kind -> kind)');
-  L.push('  from     to        outgoing       incoming        pane   abort');
-  L.push('  -------  --------  -------------  --------------  -----  --------');
+  L.push('CONSTRUCTION PLAN by kind (from the frozen spec; abort is frozen finalization data)');
+  L.push('  from     to        outgoing      incoming          render       pane   abort');
+  L.push('  -------  --------  ------------  ----------------  -----------  -----  --------');
   for (const f of kinds) {
     for (const t of kinds) {
       if (f === 'home' && t === 'home') continue;   // not a transition
-      const p = planFor(byKind(f), byKind(t));
-      L.push(`  ${f.padEnd(8)} ${t.padEnd(8)}  ${p.outgoing.padEnd(13)}  ${p.incoming.padEnd(14)}  `
-        + `${(p.pane ? 'yes' : 'no').padEnd(5)}  ${p.abortRender}`);
+      const p = outcomeFor(byKind(f), byKind(t));
+      L.push(`  ${f.padEnd(8)} ${t.padEnd(8)}  ${p.outgoing.padEnd(12)}  ${p.incoming.padEnd(16)}  `
+        + `${p.renderDestination.padEnd(11)}  ${(p.pane ? 'yes' : 'no').padEnd(5)}  ${p.abortRender}`);
     }
   }
   const pairs = [];
-  for (const f of screens) for (const t of screens) if (f.v !== t.v) pairs.push(planFor(f, t));
+  for (const f of screens) for (const t of screens) if (f.v !== t.v) pairs.push(outcomeFor(f, t));
   L.push('');
   L.push(`concrete pairs building a pane: ${pairs.filter((p) => p.pane).length} of ${pairs.length}`);
   L.push(`concrete pairs re-rendering on abort: ${pairs.filter((p) => p.abortRender === 'rerender').length}`);
-  L.push(`concrete pairs carrying the NP pill: ${pairs.filter((p) => p.decorations === 'np-pill').length}`);
+  L.push(`concrete pairs carrying the NP pill: ${pairs.filter((p) => p.decoration === 'np-pill').length}`);
   return L.join('\n') + '\n';
 }
 

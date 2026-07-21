@@ -590,8 +590,14 @@
       revealBase = snapBrowse(true);   // BEFORE the mid-drag render clobbers #browse
       takeRowHold();   // from here the outgoing page keeps its rows until this gesture ends
       const fromV = d.from.v, toV = d.dest.v, off = d.dir === 'back' ? -d.w : d.w;
-      const fromOv = isOverlay(fromV), toOv = isOverlay(toV);
-      const incomingBrowse = !toOv && toV !== 'home';   // a real #browse render (must occupy .app)
+      const fromOv = isOverlay(fromV);   // still needed to resolve the REAL source element (overlay vs in-flow)
+      // The transition is CLASSIFIED and the construction plan derived by js/swipe.js
+      // (stage 4) — the one place the fromOv/toOv/incomingBrowse decision lives, so the
+      // frozen model derives from it instead of a hand-kept mirror. This function still
+      // BUILDS the panes (ghostApp/snapshotHome/overlayEl/appViewEl/npPillClone) and runs
+      // the renders; only the DECISION of which to build moved out. Stage 5 moves the
+      // builders too; stage 6 adds the finalization half of the plan.
+      const plan = Swipe.constructionPlanFor(Swipe.classifyTransition({ from: d.from, to: d.dest }));
       if (window.PBDebug) PBDebug.log('SWIPE', `start ${d.dir} ${fromV}→${toV} ghosts=${document.querySelectorAll('.nav-ghost').length}`);
       let out, incoming, pill = null;
 
@@ -610,29 +616,34 @@
       //                    resetSwipeStyles, not by a mover consumer. Kept, not dropped,
       //                    so every mover stays typed for the stage-6 teardown
       //                    consolidation (review of .223, finding 5).
-      if (fromOv) {
-        out = { el: overlayEl(fromV), base: 0, own: 'borrowed-real' };
-        if (fromV === 'nowplaying') { document.body.classList.remove('np-locked'); pill = { el: npPillClone(), base: 0, own: 'owned-decoration' }; }
-      } else if (incomingBrowse) {
+      if (plan.outgoing === 'app-ghost') {
         out = { el: ghostApp(), base: 0, own: 'owned-pane' };  // incoming needs the real #browse → freeze outgoing as a ghost
       } else {
-        out = { el: appViewEl(fromV), base: 0, own: 'borrowed-real' };   // incoming is overlay/snapshot → move the real view (scroll-neutral)
+        out = { el: fromOv ? overlayEl(fromV) : appViewEl(fromV), base: 0, own: 'borrowed-real' };   // move the real source view (scroll-neutral)
       }
 
       // ── INCOMING (base off) ──
-      if (toOv) {
+      if (plan.incoming === 'home-snapshot') {
+        incoming = { el: snapshotHome(), base: off, own: 'owned-pane' };   // static snapshot at top, .app untouched
+      } else if (plan.renderDestination === 'browse-host') {
+        showAppView(d.dest, true);                      // render dest into the real #browse (outgoing already ghosted)
+        d.clobbered = !fromOv && appViewEl(fromV) === $('browse');   // browse→browse → abort re-renders
+        incoming = { el: $('browse'), base: off, own: 'borrowed-real' };
+      } else {                                          // real-destination overlay
         const el = overlayEl(toV);
         if (toV === 'nowplaying') { renderNowPlaying(); document.body.classList.remove('np-locked'); }
         else renderScreen(toV);   // 'options' or any settings sub-screen
         el.classList.remove('hidden');
         incoming = { el, base: off, own: 'borrowed-real' };
-        if (toV === 'nowplaying') pill = { el: npPillClone(), base: off, own: 'owned-decoration' };
-      } else if (toV === 'home') {
-        incoming = { el: snapshotHome(), base: off, own: 'owned-pane' };   // static snapshot at top, .app untouched
-      } else {
-        showAppView(d.dest, true);                      // render dest into the real #browse (outgoing already ghosted)
-        d.clobbered = !fromOv && appViewEl(fromV) === $('browse');   // browse→browse → abort re-renders
-        incoming = { el: $('browse'), base: off, own: 'borrowed-real' };
+      }
+
+      // ── DECORATIONS ── the NP pill is a plan-level mover (stage 4). base 'outgoing'→0
+      // (NP is the SOURCE, and the body unlocks), 'incoming'→off (NP is the DESTINATION;
+      // its render/unlock already ran in the overlay branch above).
+      for (const deco of plan.decorations) {
+        if (deco.kind !== 'now-playing-pill') continue;
+        if (deco.base === 'outgoing') document.body.classList.remove('np-locked');
+        pill = { el: npPillClone(), base: deco.base === 'outgoing' ? 0 : off, own: 'owned-decoration' };
       }
 
       d.movers = [out, incoming];

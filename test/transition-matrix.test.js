@@ -27,16 +27,8 @@ const { ROOT } = require('./dom-fixture.js');
 
 const GENERATED = path.join(ROOT, 'docs', 'transition-matrix.generated.txt');
 
-// The app.js branch region as it stood when the predicate was verified against it,
-// line by line, on 2026-07-20. Update ONLY together with a re-verification.
-// Re-verified 2026-07-20: the mover region's typed `own:` fields (stage 3) and now the
-// review-of-.223 finding-5 COMMENT clarifying the decorative pill tag. The generator
-// mirrors the branch CONDITIONS (fromOv/toOv/incomingBrowse), not comments or mover
-// flags, and those conditions are unchanged. Pin moves, predicate stands.
-// Was '2cf44185fe7497bc' (pre-stage-3), then '55f4d0411e8e301f' (before the finding-5 note).
-const VERIFIED_FINGERPRINT = '38f9eeabefc34a3f';
-
 const load = () => import(pathToFileURL(path.join(ROOT, 'tools', 'gen-transition-matrix.mjs')).href);
+const loadSpec = () => import(pathToFileURL(path.join(ROOT, 'test', 'fixtures', 'swipe-plan-spec.mjs')).href);
 const lf = (s) => s.replace(/\r\n/g, '\n');
 
 test('the committed inventory is exactly what the generator produces', async () => {
@@ -47,15 +39,12 @@ test('the committed inventory is exactly what the generator produces', async () 
     + 'Run: node tools/gen-transition-matrix.mjs');
 });
 
-test('the predicate still mirrors the js/app.js branch region it was derived from', async () => {
-  const gen = await load();
-  assert.equal(gen.sourceFingerprint(), VERIFIED_FINGERPRINT,
-    'js/app.js\'s transition branches CHANGED. The generator reimplements those '
-    + 'conditions rather than executing them, so the inventory can no longer be '
-    + 'trusted. Re-verify tools/gen-transition-matrix.mjs planFor() against '
-    + 'js/app.js start(), regenerate, and update VERIFIED_FINGERPRINT in the same '
-    + 'commit — never update the constant alone.');
-});
+// The MIRROR IS RETIRED (stage 4). There used to be a test here pinning a fingerprint of
+// js/app.js's branch region, because the generator reimplemented those conditions and the
+// pin proved the two copies had not drifted. js/swipe.js now owns that decision and
+// test/fixtures/swipe-plan-spec.mjs is its independent contract; test/swipe-transition.test.js
+// checks the real production functions against the contract. There is no second copy of the
+// branch logic, so there is nothing to fingerprint and no test to keep here.
 
 // NAME CORRECTED after an external review of .218: this checks the DERIVED half only.
 // The other seven screens are hand-listed in the generator; the screen-name census in
@@ -81,23 +70,27 @@ test('the SETTINGS-SUB half of the registry is derived from nav.js, not hand-lis
     `registry collapsed to ${screens.length} screens — the derivation is probably broken`);
 });
 
-test('a pane is built exactly when the rules say, and nowhere else', async () => {
-  const gen = await load();
-  const screens = gen.registry();
+// SPEC SELF-CONSISTENCY. The frozen contract (test/fixtures/swipe-plan-spec.mjs) is
+// hand-written, so a typo there could quietly bless the wrong behaviour AND the production
+// test would follow it. This asserts the eight structural expectations obey the two rules
+// stated in prose, independently of any implementation — a hand-error in the spec fails
+// here before it can propagate. (Production is checked against the spec separately in
+// test/swipe-transition.test.js.)
+test('the frozen spec builds a pane exactly when the GHOST/SNAPSHOT rules say', async () => {
+  const spec = await loadSpec();
   const wrong = [];
-  for (const f of screens) {
-    for (const t of screens) {
-      if (f.v === t.v) continue;
-      const p = gen.planFor(f, t);
-      // The two rules, stated independently of the implementation under test:
-      //   GHOST    iff source is not an overlay AND destination is browse-family
-      //   SNAPSHOT iff destination is home
-      const expectGhost = f.kind !== 'overlay' && t.kind === 'browse';
-      const expectSnap = t.kind === 'home';
-      if ((p.outgoing === 'GHOST-pane') !== expectGhost) wrong.push(`${f.v}->${t.v} ghost`);
-      if ((p.incoming === 'SNAPSHOT-pane') !== expectSnap) wrong.push(`${f.v}->${t.v} snapshot`);
-      if (p.pane !== (expectGhost || expectSnap)) wrong.push(`${f.v}->${t.v} pane`);
-    }
+  for (const c of spec.STRUCTURAL_CASES) {
+    //   GHOST    iff source is not an overlay AND destination is browse
+    //   SNAPSHOT iff destination is home
+    const expectGhost = c.from !== 'overlay' && c.to === 'browse';
+    const expectSnap = c.to === 'home';
+    const ec = c.expectedConstruction;
+    if ((ec.outgoing === 'app-ghost') !== expectGhost) wrong.push(`${c.from}->${c.to} ghost`);
+    if ((ec.incoming === 'home-snapshot') !== expectSnap) wrong.push(`${c.from}->${c.to} snapshot`);
+    if (spec.paneOf(ec) !== (expectGhost || expectSnap)) wrong.push(`${c.from}->${c.to} pane`);
+    // renderDestination is 'browse-host' exactly when the destination is browse.
+    if ((ec.renderDestination === 'browse-host') !== (c.to === 'browse')) wrong.push(`${c.from}->${c.to} render`);
   }
-  assert.deepEqual(wrong, [], `plan disagrees with the stated rules: ${wrong.slice(0, 8).join(', ')}`);
+  assert.deepEqual(wrong, [], `the spec disagrees with the stated rules: ${wrong.slice(0, 8).join(', ')}`);
+  assert.equal(spec.STRUCTURAL_CASES.length, 8, 'there are eight structural transitions (home->home is not one)');
 });

@@ -586,6 +586,7 @@ function boot(opts = {}) {
   put('Settings', real('../js/settings.js'));
   put('Playback', real('../js/playback.js'));
   put('Nav', real('../js/nav.js'));
+  put('Swipe', real('../js/swipe.js'));   // the swipe construction classifier start() consumes (stage 4)
   put('HandoffController', real('../js/handoff.js'));
   put('HomeScreen', real('../js/home-screen.js'));   // REAL: renders real tiles via app.js's renderTile
   // REAL too: it OWNS the only UI buttons for prevTrack/nextTrack (npPrev/npNext,

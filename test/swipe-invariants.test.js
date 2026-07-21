@@ -69,6 +69,31 @@ async function abortingSwipe(h, row) {
   await settle(h);
 }
 
+// ── WIRING (stage 4) — start() consumes the construction plan's OUTGOING choice ─────
+// swipe-transition.test.js proves the DECISION (js/swipe.js: an overlay source is moved
+// as its real element, 'real-source', never frozen as a ghost — only a NON-overlay source
+// bound for a browse destination ghosts). This proves start() actually CONSUMES that
+// decision: if it ignored plan.outgoing and always ghosted, an overlay->browse back-swipe
+// would build a .nav-ghost. That mutation left all 76 harness tests green until this one —
+// the exact wiring-seam blind spot the app-harness exists to close.
+test('WIRING — an overlay-source back-swipe moves the real overlay and builds NO ghost', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    h.tap('.navbtn[data-nav="books"]');
+    await settle(h);
+    h.tap('.navbtn[data-nav="options"]');   // navStack = [books, options]; options is an overlay
+    await settle(h);
+    h.touch.start(10, 300, h.$('options')); // left edge, on the overlay itself
+    h.touch.move(80, 302);                  // past the 8px lock, horizontal → start()
+    assert.equal(starts(h).length, 1, 'the overlay->browse back-swipe must go live');
+    assert.equal(ghosts(h), 0, 'an overlay source is the real #options element moving out — never a ghost');
+    h.touch.end(80, 302);
+    await settle(h);
+    await h.clock.advance(400);
+    await settle(h);
+  } finally { h.dispose(); }
+});
+
 // ── I19 — gesture-ending inputs route by STATE, not by input ────────────────────────
 // Frozen model §4: ARMED finishes with NO navigation; DRAGGING takes the ordinary
 // travel+velocity decision (so touchcancel CAN commit); SETTLING or later ignores the

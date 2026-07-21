@@ -25,11 +25,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { registry, planFor, sourceFingerprint } from './gen-transition-matrix.mjs';
+import { registry } from './gen-transition-matrix.mjs';
+import { STRUCTURAL_CASES, paneOf, NP_SCREEN, NP_DECORATION } from '../test/fixtures/swipe-plan-spec.mjs';
 
 // Re-exported so the frozen model is a single entry point: a consumer should never
-// have to know which of the two generators owns which half of the derivation.
-export { registry, planFor, sourceFingerprint };
+// have to know which of the two generators owns which half of the derivation. The
+// transition branch predicate is no longer reimplemented here — stage 4 retired that
+// mirror — so its construction outcomes come from the frozen spec (below), not a
+// second copy of the branch logic.
+export { registry };
+
+// The frozen CONSTRUCTION outcome for a kind pair, read from the spec (not derived).
+const STRUCTURAL_BY_KIND = new Map(STRUCTURAL_CASES.map((c) => [c.from + '->' + c.to, c]));
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
@@ -173,13 +180,28 @@ const kindOf = (() => {
   };
 })();
 
+// The construction outcome for a descriptor pair, read from the frozen spec by kind
+// (plus the NP-pill modifier by endpoint). No branch logic — the spec is the contract.
+function constructionFor(from, to) {
+  const c = STRUCTURAL_BY_KIND.get(kindOf(from).kind + '->' + kindOf(to).kind);
+  if (!c) throw new Error(`the spec has no structural case for ${from.v}->${to.v}`);
+  const np = from.v === NP_SCREEN ? NP_DECORATION.source : to.v === NP_SCREEN ? NP_DECORATION.destination : null;
+  return {
+    outgoing: c.expectedConstruction.outgoing,
+    incoming: c.expectedConstruction.incoming,
+    pane: paneOf(c.expectedConstruction),
+    abortRender: c.expectedFinalization.abortRender,
+    decorations: np ? 'np-pill' : '-',
+  };
+}
+
 /** Full outcome for one ordered descriptor pair. No default branch — everything named. */
 export function scenarioFor(from, to) {
   const vf = validate(from), vt = validate(to);
   if (!vf.ok) return { status: 'rejected', reason: `source ${vf.reason}` };
   if (!vt.ok) return { status: 'rejected', reason: `destination ${vt.reason}` };
   if (from.v === 'home' && to.v === 'home') return { status: 'rejected', reason: 'not-a-transition:home-to-home' };
-  const p = planFor(kindOf(from), kindOf(to));
+  const p = constructionFor(from, to);
   return {
     status: 'planned',
     outgoing: p.outgoing, incoming: p.incoming, pane: p.pane, abortRender: p.abortRender,
@@ -278,7 +300,9 @@ export function render() {
   P('');
   P('SOURCE FINGERPRINTS — if one changes, the mirrored rule must be RE-VERIFIED');
   P('before this document is trusted again. Never update a pinned constant alone.');
-  P(`  transition branches   ${sourceFingerprint()}`);
+  P('(The transition-branch mirror was RETIRED in stage 4: js/swipe.js now owns that');
+  P(' decision and test/fixtures/swipe-plan-spec.mjs is its frozen contract, so there is');
+  P(' no second copy to pin. The regions below are still mirrored and stay pinned.)');
   P(`  navTo stack rule      ${navToFingerprint()}`);
   P(`  begin/nav-relation    ${navRelationFingerprint()}`);
   P(`  end/state-routing     ${gestureEndFingerprint()}`);
