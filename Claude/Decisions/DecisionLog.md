@@ -589,3 +589,18 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   §3.6-model grounding and current-code analysis. The review is ready to hand to the planner; the four OPEN
   decisions (F0 scope A/B/C, F1 seam, F3 host-field consumer, F6 pane-lifecycle) plus the F2/F4/F5 step
   requirements are the planner's, and the build stays blocked on them — 2026-07-22.
+
+- PROPOSED (pending review, not yet settled): the planner's resolved Stage-5 plan
+  (`Claude/Plans/PLAN-swipe-stage5.md`) recommends SCOPE B — move the two capture recipes + real
+  source/host mover resolution + the Now Playing decoration into swipe.js behind an injected `env`; leave
+  the Browse render dispatch and Browse hold in app.js behind narrow callbacks. Rationale grounded in code:
+  B closes the decision/execution split swipe.js exists to own and gives the host fields a real consumer,
+  while stopping at the Browse boundary that STAGE 7 (the lease interface, §7.7) redesigns — so it pulls no
+  later-stage surface forward. A rejected as under-delivering §1 (construction still split across two
+  modules; host fields still dead); C rejected on sequencing (moving Browse.render into swipe.js is
+  re-touched by stage 7 — churn). The plan also settles the seam (`buildConstruction(plan, env) →
+  { movers, capture }`, returns capture, never receives the session — F5), host-field consumers (F3),
+  pane-lifecycle deferral of release/dispose/equivalence to stage 6 (F6), NON_CONTRACT export
+  classification (F2), and two coverage layers with a Mendeleev pass (F4). The four OPEN F0/F1/F3/F6
+  decisions REMAIN OPEN until this proposal is reviewed; on approval the three records (PLAN-swipe-reveal.md
+  §7.5, the swipe.js header, this log) reconcile to B. Not implemented — 2026-07-22.

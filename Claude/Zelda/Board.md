@@ -68,6 +68,14 @@ production mover set with correct ownership/ordering — not a `d.movers` intern
 (prefer returned capture metadata; do not pass `d` without explicit justification).
 **Do NOT start stage 5 until F0/F1/F3/F6 are resolved by the planner and F2/F4/F5 are in the step.**
 
+**PROPOSED RESOLUTION (2026-07-22, pending review):** the planner filed `Claude/Plans/PLAN-swipe-stage5.md`
+recommending **scope B** (recipes + real host/mover resolution behind an injected `env`; Browse render
+dispatch + hold stay in app.js until stages 6/7). It settles the seam (`buildConstruction(plan, env) →
+{ movers, capture }`, returns capture, never the session), host-field consumers, pane-lifecycle deferral to
+stage 6, NON_CONTRACT export, and F4 coverage. A/C rejected (A under-delivers §1; C churns against stage 7).
+The four OPEN decisions stay OPEN until this is reviewed; on approval the three records reconcile to B. Not
+implemented.
+
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
 subsystem addendum; this DecisionLog is the Ledger. **Mechanized sections (gates, not vigilance):**
