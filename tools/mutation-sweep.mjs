@@ -14,6 +14,11 @@
 //
 // Slow by nature (one full suite run per mutation), so it is a CI / on-demand tool,
 // not part of `npm test`. ALWAYS restores the working tree, including on Ctrl-C.
+//
+// The pure helpers below (parseChangedFiles / changedFiles / targetsOf / affectedIndices)
+// are exported and unit-tested in test/mutation-sweep-select.test.js. The sweep itself
+// runs only when this file is executed directly (the isCli guard at the bottom), so a
+// test importing the helpers does not launch a sweep as a side effect.
 import { spawnSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,12 +27,57 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NODE = process.execPath;
 
-const run = (args) => spawnSync(NODE, args, { cwd: ROOT, encoding: 'utf8' });
-const restore = () => run([path.join('tools', 'mutate.mjs'), '--restore']);
-
-process.on('SIGINT', () => { restore(); process.exit(130); });
-
+// The mutation registry. Imported at module load — mutate.mjs guards its CLI, so this
+// import has no side effect (it does not touch the working tree).
 const { MUTATIONS, DEFAULT_FILE } = await import(pathToFileURL(path.join(ROOT, 'tools', 'mutate.mjs')).href);
+
+// ── Pure, exported helpers — no side effects, unit-tested ────────────────────────────
+
+// Parse the output of `git status --porcelain=v1 -z --untracked-files=all` into the set
+// of repo-relative paths changed vs HEAD.
+//
+// The -z format is what makes this parseable rather than a guess: records are NUL-
+// delimited and paths are VERBATIM — no surrounding quotes, no octal/backslash escaping
+// of odd characters, no ` -> ` arrow. Each record is `XY<space>path`. A rename or copy
+// record carries the DESTINATION path; its SOURCE path is the very next bare NUL token
+// (no XY prefix). Both sides are returned, because a mutation may target the pre-rename
+// path. This replaced a plain-`--porcelain` parser that (1) kept only the rename
+// destination, dropping the source; (2) missed new files under a wholly-new untracked
+// directory, which the plain format collapses to a single `dir/` entry (fixed by
+// --untracked-files=all listing each file); and (3) split on a literal ` -> ` and left
+// git's octal escapes undecoded for odd-character names.
+export function parseChangedFiles(zOut) {
+  const files = new Set();
+  const tok = zOut.split('\0');
+  for (let i = 0; i < tok.length; i++) {
+    const rec = tok[i];
+    if (!rec) continue;                 // trailing empty token after the final NUL (or a blank)
+    const x = rec[0];                   // index (staged) status letter
+    const p = rec.slice(3);             // records are `XY<space>path`; the path is verbatim
+    if (x === 'R' || x === 'C') {       // rename/copy: the source path is the next bare token
+      const src = tok[++i];
+      if (src) files.add(src);
+    }
+    files.add(p);
+  }
+  return files;
+}
+
+// Repo-relative paths changed vs HEAD (staged + unstaged + untracked). See
+// parseChangedFiles for why the -z / --untracked-files=all form is used. `cwd` is a
+// parameter so the parser+command can be exercised against a throwaway repo in tests.
+export function changedFiles(cwd = ROOT) {
+  const out = execSync('git status --porcelain=v1 -z --untracked-files=all', { cwd }).toString();
+  return parseChangedFiles(out);
+}
+
+// The file(s) a mutation touches — its own file, plus a two-part `also` mutation's file.
+export const targetsOf = (m) => [m.file || DEFAULT_FILE, m.also && (m.also.file || m.file || DEFAULT_FILE)].filter(Boolean);
+
+// Indices of the mutations that target at least one of the changed files.
+export function affectedIndices(mutations, changed) {
+  return mutations.map((_, i) => i).filter((i) => targetsOf(mutations[i]).some((f) => changed.has(f)));
+}
 
 // SOURCE-TEXT GATES — excluded from the sweep, each with its reason. These assert on
 // the TEXT of production files rather than on behaviour, so under any mutation they
@@ -55,24 +105,19 @@ function behaviourTests() {
   return all.filter((f) => !(f in SOURCE_TEXT_GATES)).map((f) => path.join('test', f));
 }
 
-// Repo-relative paths changed vs HEAD (staged + unstaged + untracked), from porcelain status.
-function changedFiles() {
-  const out = execSync('git status --porcelain', { cwd: ROOT }).toString();
-  const files = new Set();
-  for (const line of out.split('\n')) {
-    if (!line.trim()) continue;
-    let p = line.slice(3).trim();                       // "XY path"
-    if (p.includes(' -> ')) p = p.split(' -> ').pop().trim();   // rename → the new path
-    files.add(p.replace(/^"|"$/g, ''));                 // git quotes paths with odd chars
-  }
-  return files;
-}
-const targetsOf = (m) => [m.file || DEFAULT_FILE, m.also && (m.also.file || m.file || DEFAULT_FILE)].filter(Boolean);
+// ── The sweep — runs only when executed directly, never on import ────────────────────
+const isCli = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop());
+if (isCli) {
+
+const run = (args) => spawnSync(NODE, args, { cwd: ROOT, encoding: 'utf8' });
+const restore = () => run([path.join('tools', 'mutate.mjs'), '--restore']);
+
+process.on('SIGINT', () => { restore(); process.exit(130); });
 
 let indices;
 if (process.argv.includes('--affected')) {
   const changed = changedFiles();
-  indices = MUTATIONS.map((_, i) => i).filter((i) => targetsOf(MUTATIONS[i]).some((f) => changed.has(f)));
+  indices = affectedIndices(MUTATIONS, changed);
   const changedTests = [...changed].filter((f) => f.startsWith('test/'));
   console.log(`--affected: ${changed.size} changed file(s); ${indices.length} of ${MUTATIONS.length} mutation(s) target them.`);
   // §4.20 — a partial run must NOT read as complete. State exactly what it does not cover.
@@ -137,3 +182,5 @@ if (unapplied.length) console.log('UNAPPLIED (anchor rot):\n  ' + unapplied.join
 if (uncaught.length) console.log('UNCAUGHT (guard is undefended):\n  ' + uncaught.join('\n  '));
 if (staleBenign.length) console.log('STALE benignAlone FLAGS (remove them):\n  ' + staleBenign.join('\n  '));
 process.exit(uncaught.length || unapplied.length || staleBenign.length ? 1 : 0);
+
+}   // end isCli guard
