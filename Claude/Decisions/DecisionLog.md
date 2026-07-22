@@ -351,3 +351,20 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   miss them. Dev-workflow infra (like the pre-commit hook and ci.yml), so it does NOT bump the build.
   NOTE: Claude hooks load only after a `/hooks` reload or a restart, so it activates next session (verified
   not-yet-live this session by a sentinel test) — 2026-07-21.
+
+- The `mutation-sweep.mjs --affected` selector's `parseChangedFiles` tests BOTH git status columns for
+  rename/copy (`x==='R'||x==='C'||y==='R'||y==='C'`), not only the index column. A worktree-column rename
+  (`mv` + `git add -N`, reported as ` R new.js\0old.js\0`) previously desynced the token loop and dropped
+  the rename source — a false-clean, the F-cf1 class reopened on the Y column. Surfaced by an external
+  reviewer on the `.234` re-review (finding F-y) and missed by this project's own re-review; fixed in
+  `.235` with a red-first regression (Y-column parse fixture, copy-in-Y fixture, end-to-end `mv`+`git add
+  -N`, all red before the fix and green after). CI's full sweep was the backstop that kept the local
+  false-clean from shipping an undefended guard — 2026-07-22.
+
+- Poirot coverage-ledger cells split the clear mark: `✓` means cleared by an EXECUTED command cited that
+  pass; `~` means cleared by reading/reasoning only — admissible, but unverified, and the Phase 5 verdict
+  must account for every `~`. The gate (`~/.claude/hooks/poirot-casebook-gate.sh`, check 5) blocks a
+  casebook whose ledger has any bare `✓` but cites no command. Earned by the `.234` re-review stamping `✓`
+  on a reasoned claim about git's output it never ran. This is a global scheme change (Poirot spec Local
+  section, `~/.claude/personas/`), logged here because this project's review filings now follow it —
+  2026-07-22.

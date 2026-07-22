@@ -41,8 +41,14 @@ decisions + stage-6 cleanup debt are all in DecisionLog. **`.234`** then closed 
 `mutation-sweep.mjs --affected` selector's four false-clean cases (F-cf1 rename source dropped, F-cf2
 new file in a new untracked dir missed, F-cf3 odd-char names escaped / false comment, F-cf4 no selector
 tests) are fixed by parsing `git status --porcelain=v1 -z --untracked-files=all` + a new selector test
-set — each reproduced with real git and mutation-verified. Watch-list W17 CLOSED (.234); W8 (stage-5
-scope) + W11 (O1, low) stay OPEN. **Do NOT start stage 5 without the user's go.**
+set — each reproduced with real git and mutation-verified. **`.235`** then fixed **F-y**, a
+worktree-column (Y=R, from `mv`+`git add -N`) rename false-clean that `.234` left — the X-only parser
+dropped the rename source. Found by an external re-review (ChatGPT), MISSED by this project's own
+re-review (`Claude/Poirot/009dbc9-selector-fix-rereview.md`); red-first regression added, both columns
+now handled. Watch-list W17 + W19 CLOSED (.235); W8 (stage-5 scope) + W11 (O1, low) stay OPEN. Also this
+session: Poirot's coverage-ledger clear mark split into `✓` (executed, command cited) vs `~` (reasoned,
+unverified), gate-enforced — the durable fix for the `✓`-on-reasoning miss (see DecisionLog). **Do NOT
+start stage 5 without the user's go.**
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
