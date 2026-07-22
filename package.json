@@ -8,7 +8,14 @@
     "lint": "eslint js sw.js",
     "typecheck": "tsc -p jsconfig.json",
     "stamp": "node tools/stamp-build.mjs",
-    "stamp:check": "node tools/stamp-build.mjs --check"
+    "stamp:check": "node tools/stamp-build.mjs --check",
+    "mutation-sweep": "node tools/mutation-sweep.mjs",
+    "hooks:install": "node tools/hooks/manage.mjs install",
+    "hooks:uninstall": "node tools/hooks/manage.mjs uninstall",
+    "hooks:on": "node tools/hooks/manage.mjs on",
+    "hooks:off": "node tools/hooks/manage.mjs off",
+    "hooks:status": "node tools/hooks/manage.mjs status",
+    "hooks:check": "node tools/hooks/run-checks.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

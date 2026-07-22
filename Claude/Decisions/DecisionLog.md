@@ -302,6 +302,20 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   (batching independent tool calls is in-turn judgment; running the cheap path at all is still my
   choice, only made easier) — 2026-07-21.
 
+- Local pre-commit enforcement is added, closing the last enforcement gap (a red/incoherent
+  commit could be created locally; CI only caught it after push). TWO hooks run the same fast
+  battery (`tools/hooks/run-checks.mjs`: stamp --check, lint, typecheck, full suite incl. every
+  gate — NOT the mutation sweep, which stays in CI): a git `pre-commit` hook (any commit, any
+  tool) and a Claude PreToolUse hook (`.claude/settings.json` → `claude-precommit.mjs`, the
+  agent's commits). The Claude hook DEFERS when the git hook is installed, so they never
+  double-run; it only covers the gap of a clone without the git hook. BOTH obey one toggle
+  (`git config tomeroam.hooks`, default ON) so `npm run hooks:off` disables everything; a single
+  commit bypasses with `git commit --no-verify`. Verified: the git hook blocks a commit with an
+  incoherent stamp (HEAD unchanged) and the toggle turns it off/on. This is dev-workflow infra
+  (like ci.yml), not app/test/tooling-under-test, so it does not bump the build. NOTE: the Claude
+  hook loads only after `/hooks` or a restart (no `.claude/` existed at session start). Neither
+  hook enforces the JUDGMENT half of the contract — only the checkable outcomes — 2026-07-21.
+
 - Owed to stage 6 (from the .227 review's process note, recorded now so it is not lost): when the settle
   requestAnimationFrame, the settle/reveal timers, or the transitionend listener are cancelled OR fire,
   NULL their stored session handles (`cur.settleFrame = null`, etc.) so the session object describes LIVE

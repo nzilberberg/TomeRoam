@@ -1,0 +1,11 @@
+#!/bin/sh
+# tomeroam git pre-commit hook — runs the shared fast-check battery (tools/hooks/run-checks.mjs).
+# Installed via `npm run hooks:install` (sets core.hooksPath=tools/hooks). ONE toggle governs
+# this and the Claude hook:  npm run hooks:off  /  npm run hooks:on.
+# Bypass a single commit:  git commit --no-verify.
+#
+# node is recorded at install time (git config tomeroam.node) because it may not be on PATH.
+NODE="$(git config --get tomeroam.node)"
+[ -z "$NODE" ] && NODE=node
+DIR="$(dirname "$0")"
+exec "$NODE" "$DIR/run-checks.mjs"

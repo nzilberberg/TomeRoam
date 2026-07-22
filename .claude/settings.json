@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "shell": "bash",
+            "command": "NODE=\"$(git config --get tomeroam.node)\"; [ -z \"$NODE\" ] && NODE=node; \"$NODE\" tools/hooks/claude-precommit.mjs",
+            "timeout": 180,
+            "statusMessage": "tomeroam pre-commit checks"
+          }
+        ]
+      }
+    ]
+  }
+}
