@@ -349,11 +349,16 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   to ask "is CI green?" every commit. It greps the command in-script rather than using an `if:
   "Bash(git push*)"` filter, because pushes are frequently `cd … && git push` and a prefix filter would
   miss them. Dev-workflow infra (like the pre-commit hook and ci.yml), so it does NOT bump the build.
-  NOTE: Claude hooks load at session start from `.claude/settings.json`. LIVE as of 2026-07-22 (after a
-  restart) — confirmed because the sibling PreToolUse pre-commit hook in the same settings block fired this
-  session ("tomeroam pre-commit checks: PASS" on each commit); both hooks load together, so the PostToolUse
-  ci-watch is loaded too. It fires only on a Bash command matching `git push` and no-ops otherwise —
-  2026-07-21; liveness confirmed 2026-07-22.
+  NOTE: partially verified 2026-07-22 — do not over-trust. The PreToolUse pre-commit hook in
+  `.claude/settings.json` DOES load and fire this session ("tomeroam pre-commit checks: PASS" on each
+  commit; there is no native `.git/hooks/pre-commit`, so that output is the Claude hook). The ci-watch.mjs
+  SCRIPT is sound — invoked directly with a synthetic `git push` event it resolves `gh` and reaches the
+  watch loop. BUT the PostToolUse asyncRewake watch did NOT spawn a watcher on the actual `.235` push: no
+  `gh`/watch process existed while CI ran, and no background task surfaced. So the AUTO-watch is UNPROVEN
+  end-to-end and did nothing this push; CI was watched by a manual `gh run watch` instead. The prior "both
+  load together so it's live" claim was an inference from the PreToolUse half and was wrong about the
+  async watch actually firing. Next real push: confirm a watcher/background task appears before trusting it
+  — 2026-07-22.
 
 - The `mutation-sweep.mjs --affected` selector's `parseChangedFiles` tests BOTH git status columns for
   rename/copy (`x==='R'||x==='C'||y==='R'||y==='C'`), not only the index column. A worktree-column rename
