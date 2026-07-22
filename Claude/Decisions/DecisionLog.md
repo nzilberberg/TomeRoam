@@ -349,8 +349,11 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   to ask "is CI green?" every commit. It greps the command in-script rather than using an `if:
   "Bash(git push*)"` filter, because pushes are frequently `cd … && git push` and a prefix filter would
   miss them. Dev-workflow infra (like the pre-commit hook and ci.yml), so it does NOT bump the build.
-  NOTE: Claude hooks load only after a `/hooks` reload or a restart, so it activates next session (verified
-  not-yet-live this session by a sentinel test) — 2026-07-21.
+  NOTE: Claude hooks load at session start from `.claude/settings.json`. LIVE as of 2026-07-22 (after a
+  restart) — confirmed because the sibling PreToolUse pre-commit hook in the same settings block fired this
+  session ("tomeroam pre-commit checks: PASS" on each commit); both hooks load together, so the PostToolUse
+  ci-watch is loaded too. It fires only on a Bash command matching `git push` and no-ops otherwise —
+  2026-07-21; liveness confirmed 2026-07-22.
 
 - The `mutation-sweep.mjs --affected` selector's `parseChangedFiles` tests BOTH git status columns for
   rename/copy (`x==='R'||x==='C'||y==='R'||y==='C'`), not only the index column. A worktree-column rename
