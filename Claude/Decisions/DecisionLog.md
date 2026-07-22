@@ -500,3 +500,40 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   critiques were that missing pass. Gate check proven able to fail (a conditional finding with no named
   condition reddens a fixture; a conditioned one and the real casebook pass). Global files (spec/hook); this
   entry records that this project's Charpy reviews are held to it — 2026-07-22.
+
+- The Charpy casebook gate gains two more per-finding checks, gating every mechanizable slice of D3/D5:
+  a `recommendation` finding using hard-law language (prohibited/forbidden/must-not/…) without a hedge is
+  blocked (D3 — a preference cannot be filed as a rule, the F5 "prohibited" error), and an `open-unknown`
+  finding that never names its unresolved question is blocked (D5 — it must read as a decision owed). Both
+  proven able to fail on fixtures; the real casebook passes. A dogfooding bug was found and fixed in the
+  process: the tag word "recommendation" contains "recommend" (a hedge token), so scanning the heading made
+  every recommendation self-satisfy the hedge check — the gate now strips the nature-tag words from the
+  heading before scanning — 2026-07-22.
+
+- The "adapt durably" obligation is enforced by a hook, not stored as a memory (a memory is the ignorable-
+  rule category this project's rules-vs-gates law rejects). A UserPromptSubmit hook
+  (`~/.claude/hooks/adapt-durably-guard.sh`, wired in `~/.claude/settings.json`) injects the mandatory
+  loop (fix → sweep siblings → build a gate/hook that makes the class mechanically impossible → prove it
+  fails on a fixture and passes on the real artifact → record; discipline only for the residual that
+  provably resists a cheap gate, shown with a concrete false-positive, never asserted). It does NOT key on
+  critique PHRASING — the cue is being confronted with a substantive correction one could have guarded
+  against, regardless of wording, and a prompt-text hook cannot detect that (a neutral factual correction
+  carries no critique markers; a fresh task carries correction-shaped words), demonstrated by both false
+  cases. So the explicit phrase "adapt durably" injects the full loop, and EVERY other prompt gets a short
+  STANDING situational directive that states the cue and self-nullifies if the prompt is not such a
+  correction. Corrects the earlier phrasing-matched design (which keyed on hardcoded critique phrases from
+  the very session that produced it). Global files; this entry records the governing rule — 2026-07-22.
+
+- Every mechanizable slice of the seven GLOBAL feedback rules (`~/.claude/memory/`) was gated or its
+  resistance demonstrated, per the "adapt durably = max enforcement" rule; each memory now carries an
+  `**Enforcement:**` line stating its status. NEWLY GATED: `tests-must-be-able-to-fail` — a global
+  PostToolUse hook (`~/.claude/hooks/test-can-fail-gate.sh`) blocks a test file that declares test blocks
+  but contains no assertion (vacuously green), across JS/Python/Go/Rust conventions; proven able to fail
+  (a no-assertion test file reddens a fixture; an asserting one, a non-test file, and every real project
+  test pass). ALREADY GATED in-project: the commit/CI slice of `no-assumed-success`/`no-fixed-before-
+  confirmation` (pre-commit battery + ci-watch + [[git-commit-verify]]). RESISTS a clean gate, each with a
+  concrete false-positive recorded in its memory: `speak-plainly-no-codenames` (path/filename/artifact
+  references), `establish-dependency-surface` (cannot tell shared from local symbols), `no-bandaid-fixes`
+  and `debug-transient-visual-bugs` (semantic judgment / methodology, no mechanical signal), and the
+  cross-turn core of the two success rules (block-only Stop hook would block a truthful report of a
+  prior-turn fix). Global files; this entry records the audit — 2026-07-22.
