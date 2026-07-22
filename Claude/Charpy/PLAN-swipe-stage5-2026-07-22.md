@@ -2,7 +2,7 @@
 
 Type: plan-review
 
-<!-- charpy-gate {"review_type":"plan-review","patterns":{"defining_records":true,"boundary_relocation":true,"callee_replacement":true,"contract_shape":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:345-356","js/app.js:368-496","js/app.js:564-580","js/app.js:588-655"],"callee_ranges":["js/app.js:550-558"]} -->
+<!-- charpy-gate {"review_type":"plan-review","patterns":{"defining_records":true,"boundary_relocation":true,"callee_replacement":true,"contract_shape":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:345-356","js/app.js:368-496","js/app.js:564-580","js/app.js:588-655"],"callee_ranges":["js/app.js:550-558","js/app.js:633-637"]} -->
 <!-- note: source range 588-655 covers the construction tail incl. the initial mover-parking loop (654). -->
 
 Reviewed: 2026-07-22 · Plan: `Claude/Plans/PLAN-swipe-stage5.md` (Vitruvius's resolution of F0/F1/F3/
@@ -16,7 +16,7 @@ gives, checked by an independent adversarial read and an external review before 
 Declared change patterns (machine-readable declaration above; project adapter `tomeroam-js-dom`):
 - **defining_records: true** — three records (parent plan, `swipe.js` header, DecisionLog) define the scope; they CONFLICT (see below).
 - **boundary_relocation: true** — Stage 5 moves the pane-builder construction across the `app.js`→`swipe.js` boundary; source ranges declared and traced in the ledger.
-- **callee_replacement: true** — `showAppView` / render dispatch become the injected `env.renderDestination` callback; callee range declared (F5/F7/F9).
+- **callee_replacement: true** — `showAppView` AND the overlay render branch become the injected `env.renderDestination` callback; both callee ranges declared (F5/F7).
 - **contract_shape: true** — emitting the host fields changes `classifyTransition`'s exact-key contract (F2).
 
 ## Verdict
@@ -289,10 +289,13 @@ mutation-verified, that prove the primary seam shape and routing — not only th
 - **F9** — the incoming mover starts at the signed pixel offset and outgoing base-0 gets NO initial
   transform, parked before the first `move()`; real `#home`/`#browse` movers gain NO `will-change`
   (reddens if the parking loop is dropped, applied to base-0, or promotes a real in-flow element).
-- **Recipe pre-mount (both recipes)** — `freezeArt` strips every `img[data-art]` BEFORE the clone is
-  appended (mutation reddens if `freezeArt` is omitted or moved after `appendChild`), and the wrapper
-  carries the `.nav-ghost` class and fixed-pane style contract (position/inset/z-index) for cleanup and
-  visual parity.
+- **Recipe pre-mount (both recipes)** — both recipes remove every `img[data-art]` before the constructed
+  pane becomes CONNECTED to the live document (mutation reddens if stripping is omitted or delayed until
+  after live-document insertion — the invariant is pre-connection, not a fixed position within the
+  detached-wrapper build). The wrapper carries the `.nav-ghost` behavioural contract: fixed full-viewport
+  coverage, correct stacking beneath the persistent bars, non-interactive, clipped, matching page
+  background, and transform-capable for the swipe (implemented via `position`/`inset`/`z-index`/`overflow`/
+  `background`/`pointer-events`/`will-change`) — test the contract, not three exact declarations.
 
 ## Prediction — where this breaks in execution if built as written
 
