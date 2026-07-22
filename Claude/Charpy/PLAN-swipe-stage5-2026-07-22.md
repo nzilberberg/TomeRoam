@@ -26,7 +26,8 @@ shatters scope B.
 The authorities that specify Stage 5, reconciled — verdict: **CONFLICT (unchanged at HEAD), with this
 sub-plan as the proposed resolution to B**:
 - **`PLAN-swipe-stage5.md`** (this sub-plan) — scope B; the artifact under review.
-- **`PLAN-swipe-reveal.md` §7 step 5** — still reads boundary A. To be rewritten to B on approval (§8).
+- **`PLAN-swipe-reveal.md` §7 step 5** — still reads the ambiguous one-line "move pane builders
+  unchanged" step (F0 characterized its narrow reading as boundary A). To be rewritten to B on approval (§8).
 - **`js/swipe.js` header, lines 24–27** — still lists boundary C. To be rewritten to B on approval (§8).
 - **DecisionLog 2026-07-21** — promises `sourceHost`/`destinationHost` reintroduced with a reader;
   the plan chose to carry them (§4). To be settled to B on approval (§8); whether the carry earns its
@@ -52,7 +53,11 @@ A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHO
 | `d.from.v` / `d.dest.v` (`fromV`/`toV`) | object | in | 622, 630, 633, 635 | **none** — env callbacks need it, unsourced | F5 |
 | `isOverlay(fromV)` (`fromOv`) | free id | in | 593, feeds 622/630 | `Nav` (already imported, swipe.js:34) | F5/F6 |
 | `d.dir`, `d.w` (→ `off`) | geometry | in | 592 | unresolved — crosses the seam only if the builder computes `base` | F1 |
-| `window.scrollY` (→ `ghostY`) | geometry | in | 486 (function body) | ambient global outside `env`; name the seam source | F4 |
+| `window.scrollY` (→ `ghostY`) | geometry | in | 486 (function body) | ambient global outside `env`; route through env | F4 |
+| `document.querySelector('.app')` (app-ghost source) | DOM read | in | 471/492/494 | read via bare `document`; reachable via `env.document` but no dedicated owned-pane resolver named | F4 |
+| `$('home')` (home-snapshot source) | DOM read | in | 565/575/577 | read via bare `$`; no owned-pane resolver named | F4 |
+| `Element` (feature-detect global) | ambient | in | 420 | ambient; route through env | F4 |
+| `navPill()` (pill source) | DOM read | in | 345/351 | `env.navPill()` (§3) | cov |
 | `GHOST_BG` (`getComputedStyle` init) | closure const | in | 368–371, used 467 | **unassigned** — plan does not say who owns the ghost background | F8 |
 | clone build + mount (`createElement`/`appendChild` to body) | DOM effect | out | 465/489–491, 568–574, 351–354 | `env.document` / `env.document.body` (§3) | — |
 | `.np-pill-float` stale-clone removal | DOM effect | out | 350 | `env.document` (§3) | cov |
@@ -70,10 +75,14 @@ A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHO
 ### F1 — Structural — open-unknown — the return contract is stated two ways and cannot produce `base`
 
 Three parts of one contract the plan must pin:
-1. **Field names.** Production movers are `{ el, base, own }` (app.js:620–646), read across drag,
-   settle, teardown, diagnostics, reveal (654, 675, 701, 708, 716, 740–746, 795–798, 843–844, 867,
-   1313). §5's `element`/`ownership` is a rename that scrubs the stage-6-owned finalize path — which
-   §10 says Stage 5 will not touch.
+1. **Field-name mapping.** `buildConstruction` returns panes keyed `{ element, base, ownership,
+   capture }` (§5), while production `d.movers` are `{ el, base, own }` (app.js:620–646), read across
+   drag/settle/teardown/reveal (654, 675, 708, 716, 795–798, 1313). The plan states the returned
+   element "participates in the production mover set ... NOT as a `d.movers` internal" (§7), i.e.
+   `start()` assembles `d.movers` from the builder's return, and §10 keeps the finalize path — so this
+   is not a rewrite of that path. But the mapping is unstated: does `start()` translate
+   `element`→`el`, `ownership`→`own`, or does the builder return the production keys directly? The plan
+   must state the adaptation so the builder and `start()` agree on the field names.
 2. **`base` and its geometry.** `base` is the pixel position `0` or `off = d.dir==='back' ? -d.w :
    d.w` (app.js:592), and consumers depend on the number (`if (m.base)` 654; `m.base === 0` 708).
    Today `start()` computes `off` before building movers, so viewport width/direction cross into the
@@ -118,16 +127,23 @@ one sentence stating the architectural benefit (mapping policy centralized in cl
 justifies carrying both `kind` and `host` in the exact-key contract. It becomes blocking only if the
 planner switches to deriving host selection while resolving F2, which would remove the fields.
 
-### F4 — Weak — requirement — name the scroll input so construction does not read an ambient global outside its seam
+### F4 — Structural — requirement — the relocated recipes read external DOM directly; the seam must route all of it through `env`
 
-`ghostApp` reads `window.scrollY` for `ghostY` (app.js:486). This is a runtime function-body read, so it
-is DOM-free at module load and does not affect the `require()`-in-Node gate (that module-load argument
-belongs to F8, where it applies). The finding is that a bare ambient `window` would violate the plan's
-own claim that `env` is the sole external seam, and would make direct recipe tests depend on global
-setup rather than an injected env. The plan must name scroll position explicitly or authorize
-`env.document.defaultView`, so construction does not depend on ambient browser globals outside its
-declared seam. (Viewport width is left to F1 — it crosses the seam only under the branch where the
-builder computes `base`.)
+The moved recipes reach outside their arguments for live DOM that the plan's `env` does not name:
+`window.scrollY` for `ghostY` (app.js:486), the ambient `Element` global for a feature check
+(`copyAnimPhase`, app.js:420), and — the clone SOURCES themselves — `document.querySelector('.app')`
+for the app-ghost (app.js:471) and `$('home')` for the home-snapshot (app.js:565). None of these currently go
+through `env`: the recipes read bare `document`/`window`/`Element`/`$`. The plan provides `env.document`
+(§3), so `.app`/`#home` are reachable via `env.document.querySelector`/`getElementById` — but the plan
+names no dedicated owned-pane source resolver (its `env.sourceEl(kind,v)` serves the borrowed-real path
+only) and never states that the relocated recipe bodies must route their reads through `env` rather than
+the bare globals they use today. These are runtime function-body reads, so they do not
+break module load (that is F8) — but a module whose recipes read `window`/`Element`/`document`/`$`
+directly is not the env-injectable seam the extraction promises, and recipe tests cannot drive it
+through a fake `env`. The plan must route every external read through `env` (e.g.
+`env.document.querySelector('.app')`, `env.document.defaultView.scrollY`) and name the owned-pane source
+accessors its `env` vocabulary currently lacks. (Viewport width is left to F1 — it crosses the seam
+only under the branch where the builder computes `base`.)
 
 ### F5 — Structural — open-unknown — the seam has no source/destination descriptor identity, and render-callback ownership is vague
 
@@ -205,8 +221,9 @@ mutation-verified, that prove the primary seam shape and routing — not only th
   signed pixel offset `±d.w`; a transition with no owned pane yields the defined no-capture value.
 - **F2** — the contract-function gate's exact-key registrations reflect whichever host-field routing the
   plan selects (the registrations at contract-function-gate.test.js:24/30 make this concrete).
-- **F4** — construction reads scroll position through the declared seam (an injected `env`), not a bare
-  `window` global, provable by driving a fake env.
+- **F4** — the recipes read every external DOM value (scroll, the `Element` feature-check, and the
+  `.app`/`#home` clone sources) through an injected `env`, not bare globals, provable by driving a fake
+  env with no ambient `document`/`window`.
 - **F5** — a payload-bearing destination (`authorBooks`/`files`) reaches the render callback with the
   correct descriptor; overlay rendering preserves its visibility change (`classList.remove('hidden')`).
 - **Moved decoration recipe (`npPillClone`)** — the relocated builder removes stale `.np-pill-float`
