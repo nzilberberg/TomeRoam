@@ -114,8 +114,7 @@ marking it still-open, `resolved: <how>`, or `dropped: <why>` — never silently
 an item resolved/dropped is a FILING event: its resolution and any durable lesson graduate to
 their permanent home (a settled question → Claude/Decisions/DecisionLog.md; a review-craft lesson
 → the Poirot disciplines; a design change → the plan) BEFORE it falls off, so the list stays
-bounded without losing history. New concerns get the next free id. Enforced by
-`test/poirot-casebook-gate.test.js`.
+bounded without losing history. New concerns get the next free id.
 
 - [W1] (resolved: .228 — a WIRING test in swipe-invariants drives a real NP-source back-swipe and asserts the `.np-pill-float` mover is built; mutation-verified by dropping start()'s decorations loop) F1 — the NP-pill decoration wiring seam had no running test.
 - [W2] (resolved: .228 — filed in Claude/Decisions/DecisionLog.md as a deliberate §3.3/§7.4 phase-split driven by the no-dead-fields rule; the stage-6 handle-cancellation cleanup also filed) F2 — the phase-split was recorded only in the commit message.

@@ -76,7 +76,6 @@ independent pass caught this class and the context-rich pass did not.
 
 The bounded continuity artifact. Carries forward the prior review's open item (W8) and adds
 what this review surfaced. The next review (stage 5) MUST forward every OPEN item below.
-Enforced by `test/poirot-casebook-gate.test.js`.
 
 - [W8] (open) Stage 5 scope — the pane builders (ghostApp/snapshotHome/overlayEl/appViewEl/npPillClone) move into swipe.js. Watch the builder-move for behaviour drift on the seams checkable only by decision, not by a moved builder. Stage 5 is gated on the user's go.
 - [W10] (open) F8 forward-check — `.228` dispositioned `sourceHost`/`destinationHost`/`sameBrowseHost` as "stage-6-consumed" boundary outputs, not dead fields. Verify stage 6 (finalization) actually consumes them; if it does not, they are permanently production-dead (test-asserted only) and F8 reopens.
