@@ -436,3 +436,13 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   (`element`/`source`/`equivalence`/`capture` now, lifecycle methods in stage 6) is a good phase split — the
   same shape as `constructionPlanFor()` vs `finalizationPlanFor()` — but one valid option, not the only one.
   What is not admissible is leaving the representation unstated. Charpy finding F6 — 2026-07-22.
+
+- The CI mutation-sweep runs SHARDED across an 8-way matrix (`.236`), not serially. Wall-clock drops from
+  ~13 min to ~2 min while staying every-push. `tools/mutation-sweep.mjs --shard=I/N` computes shard I's
+  slice `{ k : k % N === I }` from the live mutation count; the N shards partition the set (union = every
+  mutation, no overlap), so no guard is silently skipped as mutations are added, and the sweep is complete
+  only when all shards pass. Chosen over (a) moving the full sweep to a nightly schedule — rejected because
+  every-push feedback is worth keeping now that it is fast; and (b) more than 8 shards — rejected because
+  each shard re-pays a ~16s checkout+`npm ci` toll and GitHub caps ~20 concurrent jobs, so past ~8 the total
+  runner-time rises for negligible wall-clock gain (floor is one suite run). Supersedes the earlier "full
+  sweep stays in CI, serial" arrangement; it still stays in CI — 2026-07-22.

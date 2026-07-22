@@ -47,7 +47,8 @@ dropped the rename source. Found by an external re-review (ChatGPT), MISSED by t
 re-review (`Claude/Poirot/009dbc9-selector-fix-rereview.md`); red-first regression added, both columns
 now handled. Watch-list W17 + W19 CLOSED (.235); W8 (stage-5 scope) + W11 (O1, low) stay OPEN. Also this
 session: Poirot's coverage-ledger clear mark split into `✓` (executed, command cited) vs `~` (reasoned,
-unverified), gate-enforced — the durable fix for the `✓`-on-reasoning miss (see DecisionLog).
+unverified), gate-enforced — the durable fix for the `✓`-on-reasoning miss (see DecisionLog). **`.236`**
+sharded the CI mutation-sweep 8 ways (`--shard=I/N`, partitioned) — ~13 min → ~2 min, still every-push.
 
 **Stage 5 is TEMPERED, not cleared to build (2026-07-22).** The plan verifier struck the stage-5 step
 (`Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`, verdict TEMPER): end-state architecture sound, but
