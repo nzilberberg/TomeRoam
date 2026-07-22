@@ -488,3 +488,15 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   valid under any scope A–C that defers the §3.6 lifecycle, not only under scope A; and the prediction says
   the improvised seam "relocates code but fails to establish a clean ownership boundary" rather than
   "achieves nothing structural." — 2026-07-22.
+
+- D5's gateable core is converted from a rule to a gate: the Charpy casebook gate now blocks a finding
+  tagged `conditional` unless its body names the condition it depends on (an if/when/unless/under/scope
+  token), so a scope-conditional flaw can no longer be filed as an unconditional verdict — the most-repeated
+  review error. Correcting the earlier claim that D5 "resists structure" (a comfortable stop): the D2 core
+  was gateable and is now gated; only cross-prose consistency and the full semantic sweep (D4/D5 residual)
+  resist a cheap gate, because a token-lint for over-strong language false-fires on legitimate unconditional
+  defects and an over-firing gate gets skipped. The durable backstop for that residual is an INDEPENDENT
+  read of the review — Charpy is every plan's adversary and has none of his own; the repeated manual
+  critiques were that missing pass. Gate check proven able to fail (a conditional finding with no named
+  condition reddens a fixture; a conditioned one and the real casebook pass). Global files (spec/hook); this
+  entry records that this project's Charpy reviews are held to it — 2026-07-22.
