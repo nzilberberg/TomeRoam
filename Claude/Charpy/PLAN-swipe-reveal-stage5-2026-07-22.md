@@ -201,10 +201,14 @@ forward have different costs:
 So a raw-node return is not itself a defect; it is a defect only if stage 5 is intended to introduce
 the complete §3.6 abstraction. The requirement filed is that the plan STATE which: if lifecycle
 ownership stays stage-6 work, stage 5 may retain a raw-node or capture-result representation and
-explicitly defer the methods. A partial capture object carrying the fields construction and the I8
-equivalence tests consume now (`element`, `source`, `equivalence`, `capture`), with `release()`/
-`dispose()` activated in stage 6, is a good phase split — the same shape as `constructionPlanFor()` vs
-`finalizationPlanFor()` — but one valid option, not the only one. What is not admissible is leaving it
+explicitly defer the methods. A partial capture result containing ONLY fields with genuine Stage-5
+production consumers is one possible phase split — for example `{ element, capture }` if those are the
+only values currently consumed. `source`, `equivalence`, `release()`, and `dispose()` must wait until
+the stage that introduces their runtime consumers; test-only reads (I8) do not justify a production
+field — the same no-dead-fields rule (Engineering Contract §17) F3 applies. The general rule: the
+chosen representation must contain no field or method whose only consumer is a test or a later planned
+stage. This is one valid split — the same shape as `constructionPlanFor()` vs `finalizationPlanFor()` —
+not the only one. What is not admissible is leaving it
 unstated, so the implementation invents the boundary while coding — the failure the rewrite exists to
 stop.
 

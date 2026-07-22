@@ -433,9 +433,12 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   node, app.js:496/579). A raw-node return is not itself a defect — it is one only if stage 5 is intended to
   introduce the complete abstraction. Waits on the planner to STATE which: if pane-lifecycle ownership stays
   stage-6 work, stage 5 may retain a raw-node or capture-result representation and explicitly defer
-  `release()`/`dispose()` to stage 6 (when finalization becomes their consumer). A partial capture object
-  (`element`/`source`/`equivalence`/`capture` now, lifecycle methods in stage 6) is a good phase split — the
-  same shape as `constructionPlanFor()` vs `finalizationPlanFor()` — but one valid option, not the only one.
+  `release()`/`dispose()` to stage 6 (when finalization becomes their consumer). A partial capture result
+  containing ONLY fields with genuine Stage-5 production consumers is one valid split — e.g. `{ element,
+  capture }` if those are the only values consumed now; `source`/`equivalence`/`release()`/`dispose()` wait
+  for the stage that introduces their runtime consumers (a test-only read does not justify a production
+  field — the same no-dead-fields rule, Engineering Contract §17, that F3 applies). GENERAL RULE: the chosen
+  representation must contain no field or method whose only consumer is a test or a later planned stage.
   What is not admissible is leaving the representation unstated. Charpy finding F6 — 2026-07-22.
 
 - The CI mutation-sweep runs SHARDED across an 8-way matrix (`.236`), not serially. Wall-clock drops from
@@ -562,3 +565,18 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   meaning with a broad net (every construction that could express the error), not the corrected wording. A
   broad class-level re-grep now shows every records+scope construction across casebook/DecisionLog/Board
   uses the conflict/unresolved framing — 2026-07-22.
+
+- F6's proposed stage-5 capture object is corrected: it justified `source`/`equivalence` fields by the I8
+  equivalence TESTS, which recreates the dead field the same review's F3 forbids under the no-dead-fields
+  rule (Engineering Contract §17) — a test-only read is not a production consumer. Corrected to: a capture
+  result contains ONLY fields with genuine Stage-5 production consumers (e.g. `{ element, capture }`);
+  `source`/`equivalence`/`release()`/`dispose()` wait for the stage that introduces their runtime consumers.
+  General rule now stated in F6 and the DecisionLog F6 entry: the chosen representation must contain no field
+  or method whose only consumer is a test or a later planned stage. Class-swept — the sibling in the
+  DecisionLog F6 entry was fixed too; the PLAN-swipe-reveal §3.6/I8 hits are the plan's own definitions, not
+  proposals. New Charpy discipline D6 (police your own proposals by the plan's rules). Enforcement split:
+  a SHIPPED dead field is caught by the exact-key gate/§17 only where the surface is a registered contract
+  function — an exempt impure builder return is not, so the review REQUIRES a per-field-production-consumer
+  check for that return; the review-prose side (proposing the dead field) resists a cheap gate (demonstrated:
+  a lint cannot tell a consumed field set from a test-only one without knowing production's reads), backstop
+  = D6 + independent read — 2026-07-22.
