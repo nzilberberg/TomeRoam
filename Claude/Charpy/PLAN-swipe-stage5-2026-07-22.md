@@ -2,7 +2,7 @@
 
 Type: plan-review
 
-<!-- value-crossing-ledger source=js/app.js ranges=345-356,368-496,564-580,588-650 -->
+<!-- value-crossing-ledger source=js/app.js ranges=345-356,368-496,564-580,588-650 callees=550-558 -->
 
 Reviewed: 2026-07-22 · Plan: `Claude/Plans/PLAN-swipe-stage5.md` (Vitruvius's resolution of F0/F1/F3/
 F6 + F2/F4/F5 from `Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`). Grounded against HEAD:
@@ -64,7 +64,7 @@ A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHO
 | `d.movers` shape `{el, base, own}` | object | out | 620–650 | plan says `{element, base, ownership, capture}` | F1 |
 | `d.ghostY` / `d.animSync` / `d.animRes` | object | out | 487, 495, 578 | `capture` — but contract stated two ways | F1 |
 | `d.clobbered` (same-browse-host carrier) | object | out | 630, read 1260/1286 | **unassigned** — plan doesn't say recompute-in-start() or return-as-metadata | F6 |
-| `document.body` `np-locked` removal | DOM effect | out | 634, 645 | app.js via `plan.decorations` (plan §3:80 keeps it) | cov |
+| `document.body` `np-locked` removal | DOM effect | out | 634 (incoming NP), 645 (outgoing NP) | 634 → `renderDestination` (F5); 645 → app.js via `plan.decorations` | F5/cov |
 | outgoing-ghost capture **before** dest render | ordering | out | 604–605, 620→629 | unstated — plan says only "relative to the ghost" | F7 |
 | `revealBase = snapBrowse(true)` | ordering | out | 590 (pre-render) | must precede any clobbering render; unstated | F7 |
 | `takeRowHold()` (Browse hold) | ordering | out | 591 (pre-render) | must precede any clobbering render; unstated | F7 |
@@ -140,10 +140,15 @@ only) and never states that the relocated recipe bodies must route their reads t
 the bare globals they use today. These are runtime function-body reads, so they do not
 break module load (that is F8) — but a module whose recipes read `window`/`Element`/`document`/`$`
 directly is not the env-injectable seam the extraction promises, and recipe tests cannot drive it
-through a fake `env`. The plan must route every external read through `env` (e.g.
-`env.document.querySelector('.app')`, `env.document.defaultView.scrollY`) and name the owned-pane source
-accessors its `env` vocabulary currently lacks. (Viewport width is left to F1 — it crosses the seam
-only under the branch where the builder computes `base`.)
+through a fake `env`. The `Element` read is the sharpest: `copyAnimPhase` early-returns `0` when
+`Element` is undefined (app.js:420), so a test that supplies a DOM through `env.document` without a
+global `Element` constructor silently disables animation-phase sync — the load-bearing `.207` parity
+fix goes untested while the test passes green. The plan must specify whether the recipes resolve these
+through `env.document` directly (e.g. `env.document.querySelector('.app')`,
+`env.document.getElementById('home')`, `env.document.defaultView.Element` / `.scrollY`) or through
+narrow injected accessors — either is admissible; bare `document`/`window`/`Element`/`$` reads are not.
+(Viewport width is left to F1 — it crosses the seam only under the branch where the builder computes
+`base`.)
 
 ### F5 — Structural — open-unknown — the seam has no source/destination descriptor identity, and render-callback ownership is vague
 
@@ -155,10 +160,18 @@ screen name) nor `desc` (the descriptor with payload) exists in `constructionPla
 required payload (swipe.js:58; `Browse.render` takes the full `desc`, app.js:557/2892), and cannot
 invoke its callbacks per their declared signatures. Two things the plan must state: (1) where canonical
 `from`/`to` identity enters `buildConstruction`, without creating independently-supplied raw identity
-and derived classification that can disagree (a two-source-of-truth hazard); and (2) what
-`env.renderDestination(host, desc)` owns exactly — overlay visibility (`el.classList.remove('hidden')`,
-app.js:636) and the destination render calls (`renderNowPlaying`/`renderScreen`/`Browse.render`) —
-rather than the plan vaguely saying it "performs the render."
+and derived classification that can disagree (a two-source-of-truth hazard); and (2) the **complete**
+host-state transition `env.renderDestination(host, desc)` owns — not merely "performs the render." The
+function it replaces, `showAppView(desc, render)` (app.js:550–558), performs a cluster of side effects
+the callback signature would satisfy while silently dropping: hiding stale settings overlays except the
+active outgoing one (`$(s).classList.add('hidden')`, 555), un/`parked`ing `#home` (556–557), toggling
+`#browse` `hidden` (556–557), then optionally `Browse.render(desc)` (557) — and for an overlay
+destination the branch resolves `overlayEl(toV)`, calls `renderNowPlaying`/`renderScreen`, unhides it
+(`el.classList.remove('hidden')`, 636), and removes `np-locked` for incoming NP (634). The plan must
+specify that `renderDestination` owns the whole destination-host transition — stale-overlay cleanup,
+`#home` parking/visibility, `#browse` visibility, payload-bearing rendering, overlay rendering and
+unhiding, and the destination-coupled `np-locked` removal that stays in `app.js` — or a planner can
+satisfy the signature by moving only the content render and drop the host-state effects.
 
 ### F6 — Structural — open-unknown — the plan must assign ownership of the live `clobbered` carrier
 
@@ -202,8 +215,9 @@ test — the exact browse→browse flash this subsystem exists to prevent.
 
 `ghostWrap` reads `GHOST_BG` (app.js:467), which is initialized at closure-init by an immediately-invoked
 function calling `getComputedStyle(document.documentElement).getPropertyValue('--page-bg')`
-(app.js:368–371). The plan lists five relocating helpers but does not say the `GHOST_BG` initializer
-relocates, nor who owns the ghost background in `swipe.js` — the dependency is unassigned. This is an
+(app.js:368–371). The plan's relocation list — the four capture helpers plus the state
+`lastAnimResidual` (§3:82) — does not include the `GHOST_BG` initializer, nor say who owns the ghost
+background in `swipe.js`; the dependency is unassigned. This is an
 architectural / module-boundary defect, not a demonstrated runtime failure: the initializer is wrapped
 in `try/catch`, so it does not necessarily break, and the caught fallback in a Node process says nothing
 about the browser runtime. The defect is that moving the initializer unchanged introduces exactly the
@@ -223,9 +237,14 @@ mutation-verified, that prove the primary seam shape and routing — not only th
   plan selects (the registrations at contract-function-gate.test.js:24/30 make this concrete).
 - **F4** — the recipes read every external DOM value (scroll, the `Element` feature-check, and the
   `.app`/`#home` clone sources) through an injected `env`, not bare globals, provable by driving a fake
-  env with no ambient `document`/`window`.
+  env with no ambient `document`/`window`. Specifically run `copyAnimPhase` with NO global `Element`
+  but with `env.document.defaultView.Element.prototype.getAnimations` available, and prove phase copying
+  still occurs — guarding the `.207` parity from silent bypass (a `0`-return that passes green).
 - **F5** — a payload-bearing destination (`authorBooks`/`files`) reaches the render callback with the
-  correct descriptor; overlay rendering preserves its visibility change (`classList.remove('hidden')`).
+  correct descriptor; overlay rendering preserves its visibility change (`classList.remove('hidden')`);
+  and a browse-host transition **with a stale settings overlay present** asserts the resulting
+  `#home`/`#browse`/overlay class state (`parked`/`hidden`) after `renderDestination`, proving the
+  callback owns the full host-state transition, not only the content render.
 - **Moved decoration recipe (`npPillClone`)** — the relocated builder removes stale `.np-pill-float`
   (app.js:350), strips descendant IDs (352), adds `np-pill-float` (353), appends the clone (354), and
   yields the correct outgoing/incoming `base` and `owned-decoration` ownership; current recipe tests
@@ -257,10 +276,11 @@ dependency crossing the old construction block the plan did not trace; each is v
 
 Scope B is sound and was checked against later-stage ownership: the render dispatch (app.js:557) and
 Browse hold (app.js:339) it leaves in app.js are stage-7 surfaces, and `renderBrowse` is already
-injected into Nav (app.js:2892). The capture-helper cluster (`ghostWrap`/`freezeArt`/`copyScroll`/
-`copyAnimPhase`/`lastAnimResidual`) has no consumers outside the two capture recipes — each is called by
-both `ghostApp` and `snapshotHome` and by nothing else (app.js:480/567, 489/570, 492/575, 494/577) — so
-it can relocate with them. The no-session return-capture direction is the right decoupling. The lifecycle
+injected into Nav (app.js:2892). The capture-helper cluster has no consumers outside the two
+capture recipes: the four helper functions (`ghostWrap`/`freezeArt`/`copyScroll`/`copyAnimPhase`) serve
+both `ghostApp` and `snapshotHome` and nothing else (app.js:480/567, 489/570, 492/575, 494/577), and
+`lastAnimResidual` is cluster state written by `copyAnimPhase()` and read only by those recipes
+(495/578) — so the cluster has no outside consumer and can relocate as a unit. The no-session return-capture direction is the right decoupling. The lifecycle
 deferral (§5) correctly withholds `release()`/`dispose()`/`equivalence` until stage 6. And
 `buildConstruction` as `NON_CONTRACT` is correct: the gate's immutability loop runs on `CONTRACT` only
 (contract-function-gate.test.js:58). The step is buildable once the seam is fully specified — every value
