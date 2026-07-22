@@ -145,7 +145,8 @@ same commit that reintroduces the fields. Under scope A, that resolution stays i
 have no reader, so reintroducing them recreates the dead field `.229` removed.
 
 So the fields are dead *only under scope A*. The defect is not "the fields are dead" — it is that the
-records authorize all three scopes while the DecisionLog unconditionally promises the fields. Resolving
+records collectively leave three possible extraction boundaries unresolved while the DecisionLog
+unconditionally promises the fields. Resolving
 F0 resolves this: under B or C, name the resolution line that reads each host; under A, drop the
 host-field reintroduction from stage 5 and correct the DecisionLog. (The `d.clobbered` read at
 app.js:630 is `sameBrowseHost`, assigned to stage 6 under every scope.)
@@ -210,7 +211,8 @@ stop.
 ## Prediction — where this breaks in execution if built as written
 
 Built from the current records, the builder first has to guess which scope "stage 5" means, because
-three records answer differently — and picks whichever the red module in front of it makes easiest,
+the records conflict and do not select one extraction boundary — and picks whichever the red module in
+front of it makes easiest,
 not whichever the plan intended. Then, on the first `node --test`, `freezeArt`/`ghostWrap`/`copyScroll`/
 `copyAnimPhase`/`d` come back undefined and a dependency seam is invented on the spot — the exact
 decision the plan exists to make deliberately (plan §1). If the improvised seam injects `d` (the

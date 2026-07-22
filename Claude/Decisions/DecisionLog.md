@@ -551,3 +551,14 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   false-positive: a lint for "three records → three scopes" fires on the legitimate "one of three admissible
   scopes", and "two records that do not match" is only wrong given the actual record→scope mapping a script
   cannot know) — backstop is the D5 sweep plus an independent read — 2026-07-22.
+
+- A second instance of the same records-conflict class was found after the first fix — F3 said the records
+  "authorize all three scopes" and the prediction said "three records answer differently", both attributing
+  scope-selection to the records instead of describing them as conflicting/unresolved. Corrected (F3 →
+  "collectively leave three possible extraction boundaries unresolved"; prediction → "the records conflict
+  and do not select one extraction boundary"). ROOT CAUSE of the survival: the prior D5 sweep grepped the
+  FLAGGED STRINGS ("authorize three", "two records that do not match") rather than the semantic class, so
+  differently-worded siblings slipped through. D5 in the Charpy spec is sharpened accordingly: sweep the
+  meaning with a broad net (every construction that could express the error), not the corrected wording. A
+  broad class-level re-grep now shows every records+scope construction across casebook/DecisionLog/Board
+  uses the conflict/unresolved framing — 2026-07-22.
