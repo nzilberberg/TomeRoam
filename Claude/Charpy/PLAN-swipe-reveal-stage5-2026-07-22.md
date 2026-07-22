@@ -8,18 +8,21 @@ Reviewed: 2026-07-22 · Plan: `Claude/Plans/PLAN-swipe-reveal.md` §7 step 5, gr
 **TEMPER** — fix-then-build. The end-state architecture (the swipe subsystem's construction in one
 module) is sound and buildable. But the step cannot open, for a reason larger than one bad word: the
 three records that define stage 5 authorize three different scopes, and the step rests on a
-dependency seam none of them specifies. The planner must settle four questions before a line is
-written (F0–F3 below). None is fatal; the end-state holds. The build is blocked on decisions, not on
-a broken design.
+dependency seam none of them specifies. The planner must settle five things before a line is written.
+None is fatal; the end-state holds. The build is blocked on decisions, not on a broken design.
 
-The four questions the planner must resolve:
-1. **Scope** — does stage 5 move only the two capture recipes, or the whole mover-construction
-   boundary (real host resolution + decoration building + render dispatch)? (F0)
-2. **Seam** — the exact dependency and return-value contract of the moved builders. (F1)
-3. **Host fields** — whether and where `sourceHost`/`destinationHost` gain a real consumer, which is
-   a consequence of the scope choice, not an independent question. (F3)
-4. **Pane interface** — how §3.6's pane object (`release()`/`dispose()`) is phase-split so stage 5
-   adds no dead method and pulls no stage-6 finalization forward. (F6)
+The five things the planner must resolve:
+1. **Scope** — which extraction boundary stage 5 takes, among three (F0): capture recipes only;
+   capture recipes plus real host/mover resolution (render dispatch stays in app.js behind injected
+   callbacks); or the whole construction boundary including decoration and render dispatch.
+2. **Seam** — the exact dependency and result contract of the moved builders (F1). The preferred
+   contract returns capture metadata rather than receiving the mutable session (F5).
+3. **Host fields** — whether `sourceHost`/`destinationHost` gain a genuine consumer in the chosen
+   boundary (F3) — a consequence of the scope choice, not an independent question.
+4. **Pane lifecycle** — whether stage 5 begins the §3.6 pane abstraction or explicitly defers
+   `release()`/`dispose()` to stage 6, keeping a raw-node or capture-result representation now (F6).
+5. **Export + coverage** — the new public surface's export-gate classification (F2) and behavior-level
+   recipe + production-wiring tests (F4).
 
 ## The claim under review
 
@@ -46,13 +49,13 @@ scope.
 
 | # | Assumption the step rests on | Struck against | Result |
 |---|---|---|---|
-| A0 | The three records agree on what stage 5 moves. | plan §7.5, swipe.js:24–27, DecisionLog 2026-07-21 | CRACKED — see F0 |
+| A0 | The three records agree on what stage 5 moves. | plan §7.5, swipe.js:24–27, DecisionLog 2026-07-21 | CRACKED (three scopes) — see F0 |
 | A1 | The builders can move "unchanged." | app.js:470–496, 564–580 | CRACKED — see F1 |
 | A2 | `swipe.js` can host impure DOM builders. | test/contract-function-gate.test.js:47–56 | HOLDS with a classified public surface — see F2 |
-| A3 | `sourceHost`/`destinationHost` have a stage-5 consumer. | grep of all `*.js`/`*.mjs` | CONDITIONAL on scope — see F3 |
-| A4 | Relocation preserves parity (T1–T4, the .207 ordering). | plan §5, app.js:492–495, 575–578 | HOLDS only if the seam does NOT pass `d` and preserves insertion-then-sync — see F5 |
+| A3 | `sourceHost`/`destinationHost` have a stage-5 consumer. | grep of all `*.js`/`*.mjs` | CONDITIONAL on scope (yes under B/C, no under A) — see F3 |
+| A4 | Relocation preserves parity (T1–T4, the .207 ordering). | plan §5, app.js:492–495, 575–578 | HOLDS if the seam avoids `d` and preserves insertion-then-sync — see F5 |
 | A5 | The wiring seam is covered so a mis-wire reddens. | §4.11 gate + app-harness (.228 F1 law) | UNSTATED for stage 5 — see F4 |
-| A6 | Builders return the §3.6 pane object. | app.js:496, 579 (both `return wrap`) | CRACKED — today they return a raw node; see F6 |
+| A6 | Stage 5's pane representation is defined. | app.js:496, 579 (both `return wrap`) | UNSTATED — plan does not say whether stage 5 delivers the §3.6 pane object or a capture-result; see F6 |
 
 ## Findings
 
@@ -61,19 +64,24 @@ scope.
 The scope of stage 5 is not settled, because its three defining records disagree (see "The claim
 under review"): plan §7.5 says two capture recipes; the `swipe.js` header says five builders plus the
 render dispatch (the whole construction boundary); the DecisionLog's host-field reintroduction implies
-host-based mover resolution, which only exists under the broad scope. This is the root finding — F1,
-F3, and F6 are all downstream of it. The planner must choose explicitly between two defensible shapes,
-because the records currently authorize both:
+host-based mover resolution. This is the root finding — F1, F3, and F6 are all downstream of it. The
+three records map onto three genuinely distinct boundaries, and the planner chooses one explicitly:
 
-- **Narrow stage 5** — move only the `app-ghost` and `home-snapshot` capture recipes; leave real-mover
-  resolution (`overlayEl`/`appViewEl`) and the render dispatch in app.js; do NOT reintroduce the host
-  fields (there is no reader under this scope — F3).
-- **Construction stage 5** — move the whole mover-construction boundary: real host resolution,
-  decoration building, and destination-render dispatch; reintroduce `sourceHost`/`destinationHost`
-  because the moved construction genuinely reads them (F3).
+- **A — capture recipes only.** Move `app-ghost` and `home-snapshot`; leave real-mover resolution
+  (`overlayEl`/`appViewEl`), decoration, and render dispatch in app.js. No host-field reader under this
+  scope, so do NOT reintroduce them (F3).
+- **B — capture recipes plus host/mover resolution.** Move the recipes AND real host resolution, so
+  `sourceHost`/`destinationHost` gain a genuine consumer (F3); leave application rendering in app.js
+  behind injected callbacks. This middle boundary may be the cleanest stage 5 — it delivers the
+  host-field consumer the DecisionLog wants without pulling render dispatch across the seam — but it is
+  the planner's call, not a finding.
+- **C — the whole construction boundary.** Move recipes, host resolution, decoration building, and
+  destination-render dispatch. Largest single-review blast radius; matches the `swipe.js` header's
+  stated intent.
 
-Whichever is chosen, the two losing records are scrubbed to match (StandardsDocument §6.6): the plan
-step, the swipe.js header, and the DecisionLog must state one scope, not three.
+The middle boundary was silently dropped in the first version of this finding; all three are
+admissible. Whichever is chosen, the two records that do not match it are scrubbed
+(StandardsDocument §6.6): plan step, swipe.js header, and DecisionLog must state one scope, not three.
 
 ### F1 — Structural — "unchanged" is not compilable; the dependency seam is unspecified
 
@@ -88,7 +96,8 @@ patch — the plan must resolve it, not the builder mid-flight. The requirement 
 answer, before a line is written: which helper functions move with the builders; which dependencies
 are injected; what each builder accepts; what it returns; and where the capture diagnostics (`ghostY`,
 `animSync`, `animRes`) are recorded. The shape (inject deps / relocate the helper cluster / minimal
-move with args) is the planner's call; F5 constrains it (no `d`).
+move with args) is the planner's call; F5 states the preferred contract (return capture, not the
+session).
 
 ### F2 — Structural — stage 5's new public surface must be classified by the export gate and covered
 
@@ -99,8 +108,9 @@ surface being classified and covered — not a specific export shape: individual
 `snapshotHome` exports (each a `NON_CONTRACT` entry) is one option; a single `createPaneBuilders(deps)`
 factory, an `init(deps)` plus builder methods, or one construction function keeping the recipes private
 are equally admissible, and each classifies differently. The step must name its chosen surface and its
-gate classification, and — because a `NON_CONTRACT` exemption removes a builder from this gate's
-coverage — name what covers it instead (F4).
+gate classification. The gate checks only classification and contract-factory properties — it never
+proves DOM-builder behaviour — so the builders' behaviour is carried by the separate recipe and
+production-wiring tests F4 requires, whatever the surface shape.
 
 Note: `swipe.js` is `require()`d in a no-DOM node context (the gate loads it directly). Builders that
 touch `document`/`window` only inside their bodies are safe at module-load; a top-level DOM reference
@@ -110,64 +120,74 @@ introduced by the move would break every `swipe.js` unit test. The step must kee
 
 No file reads `sourceHost` or `destinationHost` today (grep, all `*.js`/`*.mjs`); `.229` removed them
 for exactly that reason. But this does not prove they lack a valid stage-5 consumer — stage 5 may be
-the change that *creates* their first reader. Under the construction scope (F0), the moved boundary
-replaces the raw branching `fromOv ? overlayEl(fromV) : appViewEl(fromV)` and the `#browse`/overlay
-destination selection with host resolution driven by `sourceHost`/`destinationHost` — a genuine
-consumer, in the same commit that reintroduces the fields. Under the narrow scope, that resolution
-stays in app.js and the fields have no reader, so reintroducing them recreates the dead field `.229`
-removed.
+the change that *creates* their first reader. Under scope B or C (F0), the moved boundary replaces the
+raw branching `fromOv ? overlayEl(fromV) : appViewEl(fromV)` and the `#browse`/overlay destination
+selection with host resolution driven by `sourceHost`/`destinationHost` — a genuine consumer, in the
+same commit that reintroduces the fields. Under scope A, that resolution stays in app.js and the fields
+have no reader, so reintroducing them recreates the dead field `.229` removed.
 
-So the fields are dead *only under the narrow scope*. The defect is not "the fields are dead" — it is
-that the records authorize both scopes while the DecisionLog unconditionally promises the fields.
-Resolving F0 resolves this: if construction scope, name the resolution line that reads each host; if
-narrow scope, drop the host-field reintroduction from stage 5 and correct the DecisionLog.
-(The `d.clobbered` read at app.js:630 is `sameBrowseHost`, assigned to stage 6 either way.)
+So the fields are dead *only under scope A*. The defect is not "the fields are dead" — it is that the
+records authorize all three scopes while the DecisionLog unconditionally promises the fields. Resolving
+F0 resolves this: under B or C, name the resolution line that reads each host; under A, drop the
+host-field reintroduction from stage 5 and correct the DecisionLog. (The `d.clobbered` read at
+app.js:630 is `sameBrowseHost`, assigned to stage 6 under every scope.)
 
 ### F4 — Structural — the wiring seam's coverage obligation is unstated for stage 5
 
-After the move, `start()` calls the moved builder instead of a local function. The `.228` F1 law
-(DecisionLog): proving the builder exists and is correct in `swipe.js` is not proving `start()`
-selects and wires the right one — a wiring mutation must redden an app-harness test. Stage 5 therefore
-owes two coverage layers: recipe-level tests for the clone/capture behaviour, and a production-wiring
-test proving the construction plan selects the correct recipe and that its returned element becomes
-the owned mover in `d.movers`. (One concrete pair: a browse-destination swipe builds the ghost from
-the moved builder; an overlay-source back-swipe builds none — illustrative of the obligation, not the
-only acceptable scenarios.) F2's gate exemption makes this mandatory: it is the coverage the exemption
-gives up.
+After the move, `start()` (or the moved construction owner) calls the moved builder instead of a local
+function. The `.228` F1 law (DecisionLog): proving the builder exists and is correct in `swipe.js` is
+not proving the production path selects and wires the right one — a wiring mutation must redden an
+app-harness test. Stage 5 therefore owes two coverage layers: recipe-level tests for the clone/capture
+behaviour, and a production-wiring test proving the construction plan selects the correct recipe and
+that **its element participates in the production mover set with the correct ownership and ordering**.
+Stated as that invariant, not as an internal shape — under scope C `swipe.js` may return the completed
+mover collection and `start()` may never assemble `d.movers` directly, and the test must survive that
+legitimate relocation. (One concrete pair: a browse-destination swipe builds the ghost from the moved
+builder; an overlay-source back-swipe builds none — illustrative, not the only acceptable scenarios.)
+This is required because the contract-function gate can only classify the public surface and check
+contract-factory properties (F2) — it cannot prove DOM-builder behaviour, so the recipe and
+production-wiring tests carry that proof.
 
-### F5 — Structural — the seam must not pass the session object `d`; builders return capture metadata
+### F5 — Structural — the seam should not pass the session object `d`; the preferred contract returns capture metadata
 
 The builders today mutate the gesture session directly: `d.ghostY`, `d.animSync`, `d.animRes`
 (app.js:487, 495, 578). Preserving that by injecting `d` into `swipe.js` would retain the exact
 closure coupling the extraction exists to remove, and would let a pane recipe mutate caller-owned
-session state. The seam must instead have each builder RETURN its capture, e.g.
+session state. The preferred contract has each builder RETURN its capture, e.g.
 `{ element, capture: { scrollY, animationSyncCount, animationResidual } }`, and the construction owner
-(`start()`, or the moved construction function) records that onto the session. A narrow telemetry
-callback is an acceptable alternative; passing the whole session object is prohibited. This is a
-constraint on F1's seam, not a separate defect — but it is load-bearing, because the wrong seam
-re-couples the module it is meant to decouple.
+(`start()`, or the moved construction function) records that onto the session; a narrow telemetry
+callback is an acceptable alternative. The seam should not receive or mutate the whole session object
+unless the planner explicitly justifies that ownership — this is a design recommendation grounded in
+the coupling evidence, not an existing contractual rule. It is a constraint on F1's seam, not a
+separate defect, but it is load-bearing: the wrong seam re-couples the module it is meant to decouple.
 
 The parity invariants the relocation must hold, named so they are not lost: `copyAnimPhase`/
 `copyScroll` run AFTER the clone is inserted (the `.207` ordering, app.js:492–495, 575–578); pruning
 `.hidden`/`.parked` must not test the clone root (snapshotHome's source is `#home.parked`, T2); T3/T4
 are iOS compositor/decode hazards.
 
-### F6 — Structural — the §3.6 pane interface has no stage-5 phase split
+### F6 — Structural — the plan must state whether stage 5 begins the §3.6 pane abstraction or defers it
 
 §3.6 defines a pane as an object `{ kind, element, source, pin, equivalence, release(), dispose(reason) }`.
-Today the builders `return wrap` — a raw DOM node (app.js:496, 579). Stage 5 hits an unresolved
-boundary the plan does not address:
+Today the builders `return wrap` — a raw DOM node (app.js:496, 579). The plan does not say whether
+stage 5 delivers that abstraction or only relocates today's capture behaviour, and the three ways
+forward have different costs:
 
-- Return the full pane interface → `release()`/`dispose()` have no consumer until stage 6 centralizes
-  finalization and reveal — dead methods, which this project forbids.
-- Keep returning raw nodes → stage 5 has not delivered the target pane abstraction.
+- Return the full pane interface now → `release()`/`dispose()` have no consumer until stage 6
+  centralizes finalization and reveal — dead methods, which this project forbids.
+- Keep a raw-node or capture-result representation → valid ONLY if stage 5 is explicitly a
+  capture-behaviour relocation and the plan defers `release()`/`dispose()` to stage 6.
 - Change cleanup to consume `release()`/`dispose()` now → stage 6 finalization work is pulled forward.
 
-The plan needs the same phase split it already uses for `constructionPlanFor()` vs
-`finalizationPlanFor()`: stage 5 returns a capture object carrying the fields construction and the I8
-equivalence tests consume now (`element`, `source`, `equivalence`, `capture`); `release()`/`dispose()`
-are added or activated in stage 6 when finalization becomes their real consumer. Without this, the
-implementation invents the boundary while coding — the failure mode the whole rewrite exists to stop.
+So a raw-node return is not itself a defect; it is a defect only if stage 5 is intended to introduce
+the complete §3.6 abstraction. The requirement filed is that the plan STATE which: if lifecycle
+ownership stays stage-6 work, stage 5 may retain a raw-node or capture-result representation and
+explicitly defer the methods. A partial capture object carrying the fields construction and the I8
+equivalence tests consume now (`element`, `source`, `equivalence`, `capture`), with `release()`/
+`dispose()` activated in stage 6, is a good phase split — the same shape as `constructionPlanFor()` vs
+`finalizationPlanFor()` — but one valid option, not the only one. What is not admissible is leaving it
+unstated, so the implementation invents the boundary while coding — the failure the rewrite exists to
+stop.
 
 ## Prediction — where this breaks in execution if built as written
 
@@ -188,6 +208,8 @@ the records, and costs a specimen here instead of a build there.
 
 The end-state architecture is sound: the swipe subsystem's construction belongs in one module, the two
 capture recipes are well-defined, and stage 5 rests only on stage 4 (shipped) and the frozen model
-(§7.1–2) — no later step gates it. The step is buildable the moment the planner settles the four
-questions (F0 scope, F1 seam, F3 host-field consumer, F6 pane-interface split), writes F2's classified
-surface and F4's two coverage layers into it, and constrains the seam per F5.
+(§7.1–2) — no later step gates it. The step is buildable the moment the planner settles the five things
+above: the scope (F0, one of three boundaries), the seam contract (F1, preferring returned capture over
+the session per F5), the host-field consumer question (F3, a consequence of scope), the pane-lifecycle
+now-or-deferred question (F6), and the export classification (F2) plus behaviour-level coverage (F4)
+written into the step.

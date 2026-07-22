@@ -382,50 +382,57 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   `Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`. The end-state architecture passes (construction
   in one module, two well-defined capture recipes, correctly sequenced on the shipped stage 4, no later
   step gating it). The build is blocked on decisions, not a broken design: the planner must settle four
-  questions before it opens (the four OPEN entries below — scope, seam, host-field consumer, pane-interface
-  split), write into the step F2 (the new public surface is classified by the export gate — individual
+  OPEN decisions before it opens (the four OPEN entries below — scope, seam, host-field consumer, pane-
+  lifecycle), and write into the step F2 (the new public surface is classified by the export gate — individual
   `NON_CONTRACT` exports OR a `createPaneBuilders(deps)`/`init(deps)`/private-recipe surface — with DOM
   access kept lazy so the no-DOM `swipe.js` unit tests still load) and F4 (two coverage layers: recipe-level
   clone/capture tests AND a mutation-verified production-wiring test that `start()` selects the correct
-  recipe and its returned element becomes the owned `d.movers` entry), and constrain the seam per F5 —
+  recipe and its element participates in the production mover set with the correct ownership and ordering
+  — stated as that invariant, not a `d.movers` internal, so it survives a legitimate relocation of mover
+  assembly under scope C), and constrain the seam per F5 —
   2026-07-22.
 
-- OPEN — stage-5 SCOPE: does stage 5 move only the two capture recipes (`app-ghost`, `home-snapshot`), or
-  the whole mover-construction boundary (real host resolution + decoration building + destination-render
-  dispatch)? Three records authorize three different scopes: plan §7.5 (two recipes), the `js/swipe.js`
-  header lines 24–27 (five builders + render calls), and this log's 2026-07-21 host-field entry (implies
-  host-based resolution → broad). Both narrow and construction scope are defensible; the records accidentally
-  authorize both. Waits on the planner to choose one and scrub the two losing records to match
-  (StandardsDocument §6.6). This is the root question — the seam, the host fields, and the pane interface
-  are all downstream of it. Charpy finding F0 — 2026-07-22.
+- OPEN — stage-5 SCOPE: which extraction boundary does stage 5 take? Three records authorize three
+  genuinely distinct scopes: plan §7.5 (two capture recipes), the `js/swipe.js` header lines 24–27 (five
+  builders + render calls), and this log's 2026-07-21 host-field entry (host-based mover resolution). They
+  map onto three admissible boundaries — A: capture recipes only (`app-ghost`/`home-snapshot`); B: capture
+  recipes plus real host/mover resolution, leaving application rendering in app.js behind injected callbacks;
+  C: the whole construction boundary including decoration and destination-render dispatch. The middle boundary
+  B may be the cleanest stage 5 (it delivers the host-field consumer without pulling render dispatch across
+  the seam), but the choice is the planner's. Waits on the planner to choose one and scrub the two records
+  that do not match it (StandardsDocument §6.6) so plan step, swipe.js header, and this log state one scope.
+  This is the root question — seam, host fields, and pane lifecycle are all downstream. Charpy finding F0 —
+  2026-07-22.
 
 - OPEN — the stage-5 dependency SEAM (the W8 question). `ghostApp`/`snapshotHome` reference app.js closures
   absent in `swipe.js` (`freezeArt`, `ghostWrap`, `copyScroll`, `copyAnimPhase`, `lastAnimResidual`, the
   session `d`, `$`), so plan §7.5's "unchanged" is not literal. Waits on the planner to state, before build:
   which helpers move with the builders, which dependencies are injected, what each builder accepts, what it
-  returns, and where the capture diagnostics (`ghostY`/`animSync`/`animRes`) are recorded. CONSTRAINT (F5):
-  the seam must NOT pass the session object `d` — each builder RETURNS its capture (e.g. `{ element, capture:
-  { scrollY, animationSyncCount, animationResidual } }`) and the construction owner records it onto the
-  session; a narrow telemetry callback is acceptable, passing `d` is prohibited (it retains the closure
-  coupling the extraction removes and lets a recipe mutate caller-owned session state). Charpy findings
-  F1+F5 — 2026-07-22.
+  returns, and where the capture diagnostics (`ghostY`/`animSync`/`animRes`) are recorded. PREFERENCE (F5,
+  a design recommendation grounded in the coupling evidence, NOT an existing contractual rule): each builder
+  RETURNS its capture (e.g. `{ element, capture: { scrollY, animationSyncCount, animationResidual } }`) and
+  the construction owner records it onto the session; a narrow telemetry callback is acceptable. The seam
+  should not receive or mutate the whole session object `d` unless the planner explicitly justifies that
+  ownership — passing `d` retains the closure coupling the extraction removes and lets a recipe mutate
+  caller-owned session state. Charpy findings F1+F5 — 2026-07-22.
 
 - OPEN — whether stage 5 reintroduces `sourceHost`/`destinationHost` into `classifyTransition`. This is a
   CONSEQUENCE of the scope choice, not an independent question, and the 2026-07-21 entry that promised them
   unconditionally is thereby narrowed. No file reads the fields today (`.229` removed them), but stage 5 may
-  create their first consumer: under construction scope the moved boundary replaces the raw branching
+  create their first consumer: under scope B or C the moved boundary replaces the raw branching
   `fromOv ? overlayEl(fromV) : appViewEl(fromV)` and the `#browse`/overlay selection with host resolution
-  that genuinely reads them, in the same commit that reintroduces them. Under narrow scope that resolution
-  stays in app.js and the fields have no reader — reintroducing them would recreate the dead field `.229`
-  removed. So: construction scope ⇒ reintroduce and name the resolution line that reads each; narrow scope ⇒
-  do not reintroduce and correct this log. (`d.clobbered`, app.js:630, is `sameBrowseHost`, stage 6, either
-  way.) Charpy finding F3 — 2026-07-22.
+  that genuinely reads them, in the same commit that reintroduces them. Under scope A that resolution stays
+  in app.js and the fields have no reader — reintroducing them would recreate the dead field `.229` removed.
+  So: scope B or C ⇒ reintroduce and name the resolution line that reads each; scope A ⇒ do not reintroduce
+  and correct this log. (`d.clobbered`, app.js:630, is `sameBrowseHost`, stage 6, under every scope.) Charpy
+  finding F3 — 2026-07-22.
 
-- OPEN — the §3.6 pane-interface phase split for stage 5. §3.6 defines a pane as `{ kind, element, source,
-  pin, equivalence, release(), dispose(reason) }`; today the builders `return wrap` (a raw node, app.js:496/
-  579). Returning the full interface makes `release()`/`dispose()` dead until stage 6 (forbidden dead
-  methods); returning raw nodes does not deliver the abstraction; consuming those methods now pulls stage-6
-  finalization forward. Waits on the planner to apply the same split already used for `constructionPlanFor()`
-  vs `finalizationPlanFor()`: stage 5 returns a capture object with the fields construction and the I8
-  equivalence tests consume now (`element`/`source`/`equivalence`/`capture`); `release()`/`dispose()` are
-  added or activated in stage 6 when finalization becomes their consumer. Charpy finding F6 — 2026-07-22.
+- OPEN — whether stage 5 begins the §3.6 pane abstraction or defers it. §3.6 defines a pane as `{ kind,
+  element, source, pin, equivalence, release(), dispose(reason) }`; today the builders `return wrap` (a raw
+  node, app.js:496/579). A raw-node return is not itself a defect — it is one only if stage 5 is intended to
+  introduce the complete abstraction. Waits on the planner to STATE which: if pane-lifecycle ownership stays
+  stage-6 work, stage 5 may retain a raw-node or capture-result representation and explicitly defer
+  `release()`/`dispose()` to stage 6 (when finalization becomes their consumer). A partial capture object
+  (`element`/`source`/`equivalence`/`capture` now, lifecycle methods in stage 6) is a good phase split — the
+  same shape as `constructionPlanFor()` vs `finalizationPlanFor()` — but one valid option, not the only one.
+  What is not admissible is leaving the representation unstated. Charpy finding F6 — 2026-07-22.

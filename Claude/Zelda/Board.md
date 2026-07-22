@@ -52,16 +52,19 @@ unverified), gate-enforced — the durable fix for the `✓`-on-reasoning miss (
 **Stage 5 is TEMPERED, not cleared to build (2026-07-22).** The plan verifier struck the stage-5 step
 (`Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`, verdict TEMPER): end-state architecture sound, but
 the build is blocked on **four planner decisions**, now OPEN in DecisionLog (waiting on the planner, not on
-code): **F0 SCOPE** — three records authorize three scopes (plan §7.5 = two recipes; `swipe.js` header
-lines 24–27 = five builders + renders; DecisionLog host-fields = broad); pick narrow vs construction and
-scrub the two losing records. **F1 SEAM** — "move pane builders **unchanged**" is not compilable
-(`ghostApp`/`snapshotHome` reference app.js closures — `freezeArt`/`ghostWrap`/`copyScroll`/`copyAnimPhase`/
-`lastAnimResidual`/`d`/`$` — absent in `swipe.js`); state the deps/return contract. **F3 HOST FIELDS** —
-`sourceHost`/`destinationHost` are dead only under narrow scope; a consequence of F0, not independent.
-**F6 PANE INTERFACE** — §3.6's `release()`/`dispose()` pane object vs today's raw-node `return wrap`; phase-
-split it like `constructionPlanFor`/`finalizationPlanFor`. Plus into the step: **F2** (classify the new
-public surface for the export gate; DOM access lazy) and **F4** (recipe tests + a mutation-verified wiring
-test), constrained by **F5** (the seam must NOT pass `d` — builders return capture metadata).
+code): **F0 SCOPE** — three records authorize three genuinely distinct boundaries; pick one — A: capture
+recipes only; B: capture + real host/mover resolution (rendering stays in app.js behind injected callbacks;
+B may be the cleanest); C: whole construction boundary incl. render dispatch — and scrub the two records that
+do not match. **F1 SEAM** — "move pane builders **unchanged**" is not compilable (`ghostApp`/`snapshotHome`
+reference app.js closures — `freezeArt`/`ghostWrap`/`copyScroll`/`copyAnimPhase`/`lastAnimResidual`/`d`/`$` —
+absent in `swipe.js`); state the deps/return contract. **F3 HOST FIELDS** — `sourceHost`/`destinationHost`
+are dead only under scope A; a real consumer under B/C; a consequence of F0, not independent. **F6 PANE
+LIFECYCLE** — state whether stage 5 begins the §3.6 pane abstraction or explicitly defers `release()`/
+`dispose()` to stage 6 (a raw-node/capture-result return is valid if deferred). Plus into the step: **F2**
+(classify the new public surface for the export gate; DOM access lazy; the gate can't prove builder
+behaviour) and **F4** (recipe tests + a mutation-verified wiring test, asserting the element joins the
+production mover set with correct ownership/ordering — not a `d.movers` internal), with the seam per **F5**
+(prefer returned capture metadata; do not pass `d` without explicit justification).
 **Do NOT start stage 5 until F0/F1/F3/F6 are resolved by the planner and F2/F4/F5 are in the step.**
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
