@@ -465,3 +465,13 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   casebook was updated to conform (Type header, Defining records = CONFLICT, per-finding nature tags — F3
   tagged `conditional`, F5 `recommendation`, the two mis-classifications the critiques corrected). Global
   scheme change, logged here per the Poirot-gate precedent — 2026-07-22.
+
+- The Charpy spec gains a fourth discipline (D4): state the tightest correct bound, and keep an
+  enumerated option set's references consistent across the whole review — "implies at least B" is not
+  "implies the broadest," and a range is not a point. It is comprehension-bound, not gate-enforced (the
+  casebook gate cannot tell "implies C" from "implies B or C"), so it is the within-document scrub
+  (StandardsDocument §7) specialized to a review's option set. Earned by a third critique of the stage-5
+  review: one section said the host-field record "implies the broad scope" while two findings correctly
+  said "scope B or C" — a lower bound rounded to the top of the range, contradicting the review's own more
+  careful statement. The stage-5 casebook's "claim under review" was corrected to "at least real host/mover
+  resolution: scope B or C." — 2026-07-22.

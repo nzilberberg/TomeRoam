@@ -46,7 +46,8 @@ Three records define stage 5, and they do not agree on its scope:
   `appViewEl`/`npPillClone`) and the render calls stay in app.js until stage 5 moves them here"
   (broadest: five builders plus the render dispatch — the whole construction boundary).
 - **DecisionLog (2026-07-21)** — stage 5 reintroduces `sourceHost`/`destinationHost` "in the stage-5
-  pane/mover construction that reads them" (implies host-based mover resolution, i.e. the broad scope).
+  pane/mover construction that reads them" (implies stage 5 includes at least real host/mover
+  resolution: scope B or C, but does not determine whether render dispatch and decoration also move).
 
 Grounded by the plan's model: §3.6 defines a pane as an object `{ kind, element, source, pin,
 equivalence, release(), dispose(reason) }` — "one interface, two recipes" (`app-ghost`,
