@@ -446,3 +446,22 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   each shard re-pays a ~16s checkout+`npm ci` toll and GitHub caps ~20 concurrent jobs, so past ~8 the total
   runner-time rises for negligible wall-clock gain (floor is one suite run). Supersedes the earlier "full
   sweep stays in CI, serial" arrangement; it still stays in CI — 2026-07-22.
+
+- The plan verifier (Charpy) is durably hardened against the three failure modes the stage-5 review
+  exhibited (they took two user critiques to correct): (1) silently collapsing a conflict between the
+  records that define the work to one reading instead of surfacing it; (2) filing a flaw that holds only
+  under an unresolved decision as an unconditional defect; (3) prescribing the implementation, and stating a
+  design preference as an existing rule. The fix is structural, not a reminder (the project's rules-vs-gates
+  law): three disciplines added to the global Charpy spec Local section (`~/.claude/personas/Plan/Charpy/
+  Charpy.md` — D1 reconcile-every-defining-record/enumerate-completely, D2 conditional-is-not-a-defect, D3
+  requirement-not-prescription/preference-is-not-law), plus a global PostToolUse gate
+  (`~/.claude/hooks/charpy-casebook-gate.sh`, wired in `~/.claude/settings.json` beside the Poirot gate) that
+  blocks writing any `Claude/Charpy/*.md` declaring `Type: plan-review` unless it carries a `## Verdict`
+  (forge/temper/scrap), a `## Defining records` section stating an explicit agree/conflict verdict across the
+  authorities, and a severity + nature tag (defect/conditional/open-unknown/requirement/recommendation) on
+  every `### F<n>` finding. The gate is proven able to fail (each failure mode reddens a fixture; a complete
+  casebook and a non-casebook path pass). These files are global (outside this repo), so they are not
+  committed here; this entry records that this project's Charpy filings now follow the schema. The stage-5
+  casebook was updated to conform (Type header, Defining records = CONFLICT, per-finding nature tags — F3
+  tagged `conditional`, F5 `recommendation`, the two mis-classifications the critiques corrected). Global
+  scheme change, logged here per the Poirot-gate precedent — 2026-07-22.

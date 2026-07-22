@@ -1,5 +1,7 @@
 # Plan review — PLAN-swipe-reveal.md stage 5 ("move pane builders into swipe.js")
 
+Type: plan-review
+
 Reviewed: 2026-07-22 · Plan: `Claude/Plans/PLAN-swipe-reveal.md` §7 step 5, grounded by §3.2,
 §3.6, §4.2. Baseline: build `.235`, working tree clean at HEAD `c38c888`. Stage 4 closed.
 
@@ -23,6 +25,18 @@ The five things the planner must resolve:
    `release()`/`dispose()` to stage 6, keeping a raw-node or capture-result representation now (F6).
 5. **Export + coverage** — the new public surface's export-gate classification (F2) and behavior-level
    recipe + production-wiring tests (F4).
+
+## Defining records
+
+The authorities that specify stage 5, reconciled — verdict: **CONFLICT** (on scope):
+- **Plan §7 step 5** — "Move pane builders unchanged into swipe.js" → two capture recipes.
+- **`js/swipe.js` header, lines 24–27** — five builders (`ghostApp`/`snapshotHome`/`overlayEl`/
+  `appViewEl`/`npPillClone`) plus the render calls → the whole construction boundary.
+- **DecisionLog, 2026-07-21** — reintroduce `sourceHost`/`destinationHost` "in the pane/mover
+  construction that reads them" → host-based mover resolution.
+
+The three do not agree on what stage 5 moves. That disagreement is finding F0; F1, F3, and F6 are
+downstream of it.
 
 ## The claim under review
 
@@ -59,7 +73,7 @@ scope.
 
 ## Findings
 
-### F0 — Structural — three records authorize three different scopes for stage 5
+### F0 — Structural — open-unknown — three records authorize three different scopes for stage 5
 
 The scope of stage 5 is not settled, because its three defining records disagree (see "The claim
 under review"): plan §7.5 says two capture recipes; the `swipe.js` header says five builders plus the
@@ -83,7 +97,7 @@ The middle boundary was silently dropped in the first version of this finding; a
 admissible. Whichever is chosen, the two records that do not match it are scrubbed
 (StandardsDocument §6.6): plan step, swipe.js header, and DecisionLog must state one scope, not three.
 
-### F1 — Structural — "unchanged" is not compilable; the dependency seam is unspecified
+### F1 — Structural — open-unknown — "unchanged" is not compilable; the dependency seam is unspecified
 
 `ghostApp()` and `snapshotHome()` reference identifiers that live in app.js's closure and do not
 exist in `swipe.js`: `freezeArt` (app.js:376), `ghostWrap` (app.js:464), `copyScroll` (app.js:382),
@@ -99,7 +113,7 @@ are injected; what each builder accepts; what it returns; and where the capture 
 move with args) is the planner's call; F5 states the preferred contract (return capture, not the
 session).
 
-### F2 — Structural — stage 5's new public surface must be classified by the export gate and covered
+### F2 — Structural — requirement — stage 5's new public surface must be classified by the export gate and covered
 
 `test/contract-function-gate.test.js` (§4.11) requires every export of `js/swipe.js` to be either a
 registered exact-keyed deep-immutable contract factory or listed in `NON_CONTRACT` with a reason
@@ -116,7 +130,7 @@ Note: `swipe.js` is `require()`d in a no-DOM node context (the gate loads it dir
 touch `document`/`window` only inside their bodies are safe at module-load; a top-level DOM reference
 introduced by the move would break every `swipe.js` unit test. The step must keep DOM access lazy.
 
-### F3 — Structural — the host fields are a scope inconsistency, not proven-dead
+### F3 — Structural — conditional — the host fields are a scope inconsistency, not proven-dead
 
 No file reads `sourceHost` or `destinationHost` today (grep, all `*.js`/`*.mjs`); `.229` removed them
 for exactly that reason. But this does not prove they lack a valid stage-5 consumer — stage 5 may be
@@ -132,7 +146,7 @@ F0 resolves this: under B or C, name the resolution line that reads each host; u
 host-field reintroduction from stage 5 and correct the DecisionLog. (The `d.clobbered` read at
 app.js:630 is `sameBrowseHost`, assigned to stage 6 under every scope.)
 
-### F4 — Structural — the wiring seam's coverage obligation is unstated for stage 5
+### F4 — Structural — requirement — the wiring seam's coverage obligation is unstated for stage 5
 
 After the move, `start()` (or the moved construction owner) calls the moved builder instead of a local
 function. The `.228` F1 law (DecisionLog): proving the builder exists and is correct in `swipe.js` is
@@ -148,7 +162,7 @@ This is required because the contract-function gate can only classify the public
 contract-factory properties (F2) — it cannot prove DOM-builder behaviour, so the recipe and
 production-wiring tests carry that proof.
 
-### F5 — Structural — the seam should not pass the session object `d`; the preferred contract returns capture metadata
+### F5 — Structural — recommendation — the seam should not pass the session object `d`; the preferred contract returns capture metadata
 
 The builders today mutate the gesture session directly: `d.ghostY`, `d.animSync`, `d.animRes`
 (app.js:487, 495, 578). Preserving that by injecting `d` into `swipe.js` would retain the exact
@@ -166,7 +180,7 @@ The parity invariants the relocation must hold, named so they are not lost: `cop
 `.hidden`/`.parked` must not test the clone root (snapshotHome's source is `#home.parked`, T2); T3/T4
 are iOS compositor/decode hazards.
 
-### F6 — Structural — the plan must state whether stage 5 begins the §3.6 pane abstraction or defers it
+### F6 — Structural — open-unknown — the plan must state whether stage 5 begins the §3.6 pane abstraction or defers it
 
 §3.6 defines a pane as an object `{ kind, element, source, pin, equivalence, release(), dispose(reason) }`.
 Today the builders `return wrap` — a raw DOM node (app.js:496, 579). The plan does not say whether
