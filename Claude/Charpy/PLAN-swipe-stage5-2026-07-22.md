@@ -2,7 +2,8 @@
 
 Type: plan-review
 
-<!-- charpy-gate {"review_type":"plan-review","patterns":{"defining_records":true,"boundary_relocation":true,"callee_replacement":true,"contract_shape":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:345-356","js/app.js:368-496","js/app.js:564-580","js/app.js:588-650"],"callee_ranges":["js/app.js:550-558"]} -->
+<!-- charpy-gate {"review_type":"plan-review","patterns":{"defining_records":true,"boundary_relocation":true,"callee_replacement":true,"contract_shape":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:345-356","js/app.js:368-496","js/app.js:564-580","js/app.js:588-655"],"callee_ranges":["js/app.js:550-558"]} -->
+<!-- note: source range 588-655 covers the construction tail incl. the initial mover-parking loop (654). -->
 
 Reviewed: 2026-07-22 · Plan: `Claude/Plans/PLAN-swipe-stage5.md` (Vitruvius's resolution of F0/F1/F3/
 F6 + F2/F4/F5 from `Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`). Grounded against HEAD:
@@ -24,7 +25,7 @@ Declared change patterns (machine-readable declaration above; project adapter `t
 ownership; the capture-helper cluster has no consumers outside the two recipes; the no-session
 return-capture direction is right; the lifecycle deferral (§5) correctly avoids the dead-field trap;
 and `buildConstruction` as `NON_CONTRACT` is sound. The defect is the **seam specification**, not the
-chosen boundary. **Seven things** to settle before a line is written (F1, F2, F4, F5, F6, F7, F8); F3
+chosen boundary. **Eight things** to settle before a line is written (F1, F2, F4, F5, F6, F7, F8, F9); F3
 is a non-blocking recommendation, and preserving the `np-locked` unlock when `npPillClone` moves is a
 coverage requirement (the plan already keeps `np-locked` in app.js, §3:80), not a blocker. None
 shatters scope B.
@@ -53,7 +54,7 @@ StandardsDocument §6.6). That deferral is proper, not a finding.
 Enumerate every value the moved code reads (input) and writes (output) — object, geometry, closure
 constant, DOM side effect, free identifier, ordering precondition — and name its owner in the new seam.
 A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHOST_BG`+helpers+`ghostApp`
-368–496, `snapshotHome` 564–580, `start()` construction 588–650.
+368–496, `snapshotHome` 564–580, `start()` construction 588–655 (incl. the initial mover-parking loop).
 
 | Value | Class | Dir | Today (app.js) | Owner under the plan as written | Finding |
 |---|---|---|---|---|---|
@@ -76,6 +77,9 @@ A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHO
 | outgoing-ghost capture **before** dest render | ordering | out | 604–605, 620→629 | unstated — plan says only "relative to the ghost" | F7 |
 | `revealBase = snapBrowse(true)` | ordering | out | 590 (pre-render) | must precede any clobbering render; unstated | F7 |
 | `takeRowHold()` (Browse hold) | ordering | out | 591 (pre-render) | must precede any clobbering render; unstated | F7 |
+| `freezeArt` strips `img[data-art]` before mount | DOM effect | out | 376, 480/567 | recipe via `env.document`; pre-mount order + coverage owed | F9/cov |
+| `.nav-ghost` wrapper class + fixed-pane style | DOM contract | out | 466–467 | recipe (`ghostWrap`); parity contract, coverage owed | cov |
+| initial mover parking (`m.el.style.transform`) | DOM effect | out | 654 | **unassigned** — base-0 gets none; no `will-change` on real `#home`/`#browse`; plan doesn't say which layer applies it | F9 |
 | `d.live = true` | object | out | 589 | stays in `start()` (trivially) | — |
 
 ## Findings
@@ -132,8 +136,10 @@ nav.js:35–36), so `sourceHost` is a projection of `fromKind`, and destination 
 carried by `plan.incoming`+`plan.renderDestination` — but derivability does not make a consumed field
 dead, and no project rule forbids derived contract fields. So this is not a blocker: the plan should add
 one sentence stating the architectural benefit (mapping policy centralized in classification) that
-justifies carrying both `kind` and `host` in the exact-key contract. It becomes blocking only if the
-planner switches to deriving host selection while resolving F2, which would remove the fields.
+justifies carrying both `kind` and `host` in the exact-key contract. If the planner switches to deriving
+host selection while resolving F2, this recommendation becomes inapplicable (not blocking) — remove the
+host fields and reconcile the plan, the gate registration, and the DecisionLog accordingly; F2 already
+owns the requirement to choose and document the routing.
 
 ### F4 — Structural — requirement — the relocated recipes read external DOM directly; the seam must route all of it through `env`
 
@@ -235,6 +241,21 @@ must assign the dependency: inject the background, resolve it lazily inside the 
 `env.document.defaultView.getComputedStyle`, or cache it on the first runtime construction call — not
 move the `GHOST_BG` initializer to `swipe.js` unchanged.
 
+### F9 — Structural — open-unknown — the initial mover-placement effect has no named owner
+
+The construction block does not end at `d.movers` assembly: `start()` immediately parks the incoming
+movers offscreen — `for (const m of d.movers) if (m.base) m.el.style.transform = 'translateX(' + m.base
++ 'px)'` (app.js:654) — and deliberately adds NO `will-change` to the real in-flow `#home`/`#browse`
+movers, because promoting them to a layer nudges the iOS fixed navbar (comment app.js:651–653). The
+review previously traced `base`, the mover shape, and ordering, but not this placement effect. The plan
+says `buildConstruction` returns movers and `start()` consumes them, but does not state which layer
+applies the incoming mover's initial `translateX(base)` before the first `move()`. The plan must decide:
+does `buildConstruction` apply the initial transforms, does `start()` map the return into `d.movers` and
+retain the existing parking loop, or does another layer own initial placement? Whichever, it must
+preserve two invariants — outgoing base-0 movers receive NO initial transform (`if (m.base)` is false),
+and real `#home`/`#browse` movers receive NO new `will-change` promotion. Without a named owner the seam
+can return numerically correct movers that are visibly in the wrong initial position.
+
 ## Coverage the plan must require
 
 Once the seam is specified, the revised plan owes production (app-harness/recipe) tests, each
@@ -265,6 +286,13 @@ mutation-verified, that prove the primary seam shape and routing — not only th
 - **F7** — the outgoing ghost is captured before any render that can clobber `#browse` (reordering
   reddens); `revealBase` and the Browse hold precede that render.
 - **F8** — no ambient DOM access at module load; the ghost background resolves through the chosen seam.
+- **F9** — the incoming mover starts at the signed pixel offset and outgoing base-0 gets NO initial
+  transform, parked before the first `move()`; real `#home`/`#browse` movers gain NO `will-change`
+  (reddens if the parking loop is dropped, applied to base-0, or promotes a real in-flow element).
+- **Recipe pre-mount (both recipes)** — `freezeArt` strips every `img[data-art]` BEFORE the clone is
+  appended (mutation reddens if `freezeArt` is omitted or moved after `appendChild`), and the wrapper
+  carries the `.nav-ghost` class and fixed-pane style contract (position/inset/z-index) for cleanup and
+  visual parity.
 
 ## Prediction — where this breaks in execution if built as written
 
@@ -292,5 +320,5 @@ both `ghostApp` and `snapshotHome` and nothing else (app.js:480/567, 489/570, 49
 deferral (§5) correctly withholds `release()`/`dispose()`/`equivalence` until stage 6. And
 `buildConstruction` as `NON_CONTRACT` is correct: the gate's immutability loop runs on `CONTRACT` only
 (contract-function-gate.test.js:58). The step is buildable once the seam is fully specified — every value
-and order in the ledger given an owner (F1, F2, F4, F5, F6, F7, F8), with F3's one-sentence justification
+and order in the ledger given an owner (F1, F2, F4, F5, F6, F7, F8, F9), with F3's one-sentence justification
 and the `np-locked` regression test on top.
