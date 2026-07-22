@@ -8,17 +8,17 @@ Reviewed: 2026-07-22 · Plan: `Claude/Plans/PLAN-swipe-stage5.md` (Vitruvius's r
 F6 + F2/F4/F5 from `Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`). Grounded against HEAD:
 `js/swipe.js`, `js/nav.js`, `js/app.js`, `test/contract-function-gate.test.js`, `test/app-harness.js`.
 Traced every value crossing the construction block; each claim held to the tightest bound the code
-gives and checked by an independent adversarial read of the review before filing.
+gives, checked by an independent adversarial read and an external review before filing.
 
 ## Verdict
 
 **TEMPER** — fix-then-build. Scope B is the right boundary and was checked against later-stage
-ownership; the five capture helpers are single-caller; the no-session return-capture direction is
-right; the lifecycle deferral (§5) correctly avoids the dead-field trap; and `buildConstruction` as
-`NON_CONTRACT` is sound. The defect is the **seam specification**, not the chosen boundary. **Eight
-things** to settle before a line is written (F1, F2, F4, F5, F6, F7, F8, F9); F3 is a non-blocking
-recommendation. Two of the eight (F6, F9) are conditional — they break only if the plan lets a coupled
-computation move with the code B relocates, so the fix is to state explicitly that it does not. None
+ownership; the capture-helper cluster has no consumers outside the two recipes; the no-session
+return-capture direction is right; the lifecycle deferral (§5) correctly avoids the dead-field trap;
+and `buildConstruction` as `NON_CONTRACT` is sound. The defect is the **seam specification**, not the
+chosen boundary. **Seven things** to settle before a line is written (F1, F2, F4, F5, F6, F7, F8); F3
+is a non-blocking recommendation, and preserving the `np-locked` unlock when `npPillClone` moves is a
+coverage requirement (the plan already keeps `np-locked` in app.js, §3:80), not a blocker. None
 shatters scope B.
 
 ## Defining records
@@ -52,17 +52,17 @@ A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHO
 | `d.from.v` / `d.dest.v` (`fromV`/`toV`) | object | in | 622, 630, 633, 635 | **none** — env callbacks need it, unsourced | F5 |
 | `isOverlay(fromV)` (`fromOv`) | free id | in | 593, feeds 622/630 | `Nav` (already imported, swipe.js:34) | F5/F6 |
 | `d.dir`, `d.w` (→ `off`) | geometry | in | 592 | unresolved — crosses the seam only if the builder computes `base` | F1 |
-| `window.scrollY` (→ `ghostY`) | geometry | in | 486 (function body) | lazy; name the seam source | F4 |
+| `window.scrollY` (→ `ghostY`) | geometry | in | 486 (function body) | ambient global outside `env`; name the seam source | F4 |
 | `GHOST_BG` (`getComputedStyle` init) | closure const | in | 368–371, used 467 | **unassigned** — plan does not say who owns the ghost background | F8 |
 | clone build + mount (`createElement`/`appendChild` to body) | DOM effect | out | 465/489–491, 568–574, 351–354 | `env.document` / `env.document.body` (§3) | — |
-| `.np-pill-float` stale-clone removal | DOM effect | out | 350 | `env.document` (§3) | — |
+| `.np-pill-float` stale-clone removal | DOM effect | out | 350 | `env.document` (§3) | cov |
 | `d.movers` shape `{el, base, own}` | object | out | 620–650 | plan says `{element, base, ownership, capture}` | F1 |
 | `d.ghostY` / `d.animSync` / `d.animRes` | object | out | 487, 495, 578 | `capture` — but contract stated two ways | F1 |
-| `d.clobbered` (same-browse-host carrier) | object | out | 630, read 1260/1286 | start()-owned unless the coupled computation moves into the builder | F6 |
-| `document.body` `np-locked` removal | DOM effect | out | 634, 645 | app.js via `plan.decorations` unless the decoration loop moves | F9 |
+| `d.clobbered` (same-browse-host carrier) | object | out | 630, read 1260/1286 | **unassigned** — plan doesn't say recompute-in-start() or return-as-metadata | F6 |
+| `document.body` `np-locked` removal | DOM effect | out | 634, 645 | app.js via `plan.decorations` (plan §3:80 keeps it) | cov |
 | outgoing-ghost capture **before** dest render | ordering | out | 604–605, 620→629 | unstated — plan says only "relative to the ghost" | F7 |
-| `revealBase = snapBrowse(true)` | ordering | out | 590 (pre-render) | must precede the seam's render; unstated | F7 |
-| `takeRowHold()` (Browse hold) | ordering | out | 591 (pre-render) | must precede the seam's render; unstated | F7 |
+| `revealBase = snapBrowse(true)` | ordering | out | 590 (pre-render) | must precede any clobbering render; unstated | F7 |
+| `takeRowHold()` (Browse hold) | ordering | out | 591 (pre-render) | must precede any clobbering render; unstated | F7 |
 | `d.live = true` | object | out | 589 | stays in `start()` (trivially) | — |
 
 ## Findings
@@ -115,19 +115,19 @@ nav.js:35–36), so `sourceHost` is a projection of `fromKind`, and destination 
 carried by `plan.incoming`+`plan.renderDestination` — but derivability does not make a consumed field
 dead, and no project rule forbids derived contract fields. So this is not a blocker: the plan should add
 one sentence stating the architectural benefit (mapping policy centralized in classification) that
-justifies carrying both `kind` and `host` in the exact-key contract, rather than leaving the carry
-unexplained. It becomes blocking only if the planner switches to deriving host selection while resolving
-F2, which would remove the fields.
+justifies carrying both `kind` and `host` in the exact-key contract. It becomes blocking only if the
+planner switches to deriving host selection while resolving F2, which would remove the fields.
 
-### F4 — Weak — requirement — name the scroll input the recipe reads through the seam
+### F4 — Weak — requirement — name the scroll input so construction does not read an ambient global outside its seam
 
-`ghostApp` reads `window.scrollY` for `ghostY` (app.js:486). It is a runtime function-body read, so it
-is already DOM-free at module load and does not threaten the `require()`-in-Node gate (which only loads
-the module and checks exports, never calling `ghostApp`) — this is a seam-completeness point, not a
-load-time hazard. For the seam to be fully specified and the relocated recipe injectable and testable,
-the plan should name where the scroll position enters (e.g. `env.document.defaultView.scrollY`) rather
-than leaving the recipe to read a bare `window` global. (Viewport width is left to F1 — it crosses the
-seam only under the branch where the builder computes `base`.)
+`ghostApp` reads `window.scrollY` for `ghostY` (app.js:486). This is a runtime function-body read, so it
+is DOM-free at module load and does not affect the `require()`-in-Node gate (that module-load argument
+belongs to F8, where it applies). The finding is that a bare ambient `window` would violate the plan's
+own claim that `env` is the sole external seam, and would make direct recipe tests depend on global
+setup rather than an injected env. The plan must name scroll position explicitly or authorize
+`env.document.defaultView`, so construction does not depend on ambient browser globals outside its
+declared seam. (Viewport width is left to F1 — it crosses the seam only under the branch where the
+builder computes `base`.)
 
 ### F5 — Structural — open-unknown — the seam has no source/destination descriptor identity, and render-callback ownership is vague
 
@@ -144,7 +144,7 @@ and derived classification that can disagree (a two-source-of-truth hazard); and
 app.js:636) and the destination render calls (`renderNowPlaying`/`renderScreen`/`Browse.render`) —
 rather than the plan vaguely saying it "performs the render."
 
-### F6 — Structural — conditional — `d.clobbered` is coupled to the resolution B moves; the plan must keep it start()-owned
+### F6 — Structural — open-unknown — the plan must assign ownership of the live `clobbered` carrier
 
 Today the browse-host branch sets `d.clobbered = !fromOv && appViewEl(fromV) === $('browse')`
 (app.js:630) — destination rendering into the real `#browse` while the source is also the real
@@ -152,18 +152,16 @@ Today the browse-host branch sets `d.clobbered = !fromOv && appViewEl(fromV) ===
 `applyScreen(dest, { render: cur.clobbered, resetScroll: false })` (app.js:1286), re-rendering the
 source under the covering ghost on a browse→browse abort. `d.clobbered` is the current operational
 carrier of the same-browse-host condition (Stage 6 replaces it with the normalized `sameBrowseHost` —
-same semantics, later staging), initialized `false` at begin() (app.js:541). The plan keeps the render
-dispatch and `np-locked` in app.js (§2/§3), so the natural reading is that `d.clobbered`, set one line
-after `showAppView` (629), stays in `start()` too — in which case there is no gap. The finding is
-therefore conditional: `d.clobbered`'s inputs are exactly the source/host resolution B moves (`fromOv =
-isOverlay(fromV)`, `appViewEl(fromV)`), so **if** the plan lets the clobbered computation move into
-`buildConstruction` with that resolution, the no-session rule bars writing it and a browse→browse abort
-would render with `render:false` (1286) and lose its reveal. The plan must state explicitly that
-`d.clobbered` remains computed and set in `start()` (recomputing `fromOv`/`appViewEl` there, or having
-the builder return `{ sourceWasClobbered }`), so the carrier is preserved until Stage 6's
-`sameBrowseHost`.
+same semantics, later staging), initialized `false` at begin() (app.js:541). Scope B moves the
+host-resolution logic that participates in computing it (`fromOv = isOverlay(fromV)`, `appViewEl(fromV)`),
+but the plan does not say whether `d.clobbered` is recomputed in `start()` or returned as construction
+metadata. The finalizer still reads the session field, so a gap where neither owner produces it is not
+acceptable. The plan must assign ownership: `start()` recomputes and sets it (the render dispatch it sits
+beside stays in app.js, §2/§3, so this is natural), or `buildConstruction` returns it as construction
+metadata (e.g. `{ sourceWasClobbered }`) that `start()` records — either is admissible, but the plan
+must choose one.
 
-### F7 — Structural — requirement — the construction order (outgoing capture → destination render) and its preconditions are unstated
+### F7 — Structural — requirement — the outgoing-capture-before-clobbering-render invariant is unstated
 
 The central browse→browse construction order is that the outgoing app-ghost must be fully captured
 before the destination render overwrites `#browse` — the code builds the ghost first (app.js:620) then
@@ -171,56 +169,58 @@ renders the destination (629), with the comment stating the ghost "must snapshot
 BEFORE the incoming render clobbers it" (604–605). If the impure builder invokes `env.renderDestination`
 before `ghostApp()` completes, it snapshots the destination instead of the source. §3 says only that the
 callback allows ordering "relative to the outgoing ghost"; it does not state which order is required.
-The plan must fix the exact sequence as an invariant of the seam:
+The plan must fix the proven invariant as a seam requirement:
 1. `start()` captures `revealBase` (`snapBrowse(true)`, app.js:590);
 2. `start()` acquires the Browse hold (`takeRowHold()`, app.js:591);
 3. construction completes the outgoing representation, including clone + capture;
-4. only then may it invoke the destination-render callback;
-5. incoming real-host resolution and decoration assembly follow.
+4. only then may it invoke any destination-render callback that can clobber `#browse`;
+5. after outgoing capture completes, destination resolution, rendering, visibility changes,
+   incoming-mover creation, and decoration assembly must preserve their **existing transition-specific
+   ordering** (e.g. an overlay destination resolves `overlayEl(toV)` before rendering and unhiding it,
+   app.js:633–637) — the requirement pins outgoing-capture-before-clobber, not a new universal order.
 
 And it must be mutation-tested: moving the render ahead of the outgoing-ghost capture must redden a
-test. Stated as only the snapshot-and-hold preconditions, the seam could preserve those and still render
-before the ghost is captured — the exact browse→browse flash this subsystem exists to prevent.
+test — the exact browse→browse flash this subsystem exists to prevent.
 
-### F8 — Structural — open-unknown — `ghostWrap`'s `GHOST_BG` dependency is unassigned and unreconciled with the DOM-free-load promise
+### F8 — Structural — open-unknown — `ghostWrap`'s `GHOST_BG` dependency is unassigned and violates the plan's own no-top-level-DOM seam
 
 `ghostWrap` reads `GHOST_BG` (app.js:467), which is initialized at closure-init by an immediately-invoked
 function calling `getComputedStyle(document.documentElement).getPropertyValue('--page-bg')`
 (app.js:368–371). The plan lists five relocating helpers but does not say the `GHOST_BG` initializer
-relocates, nor who owns the ghost background in `swipe.js` — the dependency is unassigned. It is not a
-guaranteed red test: the initializer is wrapped in `try/catch`, so in a no-DOM Node process the undefined
-`document` reference throws and is caught, yielding `'var(--bg)'`, and `require()` need not fail — the
-module gate only requires the module and checks exports, it does not statically reject a caught top-level
-DOM reference. The real conflict is with the plan's own §6 promise that "no top-level `document`/`window`
-reference is introduced": moving the initializer unchanged would introduce exactly such a reference
-(silently degrading to the fallback background in any no-DOM context), contradicting that constraint. The
-plan must assign the dependency: inject the background, resolve it lazily inside the recipe via
+relocates, nor who owns the ghost background in `swipe.js` — the dependency is unassigned. This is an
+architectural / module-boundary defect, not a demonstrated runtime failure: the initializer is wrapped
+in `try/catch`, so it does not necessarily break, and the caught fallback in a Node process says nothing
+about the browser runtime. The defect is that moving the initializer unchanged introduces exactly the
+top-level `document` reference the plan's §6 forbids ("no top-level `document`/`window` reference is
+introduced"), making the module's external dependency ambient rather than routed through `env`. The plan
+must assign the dependency: inject the background, resolve it lazily inside the recipe via
 `env.document.defaultView.getComputedStyle`, or cache it on the first runtime construction call — not
 move the `GHOST_BG` initializer to `swipe.js` unchanged.
 
-### F9 — Weak — conditional — the `np-locked` unlock must stay in app.js when `npPillClone` moves
-
-Today the construction block removes the global `np-locked` body class in two cases:
-`document.body.classList.remove('np-locked')` when Now Playing is the incoming overlay (app.js:634,
-beside the render) and when Now Playing is the outgoing endpoint (app.js:645, inside the decoration
-loop). The plan keeps all `np-locked` logic in app.js (§2/§3), and `start()` still holds
-`plan.decorations` (app.js:600), which classifyTransition emits for an NP source (swipe.js:90) — so the
-outgoing-NP unlock at 645 reads `deco.base === 'outgoing'` from a value app.js already has, independent
-of `buildConstruction`. So app.js does have the signal. The finding is therefore conditional: only
-`npPillClone` moves into the builder, so **if** the decoration loop (645–646) is moved with it, the
-`np-locked` removal at 645 leaves app.js and the outgoing-NP case (NP→home, `renderDestination:'none'`,
-no render callback) loses its unlock. The plan must state that the decoration loop's `np-locked` removal
-stays in app.js reading `plan.decorations`, with only `npPillClone` relocated.
-
 ## Coverage the plan must require
 
-Once the seam is specified, the revised plan owes production (app-harness) tests for the values and
-orders that cross the block, each mutation-verified:
-- a browse→browse abort preserves the `d.clobbered` / same-host carrier and re-renders the source (F6);
-- both incoming-NP and outgoing-NP transitions remove `np-locked` (F9);
-- the outgoing ghost is captured before the destination render (moving the render earlier reddens) (F7);
-- `revealBase` and the Browse hold are acquired before any render into `#browse` (F7);
-- no ambient DOM access at module load, with the ghost background resolved through the chosen seam (F8).
+Once the seam is specified, the revised plan owes production (app-harness/recipe) tests, each
+mutation-verified, that prove the primary seam shape and routing — not only the later-discovered effects:
+- **F1** — production mover keys remain `{ el, base, own }`; outgoing `base` is `0`, incoming `base` the
+  signed pixel offset `±d.w`; a transition with no owned pane yields the defined no-capture value.
+- **F2** — the contract-function gate's exact-key registrations reflect whichever host-field routing the
+  plan selects (the registrations at contract-function-gate.test.js:24/30 make this concrete).
+- **F4** — construction reads scroll position through the declared seam (an injected `env`), not a bare
+  `window` global, provable by driving a fake env.
+- **F5** — a payload-bearing destination (`authorBooks`/`files`) reaches the render callback with the
+  correct descriptor; overlay rendering preserves its visibility change (`classList.remove('hidden')`).
+- **Moved decoration recipe (`npPillClone`)** — the relocated builder removes stale `.np-pill-float`
+  (app.js:350), strips descendant IDs (352), adds `np-pill-float` (353), appends the clone (354), and
+  yields the correct outgoing/incoming `base` and `owned-decoration` ownership; current recipe tests
+  cover only app-ghost and home-snapshot, so the moved pill builder is otherwise unproven.
+- **np-locked (regression, not a blocker)** — both incoming- and outgoing-NP transitions preserve the
+  existing `np-locked` removal while only `npPillClone` relocates (the plan already keeps `np-locked` in
+  app.js, §3:80; `start()` retains `plan.decorations`, app.js:600/645).
+- **F6** — a browse→browse abort preserves the `clobbered`/same-host carrier and re-renders the source
+  under the ghost, under whichever owner the plan assigns.
+- **F7** — the outgoing ghost is captured before any render that can clobber `#browse` (reordering
+  reddens); `revealBase` and the Browse hold precede that render.
+- **F8** — no ambient DOM access at module load; the ghost background resolves through the chosen seam.
 
 ## Prediction — where this breaks in execution if built as written
 
@@ -228,22 +228,24 @@ The builder relocates the recipes and hits the walls the plan left standing. It 
 `desc` to call `env.sourceEl`/`renderDestination`, finds them nowhere in `plan`, and threads raw
 identity in beside the classification — the two-source hazard (F5). `d.movers` transforms read
 `m.el`/`m.base` while it was handed `element`/`base`, so it invents the mapping and decides the geometry
-owner mid-build (F1). Then the conditional losses the plan must foreclose: if the clobbered computation
-moves with the resolution B relocates, a browse→browse abort re-renders with `render:false` (F6); if the
-decoration loop moves with `npPillClone`, an NP→home swipe loses its `np-locked` unlock (F9); the ghost
-background silently degrades to the fallback in the require()-in-Node context (F8); and — worst — if the
-builder calls the render callback before finishing the ghost, the browse→browse ghost snapshots the
-destination and the page flashes on settle, the exact bug this subsystem exists to kill (F7). Each is a
-value or order crossing the old construction block the plan did not trace; each is visible now, in the
-code.
+owner mid-build (F1). If neither owner is assigned for `d.clobbered`, the finalizer reads a session field
+nobody set and a browse→browse abort renders with `render:false` (F6). And — worst — if the builder
+calls the render callback before finishing the ghost, the browse→browse ghost snapshots the destination
+and the page flashes on settle, the exact bug this subsystem exists to kill (F7). Separately, and not a
+runtime loss but a boundary violation: relocating the `GHOST_BG` initializer unchanged makes `swipe.js`
+carry an ambient top-level DOM reference the plan's own §6 forbids (F8). Each is a value, order, or
+dependency crossing the old construction block the plan did not trace; each is visible now, in the code.
 
 ## What passes temper
 
 Scope B is sound and was checked against later-stage ownership: the render dispatch (app.js:557) and
 Browse hold (app.js:339) it leaves in app.js are stage-7 surfaces, and `renderBrowse` is already
-injected into Nav (app.js:2892). The five capture helpers are single-caller. The no-session
-return-capture direction is the right decoupling. The lifecycle deferral (§5) correctly withholds
-`release()`/`dispose()`/`equivalence` until stage 6. And `buildConstruction` as `NON_CONTRACT` is
-correct: the gate's immutability loop runs on `CONTRACT` only (contract-function-gate.test.js:58). The
-step is buildable once the seam is fully specified — every value and order in the ledger given an owner
-(F1, F2, F4, F5, F6, F7, F8, F9), with F3's one-sentence justification on top.
+injected into Nav (app.js:2892). The capture-helper cluster (`ghostWrap`/`freezeArt`/`copyScroll`/
+`copyAnimPhase`/`lastAnimResidual`) has no consumers outside the two capture recipes — each is called by
+both `ghostApp` and `snapshotHome` and by nothing else (app.js:480/567, 489/570, 492/575, 494/577) — so
+it can relocate with them. The no-session return-capture direction is the right decoupling. The lifecycle
+deferral (§5) correctly withholds `release()`/`dispose()`/`equivalence` until stage 6. And
+`buildConstruction` as `NON_CONTRACT` is correct: the gate's immutability loop runs on `CONTRACT` only
+(contract-function-gate.test.js:58). The step is buildable once the seam is fully specified — every value
+and order in the ledger given an owner (F1, F2, F4, F5, F6, F7, F8), with F3's one-sentence justification
+and the `np-locked` regression test on top.
