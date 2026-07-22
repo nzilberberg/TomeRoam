@@ -321,3 +321,21 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   NULL their stored session handles (`cur.settleFrame = null`, etc.) so the session object describes LIVE
   ownership rather than stale numeric handles. Not a .228 blocker — it is part of the stage-6
   finalization-centralization work — 2026-07-21.
+
+- The .233 stage-4 code review (`Claude/Poirot/90a139c-swipe-stage4-contract-gates.md`, verdict
+  fix-then-ship) is closed. Fixed in build .234 — the `tools/mutation-sweep.mjs --affected` file selector
+  now parses `git status --porcelain=v1 -z --untracked-files=all` (NUL-delimited, verbatim paths,
+  `dest\0src` rename records) instead of the plain porcelain format. Each finding was reproduced with real
+  git before accepting the reviewer's fix, and each fix was mutation-verified (reverting it reddens its
+  guard): F-cf1 (rename records now return BOTH source and destination; the old `split(' -> ').pop()`
+  dropped the pre-rename path); F-cf2 (`--untracked-files=all` lists each new file instead of collapsing a
+  wholly-new untracked dir to one `dir/` entry); F-cf3 (`-z` paths are verbatim, so odd-character names are
+  no longer octal-escaped and a literal ` -> ` in a name is not split — the false reassuring comment is
+  removed); F-cf4 (the selector had zero tests — `test/mutation-sweep-select.test.js` is added, grounded in
+  real `-z` bytes plus one end-to-end case against a throwaway real repo). The pure helpers
+  (parseChangedFiles/changedFiles/targetsOf/affectedIndices) are extracted and exported behind an isCli
+  guard so a test imports them without launching a sweep. O1/W12 satisfied: full suite run this session —
+  658 tests, 656 pass, 0 fail, 2 known-red todo; the full mutation sweep stays in CI. O2 (run-checks has no
+  installed-deps guard) noted, not required. W17 (the `--affected` false-clean cases) is CLOSED by .234.
+  W8 (stage-5 scope) and W11 (O1, wrap the malformed-live-descriptor throw in start()) stay OPEN; stage 5
+  is NOT started, gated on the user's go — 2026-07-21.

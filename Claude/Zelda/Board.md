@@ -36,8 +36,13 @@ deep-immutable (clone+freeze at its own boundary), F-ii §4.3 enumeration comple
 `d→d`, independently-allocated-equal, `files(A)→files(A)`), F-iii swipe.js header corrected. Watch-list
 now: W13/W14/W15 CLOSED (.230); W10 MOOT (.229 removed the host fields); W12 satisfied (suite ran, 636
 pass, mutations verified); W11 (O1, low) + W8 (stage-5 scope) stay OPEN. Disposition + stage-4 scope
-decisions + stage-6 cleanup debt are all in DecisionLog. **Do NOT start stage 5 without the user's
-go.**
+decisions + stage-6 cleanup debt are all in DecisionLog. **`.234`** then closed the `.233` review
+(`Claude/Poirot/90a139c-swipe-stage4-contract-gates.md`, verdict fix-then-ship): the
+`mutation-sweep.mjs --affected` selector's four false-clean cases (F-cf1 rename source dropped, F-cf2
+new file in a new untracked dir missed, F-cf3 odd-char names escaped / false comment, F-cf4 no selector
+tests) are fixed by parsing `git status --porcelain=v1 -z --untracked-files=all` + a new selector test
+set — each reproduced with real git and mutation-verified. Watch-list W17 CLOSED (.234); W8 (stage-5
+scope) + W11 (O1, low) stay OPEN. **Do NOT start stage 5 without the user's go.**
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
