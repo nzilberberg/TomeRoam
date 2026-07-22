@@ -32,16 +32,23 @@ jobs:
   # The EXPENSIVE half of the mutation contract (Engineering Contract §4.10): npm test's
   # mutation-anchors gate proves each mutation still APPLIES; this proves each is still
   # CAUGHT — it runs the behavioural suite once per registered mutation and fails if any
-  # mutation leaves the suite green (a guard nothing defends). Slow by nature, so it is its
-  # own job here rather than part of `npm test`; CI is exactly where it should run so the
-  # evidence re-runs on every push without anyone remembering to.
+  # mutation leaves the suite green (a guard nothing defends). Slow by nature (one full suite
+  # per mutation), so it is its own job here, and SHARDED across parallel runners to keep
+  # wall-clock ~2 min instead of ~13. Each shard computes its own slice from the live mutation
+  # count (tools/mutation-sweep.mjs --shard=I/N), and the shards PARTITION the set — their
+  # union is every mutation, so no guard is silently skipped as mutations are added. The whole
+  # sweep is complete only when ALL shards pass; fail-fast is off so one failure shows them all.
   mutation-sweep:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci
-      - name: Every registered mutation is still caught by a test
-        run: node tools/mutation-sweep.mjs
+      - name: Mutation shard ${{ matrix.shard }} of 8 is fully caught
+        run: node tools/mutation-sweep.mjs --shard=${{ matrix.shard }}/8

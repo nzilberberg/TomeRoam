@@ -114,6 +114,27 @@ test('affectedIndices: selects mutations whose target changed; empty when none m
   assert.deepEqual(affectedIndices(muts, new Set(['unrelated.js'])), [], 'zero selected when nothing matches');
 });
 
+test('shardIndices: the N shards PARTITION all indices — no mutation dropped or double-run', async () => {
+  const { shardIndices } = await load();
+  // The safety property behind sharded CI: every mutation runs in exactly one shard. If this
+  // fails, a sharded sweep is a silent false-clean (an unrun mutation reads as caught).
+  for (const [total, n] of [[42, 8], [42, 1], [10, 3], [7, 7], [5, 8]]) {
+    const all = [];
+    for (let i = 0; i < n; i++) all.push(...shardIndices(total, i, n));
+    assert.deepEqual(all.sort((a, b) => a - b), Array.from({ length: total }, (_, k) => k),
+      `union of ${n} shards over ${total} must be exactly [0,${total})`);
+    assert.equal(new Set(all).size, total, `no index appears in two shards (total=${total}, n=${n})`);
+  }
+});
+
+test('shardIndices: single shard covers everything; bad args throw', async () => {
+  const { shardIndices } = await load();
+  assert.deepEqual(shardIndices(5, 0, 1), [0, 1, 2, 3, 4], '1 shard is the whole set');
+  assert.throws(() => shardIndices(42, 0, 0), /N must be/, 'N < 1 rejected');
+  assert.throws(() => shardIndices(42, 8, 8), /I must be/, 'i == n rejected (i out of [0,n))');
+  assert.throws(() => shardIndices(42, -1, 4), /I must be/, 'negative i rejected');
+});
+
 test('changedFiles: end-to-end against a real repo — rename, new dir, odd name', { skip: !hasGit }, async () => {
   const { changedFiles } = await load();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-sweep-'));

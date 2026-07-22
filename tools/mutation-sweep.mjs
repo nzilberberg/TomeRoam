@@ -82,6 +82,19 @@ export function affectedIndices(mutations, changed) {
   return mutations.map((_, i) => i).filter((i) => targetsOf(mutations[i]).some((f) => changed.has(f)));
 }
 
+// Indices for shard `i` of `n` (0-based i): the round-robin slice { k : k % n === i } of
+// [0,total). The union of all n shards is EXACTLY [0,total) and no two shards overlap — so a
+// sharded CI matrix drops no mutation and double-runs none, whatever `total` becomes as
+// mutations are added. Computed from the live MUTATIONS length, never a hard-coded range
+// (a hard-coded range would silently skip any mutation added past its end — a false-clean).
+export function shardIndices(total, i, n) {
+  if (!Number.isInteger(n) || n < 1) throw new Error(`--shard: N must be an integer >= 1, got ${n}`);
+  if (!Number.isInteger(i) || i < 0 || i >= n) throw new Error(`--shard: I must be an integer in [0,${n}), got ${i}`);
+  const out = [];
+  for (let k = 0; k < total; k++) if (k % n === i) out.push(k);
+  return out;
+}
+
 // SOURCE-TEXT GATES — excluded from the sweep, each with its reason. These assert on
 // the TEXT of production files rather than on behaviour, so under any mutation they
 // fail BY CONSTRUCTION: the mutation changed the very text they pin. Counting them
@@ -118,7 +131,16 @@ const restore = () => run([path.join('tools', 'mutate.mjs'), '--restore']);
 process.on('SIGINT', () => { restore(); process.exit(130); });
 
 let indices;
-if (process.argv.includes('--affected')) {
+const shardArg = process.argv.find((a) => a.startsWith('--shard='));
+if (shardArg) {
+  const [i, n] = shardArg.slice('--shard='.length).split('/').map(Number);
+  indices = shardIndices(MUTATIONS.length, i, n);
+  // A single shard is a PARTIAL run by construction — complete only as the union of all N
+  // shards (the CI matrix). State that, per the same rule --affected follows (§4.20).
+  console.log(`--shard ${i}/${n}: ${indices.length} of ${MUTATIONS.length} mutation(s). `
+    + `Full coverage = all ${n} shards together (the CI matrix); one shard alone is NOT the complete sweep.`);
+  if (!indices.length) { console.log('No mutations in this shard.'); process.exit(0); }
+} else if (process.argv.includes('--affected')) {
   const changed = changedFiles();
   indices = affectedIndices(MUTATIONS, changed);
   const changedTests = [...changed].filter((f) => f.startsWith('test/'));
