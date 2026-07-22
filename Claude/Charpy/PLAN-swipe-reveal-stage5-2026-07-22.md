@@ -9,8 +9,8 @@ Reviewed: 2026-07-22 · Plan: `Claude/Plans/PLAN-swipe-reveal.md` §7 step 5, gr
 
 **TEMPER** — fix-then-build. The end-state architecture (the swipe subsystem's construction in one
 module) is sound and buildable. But the step cannot open, for a reason larger than one bad word: the
-three records that define stage 5 authorize three different scopes, and the step rests on a
-dependency seam none of them specifies. The planner must settle five things before a line is written.
+records that define stage 5 conflict and leave three admissible scopes unresolved, and the step
+rests on a dependency seam none of them specifies. The planner must settle five things before a line is written.
 None is fatal; the end-state holds. The build is blocked on decisions, not on a broken design.
 
 The five things the planner must resolve:
@@ -64,7 +64,7 @@ scope.
 
 | # | Assumption the step rests on | Struck against | Result |
 |---|---|---|---|
-| A0 | The three records agree on what stage 5 moves. | plan §7.5, swipe.js:24–27, DecisionLog 2026-07-21 | CRACKED (three scopes) — see F0 |
+| A0 | The three records agree on what stage 5 moves. | plan §7.5, swipe.js:24–27, DecisionLog 2026-07-21 | CRACKED — records conflict, scope unresolved (plan→A, header→C, log→B/C) — see F0 |
 | A1 | The builders can move "unchanged." | app.js:470–496, 564–580 | CRACKED — see F1 |
 | A2 | `swipe.js` can host impure DOM builders. | test/contract-function-gate.test.js:47–56 | HOLDS with a classified public surface — see F2 |
 | A3 | `sourceHost`/`destinationHost` have a stage-5 consumer. | grep of all `*.js`/`*.mjs` | CONDITIONAL on scope (yes under B/C, no under A) — see F3 |
@@ -74,13 +74,16 @@ scope.
 
 ## Findings
 
-### F0 — Structural — open-unknown — three records authorize three different scopes for stage 5
+### F0 — Structural — open-unknown — conflicting records leave three admissible Stage-5 scopes unresolved
 
 The scope of stage 5 is not settled, because its three defining records disagree (see "The claim
 under review"): plan §7.5 says two capture recipes; the `swipe.js` header says five builders plus the
 render dispatch (the whole construction boundary); the DecisionLog's host-field reintroduction implies
 host-based mover resolution. This is the root finding — F1, F3, and F6 are all downstream of it. The
-three records map onto three genuinely distinct boundaries, and the planner chooses one explicitly:
+records conflict and leave the extraction boundary unresolved: the plan specifies the narrow A
+boundary, the `swipe.js` header the broad C boundary, and the DecisionLog requires at least host/mover
+resolution — therefore permitting B or C but conflicting with A. It does NOT uniquely specify B. The
+planner must explicitly select one of the three admissible boundaries:
 
 - **A — capture recipes only.** Move `app-ghost` and `home-snapshot`; leave real-mover resolution
   (`overlayEl`/`appViewEl`), decoration, and render dispatch in app.js. No host-field reader under this
@@ -95,7 +98,7 @@ three records map onto three genuinely distinct boundaries, and the planner choo
   stated intent.
 
 The middle boundary was silently dropped in the first version of this finding; all three are
-admissible. Whichever is chosen, the two records that do not match it are scrubbed
+admissible. Whichever is chosen, the records that do not match it are scrubbed
 (StandardsDocument §6.6): plan step, swipe.js header, and DecisionLog must state one scope, not three.
 
 ### F1 — Structural — open-unknown — "unchanged" is not compilable; the dependency seam is unspecified

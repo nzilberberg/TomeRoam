@@ -53,10 +53,10 @@ sharded the CI mutation-sweep 8 ways (`--shard=I/N`, partitioned) — ~13 min �
 **Stage 5 is TEMPERED, not cleared to build (2026-07-22).** The plan verifier struck the stage-5 step
 (`Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`, verdict TEMPER): end-state architecture sound, but
 the build is blocked on **four planner decisions**, now OPEN in DecisionLog (waiting on the planner, not on
-code): **F0 SCOPE** — three records authorize three genuinely distinct boundaries; pick one — A: capture
-recipes only; B: capture + real host/mover resolution (rendering stays in app.js behind injected callbacks;
-B may be the cleanest); C: whole construction boundary incl. render dispatch — and scrub the two records that
-do not match. **F1 SEAM** — "move pane builders **unchanged**" is not compilable (`ghostApp`/`snapshotHome`
+code): **F0 SCOPE** — conflicting records leave three admissible scopes unresolved (plan→A, header→C,
+log→B or C, not uniquely B); pick one — A: capture recipes only; B: capture + real host/mover resolution
+(rendering stays in app.js behind injected callbacks; B may be the cleanest); C: whole construction boundary
+incl. render dispatch — and scrub the records that do not match. **F1 SEAM** — "move pane builders **unchanged**" is not compilable (`ghostApp`/`snapshotHome`
 reference app.js closures — `freezeArt`/`ghostWrap`/`copyScroll`/`copyAnimPhase`/`lastAnimResidual`/`d`/`$` —
 absent in `swipe.js`); state the deps/return contract. **F3 HOST FIELDS** — `sourceHost`/`destinationHost`
 are dead only under scope A; a real consumer under B/C; a consequence of F0, not independent. **F6 PANE

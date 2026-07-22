@@ -392,14 +392,15 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   assembly under scope C), and constrain the seam per F5 —
   2026-07-22.
 
-- OPEN — stage-5 SCOPE: which extraction boundary does stage 5 take? Three records authorize three
-  genuinely distinct scopes: plan §7.5 (two capture recipes), the `js/swipe.js` header lines 24–27 (five
-  builders + render calls), and this log's 2026-07-21 host-field entry (host-based mover resolution). They
+- OPEN — stage-5 SCOPE: which extraction boundary does stage 5 take? The records conflict and leave the
+  boundary unresolved: plan §7.5 (two capture recipes → A), the `js/swipe.js` header lines 24–27 (five
+  builders + render calls → C), and this log's 2026-07-21 host-field entry (at least host/mover resolution
+  → B or C, ruling out A but not uniquely specifying B). They
   map onto three admissible boundaries — A: capture recipes only (`app-ghost`/`home-snapshot`); B: capture
   recipes plus real host/mover resolution, leaving application rendering in app.js behind injected callbacks;
   C: the whole construction boundary including decoration and destination-render dispatch. The middle boundary
   B may be the cleanest stage 5 (it delivers the host-field consumer without pulling render dispatch across
-  the seam), but the choice is the planner's. Waits on the planner to choose one and scrub the two records
+  the seam), but the choice is the planner's. Waits on the planner to choose one and scrub the records
   that do not match it (StandardsDocument §6.6) so plan step, swipe.js header, and this log state one scope.
   This is the root question — seam, host fields, and pane lifecycle are all downstream. Charpy finding F0 —
   2026-07-22.
@@ -537,3 +538,16 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   and `debug-transient-visual-bugs` (semantic judgment / methodology, no mechanical signal), and the
   cross-turn core of the two success rules (block-only Stop hook would block a truthful report of a
   prior-turn fix). Global files; this entry records the audit — 2026-07-22.
+
+- The stage-5 review's records-conflict framing is corrected: the three records do NOT each authorize a
+  distinct scope (that overstated the mapping as a bijection). The plan specifies A, the swipe.js header
+  specifies C, and the DecisionLog requires at least host/mover resolution — permitting B or C, ruling out
+  A, but NOT uniquely specifying B. The correct statement is: the records conflict and leave three
+  admissible boundaries unresolved; the planner selects one. Swept across all three records that carried the
+  error — the casebook (verdict, F0 title, F0 body, and the "two records that do not match" scrub line,
+  which was arithmetically wrong for scope C where two records match), this DecisionLog scope entry, and
+  Board.md. A D4 instance ("a range — {B,C} — is not a point — B") that survived because the D5
+  whole-document sweep was not run; both disciplines already exist. NOT gate-able (demonstrated
+  false-positive: a lint for "three records → three scopes" fires on the legitimate "one of three admissible
+  scopes", and "two records that do not match" is only wrong given the actual record→scope mapping a script
+  cannot know) — backstop is the D5 sweep plus an independent read — 2026-07-22.
