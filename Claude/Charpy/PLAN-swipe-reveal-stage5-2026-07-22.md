@@ -40,16 +40,11 @@ downstream of it.
 
 ## The claim under review
 
-Three records define stage 5, and they do not agree on its scope:
-- **Plan §7 step 5** — "Move pane builders unchanged into swipe.js" (narrowest: two capture recipes).
-- **`js/swipe.js` header (lines 24–27)** — "the pane BUILDERS (`ghostApp`/`snapshotHome`/`overlayEl`/
-  `appViewEl`/`npPillClone`) and the render calls stay in app.js until stage 5 moves them here"
-  (broadest: five builders plus the render dispatch — the whole construction boundary).
-- **DecisionLog (2026-07-21)** — stage 5 reintroduces `sourceHost`/`destinationHost` "in the stage-5
-  pane/mover construction that reads them" (implies stage 5 includes at least real host/mover
-  resolution: scope B or C, but does not determine whether render dispatch and decoration also move).
+The three records that define stage 5 disagree on its scope; they are listed with the conflict verdict
+in **Defining records** above, and their per-record boundaries (plan → A, header → C, DecisionLog →
+B or C, not uniquely B) are set out in F0. What that scope decision must respect:
 
-Grounded by the plan's model: §3.6 defines a pane as an object `{ kind, element, source, pin,
+§3.6 defines a pane as an object `{ kind, element, source, pin,
 equivalence, release(), dispose(reason) }` — "one interface, two recipes" (`app-ghost`,
 `home-snapshot`); §3.2 types movers by ownership (`owned-pane` = a ghost/snapshot).
 

@@ -580,3 +580,12 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   check for that return; the review-prose side (proposing the dead field) resists a cheap gate (demonstrated:
   a lint cannot tell a consumed field set from a test-only one without knowing production's reads), backstop
   = D6 + independent read — 2026-07-22.
+
+- The stage-5 plan review (`Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`) is FINAL: verdict TEMPER
+  stands, and every finding (F0–F6) has been confirmed correct across the review-of-the-review passes. The
+  last editorial item — "Defining records" and "The claim under review" duplicating the record enumeration —
+  is resolved: "Defining records" stays the canonical gate-required list with the conflict verdict, and "The
+  claim under review" now points to it (and to F0 for the per-record boundaries) and keeps only its unique
+  §3.6-model grounding and current-code analysis. The review is ready to hand to the planner; the four OPEN
+  decisions (F0 scope A/B/C, F1 seam, F3 host-field consumer, F6 pane-lifecycle) plus the F2/F4/F5 step
+  requirements are the planner's, and the build stays blocked on them — 2026-07-22.
