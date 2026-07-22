@@ -376,3 +376,30 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   on a reasoned claim about git's output it never ran. This is a global scheme change (Poirot spec Local
   section, `~/.claude/personas/`), logged here because this project's review filings now follow it —
   2026-07-22.
+
+- The stage-5 slice of `Claude/Plans/PLAN-swipe-reveal.md` (§7 step 5, "move pane builders into swipe.js")
+  was stressed by the plan verifier before build; verdict TEMPER (fix-then-build), filed at
+  `Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`. The architecture passes (one construction module,
+  two recipes — `ghostApp`/`snapshotHome` — one consumer `start()`, one clean seam, correctly sequenced on
+  the shipped stage 4). Two findings block the build until the planner resolves them (F1/F3 below) and two
+  must be written into the step (F2: builders ship as exempt `NON_CONTRACT` exports with DOM access kept
+  lazy so the no-DOM `swipe.js` unit tests still load; F4: an app-harness wiring assertion, mutation-
+  verified, that the moved builder is the one `start()` calls — the coverage the gate exemption gives up) —
+  2026-07-22.
+
+- OPEN — the stage-5 dependency seam (the W8 scope question). `ghostApp`/`snapshotHome` reference app.js
+  closures that do not exist in `swipe.js`: `freezeArt`, `ghostWrap`, `copyScroll`, `copyAnimPhase`,
+  `lastAnimResidual`, the session `d`, and `$`. So plan §7.5's word "unchanged" is not literal — the step
+  is a behaviour-preserving relocation behind a seam the plan does not yet specify. Waits on the planner/
+  user to choose the seam (inject the dependencies; relocate the helper cluster with the builders; or a
+  minimal literal move passing args) and state the builders' new signature, which app.js helpers move, and
+  which are injected — before the build opens. Charpy finding F1 — 2026-07-22.
+
+- OPEN — whether stage 5 reintroduces `sourceHost`/`destinationHost` into `classifyTransition`. The
+  2026-07-21 DecisionLog entry states stage 5 adds them "with … the two hosts in the pane/mover
+  construction that reads them," but no consumer exists: `start()`'s construction reads `fromOv`/
+  `appViewEl(fromV)`/`$('browse')` directly, and the one host-shaped read (`d.clobbered`, app.js:630) is
+  `sameBrowseHost`, assigned to stage 6. Reintroducing the two hosts without a real reader recreates the
+  dead field the no-dead-fields rule (Engineering Contract §17) removed in `.229`. Waits on the planner to
+  either name the genuine stage-5 construction line that reads each host, or drop the reintroduction from
+  stage 5 and leave each host to the stage that consumes it. Charpy finding F3 — 2026-07-22.
