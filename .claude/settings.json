@@ -14,6 +14,23 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "NODE=\"$(git config --get tomeroam.node)\"; [ -z \"$NODE\" ] && NODE=node; \"$NODE\" tools/hooks/ci-watch.mjs",
+            "asyncRewake": true,
+            "timeout": 1600,
+            "statusMessage": "watching CI",
+            "rewakeSummary": "CI result",
+            "rewakeMessage": "CI verification after your push:"
+          }
+        ]
+      }
     ]
   }
 }

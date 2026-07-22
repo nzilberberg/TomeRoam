@@ -339,3 +339,15 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   installed-deps guard) noted, not required. W17 (the `--affected` false-clean cases) is CLOSED by .234.
   W8 (stage-5 scope) and W11 (O1, wrap the malformed-live-descriptor throw in start()) stay OPEN; stage 5
   is NOT started, gated on the user's go — 2026-07-21.
+
+- CI verification after a push is enforced by a hook, not left to the agent's memory (the project's
+  rules-vs-gates law applied to the agent's own workflow). A PostToolUse(Bash) hook
+  (`.claude/settings.json` → `tools/hooks/ci-watch.mjs`, asyncRewake/background) fires after any Bash
+  command containing `git push`, finds the CI run for the pushed HEAD SHA, watches it to completion, and
+  then either surfaces a green `systemMessage` to the user or — on red — wakes the agent (exit 2) with the
+  failing jobs so it diagnoses and reports instead of declaring success. Closes the gap where the user had
+  to ask "is CI green?" every commit. It greps the command in-script rather than using an `if:
+  "Bash(git push*)"` filter, because pushes are frequently `cd … && git push` and a prefix filter would
+  miss them. Dev-workflow infra (like the pre-commit hook and ci.yml), so it does NOT bump the build.
+  NOTE: Claude hooks load only after a `/hooks` reload or a restart, so it activates next session (verified
+  not-yet-live this session by a sentinel test) — 2026-07-21.
