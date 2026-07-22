@@ -2,13 +2,21 @@
 
 Type: plan-review
 
-<!-- value-crossing-ledger source=js/app.js ranges=345-356,368-496,564-580,588-650 callees=550-558 -->
+<!-- charpy-gate {"review_type":"plan-review","patterns":{"defining_records":true,"boundary_relocation":true,"callee_replacement":true,"contract_shape":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:345-356","js/app.js:368-496","js/app.js:564-580","js/app.js:588-650"],"callee_ranges":["js/app.js:550-558"]} -->
 
 Reviewed: 2026-07-22 · Plan: `Claude/Plans/PLAN-swipe-stage5.md` (Vitruvius's resolution of F0/F1/F3/
 F6 + F2/F4/F5 from `Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`). Grounded against HEAD:
 `js/swipe.js`, `js/nav.js`, `js/app.js`, `test/contract-function-gate.test.js`, `test/app-harness.js`.
 Traced every value crossing the construction block; each claim held to the tightest bound the code
 gives, checked by an independent adversarial read and an external review before filing.
+
+## Applicability
+
+Declared change patterns (machine-readable declaration above; project adapter `tomeroam-js-dom`):
+- **defining_records: true** — three records (parent plan, `swipe.js` header, DecisionLog) define the scope; they CONFLICT (see below).
+- **boundary_relocation: true** — Stage 5 moves the pane-builder construction across the `app.js`→`swipe.js` boundary; source ranges declared and traced in the ledger.
+- **callee_replacement: true** — `showAppView` / render dispatch become the injected `env.renderDestination` callback; callee range declared (F5/F7/F9).
+- **contract_shape: true** — emitting the host fields changes `classifyTransition`'s exact-key contract (F2).
 
 ## Verdict
 
