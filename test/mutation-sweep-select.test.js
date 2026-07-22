@@ -78,6 +78,26 @@ test('parseChangedFiles: several records and a trailing NUL', async () => {
   assert.deepEqual([...s].sort(), ['a.js', 'c.js', 'd.js', 'e.js']);
 });
 
+test('parseChangedFiles: F-y — a WORKTREE-column rename (Y=R) yields both paths', async () => {
+  const { parseChangedFiles } = await load();
+  // `mv old.js new.js` + `git add -N new.js` reports the rename in the WORKTREE column
+  // (Y), not the index column (X): `<space>R new.js\0old.js\0`. A parser that tests only
+  // rec[0] (X) skips the source-consuming step, drops `old.js`, and leaks `old.js.slice(3)`
+  // = `.js` — a false-clean, the F-cf1 class reopened on Y. (Poirot .234 re-review, F-y.)
+  const s = parseChangedFiles(` R new.js${NUL}old.js${NUL}`);
+  assert.ok(s.has('new.js'), 'destination path present');
+  assert.ok(s.has('old.js'), 'source path present — a mutation may target the pre-rename path');
+  assert.ok(!s.has('.js'), 'no garbage token from a misparsed source path');
+});
+
+test('parseChangedFiles: F-y — a rename/copy in EITHER column is handled', async () => {
+  const { parseChangedFiles } = await load();
+  // Copy detected in the worktree column, same shape.
+  const s = parseChangedFiles(` C copy.js${NUL}orig.js${NUL}`);
+  assert.ok(s.has('copy.js') && s.has('orig.js'), 'both copy paths present');
+  assert.ok(!s.has('.js'), 'no garbage token');
+});
+
 test('targetsOf: single-file and two-file (also) mutations', async () => {
   const { targetsOf } = await load();
   assert.deepEqual(targetsOf({ file: 'a.js' }), ['a.js']);
@@ -114,6 +134,28 @@ test('changedFiles: end-to-end against a real repo — rename, new dir, odd name
     assert.ok(s.has('new.js'), 'rename destination present');
     assert.ok(s.has('js/newmod/target.js'), 'F-cf2: new file in a new dir is listed, not collapsed');
     assert.ok(s.has('café.js'), 'F-cf3: odd-character name kept verbatim');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('changedFiles: end-to-end — a WORKTREE rename (mv + git add -N) yields the source', { skip: !hasGit }, async () => {
+  const { changedFiles } = await load();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-sweep-y-'));
+  try {
+    const git = (...a) => execFileSync('git', a, { cwd: dir, stdio: 'pipe' });
+    git('init', '-q');
+    git('config', 'user.email', 't@t.t');
+    git('config', 'user.name', 't');
+    fs.writeFileSync(path.join(dir, 'old.js'), 'x\n');
+    git('add', '-A');
+    git('commit', '-qm', 'init');
+    fs.renameSync(path.join(dir, 'old.js'), path.join(dir, 'new.js'));       // worktree rename
+    git('add', '-N', 'new.js');                                             // intent-to-add → Y=R (F-y)
+    const s = changedFiles(dir);
+    assert.ok(s.has('old.js'), 'F-y: worktree-rename SOURCE present (was dropped by the X-only parser)');
+    assert.ok(s.has('new.js'), 'destination present');
+    assert.ok(!s.has('.js'), 'no garbage token leaked');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

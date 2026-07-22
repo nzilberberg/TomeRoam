@@ -53,8 +53,11 @@ export function parseChangedFiles(zOut) {
     const rec = tok[i];
     if (!rec) continue;                 // trailing empty token after the final NUL (or a blank)
     const x = rec[0];                   // index (staged) status letter
+    const y = rec[1];                   // worktree status letter
     const p = rec.slice(3);             // records are `XY<space>path`; the path is verbatim
-    if (x === 'R' || x === 'C') {       // rename/copy: the source path is the next bare token
+    if (x === 'R' || x === 'C' || y === 'R' || y === 'C') {
+      // rename/copy in EITHER column (e.g. `mv` + `git add -N` reports it in Y): the source
+      // path is the next bare token. Testing only X dropped it — a false-clean (F-y).
       const src = tok[++i];
       if (src) files.add(src);
     }
