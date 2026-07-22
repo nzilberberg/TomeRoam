@@ -475,3 +475,16 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   said "scope B or C" — a lower bound rounded to the top of the range, contradicting the review's own more
   careful statement. The stage-5 casebook's "claim under review" was corrected to "at least real host/mover
   resolution: scope B or C." — 2026-07-22.
+
+- The Charpy spec gains a fifth discipline (D5): correct the class, not the instance — when a finding,
+  claim, or wording is corrected, sweep the whole review for every sibling of the same class before filing.
+  Comprehension-bound like D4, and deliberately NOT gated: a checkbox certifying a sweep without forcing it
+  would be structure for its own sake, so the honest fix is to run the sweep every time. Earned because
+  three successive critiques of the stage-5 review each found a fresh instance of a class already corrected
+  elsewhere in the same document (an absolute verdict that was conditional; a lower bound rounded to the top
+  of its range; a coupling concern fused into a behavioural-parity claim). The stage-5 casebook's three
+  fourth-round fixes were then followed by a full-document sweep for further siblings (none found): A4 no
+  longer makes parity depend on avoiding `d` (coupling is F5's separate concern); F6's raw-node option is
+  valid under any scope A–C that defers the §3.6 lifecycle, not only under scope A; and the prediction says
+  the improvised seam "relocates code but fails to establish a clean ownership boundary" rather than
+  "achieves nothing structural." — 2026-07-22.

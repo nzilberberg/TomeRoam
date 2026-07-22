@@ -68,7 +68,7 @@ scope.
 | A1 | The builders can move "unchanged." | app.js:470–496, 564–580 | CRACKED — see F1 |
 | A2 | `swipe.js` can host impure DOM builders. | test/contract-function-gate.test.js:47–56 | HOLDS with a classified public surface — see F2 |
 | A3 | `sourceHost`/`destinationHost` have a stage-5 consumer. | grep of all `*.js`/`*.mjs` | CONDITIONAL on scope (yes under B/C, no under A) — see F3 |
-| A4 | Relocation preserves parity (T1–T4, the .207 ordering). | plan §5, app.js:492–495, 575–578 | HOLDS if the seam avoids `d` and preserves insertion-then-sync — see F5 |
+| A4 | Relocation preserves parity (T1–T4, the .207 ordering). | plan §5, app.js:492–495, 575–578 | HOLDS if insertion-before-sync, pruning semantics, and capture diagnostics are preserved — coupling is a separate concern, see F5 |
 | A5 | The wiring seam is covered so a mis-wire reddens. | §4.11 gate + app-harness (.228 F1 law) | UNSTATED for stage 5 — see F4 |
 | A6 | Stage 5's pane representation is defined. | app.js:496, 579 (both `return wrap`) | UNSTATED — plan does not say whether stage 5 delivers the §3.6 pane object or a capture-result; see F6 |
 
@@ -190,8 +190,8 @@ forward have different costs:
 
 - Return the full pane interface now → `release()`/`dispose()` have no consumer until stage 6
   centralizes finalization and reveal — dead methods, which this project forbids.
-- Keep a raw-node or capture-result representation → valid ONLY if stage 5 is explicitly a
-  capture-behaviour relocation and the plan defers `release()`/`dispose()` to stage 6.
+- Keep a raw-node or capture-result representation → valid if stage 5 explicitly defers the §3.6
+  lifecycle methods to stage 6, regardless of which construction scope A–C is chosen.
 - Change cleanup to consume `release()`/`dispose()` now → stage 6 finalization work is pulled forward.
 
 So a raw-node return is not itself a defect; it is a defect only if stage 5 is intended to introduce
@@ -211,8 +211,8 @@ three records answer differently — and picks whichever the red module in front
 not whichever the plan intended. Then, on the first `node --test`, `freezeArt`/`ghostWrap`/`copyScroll`/
 `copyAnimPhase`/`d` come back undefined and a dependency seam is invented on the spot — the exact
 decision the plan exists to make deliberately (plan §1). If the improvised seam injects `d` (the
-obvious move, since the builders write to it), the module stays coupled to the session and the
-extraction achieves nothing structural. Separately the builder either wires a host consumer that the
+obvious move, since the builders write to it), the extraction relocates code but fails to establish a
+clean ownership boundary. Separately the builder either wires a host consumer that the
 chosen scope does not actually need (a dead field wearing a use) or leaves the fields unread, and the
 pane's `return` shape is decided by whichever of the three §3.6 options costs least that afternoon —
 raw node or full interface — with `release()`/`dispose()` either dead or dragging stage-6 work
