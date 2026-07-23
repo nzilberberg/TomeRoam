@@ -63,20 +63,28 @@ app.js until stages 6/7. The four ex-OPEN decisions (F0 scope→B, F1 seam, F3 h
 DecisionLog, and the three conflicting records (PLAN-swipe-reveal.md §7 step 5, the swipe.js header
 lines 24–27, DecisionLog) are reconciled to B.
 
-**Stage 5 RED SUITE authored (Curie, 2026-07-23) — awaiting Brunel-to-green.**
-`Claude/Curie/swipe-stage5-test-design-2026-07-23.md` realizes the §8 Coverage Model. 14 red-first
-`{ todo }` tests: `test/swipe-construction.test.js` (12 recipe tests against the unbuilt
-`Swipe.buildConstruction(from,dest,env)` seam, driven by a fake `env` over the real index.html, ambient
-DOM poisoned) + 2 contract tests in `test/swipe-transition.test.js` (classifyTransition must re-emit the
-two host fields). Independent host oracle added to `test/fixtures/swipe-plan-spec.mjs` (`expectedHosts`).
-Both known-reds tracked in `PolicyLedger.mjs` (KR-swipe-stage5-buildconstruction / -classify-hosts).
-Full suite: 674 tests, 0 fail, 16 todo (14 new + 2 Stage-6); all gates green. Parity wiring cells are
-green regression guards, NOT dressed as red (map in the test-design §3); Brunel adds F1b/F5b/F5c/
-F2-r-wiring/F7b against real `start()` at build. **Loki R2 routed:** `test/swipe-invariants.test.js` is
-an affected parity guard the plan §8 does not enumerate → Charpy/Mendeleev. **Next:** Brunel builds
-stage 5 to green against the red suite (register `buildConstruction` NON_CONTRACT + flip the exact-key
-gates atomically + register §8 mutations); then Mendeleev audits. ⚠️ NOT folded into a real-device
-verification session (the standing hold above still applies).
+**Stage 5 BUILT to green (Brunel, build `.239`, 2026-07-23) — shipped-unverified, awaiting review.**
+`Swipe.buildConstruction(from, dest, env)` added to `js/swipe.js`: the two capture recipes
+(ghostApp/snapshotHome) + their helper cluster + the NP decoration builder relocated from `start()`
+behind the injected `env`, reading the world only through it (no ambient DOM). `classifyTransition`
+re-emits `sourceHost`/`destinationHost` with the fixed projection. `start()` is now the L3 adapter (env
+build with the render dispatch as `env.renderDestination`; maps external movers → production
+`{el,base,own}`; records capture/`clobbered`; outgoing-NP np-locked unlock). All 14 red-first `{ todo }`
+markers green; `buildConstruction` registered NON_CONTRACT + `classifyTransition` flipped to the 5-key
+set in both gate sites + the two PolicyLedger known-reds removed — atomically. F1b/F5b/F5c/F2-r-wiring/
+F7b wiring guards added (`test/swipe-stage5-wiring.test.js`); the §8 mutations registered and each
+verified to redden its test. Parity only — no behaviour change; the flash bug is untouched.
+`docs/swipe-model.generated.txt` regenerated (line refs only). Build log →
+`Claude/Brunel/swipe-stage5-build-2026-07-23.md`. Full suite: 680 tests, 0 fail, 2 todo (the pre-existing
+KR-swipe-scroll-restore / -source-rerender). **Loki R2 still routed:** `test/swipe-invariants.test.js` is
+the affected parity guard the plan §8 does not enumerate. **Poirot review: SHIP** (2026-07-23, casebook
+`Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`) — faithful parity extraction, zero blocking
+findings; full suite 680/0-fail/2-todo, §8 mutation sweep 0-uncaught (19 swept), host projection executed
+for all 8 cases, cold-read adversary found no defects. Two Observations (O1 commit-message "parity only"
+overstates the plan-disclosed GHOST_BG per-gesture change; O2/W11 unwrapped throw in start()). **Next:**
+apply-review dispositions O1/O2 + the watch-list; Mendeleev audits the suite against §8 (incl. Loki R2 —
+`test/swipe-invariants.test.js` confirmed a genuine guard, reddened by mutation #30). ⚠️ NOT folded into a
+real-device verification session (the standing hold above still applies).
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
