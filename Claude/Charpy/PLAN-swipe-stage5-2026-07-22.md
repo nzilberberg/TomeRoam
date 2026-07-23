@@ -164,7 +164,7 @@ narrow injected accessors — either is admissible; bare `document`/`window`/`El
 (Viewport width is left to F1 — it crosses the seam only under the branch where the builder computes
 `base`.)
 
-### F5 — Structural — open-unknown — the seam has no source/destination descriptor identity, and render-callback ownership is vague
+### F5 — Structural — open-unknown — the seam lacks descriptor identity and complete effect ownership
 
 `buildConstruction(plan, env)` is given only `plan` and `env`, but its callbacks are declared
 `env.sourceEl(kind, v)`, `env.destOverlayEl(v)`, `env.renderDestination(host, desc)`. Neither `v` (the
@@ -183,13 +183,14 @@ existing transition-specific order preserved and no effect lost merely because t
 `Browse.render(desc)` (557); the overlay branch resolves `overlayEl(toV)` (633), calls
 `renderNowPlaying`/`renderScreen` (634–635), unhides the element (`el.classList.remove('hidden')`, 636),
 and removes `np-locked` for incoming NP (634). This is NOT "`renderDestination` owns all of it": Scope B
-splits host resolution (`buildConstruction`, via `env.destOverlayEl`) from render dispatch (`app.js`,
-behind `env.renderDestination`), so overlay resolution and unhiding the resolved element may legitimately
-sit in `buildConstruction`, the content render + unlock in the callback, and stale-overlay cleanup and
-`#home`/`#browse` visibility in either the callback or the `app.js` call-site adapter. The requirement is
-that each effect — stale-overlay cleanup; `#home`/`#browse` parking and visibility; payload-bearing
-`Browse` rendering; overlay resolution; overlay content rendering; overlay unhiding; incoming-NP
-`np-locked` unlock — is assigned an owner and its order preserved, NOT that a specific layer owns it. A
+splits the old branches across `buildConstruction` (which gains `env.document` and real source/host
+resolution), the app-provided `env.renderDestination` callback, and any surrounding `app.js` call-site
+adapter. The revised plan must assign every enumerated effect — stale-overlay cleanup; `#home`/`#browse`
+parking and visibility; payload-bearing `Browse` rendering; overlay resolution; overlay content
+rendering; overlay unhiding; incoming-NP `np-locked` unlock — to one of those three layers and preserve
+its transition-specific ordering. **All three layers are admissible** unless scope B or another defining
+record requires an effect to remain app-owned, in which case the plan must state that constraint
+explicitly (the plan does not currently determine which side owns the host-visibility mutations). A
 planner must not satisfy the callback signature by moving only the content render and dropping the
 host-state effects.
 
@@ -268,8 +269,8 @@ mutation-verified, that prove the primary seam shape and routing — not only th
   each effect, not requiring the callback to own the entire transition.
 - **Moved decoration recipe (`npPillClone`)** — the relocated builder removes stale `.np-pill-float`
   (app.js:350), strips descendant IDs (352), adds `np-pill-float` (353), appends the clone (354), and
-  yields the correct outgoing/incoming `base` and `owned-decoration` ownership; current recipe tests
-  cover only app-ghost and home-snapshot, so the moved pill builder is otherwise unproven.
+  yields the correct outgoing/incoming `base` and `owned-decoration` ownership; the plan's proposed
+  recipe coverage names only app-ghost and home-snapshot, so the moved pill builder is otherwise unproven.
 - **np-locked (regression, not a blocker)** — both incoming- and outgoing-NP transitions preserve the
   existing `np-locked` removal while only `npPillClone` relocates (the plan already keeps `np-locked` in
   app.js, §3:80; `start()` retains `plan.decorations`, app.js:600/645).
