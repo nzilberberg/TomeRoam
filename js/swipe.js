@@ -22,9 +22,13 @@
 // finalizationPlanFor() and composes the rich §3.3 planFor() from both halves.
 //
 // PARITY. Every mapping below reproduces js/app.js start() (the branch conditions at
-// what was `fromOv`/`toOv`/`incomingBrowse`). classifyTransition is PURE (no DOM); the
-// pane BUILDERS (ghostApp/snapshotHome/overlayEl/appViewEl/npPillClone) and the render
-// calls stay in app.js until stage 5 moves them here.
+// what was `fromOv`/`toOv`/`incomingBrowse`). classifyTransition is PURE (no DOM). The
+// pane BUILDERS and the render dispatch stay in app.js today; stage 5 (boundary B,
+// ratified 2026-07-22 — Claude/Plans/PLAN-swipe-stage5.md) moves the two capture recipes
+// (ghostApp/snapshotHome), the real overlayEl/appViewEl source resolution, and the
+// npPillClone decoration builder here behind an injected env, while the destination render
+// dispatch (renderScreen/renderNowPlaying/Browse.render) and the Browse hold stay in
+// app.js until stages 6/7.
 const Swipe = (() => {
   'use strict';
 

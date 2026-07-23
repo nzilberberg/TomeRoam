@@ -392,7 +392,7 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   assembly under scope C), and constrain the seam per F5 —
   2026-07-22.
 
-- OPEN — stage-5 SCOPE: which extraction boundary does stage 5 take? The records conflict and leave the
+- RESOLVED 2026-07-22 (scope B ratified — see the RATIFIED entry below). Was OPEN — stage-5 SCOPE: which extraction boundary does stage 5 take? The records conflict and leave the
   boundary unresolved: plan §7.5 (two capture recipes → A), the `js/swipe.js` header lines 24–27 (five
   builders + render calls → C), and this log's 2026-07-21 host-field entry (at least host/mover resolution
   → B or C, ruling out A but not uniquely specifying B). They
@@ -405,7 +405,7 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   This is the root question — seam, host fields, and pane lifecycle are all downstream. Charpy finding F0 —
   2026-07-22.
 
-- OPEN — the stage-5 dependency SEAM (the W8 question). `ghostApp`/`snapshotHome` reference app.js closures
+- RESOLVED 2026-07-22 (see the RATIFIED entry below). Was OPEN — the stage-5 dependency SEAM (the W8 question). `ghostApp`/`snapshotHome` reference app.js closures
   absent in `swipe.js` (`freezeArt`, `ghostWrap`, `copyScroll`, `copyAnimPhase`, `lastAnimResidual`, the
   session `d`, `$`), so plan §7.5's "unchanged" is not literal. Waits on the planner to state, before build:
   which helpers move with the builders, which dependencies are injected, what each builder accepts, what it
@@ -417,7 +417,7 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   ownership — passing `d` retains the closure coupling the extraction removes and lets a recipe mutate
   caller-owned session state. Charpy findings F1+F5 — 2026-07-22.
 
-- OPEN — whether stage 5 reintroduces `sourceHost`/`destinationHost` into `classifyTransition`. This is a
+- RESOLVED 2026-07-22 (see the RATIFIED entry below — carried, read by `buildConstruction`). Was OPEN — whether stage 5 reintroduces `sourceHost`/`destinationHost` into `classifyTransition`. This is a
   CONSEQUENCE of the scope choice, not an independent question, and the 2026-07-21 entry that promised them
   unconditionally is thereby narrowed. No file reads the fields today (`.229` removed them), but stage 5 may
   create their first consumer: under scope B or C the moved boundary replaces the raw branching
@@ -428,7 +428,7 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   and correct this log. (`d.clobbered`, app.js:630, is `sameBrowseHost`, stage 6, under every scope.) Charpy
   finding F3 — 2026-07-22.
 
-- OPEN — whether stage 5 begins the §3.6 pane abstraction or defers it. §3.6 defines a pane as `{ kind,
+- RESOLVED 2026-07-22 (see the RATIFIED entry below — deferred to stage 6). Was OPEN — whether stage 5 begins the §3.6 pane abstraction or defers it. §3.6 defines a pane as `{ kind,
   element, source, pin, equivalence, release(), dispose(reason) }`; today the builders `return wrap` (a raw
   node, app.js:496/579). A raw-node return is not itself a defect — it is one only if stage 5 is intended to
   introduce the complete abstraction. Waits on the planner to STATE which: if pane-lifecycle ownership stays
@@ -590,7 +590,7 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   decisions (F0 scope A/B/C, F1 seam, F3 host-field consumer, F6 pane-lifecycle) plus the F2/F4/F5 step
   requirements are the planner's, and the build stays blocked on them — 2026-07-22.
 
-- PROPOSED (pending review, not yet settled): the planner's resolved Stage-5 plan
+- APPROVED (2026-07-22 — see the RATIFIED entry below): the planner's resolved Stage-5 plan
   (`Claude/Plans/PLAN-swipe-stage5.md`) recommends SCOPE B — move the two capture recipes + real
   source/host mover resolution + the Now Playing decoration into swipe.js behind an injected `env`; leave
   the Browse render dispatch and Browse hold in app.js behind narrow callbacks. Rationale grounded in code:
@@ -602,5 +602,18 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   { movers, capture }`, returns capture, never receives the session — F5), host-field consumers (F3),
   pane-lifecycle deferral of release/dispose/equivalence to stage 6 (F6), NON_CONTRACT export
   classification (F2), and two coverage layers with a Mendeleev pass (F4). The four OPEN F0/F1/F3/F6
-  decisions REMAIN OPEN until this proposal is reviewed; on approval the three records (PLAN-swipe-reveal.md
-  §7.5, the swipe.js header, this log) reconcile to B. Not implemented — 2026-07-22.
+  decisions were reviewed (Charpy rounds 1–2) and are now SETTLED; on approval the three records
+  (PLAN-swipe-reveal.md §7 step 5, the swipe.js header, this log) reconcile to B. Not yet implemented — 2026-07-22.
+
+- RATIFIED (2026-07-22): the Stage-5 plan (`Claude/Plans/PLAN-swipe-stage5.md`) is APPROVED — **SCOPE B**.
+  Charpy's round-1 seven blockers (F1/F2/F4/F5/F6/F7/F8) and round-2 residuals (F1-r host-field projection +
+  frozen-spec value coverage; F2-r app-ghost-only `ghostY?`; F3-r narrower `env.renderDestination` signature)
+  are all resolved; the round-2 TEMPER is cleared. This SETTLES the four OPEN stage-5 decisions above: **F0**
+  scope → B; **F1** seam → `buildConstruction(from, dest, env)` derives classification internally and returns
+  `{classification, plan, movers, capture, sourceWasClobbered}`, never receiving the session `d`; **F3** →
+  `sourceHost`/`destinationHost` are CARRIED (not derived) and read by `buildConstruction`, honouring the
+  2026-07-21 host-field entry, with the kind→host projection pinned in the frozen spec
+  (`swipe-plan-spec.mjs`) and asserted per registry pair; **F6** → pane `release()`/`dispose()`/`equivalence`
+  deferred to stage 6 (Stage 5 movers carry only `element`/`ownership`/`slot` + `capture`). The three
+  conflicting records are reconciled to B this pass: `PLAN-swipe-reveal.md` §7 step 5, the `js/swipe.js`
+  header (lines 24–27), and this log. Build may proceed — 2026-07-22.

@@ -735,7 +735,11 @@ If the rewrite lands and the flash remains, it still succeeded.
    3. Introduce the session/resource owner; pane builders and render calls
       unchanged.
    4. Extract classifyTransition() + planFor(); prove every registry pair.
-   5. Move pane builders unchanged into swipe.js.
+   5. Move the two capture recipes + real source resolution + the NP decoration
+      builder into swipe.js behind an injected env (boundary B, ratified
+      2026-07-22); the destination render dispatch and the Browse hold stay in
+      app.js behind env.renderDestination until stages 6/7. Detail:
+      Claude/Plans/PLAN-swipe-stage5.md.
    6. Centralize finalization and reveal ordering (I10, I17).
    7. Replace Browse hold calls with the lease interface.
    8. All PREEXISTING regression tests remain unchanged and pass; every

@@ -35,7 +35,7 @@ independent second pass had corrected with 3 gaps): F-i `constructionPlanFor` in
 deep-immutable (clone+freeze at its own boundary), F-ii §4.3 enumeration completed (identical-object
 `d→d`, independently-allocated-equal, `files(A)→files(A)`), F-iii swipe.js header corrected. Watch-list
 now: W13/W14/W15 CLOSED (.230); W10 MOOT (.229 removed the host fields); W12 satisfied (suite ran, 636
-pass, mutations verified); W11 (O1, low) + W8 (stage-5 scope) stay OPEN. Disposition + stage-4 scope
+pass, mutations verified); W11 (O1, low) stays OPEN (W8 stage-5 scope RESOLVED 2026-07-22 — scope B ratified). Disposition + stage-4 scope
 decisions + stage-6 cleanup debt are all in DecisionLog. **`.234`** then closed the `.233` review
 (`Claude/Poirot/90a139c-swipe-stage4-contract-gates.md`, verdict fix-then-ship): the
 `mutation-sweep.mjs --affected` selector's four false-clean cases (F-cf1 rename source dropped, F-cf2
@@ -45,36 +45,38 @@ set — each reproduced with real git and mutation-verified. **`.235`** then fix
 worktree-column (Y=R, from `mv`+`git add -N`) rename false-clean that `.234` left — the X-only parser
 dropped the rename source. Found by an external re-review (ChatGPT), MISSED by this project's own
 re-review (`Claude/Poirot/009dbc9-selector-fix-rereview.md`); red-first regression added, both columns
-now handled. Watch-list W17 + W19 CLOSED (.235); W8 (stage-5 scope) + W11 (O1, low) stay OPEN. Also this
+now handled. Watch-list W17 + W19 CLOSED (.235); W11 (O1, low) stays OPEN (W8 stage-5 scope RESOLVED 2026-07-22). Also this
 session: Poirot's coverage-ledger clear mark split into `✓` (executed, command cited) vs `~` (reasoned,
 unverified), gate-enforced — the durable fix for the `✓`-on-reasoning miss (see DecisionLog). **`.236`**
 sharded the CI mutation-sweep 8 ways (`--shard=I/N`, partitioned) — ~13 min → ~2 min, still every-push.
 
-**Stage 5 is TEMPERED, not cleared to build (2026-07-22).** The plan verifier struck the stage-5 step
-(`Claude/Charpy/PLAN-swipe-reveal-stage5-2026-07-22.md`, verdict TEMPER): end-state architecture sound, but
-the build is blocked on **four planner decisions**, now OPEN in DecisionLog (waiting on the planner, not on
-code): **F0 SCOPE** — conflicting records leave three admissible scopes unresolved (plan→A, header→C,
-log→B or C, not uniquely B); pick one — A: capture recipes only; B: capture + real host/mover resolution
-(rendering stays in app.js behind injected callbacks; B may be the cleanest); C: whole construction boundary
-incl. render dispatch — and scrub the records that do not match. **F1 SEAM** — "move pane builders **unchanged**" is not compilable (`ghostApp`/`snapshotHome`
-reference app.js closures — `freezeArt`/`ghostWrap`/`copyScroll`/`copyAnimPhase`/`lastAnimResidual`/`d`/`$` —
-absent in `swipe.js`); state the deps/return contract. **F3 HOST FIELDS** — `sourceHost`/`destinationHost`
-are dead only under scope A; a real consumer under B/C; a consequence of F0, not independent. **F6 PANE
-LIFECYCLE** — state whether stage 5 begins the §3.6 pane abstraction or explicitly defers `release()`/
-`dispose()` to stage 6 (a raw-node/capture-result return is valid if deferred). Plus into the step: **F2**
-(classify the new public surface for the export gate; DOM access lazy; the gate can't prove builder
-behaviour) and **F4** (recipe tests + a mutation-verified wiring test, asserting the element joins the
-production mover set with correct ownership/ordering — not a `d.movers` internal), with the seam per **F5**
-(prefer returned capture metadata; do not pass `d` without explicit justification).
-**Do NOT start stage 5 until F0/F1/F3/F6 are resolved by the planner and F2/F4/F5 are in the step.**
+**Stage 5 is RATIFIED — cleared to build (2026-07-22, scope B).** `Claude/Plans/PLAN-swipe-stage5.md` is
+APPROVED after Charpy rounds 1–2 (`Claude/Charpy/PLAN-swipe-stage5-2026-07-22.md` + `-r2.md`): round-1's
+seven blockers (F1/F2/F4/F5/F6/F7/F8) + F3 and round-2's residuals (F1-r host-field projection +
+frozen-spec value coverage; F2-r app-ghost-only `ghostY?`; F3-r narrower `env.renderDestination` signature)
+are all resolved. **Scope B:** `buildConstruction(from, dest, env)` derives classification internally and
+returns `{classification, plan, movers, capture, sourceWasClobbered}`, never the session `d`; the two
+capture recipes + real `overlayEl`/`appViewEl` source resolution + the NP decoration builder move to
+`swipe.js` behind the injected `env`, while the destination render dispatch and the Browse hold stay in
+app.js until stages 6/7. The four ex-OPEN decisions (F0 scope→B, F1 seam, F3 hosts CARRIED and read by
+`buildConstruction`, F6 pane `release()`/`dispose()`/`equivalence` deferred to stage 6) are SETTLED in
+DecisionLog, and the three conflicting records (PLAN-swipe-reveal.md §7 step 5, the swipe.js header
+lines 24–27, DecisionLog) are reconciled to B.
 
-**PROPOSED RESOLUTION (2026-07-22, pending review):** the planner filed `Claude/Plans/PLAN-swipe-stage5.md`
-recommending **scope B** (recipes + real host/mover resolution behind an injected `env`; Browse render
-dispatch + hold stay in app.js until stages 6/7). It settles the seam (`buildConstruction(plan, env) →
-{ movers, capture }`, returns capture, never the session), host-field consumers, pane-lifecycle deferral to
-stage 6, NON_CONTRACT export, and F4 coverage. A/C rejected (A under-delivers §1; C churns against stage 7).
-The four OPEN decisions stay OPEN until this is reviewed; on approval the three records reconcile to B. Not
-implemented.
+**Stage 5 RED SUITE authored (Curie, 2026-07-23) — awaiting Brunel-to-green.**
+`Claude/Curie/swipe-stage5-test-design-2026-07-23.md` realizes the §8 Coverage Model. 14 red-first
+`{ todo }` tests: `test/swipe-construction.test.js` (12 recipe tests against the unbuilt
+`Swipe.buildConstruction(from,dest,env)` seam, driven by a fake `env` over the real index.html, ambient
+DOM poisoned) + 2 contract tests in `test/swipe-transition.test.js` (classifyTransition must re-emit the
+two host fields). Independent host oracle added to `test/fixtures/swipe-plan-spec.mjs` (`expectedHosts`).
+Both known-reds tracked in `PolicyLedger.mjs` (KR-swipe-stage5-buildconstruction / -classify-hosts).
+Full suite: 674 tests, 0 fail, 16 todo (14 new + 2 Stage-6); all gates green. Parity wiring cells are
+green regression guards, NOT dressed as red (map in the test-design §3); Brunel adds F1b/F5b/F5c/
+F2-r-wiring/F7b against real `start()` at build. **Loki R2 routed:** `test/swipe-invariants.test.js` is
+an affected parity guard the plan §8 does not enumerate → Charpy/Mendeleev. **Next:** Brunel builds
+stage 5 to green against the red suite (register `buildConstruction` NON_CONTRACT + flip the exact-key
+gates atomically + register §8 mutations); then Mendeleev audits. ⚠️ NOT folded into a real-device
+verification session (the standing hold above still applies).
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first

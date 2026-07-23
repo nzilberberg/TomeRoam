@@ -196,3 +196,48 @@ test('constructionPlanFor throws on an unhandled source kind, not just destinati
   assert.throws(() => Swipe.constructionPlanFor({ fromKind: 'browse', toKind: 'nonsense', decorations: [] }),
     /unhandled destination kind/);
 });
+
+// ── STAGE 5 (RED-FIRST, Curie 2026-07-23) — the reintroduced host fields ──────────────
+// PLAN-swipe-stage5.md F2/F1-r. Build .229 REMOVED sourceHost/destinationHost from
+// classifyTransition (no consumer then; the no-dead-fields rule — see CLASSIFICATION_KEYS
+// above). Stage 5 reintroduces them WITH a consumer (buildConstruction reads them to select
+// the real source element and the render host). These two tests are the red-first target:
+// they fail today because only three keys are emitted, and go green when Brunel emits the
+// two host fields with the projection the frozen spec fixes. In that same commit Brunel also
+// flips the CLASSIFICATION_KEYS assertion above and contract-function-gate.test.js:24 to the
+// five-key set, and removes these todo markers. Tracked: PolicyLedger KR-swipe-stage5-classify-hosts.
+const CLASSIFICATION_KEYS_S5 = ['decorations', 'destinationHost', 'fromKind', 'sourceHost', 'toKind'];
+const KR_HOSTS = 'Stage 5 unbuilt — classifyTransition does not re-emit '
+  + 'sourceHost/destinationHost yet (removed in .229 as dead fields). Red-first; goes green when '
+  + 'Brunel emits the projected host fields. Tracked: PolicyLedger KR-swipe-stage5-classify-hosts.';
+
+test('classifyTransition emits exactly the five stage-5 fields including the two hosts', { todo: KR_HOSTS }, () => {
+  const c = Swipe.classifyTransition({ from: { v: 'home' }, to: { v: 'books' } });
+  assert.deepEqual(Object.keys(c).sort(), CLASSIFICATION_KEYS_S5,
+    'stage 5 re-adds sourceHost/destinationHost — the classification must carry exactly the five fields');
+  assert.equal(c.sourceHost, 'in-flow', 'a home source is in-flow');
+  assert.equal(c.destinationHost, 'browse-host', 'a browse destination is the browse-host');
+});
+
+test('every registry pair projects the sourceHost/destinationHost the frozen spec fixes', { todo: KR_HOSTS }, async () => {
+  const spec = await loadSpec();
+  const gen = await loadGen();
+  const screens = gen.registry();
+  const hostsByKind = new Map(spec.STRUCTURAL_CASES.map((c) => [c.from + '->' + c.to, c.expectedHosts]));
+  const wrong = [];
+  let checked = 0;
+  for (const f of screens) {
+    for (const t of screens) {
+      if (f.v === t.v) continue;
+      const expected = hostsByKind.get(f.kind + '->' + t.kind);
+      assert.ok(expected, `the spec has no expectedHosts for ${f.kind}->${t.kind}`);
+      const c = Swipe.classifyTransition({ from: wellFormed(f.v), to: wellFormed(t.v) });
+      if (c.sourceHost !== expected.sourceHost || c.destinationHost !== expected.destinationHost) {
+        wrong.push(`${f.v}->${t.v} got {${c.sourceHost},${c.destinationHost}} want {${expected.sourceHost},${expected.destinationHost}}`);
+      }
+      checked++;
+    }
+  }
+  assert.deepEqual(wrong, [], `host projection disagrees with the spec:\n  ${wrong.slice(0, 6).join('\n  ')}`);
+  assert.equal(checked, screens.length * (screens.length - 1), 'every ordered pair must be proven');
+});

@@ -42,15 +42,23 @@ export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options
 // frozen model keeps documenting abort behaviour without a second mirror. Its presence in
 // this fixture must NOT be read as "finalization is verified" — the stage-4 tests compare
 // production against expectedConstruction only.
+//
+// expectedHosts carries the FROZEN sourceHost/destinationHost the STAGE-5 classification must
+// project (PLAN-swipe-stage5.md §3, F1-r) — a hand-written independent oracle, NOT derived from
+// production. Projection: sourceHost = fromKind==='overlay' ? 'overlay' : 'in-flow'; destinationHost
+// = toKind==='overlay' ? 'overlay' : toKind==='browse' ? 'browse-host' : 'home'. It is INERT until
+// classifyTransition re-emits the host fields at stage 5 — the generator reads only
+// expectedConstruction/expectedFinalization, and the per-pair host proof in swipe-transition.test.js
+// is `{ todo }` until then. Its presence here must NOT be read as "the hosts are verified".
 export const STRUCTURAL_CASES = [
-  { from: 'home',    to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' } },
-  { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' } },
-  { from: 'browse',  to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'home-snapshot',    renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' } },
-  { from: 'browse',  to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'rerender' } },
-  { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' } },
-  { from: 'overlay', to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'home-snapshot',    renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' } },
-  { from: 'overlay', to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' } },
-  { from: 'overlay', to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' } },
+  { from: 'home',    to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
+  { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
+  { from: 'browse',  to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'home-snapshot',    renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'home' } },
+  { from: 'browse',  to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'rerender' }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
+  { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
+  { from: 'overlay', to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'home-snapshot',    renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'home' } },
+  { from: 'overlay', to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'browse-host' } },
+  { from: 'overlay', to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'overlay' } },
 ];
 
 // A pane covers the view iff the outgoing is a ghost or the incoming is a Home snapshot.
