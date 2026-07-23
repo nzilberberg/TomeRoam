@@ -16,7 +16,7 @@ gives, checked by an independent adversarial read and an external review before 
 Declared change patterns (machine-readable declaration above; project adapter `tomeroam-js-dom`):
 - **defining_records: true** — three records (parent plan, `swipe.js` header, DecisionLog) define the scope; they CONFLICT (see below).
 - **boundary_relocation: true** — Stage 5 moves the pane-builder construction across the `app.js`→`swipe.js` boundary; source ranges declared and traced in the ledger.
-- **callee_replacement: true** — `showAppView` AND the overlay render branch are SPLIT across `buildConstruction` and the injected `env.renderDestination` callback; both callee ranges declared so every effect is traced (F5/F7).
+- **callee_replacement: true** — `showAppView` and the overlay render branch are replaced by behavior distributed across the new construction seam (not pre-assigned to a single layer); both callee ranges are declared so every observable effect is traced and assigned in F5 (F5/F7).
 - **contract_shape: true** — emitting the host fields changes `classifyTransition`'s exact-key contract (F2).
 
 ## Verdict
@@ -63,8 +63,8 @@ A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHO
 | `isOverlay(fromV)` (`fromOv`) | free id | in | 593, feeds 622/630 | `Nav` (already imported, swipe.js:34) | F5/F6 |
 | `d.dir`, `d.w` (→ `off`) | geometry | in | 592 | unresolved — crosses the seam only if the builder computes `base` | F1 |
 | `window.scrollY` (→ `ghostY`) | geometry | in | 486 (function body) | ambient global outside `env`; route through env | F4 |
-| `document.querySelector('.app')` (app-ghost source) | DOM read | in | 471/492/494 | read via bare `document`; reachable via `env.document` but no dedicated owned-pane resolver named | F4 |
-| `$('home')` (home-snapshot source) | DOM read | in | 565/575/577 | read via bare `$`; no owned-pane resolver named | F4 |
+| `document.querySelector('.app')` (app-ghost source) | DOM read | in | 471/492/494 | reachable through `env.document`, but the plan doesn't state the recipe must use that declared seam rather than the bare global | F4 |
+| `$('home')` (home-snapshot source) | DOM read | in | 565/575/577 | reachable through `env.document`, but the plan doesn't state the recipe must use that declared seam rather than the bare global | F4 |
 | `Element` (feature-detect global) | ambient | in | 420 | ambient; route through env | F4 |
 | `navPill()` (pill source) | DOM read | in | 345/351 | `env.navPill()` (§3) | cov |
 | `GHOST_BG` (`getComputedStyle` init) | closure const | in | 368–371, used 467 | **unassigned** — plan does not say who owns the ghost background | F8 |
@@ -73,7 +73,7 @@ A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHO
 | `d.movers` shape `{el, base, own}` | object | out | 620–650 | plan says `{element, base, ownership, capture}` | F1 |
 | `d.ghostY` / `d.animSync` / `d.animRes` | object | out | 487, 495, 578 | `capture` — but contract stated two ways | F1 |
 | `d.clobbered` (same-browse-host carrier) | object | out | 630, read 1260/1286 | **unassigned** — plan doesn't say recompute-in-start() or return-as-metadata | F6 |
-| `document.body` `np-locked` removal | DOM effect | out | 634 (incoming NP), 645 (outgoing NP) | 634 → `renderDestination` (F5); 645 → app.js via `plan.decorations` | F5/cov |
+| `document.body` `np-locked` removal | DOM effect | out | 634 (incoming NP), 645 (outgoing NP) | 634 → **unassigned across the Stage-5 seam; revised plan must assign it** (F5); 645 → app.js via `plan.decorations` (cov) | F5/cov |
 | outgoing-ghost capture **before** dest render | ordering | out | 604–605, 620→629 | unstated — plan says only "relative to the ghost" | F7 |
 | `revealBase = snapBrowse(true)` | ordering | out | 590 (pre-render) | must precede any clobbering render; unstated | F7 |
 | `takeRowHold()` (Browse hold) | ordering | out | 591 (pre-render) | must precede any clobbering render; unstated | F7 |
@@ -148,10 +148,10 @@ The moved recipes reach outside their arguments for live DOM that the plan's `en
 (`copyAnimPhase`, app.js:420), and — the clone SOURCES themselves — `document.querySelector('.app')`
 for the app-ghost (app.js:471) and `$('home')` for the home-snapshot (app.js:565). None of these currently go
 through `env`: the recipes read bare `document`/`window`/`Element`/`$`. The plan provides `env.document`
-(§3), so `.app`/`#home` are reachable via `env.document.querySelector`/`getElementById` — but the plan
-names no dedicated owned-pane source resolver (its `env.sourceEl(kind,v)` serves the borrowed-real path
-only) and never states that the relocated recipe bodies must route their reads through `env` rather than
-the bare globals they use today. These are runtime function-body reads, so they do not
+(§3), so `.app`/`#home` are reachable through it directly (`env.document.querySelector`/`getElementById`)
+— no dedicated resolver is required — but the plan never states that the relocated recipe bodies must
+route their reads through `env` (which `env.sourceEl(kind,v)` covers only for the borrowed-real path)
+rather than the bare globals they use today. These are runtime function-body reads, so they do not
 break module load (that is F8) — but a module whose recipes read `window`/`Element`/`document`/`$`
 directly is not the env-injectable seam the extraction promises, and recipe tests cannot drive it
 through a fake `env`. The `Element` read is the sharpest: `copyAnimPhase` early-returns `0` when
@@ -260,11 +260,12 @@ mutation-verified, that prove the primary seam shape and routing — not only th
   env with no ambient `document`/`window`. Specifically run `copyAnimPhase` with NO global `Element`
   but with `env.document.defaultView.Element.prototype.getAnimations` available, and prove phase copying
   still occurs — guarding the `.207` parity from silent bypass (a `0`-return that passes green).
-- **F5** — a payload-bearing destination (`authorBooks`/`files`) reaches the render callback with the
-  correct descriptor; overlay rendering preserves its visibility change (`classList.remove('hidden')`);
-  and a browse-host transition **with a stale settings overlay present** asserts the resulting
-  `#home`/`#browse`/overlay class state (`parked`/`hidden`) after `renderDestination`, proving the
-  callback owns the full host-state transition, not only the content render.
+- **F5** — a payload-bearing destination (`authorBooks`/`files`) reaches the app-owned render dispatch
+  with its descriptor intact; an overlay transition preserves resolution, content rendering, visibility
+  (`classList.remove('hidden')`), and the incoming-NP `np-locked` unlock; and a browse-host transition
+  **with a stale settings overlay present** proves the correct final `#home`/`#browse`/overlay
+  (`parked`/`hidden`) state after construction completes — asserting the owner the revised plan chose for
+  each effect, not requiring the callback to own the entire transition.
 - **Moved decoration recipe (`npPillClone`)** — the relocated builder removes stale `.np-pill-float`
   (app.js:350), strips descendant IDs (352), adds `np-pill-float` (353), appends the clone (354), and
   yields the correct outgoing/incoming `base` and `owned-decoration` ownership; current recipe tests
