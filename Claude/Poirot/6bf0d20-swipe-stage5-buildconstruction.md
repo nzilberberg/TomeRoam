@@ -11,12 +11,25 @@ Build log: `Claude/Brunel/swipe-stage5-build-2026-07-23.md`.
 
 ## Verdict
 
-**Ship.** This is a faithful parity extraction: the pane-construction block leaves `app.js` `start()`
-for `Swipe.buildConstruction(from, dest, env)` in `js/swipe.js` behind an injected `env`, `start()`
-becomes the L3 adapter, and every observable effect of the pre-extraction `start()` is reproduced. One
-full coverage-ledger pass returns zero findings a competent reviewer would require changed before
-submit. The single behaviour change (`GHOST_BG` per-gesture) is plan-sanctioned and disclosed (§7 F8 /
-Loki R1); it is filed as an Observation, not a blocker, and needs no code change.
+**Fix-then-ship.** CORRECTED 2026-07-23 after an external reviewer (ChatGPT) surfaced F1, a dead-field
+contract defect this pass MISSED and wrongly cleared as SHIP. `Construction.classification` is returned
+by `Swipe.buildConstruction` but no `start()` consumer reads it — a dead returned field, violating the
+no-dead-fields rule (Engineering Contract §17) the SAME commit invokes to withhold `sameBrowseHost`. Not
+reachable-and-broken at runtime (no crash), so not do-not-ship; but a competent reviewer requires it
+resolved before the ratified contract is clean, so fix-then-ship. Resolution is a plan decision
+(Vitruvius/Charpy): consume `classification` in L3, or revise the ratified return shape to drop it — see
+F1. The runtime PARITY of the extraction stands (verified below); this is a contract-hygiene defect in
+the return object, not a behaviour break.
+
+The original "Ship" rested on the exact error the .227 disciplines name: I verified each classification
+FIELD has a consumer INSIDE `buildConstruction` (host resolution, plan derivation) and read that as the
+no-dead-fields dimension cleared — but "the field's value is used internally" is NOT "the returned field
+has a consumer." A dead RETURN object survives the first check and fails the second. A mechanical gate
+now closes the class (see "Durable enforcement" and F1).
+
+The runtime parity findings below stand unchanged. The one disclosed behaviour change (`GHOST_BG`
+per-gesture) is plan-sanctioned (§7 F8 / Loki R1) — O1. ChatGPT's F5a and F1a coverage questions and the
+eager-`GHOST_BG` note are filed as O3/O4 and routed to Mendeleev where they belong.
 
 The correctness bar the invocation set is met, by execution this pass:
 - **Full suite** green: `node --test "test/*.test.js"` → 680 tests, 678 pass, 0 fail, 2 todo (the two
@@ -105,7 +118,13 @@ Commands behind every `✓`: **[S]** `node --test "test/*.test.js"` (680: 678 pa
 **[M]** `node tools/mutation-sweep.mjs 30 36 42..58` (19 swept, 0 uncaught); **[H]** executed
 `classifyTransition` probe over all 8 structural cases; **[I]** `mutate.mjs 30` + `node --test
 test/swipe-invariants.test.js` (fail 1: the NP-pill WIRING test) + restore; **[G]** `git show 6bf0d20`
-per-file diff.
+per-file diff; **[D]** `node tools/dead-return-fields.mjs` (the new detector — reports `classification`).
+
+**CORRECTION (2026-07-23):** row 5's ABS was FIRST marked `✓ [M][H]` — WRONG. That mark cleared "each
+classification FIELD has a consumer" (true, inside `buildConstruction`), not "the RETURNED `classification`
+OBJECT has a consumer" (false — F1). Under the mark grammar the dead-field claim was executable and was
+NOT executed against the return→consumer boundary; it should have been `~` then a FIND. It is now FIND (F1),
+run under [D].
 
 | # | Changed file / symbol | C | RT | OL | TS | DR | RC | ABS |
 |---|---|---|---|---|---|---|---|---|
@@ -113,8 +132,8 @@ per-file diff.
 | 2 | js/swipe.js `paneBuilders`/`ghostApp`/`snapshotHome` (relocated recipes) | ✓ [S][M][G] | n/a | n/a | n/a | n/a | ✓ [M] | ✓ [M] |
 | 3 | js/swipe.js `copyAnimPhase` (env Element; returns {synced,residual}) | ✓ [M] | n/a | n/a | n/a | n/a | ✓ [M] | ✓ [M] |
 | 4 | js/swipe.js `npPillClone` (relocated) | ✓ [M][I] | n/a | n/a | n/a | n/a | ~ | ✓ [M] |
-| 5 | js/swipe.js `buildConstruction` (NEW L1 seam) | ✓ [S][M][G] | n/a | n/a | n/a | n/a | ✓ [M] | ✓ [M][H] |
-| 6 | js/app.js `start()` → L3 adapter (env, toMover, capture/clobbered recording, np-locked) | ✓ [S][M][G] | n/a | n/a | n/a | n/a | ✓ [G] | ✓ [M][G] |
+| 5 | js/swipe.js `buildConstruction` (NEW L1 seam) | ✓ [S][M][G] | n/a | n/a | n/a | n/a | ✓ [M] | **FIND (F1)** [D] |
+| 6 | js/app.js `start()` → L3 adapter (env, toMover, capture/clobbered recording, np-locked) | ✓ [S][M][G] | n/a | n/a | n/a | n/a | ✓ [G] | **FIND (F1)** [D] |
 | 7 | js/app.js `isOverlay` alias removed (now unused) | ✓ [S][G] | n/a | n/a | n/a | n/a | n/a | n/a |
 | 8 | js/app.js `paneKindOf` comment update (owned panes now built by buildConstruction) | n/a | n/a | n/a | n/a | n/a | ✓ [G] | n/a |
 | 9 | test/contract-function-gate.test.js (classify→5 keys; buildConstruction NON_CONTRACT) | ✓ [S][G] | n/a | n/a | n/a | n/a | ~ | ✓ [S] |
@@ -139,8 +158,45 @@ meta=.239; the index.html diff is `?v=` bumps + the meta stamp only — no smugg
 
 | # | Severity | Finding |
 |---|----------|---------|
-| O1 | Observation | The commit message asserts "Parity only -- no behaviour change," but `GHOST_BG` moved from `bindSwipeBack()` scope (evaluated once per bind) into `paneBuilders(env)` (evaluated per gesture). This is observably different if `--page-bg` changes mid-session: the old code used a value cached at bind, the new re-reads each gesture. It is REQUIRED by plan §7 F8 and disclosed as Curie's Loki R1 ("GHOST_BG fresh-per-gesture is a disclosed behavior change") — the code is CORRECT against the plan and is an improvement (it removes a latent stale-background class). No code change; the plan is the authoritative record and states the real story. Noted so the casebook does not carry the commit's overbroad claim as fact. |
+| F1 | Significant | `Construction.classification` (swipe.js:321) is a DEAD returned field: `start()` reads `c.movers`/`c.capture`/`c.sourceWasClobbered`/`c.plan.decorations` (app.js:458-474) but never `c.classification`; grep confirms no `.classification` read anywhere in `js/`. The plan §3 justifies returning it "so L3 reuses the exact objects (decorations loop, render-mode checks) without re-deriving" — but L3's decorations loop reads `c.plan.decorations`, not `c.classification`, and L3 does no render-mode checks, so the plan's stated consumer never materialized. A dead returned field violates the no-dead-fields rule (Engineering Contract §17) — the exact rule this commit invokes to withhold `sameBrowseHost`. Confirmed by grep + the new mechanical detector (`tools/dead-return-fields.mjs` reports `classification`). Fix (a Vitruvius/Charpy plan decision, per §3 being ratified + Curie's test pinning the exact shape): consume `classification` in L3, or revise the ratified return contract to drop it — Brunel must not invent a meaningless read to keep it alive, nor drop it without a revised contract. Credit: external reviewer (ChatGPT); this seat missed it. |
+| O1 | Observation | The commit message asserts "Parity only -- no behaviour change," but `GHOST_BG` moved from `bindSwipeBack()` scope (evaluated once per bind) into `paneBuilders(env)` (evaluated per gesture). Observably different if `--page-bg` changes mid-session (old used a bind-cached value, new re-reads). REQUIRED by plan §7 F8 and disclosed as Curie's Loki R1 — the code is CORRECT against the plan and removes a latent stale-background class. No code change; noted so the casebook does not carry the commit's overbroad claim as fact. |
 | O2 | Observation | (from prior W11) `buildConstruction` throws (malformed parameterized descriptor → `classifyTransition`; unhandled kind → `constructionPlanFor`); `start()` calls it un-wrapped (app.js:450). Unreachable in normal flow (descriptors come from the nav stack) and unchanged from stage 4. Wrap-or-confirm is take-it-or-leave-it; carried on the watch-list, not required here. |
+| O3 | Observation | (→ Mendeleev) F5a coverage is not visibly closed: the plan §8 F5a requires a payload-bearing destination descriptor (author/book, not just the screen name `v`) to reach L2 intact. The wiring suite drives browse/overlay/home destinations but no test asserts the author/book payload survives into `env.renderDestination`, and no F5a "payload lost, only `v` passed" mutation is registered in `tools/mutate.mjs`. `.239` almost certainly does not lose payloads (`env.renderDestination(dest,…)` passes the whole `d.dest`), so this is a coverage-adequacy question for Mendeleev, not a demonstrated defect. |
+| O4 | Observation | (→ Mendeleev) F1a's L3 half is not mutation-covered: plan §8 F1a contemplates "builder emits `el`/`own` directly, OR **L3 forgets a key**." Mutation #42 covers the builder half (recipe layer); no registered mutation drops a key from `toMover` (app.js:457) to prove the L3 mapping cannot omit `el`/`base`/`own`. Coverage-audit item for Mendeleev; the app-harness can record all three keys, so it is testable. |
+| O5 | Observation | `paneBuilders(env)` resolves `GHOST_BG` eagerly at the top of every `buildConstruction` call (swipe.js:161-164, 276), including overlay↔overlay transitions that build neither ghost nor snapshot — an unnecessary `getComputedStyle` on those gestures (the old code computed it once per bind, never per non-pane gesture). Lazy resolution inside `ghostWrap` (only when an owned pane is actually built) would be tighter. Minor, nonblocking. |
+
+## Durable enforcement (adapt-durably — F1's class made mechanical)
+
+F1 is the second time this seat cleared a dead classification-derived field on this subsystem (the
+.227 review made the sibling miss and wrote the discipline "turn a rule the commit invokes back on the
+commit's own additions"). A discipline that has now failed twice is vigilance; the fix is structure.
+
+Built this turn (committed in the follow-up `.240`, not part of the reviewed `6bf0d20`):
+- **`tools/dead-return-fields.mjs`** — a mechanical detector. It parses a seam function's `return { … }`
+  top-level keys (brace-depth-aware) and its consumer function's body, and reports any returned key with
+  no `<callVar>.<key>` read. No reasoning, no "is the value used somewhere" — the returned-object→consumer
+  boundary is checked directly.
+- **`test/construction-consumers.test.js`** — auto-running wiring: a HARD gate (`no NEW dead returned
+  field on Swipe.buildConstruction`, green now, reddens on any new dead field) + a known-red `{ todo }`
+  (`every … returned field is consumed by start()`, red now for F1, flips green when F1 is resolved).
+- **`Claude/Decisions/PolicyLedger.mjs`** — `KR-swipe-construction-dead-classification`, so the known-red
+  reconciles and CI stays green.
+
+Proven (must fail on the error, pass on correct content):
+- Detector on the REAL repo → exit 1, reports `classification` (the F1 defect). [D]
+- Detector on a CORRECT fixture (consumer reads all 5 fields) → `[]`, exit 0.
+- Detector on a NEW-dead-field fixture (consumer drops `c.movers`) → `["movers"]` — the class-gate catches
+  a sibling, not just the named instance.
+- Wiring: `node --test test/construction-consumers.test.js` → hard gate `ok`, known-red `not ok … # TODO`;
+  `test/policy-ledger-gate.test.js` 3/3; full suite 682/679-pass/0-fail/3-todo.
+
+Residual left to discipline (a cheap gate provably over-reaches): the detector is scoped to the ONE named
+seam (`buildConstruction`→`start`). A generalized "any returned object field must have a consumer"
+detector false-positives on legitimate patterns — a field read through a forwarded/renamed binding
+(`const {plan} = c; use(plan)`), an object returned for a DIFFERENT caller than the one scanned, or a
+field consumed in a sibling module — so a naive repo-wide grep would redden correct code. Extending the
+detector to new seams is a per-seam registration (cheap), not a blanket scan; that registration stays a
+discipline until a second seam needs it.
 
 ## The prediction
 
@@ -177,3 +233,11 @@ Carries forward every OPEN item from the prior review; the next review MUST forw
 - [W20] (open, standing) On-device parity verification for stage 5 (and the whole swipe rewrite arc) is
   owed — everything shipped is SHIPPED-UNVERIFIED on device. The pane transforms are untouched so behaviour
   SHOULD match, but a device pass is owed. Per the standing hold, NOT to be folded into this bench review.
+- [W21] (open) F1 — `Construction.classification` is a dead returned field. Mechanically gated
+  (`tools/dead-return-fields.mjs` + `test/construction-consumers.test.js` + PolicyLedger
+  `KR-swipe-construction-dead-classification`, known-red). Resolve is a Vitruvius/Charpy plan decision
+  (consume in L3, or revise the ratified return to drop it); when resolved the detector reports zero dead,
+  the known-red flips green, and the entry + the `TRACKED_OPEN` allowlist are removed.
+- [W22] (open, → Mendeleev) Coverage gaps this review surfaced (O3/O4): F5a payload-passthrough is not
+  pinned by a test/mutation, and F1a's "L3 forgets a key" half has no registered mutation. Mendeleev
+  adjudicates against §8; either an existing test proves the path or it routes to Curie as a coverage spec.

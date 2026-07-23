@@ -38,4 +38,22 @@ export const POLICY_LEDGER = [
     tests: ['I11/I20 — superseding a live browse->browse drag re-renders the SOURCE into #browse'],
     knownRed: true,
   },
+  {
+    id: 'KR-swipe-construction-dead-classification',
+    subsystem: 'swipe-reveal',
+    decision: 'Swipe.buildConstruction must return no field that start() leaves unread; today '
+      + 'it returns `classification`, which no start() consumer reads.',
+    reason: 'F1 (external review of build .239 / commit 6bf0d20): the classification field is '
+      + 'consumed INSIDE buildConstruction (host resolution, plan derivation) but the RETURNED '
+      + 'object is dead — start() reads only movers/capture/sourceWasClobbered/plan.decorations. '
+      + 'A dead returned field violates the no-dead-fields rule the same commit invoked to withhold '
+      + 'sameBrowseHost. Detected mechanically by tools/dead-return-fields.mjs.',
+    status: 'known-red',
+    introduced: '2026-07-23',
+    removalTrigger: 'The makers resolve it (consume classification in L3, or revise the ratified '
+      + 'return contract to drop it — a Vitruvius/Charpy decision); the detector then reports zero '
+      + 'dead fields, the test goes green, and this entry + the test + TRACKED_OPEN allowlist are removed.',
+    tests: ['every Swipe.buildConstruction returned field is consumed by start()'],
+    knownRed: true,
+  },
 ];

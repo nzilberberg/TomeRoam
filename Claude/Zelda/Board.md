@@ -77,14 +77,20 @@ verified to redden its test. Parity only — no behaviour change; the flash bug 
 `docs/swipe-model.generated.txt` regenerated (line refs only). Build log →
 `Claude/Brunel/swipe-stage5-build-2026-07-23.md`. Full suite: 680 tests, 0 fail, 2 todo (the pre-existing
 KR-swipe-scroll-restore / -source-rerender). **Loki R2 still routed:** `test/swipe-invariants.test.js` is
-the affected parity guard the plan §8 does not enumerate. **Poirot review: SHIP** (2026-07-23, casebook
-`Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`) — faithful parity extraction, zero blocking
-findings; full suite 680/0-fail/2-todo, §8 mutation sweep 0-uncaught (19 swept), host projection executed
-for all 8 cases, cold-read adversary found no defects. Two Observations (O1 commit-message "parity only"
-overstates the plan-disclosed GHOST_BG per-gesture change; O2/W11 unwrapped throw in start()). **Next:**
-apply-review dispositions O1/O2 + the watch-list; Mendeleev audits the suite against §8 (incl. Loki R2 —
-`test/swipe-invariants.test.js` confirmed a genuine guard, reddened by mutation #30). ⚠️ NOT folded into a
-real-device verification session (the standing hold above still applies).
+the affected parity guard the plan §8 does not enumerate. **Poirot review: FIX-THEN-SHIP** (2026-07-23,
+casebook `Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`). Runtime PARITY verified (full suite
+680/0-fail, §8 mutation sweep 0-uncaught/19-swept, host projection executed for all 8 cases, cold-read
+adversary no defects). **F1 (Significant, external review credit): `Construction.classification` is a DEAD
+returned field** — no `start()` consumer reads it, violating the no-dead-fields rule the commit itself
+invokes to withhold `sameBrowseHost`. This seat MISSED it (cleared "field-value-used-internally" ≠
+"returned-field-has-a-consumer"); the original SHIP was wrong. **Durably gated** (build `.240`):
+`tools/dead-return-fields.mjs` detector + `test/construction-consumers.test.js` (hard gate + known-red) +
+PolicyLedger `KR-swipe-construction-dead-classification`; proven fail-on-defect / pass-on-correct. Also
+O1 (GHOST_BG per-gesture, plan-disclosed), O2/W11 (unwrapped throw), O5 (eager GHOST_BG, minor). **Next:**
+**Vitruvius/Charpy** decide F1's fix (consume classification in L3, or revise the ratified return to drop
+it) → Curie reconciles the exact-shape test → Brunel makes the narrow change; **Mendeleev** audits §8
+incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard, reddened
+by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold still applies).
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
