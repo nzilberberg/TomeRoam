@@ -16,7 +16,7 @@ gives, checked by an independent adversarial read and an external review before 
 Declared change patterns (machine-readable declaration above; project adapter `tomeroam-js-dom`):
 - **defining_records: true** — three records (parent plan, `swipe.js` header, DecisionLog) define the scope; they CONFLICT (see below).
 - **boundary_relocation: true** — Stage 5 moves the pane-builder construction across the `app.js`→`swipe.js` boundary; source ranges declared and traced in the ledger.
-- **callee_replacement: true** — `showAppView` AND the overlay render branch become the injected `env.renderDestination` callback; both callee ranges declared (F5/F7).
+- **callee_replacement: true** — `showAppView` AND the overlay render branch are SPLIT across `buildConstruction` and the injected `env.renderDestination` callback; both callee ranges declared so every effect is traced (F5/F7).
 - **contract_shape: true** — emitting the host fields changes `classifyTransition`'s exact-key contract (F2).
 
 ## Verdict
@@ -25,10 +25,10 @@ Declared change patterns (machine-readable declaration above; project adapter `t
 ownership; the capture-helper cluster has no consumers outside the two recipes; the no-session
 return-capture direction is right; the lifecycle deferral (§5) correctly avoids the dead-field trap;
 and `buildConstruction` as `NON_CONTRACT` is sound. The defect is the **seam specification**, not the
-chosen boundary. **Eight things** to settle before a line is written (F1, F2, F4, F5, F6, F7, F8, F9); F3
-is a non-blocking recommendation, and preserving the `np-locked` unlock when `npPillClone` moves is a
-coverage requirement (the plan already keeps `np-locked` in app.js, §3:80), not a blocker. None
-shatters scope B.
+chosen boundary. **Seven things** to settle before a line is written (F1, F2, F4, F5, F6, F7, F8); F3
+is a non-blocking recommendation, and the `np-locked` unlock, the `freezeArt` pre-mount strip, the
+`.nav-ghost` contract, and the initial mover placement (no `will-change` on real panes) are
+regression/parity coverage, not blockers. None shatters scope B.
 
 ## Defining records
 
@@ -77,9 +77,9 @@ A value with no owner is a finding. Ranges: `npPillClone` app.js:345–356, `GHO
 | outgoing-ghost capture **before** dest render | ordering | out | 604–605, 620→629 | unstated — plan says only "relative to the ghost" | F7 |
 | `revealBase = snapBrowse(true)` | ordering | out | 590 (pre-render) | must precede any clobbering render; unstated | F7 |
 | `takeRowHold()` (Browse hold) | ordering | out | 591 (pre-render) | must precede any clobbering render; unstated | F7 |
-| `freezeArt` strips `img[data-art]` before mount | DOM effect | out | 376, 480/567 | recipe via `env.document`; pre-mount order + coverage owed | F9/cov |
+| `freezeArt` strips `img[data-art]` before live-doc connection | DOM effect | out | 376, 480/567 | recipe via `env.document`; parity coverage owed | cov |
 | `.nav-ghost` wrapper class + fixed-pane style | DOM contract | out | 466–467 | recipe (`ghostWrap`); parity contract, coverage owed | cov |
-| initial mover parking (`m.el.style.transform`) | DOM effect | out | 654 | **unassigned** — base-0 gets none; no `will-change` on real `#home`/`#browse`; plan doesn't say which layer applies it | F9 |
+| initial mover parking (`m.el.style.transform`) | DOM effect | out | 654 | `start()`; overwritten same-tick by `move()`:675 (no paint between); base-0 gets none; no `will-change` on real panes — parity/regression coverage | cov |
 | `d.live = true` | object | out | 589 | stays in `start()` (trivially) | — |
 
 ## Findings
@@ -174,18 +174,24 @@ screen name) nor `desc` (the descriptor with payload) exists in `constructionPla
 required payload (swipe.js:58; `Browse.render` takes the full `desc`, app.js:557/2892), and cannot
 invoke its callbacks per their declared signatures. Two things the plan must state: (1) where canonical
 `from`/`to` identity enters `buildConstruction`, without creating independently-supplied raw identity
-and derived classification that can disagree (a two-source-of-truth hazard); and (2) the **complete**
-host-state transition `env.renderDestination(host, desc)` owns — not merely "performs the render." The
-function it replaces, `showAppView(desc, render)` (app.js:550–558), performs a cluster of side effects
-the callback signature would satisfy while silently dropping: hiding stale settings overlays except the
-active outgoing one (`$(s).classList.add('hidden')`, 555), un/`parked`ing `#home` (556–557), toggling
-`#browse` `hidden` (556–557), then optionally `Browse.render(desc)` (557) — and for an overlay
-destination the branch resolves `overlayEl(toV)`, calls `renderNowPlaying`/`renderScreen`, unhides it
-(`el.classList.remove('hidden')`, 636), and removes `np-locked` for incoming NP (634). The plan must
-specify that `renderDestination` owns the whole destination-host transition — stale-overlay cleanup,
-`#home` parking/visibility, `#browse` visibility, payload-bearing rendering, overlay rendering and
-unhiding, and the destination-coupled `np-locked` removal that stays in `app.js` — or a planner can
-satisfy the signature by moving only the content render and drop the host-state effects.
+and derived classification that can disagree (a two-source-of-truth hazard); and (2) a named owner for
+**every** observable effect currently performed by `showAppView(desc, render)` (app.js:550–558) and the
+overlay branch (633–637), ENUMERATED and ASSIGNED across the three layers the seam creates, with the
+existing transition-specific order preserved and no effect lost merely because the old branch is split.
+`showAppView` hides stale settings overlays except the active outgoing one (`$(s).classList.add('hidden')`,
+555), un/`parked`s `#home` (556–557), toggles `#browse` `hidden` (556–557), then optionally
+`Browse.render(desc)` (557); the overlay branch resolves `overlayEl(toV)` (633), calls
+`renderNowPlaying`/`renderScreen` (634–635), unhides the element (`el.classList.remove('hidden')`, 636),
+and removes `np-locked` for incoming NP (634). This is NOT "`renderDestination` owns all of it": Scope B
+splits host resolution (`buildConstruction`, via `env.destOverlayEl`) from render dispatch (`app.js`,
+behind `env.renderDestination`), so overlay resolution and unhiding the resolved element may legitimately
+sit in `buildConstruction`, the content render + unlock in the callback, and stale-overlay cleanup and
+`#home`/`#browse` visibility in either the callback or the `app.js` call-site adapter. The requirement is
+that each effect — stale-overlay cleanup; `#home`/`#browse` parking and visibility; payload-bearing
+`Browse` rendering; overlay resolution; overlay content rendering; overlay unhiding; incoming-NP
+`np-locked` unlock — is assigned an owner and its order preserved, NOT that a specific layer owns it. A
+planner must not satisfy the callback signature by moving only the content render and dropping the
+host-state effects.
 
 ### F6 — Structural — open-unknown — the plan must assign ownership of the live `clobbered` carrier
 
@@ -241,21 +247,6 @@ must assign the dependency: inject the background, resolve it lazily inside the 
 `env.document.defaultView.getComputedStyle`, or cache it on the first runtime construction call — not
 move the `GHOST_BG` initializer to `swipe.js` unchanged.
 
-### F9 — Structural — open-unknown — the initial mover-placement effect has no named owner
-
-The construction block does not end at `d.movers` assembly: `start()` immediately parks the incoming
-movers offscreen — `for (const m of d.movers) if (m.base) m.el.style.transform = 'translateX(' + m.base
-+ 'px)'` (app.js:654) — and deliberately adds NO `will-change` to the real in-flow `#home`/`#browse`
-movers, because promoting them to a layer nudges the iOS fixed navbar (comment app.js:651–653). The
-review previously traced `base`, the mover shape, and ordering, but not this placement effect. The plan
-says `buildConstruction` returns movers and `start()` consumes them, but does not state which layer
-applies the incoming mover's initial `translateX(base)` before the first `move()`. The plan must decide:
-does `buildConstruction` apply the initial transforms, does `start()` map the return into `d.movers` and
-retain the existing parking loop, or does another layer own initial placement? Whichever, it must
-preserve two invariants — outgoing base-0 movers receive NO initial transform (`if (m.base)` is false),
-and real `#home`/`#browse` movers receive NO new `will-change` promotion. Without a named owner the seam
-can return numerically correct movers that are visibly in the wrong initial position.
-
 ## Coverage the plan must require
 
 Once the seam is specified, the revised plan owes production (app-harness/recipe) tests, each
@@ -286,9 +277,11 @@ mutation-verified, that prove the primary seam shape and routing — not only th
 - **F7** — the outgoing ghost is captured before any render that can clobber `#browse` (reordering
   reddens); `revealBase` and the Browse hold precede that render.
 - **F8** — no ambient DOM access at module load; the ghost background resolves through the chosen seam.
-- **F9** — the incoming mover starts at the signed pixel offset and outgoing base-0 gets NO initial
-  transform, parked before the first `move()`; real `#home`/`#browse` movers gain NO `will-change`
-  (reddens if the parking loop is dropped, applied to base-0, or promotes a real in-flow element).
+- **Mover placement (parity/regression)** — real `#home`/`#browse` movers gain NO new `will-change`
+  (reddens if a real in-flow element is promoted — the load-bearing invariant, since a layer promotion
+  nudges the iOS fixed navbar). The initial base transform is parity coverage only: the implementer
+  preserves it or proves it redundant, since `move()` (app.js:675) overwrites it with `translateX(base+t)`
+  in the same synchronous tick with no paint between, so its loss is not a visible-position defect.
 - **Recipe pre-mount (both recipes)** — both recipes remove every `img[data-art]` before the constructed
   pane becomes CONNECTED to the live document (mutation reddens if stripping is omitted or delayed until
   after live-document insertion — the invariant is pre-connection, not a fixed position within the
@@ -323,5 +316,5 @@ both `ghostApp` and `snapshotHome` and nothing else (app.js:480/567, 489/570, 49
 deferral (§5) correctly withholds `release()`/`dispose()`/`equivalence` until stage 6. And
 `buildConstruction` as `NON_CONTRACT` is correct: the gate's immutability loop runs on `CONTRACT` only
 (contract-function-gate.test.js:58). The step is buildable once the seam is fully specified — every value
-and order in the ledger given an owner (F1, F2, F4, F5, F6, F7, F8, F9), with F3's one-sentence justification
+and order in the ledger given an owner (F1, F2, F4, F5, F6, F7, F8), with F3's one-sentence justification
 and the `np-locked` regression test on top.
