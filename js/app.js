@@ -105,7 +105,6 @@
   // so callers may precede them; a `const` arrow would TDZ-crash).
   const SETTINGS_SUBS = Nav.SETTINGS_SUBS;
   const isSub = Nav.isSub;
-  const isOverlay = Nav.isOverlay;
   const overlayEl = Nav.overlayEl;
   const appViewEl = Nav.appViewEl;
   const viewElFor = Nav.viewElFor;
@@ -343,158 +342,11 @@
       if (window.Browse && Browse.endHold) Browse.endHold(t);
     };
     const navPill = () => $('navbar').querySelector('.np-actions');
-    // A detached, non-interactive clone of the pill for the duration of an NP swipe:
-    // it rides with NP (added as a mover) so the pill travels, while np-locked is off
-    // for the slide so the real nav buttons are visible + revealed as NP moves.
-    function npPillClone() {
-      document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());
-      const clone = navPill().cloneNode(true);
-      clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
-      clone.classList.add('np-pill-float');
-      document.body.appendChild(clone);
-      return clone;
-    }
-
-    // A ghost of the current app-view (minus the shared topbar), z BELOW the
-    // persistent bars so it slides under them, shifted up by the current scroll to
-    // match what's on screen. Used ONLY for app-view↔app-view (the real view is
-    // re-rendered for the destination, so the outgoing state must be snapshotted).
-    // Opaque gradient identical to the page background — a flat var(--bg) read as a
-    // DARKER pane than the gradient-backed real page (visible on swipe begin).
-    // Read the backdrop from CSS rather than carrying a third copy of the literal.
-    // Three copies (body, #options, here) is how the ghost and the page drifted apart:
-    // the page background scrolled away with the document and this one did not, so a
-    // swipe repainted a gradient that had not been on screen a moment earlier.
-    const GHOST_BG = (() => {
-      try { return getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)'; }
-      catch { return 'var(--bg)'; }
-    })();
-    // Clones must NOT re-trigger the art loader: a cloned <img> that was never
-    // scrolled into view (no src yet) would get adopted + fetched (= "loading all
-    // images" during the slide). Strip data-art so loaded covers still show via
-    // their copied src while unloaded ones just stay as the skeleton.
-    const freezeArt = (root) => root.querySelectorAll('img[data-art]').forEach((i) => i.removeAttribute('data-art'));
-    // cloneNode does NOT copy scroll positions. Home's carousels scroll sideways, so
-    // a fresh clone shows the FIRST tiles while the real (scrolled) home shows a
-    // different set → tiles change when the swipe settles. Copy scrollLeft across
-    // (must run AFTER the clone is in the DOM and laid out). Index-matched: the
-    // carousels appear in the same order in src and clone.
-    function copyScroll(src, dst) {
-      const s = src.querySelectorAll('.carousel'), c = dst.querySelectorAll('.carousel');
-      // Prefer the saved dataset.sl (survives display:none, where scrollLeft reads 0).
-      s.forEach((el, i) => { if (c[i]) c[i].scrollLeft = (+el.dataset.sl || el.scrollLeft || 0); });
-    }
-    // ⭐ …and cloneNode does not copy ANIMATION PHASE either. Exactly the same class of
-    // bug as copyScroll above — runtime state a clone silently loses, so the ghost is
-    // not the stand-in it claims to be and something visibly changes when the swipe
-    // settles — and the cure belongs right next to it.
-    //
-    // Every cover carries a CSS animation: an unloaded one shimmers
-    // (`artShimmer 1.25s infinite`, app.css:347) and a loaded one fades
-    // (`artFadeIn .3s both`, app.css:357). A CLONE RESTARTS BOTH FROM t=0, so for the
-    // whole gesture the ghost's covers run out of phase with the live page's, and at the
-    // swap every one of them jumps at once. On the reported device roughly 30 of 52
-    // images have no src (`imgs=52 withSrc=22`) — i.e. most of the screen is shimmering
-    // skeleton, which is what "all the bars flashed with all their contents" looks like.
-    //
-    // Why nothing caught it: it produces NO DOM mutation, NO position change (.204
-    // measured rects only — dy=0 dx=0 says elements are in the same PLACE, nothing about
-    // how they LOOK), and it survives a cross-fade (.203), because fading between two
-    // out-of-phase animations still shows the discontinuity.
-    //
-    // A negative animation-delay seeks the clone to the live element's current time:
-    // for the infinite shimmer that matches phase, and for a finished fade it lands past
-    // the end where `both` holds the final state.
-    // ⭐ .207 — SET THE ANIMATION'S TIME, don't try to express it as a CSS delay.
-    // .205 wrote `animation-delay: -<currentTime>ms` before insertion. It RAN (device:
-    // animSync=28 and 38) and did NOT sync: covers stayed 1011ms out of phase on the
-    // book list and 10111ms on home, every comparable pair, against a 1.25s shimmer —
-    // i.e. nearly opposite phase, on both screens. My error was writing a value whose
-    // semantics I had not verified (a negative delay shifts the EFFECT; it is not the
-    // same thing as seeking the animation) and then reading back a number that may not
-    // be comparable between the two sides. The Web Animations API says exactly what is
-    // meant, so use it: assign currentTime on the clone's own animation.
-    // Must run AFTER insertion — a detached clone has no CSS animations to fetch.
-    let lastAnimResidual = 0;
-    function copyAnimPhase(src, dst) {
-      if (typeof Element === 'undefined' || !Element.prototype.getAnimations) return 0;
-      // ⭐ .208 — MATCH THE PRUNED SHAPE, or index `i` means different elements on each
-      // side. ghostApp REMOVES `.hidden, .parked` from the clone, so the live `.app`
-      // still holds parked home and every hidden .browsepage while the clone holds only
-      // the visible page. Index-matching two lists of different shape paired covers with
-      // the wrong twins and mostly failed outright: device .207 reported animSync=6 on a
-      // book list carrying ~36 skeletons, phase=17126ms, bg=8 — while HOME, whose
-      // snapshot clones one subtree with nothing pruned, reached 38 and dropped to 48ms.
-      // Filtering the source to what SURVIVES the prune restores the correspondence.
-      // (Same latent trap as copyScroll's "index-matched" assumption directly above.)
-      // Mirror the prune EXACTLY: the clone drops `.hidden/.parked` nodes BELOW its
-      // root, and both builders strip those classes from the root itself. So walk up to
-      // the root and never test the root — snapshotHome's source IS `#home.parked`
-      // (home is parked while browse is showing), and testing it would filter away
-      // every cover and silently sync nothing. Caught by the .206 test, not by me.
-      const kept = (root) => (el) => {
-        let n = el;
-        while (n && n !== root) {
-          if (n.classList && (n.classList.contains('hidden') || n.classList.contains('parked'))) return false;
-          n = n.parentElement;
-        }
-        return true;
-      };
-      const s = Array.from(src.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(src));
-      const c = Array.from(dst.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(dst));
-      let synced = 0, residual = 0;
-      s.forEach((el, i) => {
-        const twin = c[i];
-        if (!twin) return;
-        try {
-          const a = el.getAnimations(), b = twin.getAnimations();
-          if (!a.length || !b.length || a[0].currentTime == null) return;
-          b[0].currentTime = a[0].currentTime;
-          // Verify AT THE POINT OF THE FIX rather than 500ms later in a reveal report.
-          // A residual here says the assignment did not take, which is the failure .205
-          // had and could not distinguish from "ran and did not help".
-          residual = Math.max(residual, Math.abs((b[0].currentTime || 0) - (a[0].currentTime || 0)));
-          synced++;
-        } catch { /* an unsynced cover is the old behaviour, never a broken ghost */ }
-      });
-      lastAnimResidual = Math.round(residual);
-      return synced;
-    }
-    // The fixed full-viewport pane both snapshot builders mount into.
-    function ghostWrap() {
-      const wrap = document.createElement('div');
-      wrap.className = 'nav-ghost';
-      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';
-      return wrap;
-    }
-    function ghostApp() {
-      const clone = document.querySelector('.app').cloneNode(true);
-      // #library's topbar clearance is id-based CSS (#library{padding-top:46px}) and
-      // would be LOST when we strip ids → the clone's top content shifts up ~46px
-      // under the topbar (the "top content hidden / reflow on swipe start" bug).
-      // Preserve it inline BEFORE stripping ids so the ghost matches the idle page.
-      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '46px';
-      clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
-      const tb = clone.querySelector('.topbar'); if (tb) tb.remove();
-      clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());   // drop cached/hidden/parked panes — only the visible view matters
-      freezeArt(clone);
-      clone.style.margin = '0 auto';                                  // keep .app's centering (was '0' → left-aligned vs the real page)
-      // The scroll this snapshot is FROZEN at. The ghost shows the page as it looked at
-      // this Y for the whole gesture; if the real view is revealed at a different Y the
-      // page appears to jump the instant the ghost goes — with no DOM write anywhere,
-      // which is precisely the state the .200 logs measured on a flashing abort.
-      const ghostY = window.scrollY || 0;
-      if (d) d.ghostY = ghostY;
-      clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
-      const wrap = ghostWrap();
-      wrap.appendChild(clone);
-      document.body.appendChild(wrap);
-      copyScroll(document.querySelector('.app'), clone);   // match carousel scroll to the live page
-      // AFTER insertion: a detached clone has no CSS animations to seek (.207).
-      const nSync = copyAnimPhase(document.querySelector('.app'), clone);
-      if (d) { d.animSync = (d.animSync || 0) + nSync; d.animRes = lastAnimResidual; }
-      return wrap;
-    }
+    // The Now Playing pill clone, the two capture recipes (ghostApp/snapshotHome) and their
+    // helper cluster (ghostWrap/freezeArt/copyScroll/copyAnimPhase, GHOST_BG) moved into
+    // js/swipe.js Swipe.buildConstruction behind the injected `env` (stage 5, boundary B —
+    // Claude/Plans/PLAN-swipe-stage5.md). start() builds the env below and consumes the
+    // Construction it returns; the destination render dispatch stays here in env.renderDestination.
 
     function begin(x, y, target) {
       if (finishing) return;   // settle animation running — ignore new gestures until it lands
@@ -557,97 +409,72 @@
       else { $('browse').classList.remove('hidden'); $('home').classList.add('parked'); if (render) Browse.render(desc); }
     }
 
-    // A fixed snapshot of HOME at its TOP (home content is static/already rendered).
-    // Used as the incoming pane for back-to-home so it shows from the top WITHOUT
-    // touching the real document scroll (the shared-scroll problem: the real #home
-    // sits at the outgoing page's scrollY). Replicates .app + #library top padding.
-    function snapshotHome() {
-      const clone = $('home').cloneNode(true);
-      clone.removeAttribute('id'); clone.classList.remove('hidden', 'parked');
-      freezeArt(clone);
-      const lib = document.createElement('div'); lib.style.paddingTop = '46px'; lib.appendChild(clone);
-      const box = document.createElement('div'); box.className = 'app'; box.style.margin = '0 auto'; box.appendChild(lib);
-      const wrap = ghostWrap();
-      wrap.appendChild(box);
-      // Home's tiles carry the same cover animations, so this snapshot needs the same
-      // phase sync as ghostApp's — set before insertion, for the same reason.
-      document.body.appendChild(wrap);
-      copyScroll($('home'), clone);   // match carousel scroll so the snapshot shows the same tiles as the live home
-      // AFTER insertion, same reason as ghostApp (.207).
-      const nSync = copyAnimPhase($('home'), clone);
-      if (d) { d.animSync = (d.animSync || 0) + nSync; d.animRes = lastAnimResidual; }
-      return wrap;
-    }
-
     // Build the sliding "movers": {el, base}; during the drag transform =
     // translateX(base + t). base 0 = OUTGOING, base ±w = INCOMING. BOTH sides always
     // move (a filmstrip, never a reveal). The real document is NEVER scrolled and the
     // real in-flow view is only re-rendered when the INCOMING is a real #browse (which
     // must live in .app); otherwise app-views ride as their real element (transform is
     // scroll-neutral) or a fixed snapshot — so scroll cannot change during a swipe.
+    //
+    // start() is the L3 adapter (stage 5, PLAN-swipe-stage5.md): it owns the geometry
+    // (numeric base/width/direction), the session recording (capture/clobbered/movers),
+    // the row hold and the reveal snapshot, and the outgoing-NP np-locked unlock. The pane
+    // BUILD — classify, clone/capture, real source resolution, the NP pill, and the
+    // outgoing-before-render ordering — is Swipe.buildConstruction (L1). The destination
+    // render dispatch stays here behind env.renderDestination (L2), which buildConstruction
+    // invokes only after the outgoing pane is fully built, so a browse→browse ghost
+    // snapshots the pre-render #browse (plan §6 step 5).
     function start() {
       d.live = true;
       revealBase = snapBrowse(true);   // BEFORE the mid-drag render clobbers #browse
       takeRowHold();   // from here the outgoing page keeps its rows until this gesture ends
-      const fromV = d.from.v, toV = d.dest.v, off = d.dir === 'back' ? -d.w : d.w;
-      const fromOv = isOverlay(fromV);   // still needed to resolve the REAL source element (overlay vs in-flow)
-      // The transition is CLASSIFIED and the construction plan derived by js/swipe.js
-      // (stage 4) — the one place the fromOv/toOv/incomingBrowse decision lives, so the
-      // frozen model derives from it instead of a hand-kept mirror. This function still
-      // BUILDS the panes (ghostApp/snapshotHome/overlayEl/appViewEl/npPillClone) and runs
-      // the renders; only the DECISION of which to build moved out. Stage 5 moves the
-      // builders too; stage 6 adds the finalization half of the plan.
-      const plan = Swipe.constructionPlanFor(Swipe.classifyTransition({ from: d.from, to: d.dest }));
-      if (window.PBDebug) PBDebug.log('SWIPE', `start ${d.dir} ${fromV}→${toV} ghosts=${document.querySelectorAll('.nav-ghost').length}`);
-      let out, incoming, pill = null;
+      const off = d.dir === 'back' ? -d.w : d.w;
+      // L2 — the injected seam. buildConstruction reads the world ONLY through this.
+      const env = {
+        document,
+        scrollY: () => window.scrollY || 0,
+        sourceEl: (host, v) => (host === 'overlay' ? overlayEl(v) : appViewEl(v)),
+        navPill,
+        renderDestination: (dest, host) => {
+          if (host === 'browse-host') { showAppView(dest, true); return $('browse'); }
+          const el = overlayEl(dest.v);   // real-destination overlay
+          if (dest.v === 'nowplaying') { renderNowPlaying(); document.body.classList.remove('np-locked'); }
+          else renderScreen(dest.v);   // 'options' or any settings sub-screen
+          el.classList.remove('hidden');
+          return el;
+        },
+      };
+      // Log BEFORE the build so `ghosts=` reports any PRE-EXISTING leftover pane (parity
+      // with the pre-extraction order), not the one this gesture is about to mount.
+      if (window.PBDebug) PBDebug.log('SWIPE', `start ${d.dir} ${d.from.v}→${d.dest.v} ghosts=${document.querySelectorAll('.nav-ghost').length}`);
+      const c = Swipe.buildConstruction(d.from, d.dest, env);
 
-      // ── OUTGOING (base 0) FIRST ── the ghost must snapshot the current #browse
-      // BEFORE the incoming render (below) clobbers it (browse→browse).
-      // TYPED MOVER OWNERSHIP (stage 3, replacing the old `remove: true` convention).
-      // Each mover declares which of three resource classes it is, so teardown is by
-      // TYPE, not by an implicit flag:
-      //   borrowed-real    a real #home/#browse/overlay element — clear its transient
-      //                    styles at the end, NEVER remove the node.
-      //   owned-pane       a ghost/snapshot this gesture built — released (paint-gated,
-      //                    stage 6/I10) or disposed. Was `remove: true`.
-      //   owned-decoration the NP pill clone. ⚠️ This tag is DECORATIVE today — NO
-      //                    consumer reads it (dropPanes/fadePanes/ghostVsReal/paneKindOf
-      //                    all key on 'owned-pane'); the pill is removed by
-      //                    resetSwipeStyles, not by a mover consumer. Kept, not dropped,
-      //                    so every mover stays typed for the stage-6 teardown
-      //                    consolidation (review of .223, finding 5).
-      if (plan.outgoing === 'app-ghost') {
-        out = { el: ghostApp(), base: 0, own: 'owned-pane' };  // incoming needs the real #browse → freeze outgoing as a ghost
-      } else {
-        out = { el: fromOv ? overlayEl(fromV) : appViewEl(fromV), base: 0, own: 'borrowed-real' };   // move the real source view (scroll-neutral)
+      // Map the seam's external movers { element, ownership, slot } onto the production
+      // shape { el, base, own }: base is OUTGOING 0, INCOMING off, a decoration by its slot.
+      // The typed `own` drives teardown by TYPE (borrowed-real | owned-pane |
+      // owned-decoration), unchanged from stage 3.
+      const baseOf = (slot) => (slot === 'outgoing' ? 0 : off);
+      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot), own: m.ownership });
+      d.movers = [toMover(c.movers.outgoing), toMover(c.movers.incoming)];
+      if (c.movers.decoration) d.movers.push(toMover(c.movers.decoration));
+
+      // Record the owned pane's capture for the reveal diagnostic — ONLY the fields the
+      // capture carries. A home snapshot has no ghostY, so today's "no ghost ⇒ d.ghostY
+      // untouched" holds (plan §3, F2-r); both d.ghostY readers null-guard it.
+      if (c.capture) {
+        if ('ghostY' in c.capture) d.ghostY = c.capture.ghostY;
+        d.animSync = (d.animSync || 0) + c.capture.animSync;
+        d.animRes = c.capture.animRes;
+      }
+      // The same-browse-host carrier the finalizer reads on an abort (plan §3, F6).
+      d.clobbered = c.sourceWasClobbered;
+      // Outgoing-NP np-locked unlock stays app-side (plan §5): when NP is the SOURCE the
+      // body unlocks so the real nav buttons show as the pill slides out. (The incoming-NP
+      // unlock rides with env.renderDestination above.)
+      for (const deco of c.plan.decorations) {
+        if (deco.kind === 'now-playing-pill' && deco.base === 'outgoing') document.body.classList.remove('np-locked');
       }
 
-      // ── INCOMING (base off) ──
-      if (plan.incoming === 'home-snapshot') {
-        incoming = { el: snapshotHome(), base: off, own: 'owned-pane' };   // static snapshot at top, .app untouched
-      } else if (plan.renderDestination === 'browse-host') {
-        showAppView(d.dest, true);                      // render dest into the real #browse (outgoing already ghosted)
-        d.clobbered = !fromOv && appViewEl(fromV) === $('browse');   // browse→browse → abort re-renders
-        incoming = { el: $('browse'), base: off, own: 'borrowed-real' };
-      } else {                                          // real-destination overlay
-        const el = overlayEl(toV);
-        if (toV === 'nowplaying') { renderNowPlaying(); document.body.classList.remove('np-locked'); }
-        else renderScreen(toV);   // 'options' or any settings sub-screen
-        el.classList.remove('hidden');
-        incoming = { el, base: off, own: 'borrowed-real' };
-      }
-
-      // ── DECORATIONS ── the NP pill is a plan-level mover (stage 4). base 'outgoing'→0
-      // (NP is the SOURCE, and the body unlocks), 'incoming'→off (NP is the DESTINATION;
-      // its render/unlock already ran in the overlay branch above).
-      for (const deco of plan.decorations) {
-        if (deco.kind !== 'now-playing-pill') continue;
-        if (deco.base === 'outgoing') document.body.classList.remove('np-locked');
-        pill = { el: npPillClone(), base: deco.base === 'outgoing' ? 0 : off, own: 'owned-decoration' };
-      }
-
-      d.movers = [out, incoming];
-      if (pill) d.movers.push(pill);
       // Park the incoming panes offscreen. Deliberately NO will-change on the real
       // in-flow views (#home/#browse) — promoting them to a layer can nudge the iOS
       // fixed navbar (a "pop" at swipe start). The transform alone is enough.
@@ -837,9 +664,10 @@
         };
         requestAnimationFrame(tick);
       };
-      // Which kind of full-viewport pane this settle built, if any. The two builders are
-      // ghostApp() (browse→browse) and snapshotHome() (→home); every other transition
-      // slides REAL elements and covers nothing. That is the correlation to test.
+      // Which kind of full-viewport pane this settle built, if any. The owned panes are the
+      // app-ghost (browse→browse) and the home snapshot (→home), both built by
+      // Swipe.buildConstruction; every other transition slides REAL elements and covers
+      // nothing. That is the correlation to test.
       const paneKindOf = () => {
         const p = cur.movers.filter((m) => m.own === 'owned-pane');
         if (!p.length) return 'none';

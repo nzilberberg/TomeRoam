@@ -51,13 +51,13 @@ before this document is trusted again. Never update a pinned constant alone.
    EVERY append path either applies navTo's replace guard, or appends a descriptor
    whose `v` differs from the current top. A new append site would break this
    silently, so the sites are pinned:
-     js/app.js:127   let navStack = [{ v: 'home' }];
-     js/app.js:141   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
-     js/app.js:142   else navStack.push(desc);
-     js/app.js:165   navStack.push({ v }); fwdStack.length = 0;
-     js/app.js:870   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
-     js/app.js:871   else navStack.push(fwdStack.pop());
-     js/app.js:1405  navStack = [{ v: 'home' }];
+     js/app.js:126   let navStack = [{ v: 'home' }];
+     js/app.js:140   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
+     js/app.js:141   else navStack.push(desc);
+     js/app.js:164   navStack.push({ v }); fwdStack.length = 0;
+     js/app.js:698   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:699   else navStack.push(fwdStack.pop());
+     js/app.js:1233  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------

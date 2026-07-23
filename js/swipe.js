@@ -69,22 +69,25 @@ const Swipe = (() => {
   }
 
   // classifyTransition — THE ONE NORMALIZATION BOUNDARY (plan §3.3). Raw descriptors in,
-  // derived kinds + decorations out. Stage 4 reads only { v } from each descriptor
-  // (kinds are kind-level; descriptor identity — authorBooks(A) vs (B) — matters only to
-  // the stage-6 stack effect, so `direction`/`navigationRelation` join the signature
-  // then). The output exposes ONLY the fields a current-slice consumer reads: `fromKind`/
-  // `toKind` (constructionPlanFor) and `decorations` (start()). §3.3 also lists
-  // sourceHost/destinationHost/sameBrowseHost, but no stage-4 consumer reads them, so
-  // per the no-dead-fields rule they are NOT emitted here — they are reintroduced in the
-  // stage that first consumes them (sameBrowseHost with the stage-6 abort re-render;
-  // the hosts with the stage-5 pane/mover construction that reads them), each with its
-  // consumer and test in the same commit. This is a staging-contract correction, not a
-  // behaviour or product-policy change.
+  // derived kinds + host projection + decorations out. Descriptor identity — authorBooks(A)
+  // vs (B) — matters only to the stage-6 stack effect, so `direction`/`navigationRelation`
+  // join the signature then. The output exposes the fields a current-slice consumer reads:
+  // `fromKind`/`toKind` (constructionPlanFor), `sourceHost`/`destinationHost` (stage-5
+  // buildConstruction, which reads them to resolve the real source element and the render
+  // host — plan §3, F1-r), and `decorations` (start()). §3.3 also lists sameBrowseHost, but
+  // its only consumer is the stage-6 abort re-render, so per the no-dead-fields rule it is
+  // NOT emitted here — it is reintroduced in that stage with its consumer and test.
   function classifyTransition({ from, to }) {
     const fromKind = kindOf(from.v);
     const toKind = kindOf(to.v);
     requirePayload(from, 'source');
     requirePayload(to, 'destination');
+    // The kind→host projection (plan §3, F1-r), the single place the kind→host mapping
+    // policy lives. sourceHost picks overlay vs in-flow source resolution; destinationHost
+    // picks the render host. Pinned per structural case in the frozen spec (expectedHosts).
+    const sourceHost = fromKind === 'overlay' ? 'overlay' : 'in-flow';
+    const destinationHost = toKind === 'overlay' ? 'overlay'
+      : toKind === 'browse' ? 'browse-host' : 'home';
     // The Now Playing pill is cloned when NP is EITHER endpoint (app.js start(): the
     // fromV and toV nowplaying branches). It is a mover with the same lifetime as
     // outgoing/incoming — based at the outgoing slot when NP is the source, the incoming
@@ -99,7 +102,7 @@ const Swipe = (() => {
     // classification (and, since constructionPlanFor passes the SAME array through, the
     // plan too). A frozen array here makes the plan's decorations frozen for free.
     decorations = Object.freeze(decorations.map((d) => Object.freeze(d)));
-    return Object.freeze({ fromKind, toKind, decorations });
+    return Object.freeze({ fromKind, toKind, sourceHost, destinationHost, decorations });
   }
 
   // constructionPlanFor — what start() must BUILD. Immutable. No default branch; an
@@ -141,7 +144,184 @@ const Swipe = (() => {
     return Object.freeze({ outgoing, incoming, renderDestination, decorations });
   }
 
-  return { classifyTransition, constructionPlanFor, BROWSE_FAMILY };
+  // ── STAGE 5 (plan §3/§7) — the pane BUILDERS, private to the L1 seam ────────────────
+  // The two capture recipes (app-ghost / home-snapshot), the shared helper cluster, and
+  // the NP decoration builder, relocated from js/app.js start() behind an injected `env`.
+  // They read the world ONLY through env (env.document / env.scrollY / env.navPill), never
+  // an ambient document/window/Element/getComputedStyle — so the module stays DOM-free at
+  // load and the recipes are drivable against a fake env (plan §7; the require() no-DOM gate
+  // and test/swipe-construction.test.js). Each returns its built element plus the capture
+  // data the L3 adapter records onto the session; no builder touches the session itself.
+  function paneBuilders(env) {
+    const doc = env.document;
+    const win = doc.defaultView;
+    // The page background, resolved FRESH per gesture (never cached at module load), so a
+    // mid-session theme change cannot leave it stale (plan §7, F8). Same try/catch →
+    // var(--bg) fallback as the original app-side reader.
+    const GHOST_BG = (() => {
+      try { return win.getComputedStyle(doc.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)'; }
+      catch { return 'var(--bg)'; }
+    })();
+    // Clones must NOT re-trigger the art loader: strip data-art so loaded covers still show
+    // via their copied src while unloaded ones stay as the skeleton.
+    const freezeArt = (root) => root.querySelectorAll('img[data-art]').forEach((i) => i.removeAttribute('data-art'));
+    // cloneNode does not copy carousel scrollLeft. Copy it across (after the clone is in the
+    // DOM), preferring the saved dataset.sl (survives display:none, where scrollLeft reads 0).
+    function copyScroll(src, dst) {
+      const s = src.querySelectorAll('.carousel'), c = dst.querySelectorAll('.carousel');
+      s.forEach((el, i) => { if (c[i]) c[i].scrollLeft = (+el.dataset.sl || el.scrollLeft || 0); });
+    }
+    // …nor animation PHASE. A clone restarts every cover animation at t=0; seek each clone
+    // animation to its live twin's currentTime so the ghost is not out of phase at the swap.
+    // Pair covers that SURVIVE the .hidden/.parked prune (walk up to the root, never test the
+    // root — snapshotHome's source IS #home.parked) so index `i` cannot pair covers in two
+    // differently-shaped trees. Reads Element through env's window, never a global one (F4b).
+    // Returns { synced, residual }: residual is the max gap measured AT the seek (0 = it took).
+    function copyAnimPhase(src, dst) {
+      const El = win && win.Element;
+      if (!El || !El.prototype.getAnimations) return { synced: 0, residual: 0 };
+      const kept = (root) => (el) => {
+        let n = el;
+        while (n && n !== root) {
+          if (n.classList && (n.classList.contains('hidden') || n.classList.contains('parked'))) return false;
+          n = n.parentElement;
+        }
+        return true;
+      };
+      const s = Array.from(src.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(src));
+      const c = Array.from(dst.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(dst));
+      let synced = 0, residual = 0;
+      s.forEach((el, i) => {
+        const twin = c[i];
+        if (!twin) return;
+        try {
+          const a = el.getAnimations(), b = twin.getAnimations();
+          if (!a.length || !b.length || a[0].currentTime == null) return;
+          b[0].currentTime = a[0].currentTime;
+          residual = Math.max(residual, Math.abs((b[0].currentTime || 0) - (a[0].currentTime || 0)));
+          synced++;
+        } catch { /* an unsynced cover is the old behaviour, never a broken ghost */ }
+      });
+      return { synced, residual: Math.round(residual) };
+    }
+    // The fixed full-viewport pane both snapshot builders mount into (beneath the persistent
+    // bars, clipped, non-interactive, transform-capable — the .nav-ghost contract, navGhost).
+    function ghostWrap() {
+      const wrap = doc.createElement('div');
+      wrap.className = 'nav-ghost';
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';
+      return wrap;
+    }
+    // A ghost of the current app-view (minus the shared topbar), shifted up by the current
+    // scroll to match what's on screen. Used app-view↔app-view (the real view is re-rendered
+    // for the destination). Returns { wrap, capture:{ ghostY, animSync, animRes } }.
+    function ghostApp() {
+      const clone = doc.querySelector('.app').cloneNode(true);
+      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '46px';
+      clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+      const tb = clone.querySelector('.topbar'); if (tb) tb.remove();
+      clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());
+      freezeArt(clone);
+      clone.style.margin = '0 auto';
+      const ghostY = env.scrollY() || 0;
+      clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
+      const wrap = ghostWrap();
+      wrap.appendChild(clone);
+      doc.body.appendChild(wrap);
+      copyScroll(doc.querySelector('.app'), clone);
+      // AFTER insertion: a detached clone has no CSS animations to seek.
+      const { synced, residual } = copyAnimPhase(doc.querySelector('.app'), clone);
+      return { wrap, capture: { ghostY, animSync: synced, animRes: residual } };
+    }
+    // A fixed snapshot of HOME at its TOP, the incoming pane for back-to-home. Pinned at top
+    // with no scroll freeze, so its capture carries NO ghostY (plan §3, F2-r) — only the two
+    // animation fields. Returns { wrap, capture:{ animSync, animRes } }.
+    function snapshotHome() {
+      const clone = doc.getElementById('home').cloneNode(true);
+      clone.removeAttribute('id'); clone.classList.remove('hidden', 'parked');
+      freezeArt(clone);
+      const lib = doc.createElement('div'); lib.style.paddingTop = '46px'; lib.appendChild(clone);
+      const box = doc.createElement('div'); box.className = 'app'; box.style.margin = '0 auto'; box.appendChild(lib);
+      const wrap = ghostWrap();
+      wrap.appendChild(box);
+      doc.body.appendChild(wrap);
+      copyScroll(doc.getElementById('home'), clone);
+      const { synced, residual } = copyAnimPhase(doc.getElementById('home'), clone);
+      return { wrap, capture: { animSync: synced, animRes: residual } };
+    }
+    // A detached, non-interactive clone of the Now Playing pill for the duration of an NP
+    // swipe: it rides with NP as a mover. Removes any stale float first, strips ids, classes it.
+    function npPillClone() {
+      doc.querySelectorAll('.np-pill-float').forEach((n) => n.remove());
+      const clone = env.navPill().cloneNode(true);
+      clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+      clone.classList.add('np-pill-float');
+      doc.body.appendChild(clone);
+      return clone;
+    }
+    return { ghostApp, snapshotHome, npPillClone };
+  }
+
+  // buildConstruction — the L1 seam (plan §3). Given the canonical gesture descriptors and
+  // the injected env, derive the classification + plan (single source of identity, F5) and
+  // BUILD the panes, returning a Construction the L3 adapter maps to production movers and
+  // records onto the session. The destination render dispatch stays app-side behind
+  // env.renderDestination (L2); numeric base/width/direction never cross the seam (they stay
+  // in L3). NON_CONTRACT: the return carries live DOM nodes, so it is not a deep-frozen
+  // contract object (see test/contract-function-gate.test.js NON_CONTRACT).
+  function buildConstruction(from, dest, env) {
+    const classification = classifyTransition({ from, to: dest });
+    const plan = constructionPlanFor(classification);
+    const { sourceHost, destinationHost } = classification;
+    const { ghostApp, snapshotHome, npPillClone } = paneBuilders(env);
+    const mover = (element, ownership, slot) => ({ element, ownership, slot });
+
+    // Resolve the real source element at most once (for a borrowed-real outgoing mover
+    // and/or the clobber check). env.sourceEl selects overlay vs in-flow by sourceHost.
+    let realSource, sourceResolved = false;
+    const resolveSource = () => {
+      if (!sourceResolved) { realSource = env.sourceEl(sourceHost, from.v); sourceResolved = true; }
+      return realSource;
+    };
+
+    // ── OUTGOING — built to completion FIRST, before any destination render can clobber the
+    // source #browse (plan §6 step 5, F7a). Exactly one owned pane produces capture per
+    // transition (app-ghost XOR home-snapshot), so `capture` is a single object or null.
+    let capture = null, outgoing, incoming, decoration = null;
+    if (plan.outgoing === 'app-ghost') {
+      const g = ghostApp();
+      outgoing = mover(g.wrap, 'owned-pane', 'outgoing');
+      capture = g.capture;
+    } else {
+      outgoing = mover(resolveSource(), 'borrowed-real', 'outgoing');
+    }
+
+    // ── INCOMING ──
+    let sourceWasClobbered = false;
+    if (plan.incoming === 'home-snapshot') {
+      const s = snapshotHome();
+      incoming = mover(s.wrap, 'owned-pane', 'incoming');
+      capture = s.capture;
+    } else if (plan.renderDestination === 'browse-host') {
+      const hostEl = env.renderDestination(dest, destinationHost);   // renders dest into #browse
+      incoming = mover(hostEl, 'borrowed-real', 'incoming');
+      // browse→browse: the mid-drag render overwrote the resolved source #browse, so an abort
+      // must re-render the source (plan §3, F6). True iff the real source IS the render host.
+      sourceWasClobbered = resolveSource() === hostEl;
+    } else {                                                          // real-destination overlay
+      incoming = mover(env.renderDestination(dest, destinationHost), 'borrowed-real', 'incoming');
+    }
+
+    // ── DECORATIONS — the NP pill; zero or one (plan §3). Its np-locked unlock stays in L3.
+    for (const deco of plan.decorations) {
+      if (deco.kind !== 'now-playing-pill') continue;
+      decoration = mover(npPillClone(), 'owned-decoration', deco.base);   // slot: outgoing | incoming
+    }
+
+    return { classification, plan, movers: { outgoing, incoming, decoration }, capture, sourceWasClobbered };
+  }
+
+  return { classifyTransition, constructionPlanFor, buildConstruction, BROWSE_FAMILY };
 })();
 
 if (typeof window !== 'undefined') window.Swipe = Swipe;

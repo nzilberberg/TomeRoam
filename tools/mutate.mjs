@@ -46,6 +46,39 @@ const DROP_SESSIONDONE_FROM = "sessionDone(cur);   // the held pane is released 
 const DROP_SESSIONDONE_TO = '/* mutated: owner not ended on held reveal */';
 const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');";
 
+// ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
+const S5_GHOSTBG_FROM = [
+  '    const GHOST_BG = (() => {',
+  "      try { return win.getComputedStyle(doc.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)'; }",
+  "      catch { return 'var(--bg)'; }",
+  '    })();',
+].join('\n');
+const S5_GHOSTBG_TO = "    const GHOST_BG = getComputedStyle(doc.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)';";
+const S5_ORDER_FROM = [
+  "    if (plan.outgoing === 'app-ghost') {",
+  '      const g = ghostApp();',
+].join('\n');
+const S5_ORDER_TO = [
+  "    if (plan.outgoing === 'app-ghost') {",
+  '      env.renderDestination(dest, destinationHost);',
+  '      const g = ghostApp();',
+].join('\n');
+const S5_NPPILL_FROM = [
+  "      doc.querySelectorAll('.np-pill-float').forEach((n) => n.remove());",
+  '      const clone = env.navPill().cloneNode(true);',
+].join('\n');
+const S5_NPPILL_TO = '      const clone = env.navPill().cloneNode(true);';
+const S5_FREEZEART_FROM = [
+  "      clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());",
+  '      freezeArt(clone);',
+].join('\n');
+const S5_FREEZEART_TO = "      clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());";
+const S5_UNHIDE_FROM = [
+  "          el.classList.remove('hidden');",
+  '          return el;',
+].join('\n');
+const S5_UNHIDE_TO = '          return el;';
+
 const MUTATIONS = [
   { name: 'MS pause -> audio.pause() direct (bypasses userPause)',
     from: "ms.setActionHandler('pause', () => userPause());",
@@ -184,9 +217,13 @@ const MUTATIONS = [
   // These were verified BY HAND at the time — the evidence lived only in commit messages,
   // exactly the anti-pattern Engineering Contract item 11 forbids. Registered here so the
   // sweep re-runs them and a guard that goes undefended announces itself.
-  { name: 'swipe4 F1: start() ignores plan.decorations, NP pill not built (-> WIRING pill test)',
-    from: '      for (const deco of plan.decorations) {',
-    to:   '      for (const deco of []) {' },
+  { name: 'swipe4 F1: buildConstruction ignores plan.decorations, NP pill not built (-> WIRING pill test)',
+    // Re-anchored for stage 5: the NP decoration loop moved from app.js start() into
+    // js/swipe.js buildConstruction. The WIRING pill test still drives the real start() →
+    // env → buildConstruction, so dropping the loop here still leaves NO pill and reddens it.
+    file: 'js/swipe.js',
+    from: '    for (const deco of plan.decorations) {',
+    to:   '    for (const deco of []) {' },
   { name: 'swipe4 F3: classifyTransition output not deep-frozen (-> classification deep-frozen test)',
     file: 'js/swipe.js',
     from: '    decorations = Object.freeze(decorations.map((d) => Object.freeze(d)));',
@@ -208,9 +245,12 @@ const MUTATIONS = [
     from: "    requirePayload(to, 'destination');",
     to:   "    requirePayload(to, 'destination');\n    if (from.v === to.v) throw new Error('mutated F4 over-reject');" },
   { name: 'swipe4 no-dead-fields: classification emits an unconsumed field (-> exposes-only-consumed test)',
+    // Stage 5 re-anchored: the classification now carries the two consumed host fields;
+    // sameBrowseHost is STILL unconsumed until stage 6, so adding it must still redden the
+    // exact-key ("exposes only consumed fields") assertions.
     file: 'js/swipe.js',
-    from: '    return Object.freeze({ fromKind, toKind, decorations });',
-    to:   '    return Object.freeze({ fromKind, toKind, decorations, sameBrowseHost: false });' },
+    from: '    return Object.freeze({ fromKind, toKind, sourceHost, destinationHost, decorations });',
+    to:   '    return Object.freeze({ fromKind, toKind, sourceHost, destinationHost, decorations, sameBrowseHost: false });' },
   { name: 'swipe4 F-i: constructionPlanFor not independently deep-immutable (-> independent-immutability test)',
     file: 'js/swipe.js',
     from: '    const decorations = Object.freeze((c.decorations || []).map((d) => Object.freeze({ ...d })));',
@@ -236,6 +276,76 @@ const MUTATIONS = [
     file: 'Claude/Decisions/PolicyLedger.mjs',
     from: "restores the starting scroll'],",
     to:   "restores the starting scroll DANGLED']," },
+  // ── SWIPE stage 5: the buildConstruction seam (js/swipe.js) + the L3 adapter (js/app.js) ─
+  // Every §8 cell of PLAN-swipe-stage5.md that this stage introduced. The recipe/contract
+  // mutations bite js/swipe.js (recipe layer, test/swipe-construction.test.js; contract layer,
+  // test/swipe-transition.test.js); the wiring mutations bite the L3 adapter in js/app.js
+  // (test/swipe-stage5-wiring.test.js). Each names the test it must redden.
+  // — RECIPE (js/swipe.js) —
+  { name: 'swipe5 F1.1: buildConstruction emits production mover keys instead of the external shape (-> movers external-shape test)',
+    file: 'js/swipe.js',
+    from: '    const mover = (element, ownership, slot) => ({ element, ownership, slot });',
+    to:   '    const mover = (element, ownership, slot) => ({ el: element, own: ownership, slot });' },
+  { name: 'swipe5 F1c: an owned pane is not the sole capture source (capture set for overlay<->overlay) (-> capture-null test)',
+    file: 'js/swipe.js',
+    from: '    let capture = null, outgoing, incoming, decoration = null;',
+    to:   '    let capture = { animSync: 0, animRes: 0 }, outgoing, incoming, decoration = null;' },
+  { name: 'swipe5 F2-r: the home snapshot capture carries a ghostY it must not (-> app-ghost-vs-home capture test)',
+    file: 'js/swipe.js',
+    from: '      return { wrap, capture: { animSync: synced, animRes: residual } };',
+    to:   '      return { wrap, capture: { ghostY: 0, animSync: synced, animRes: residual } };' },
+  { name: 'swipe5 F4a: the app-ghost recipe reads an ambient document, not env.document (-> no-ambient recipe test)',
+    file: 'js/swipe.js',
+    from: "      const clone = doc.querySelector('.app').cloneNode(true);",
+    to:   "      const clone = document.querySelector('.app').cloneNode(true);" },
+  { name: 'swipe5 F4b: copyAnimPhase reads an ambient Element, not env\'s (-> copyAnimPhase-through-env test)',
+    file: 'js/swipe.js',
+    from: '      const El = win && win.Element;',
+    to:   "      const El = (typeof Element !== 'undefined') ? Element : (win && win.Element);" },
+  { name: 'swipe5 F6: sourceWasClobbered is never set, so an abort cannot re-render the source (-> clobber test)',
+    file: 'js/swipe.js',
+    from: '      sourceWasClobbered = resolveSource() === hostEl;',
+    to:   '      sourceWasClobbered = false;' },
+  { name: 'swipe5 F7a: the destination render runs BEFORE the outgoing ghost is built (-> outgoing-before-render test)',
+    file: 'js/swipe.js',
+    from: S5_ORDER_FROM, to: S5_ORDER_TO },
+  { name: 'swipe5 F8: GHOST_BG reads an ambient getComputedStyle, not env\'s (-> ghost-background-through-env test)',
+    file: 'js/swipe.js',
+    from: S5_GHOSTBG_FROM, to: S5_GHOSTBG_TO },
+  { name: 'swipe5 navGhost: the ghost wrapper sits ABOVE the persistent bars (z>=30) (-> nav-ghost contract test)',
+    file: 'js/swipe.js',
+    from: "      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';",
+    to:   "      wrap.style.cssText = 'position:fixed;inset:0;z-index:99;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';" },
+  { name: 'swipe5 npPill: npPillClone stops removing the stale float (-> NP pill recipe test)',
+    file: 'js/swipe.js',
+    from: S5_NPPILL_FROM, to: S5_NPPILL_TO },
+  { name: 'swipe5 freezeArt: the app-ghost recipe skips freezeArt, leaving data-art on the clone (-> freezeArt recipe test)',
+    file: 'js/swipe.js',
+    from: S5_FREEZEART_FROM, to: S5_FREEZEART_TO },
+  // — CONTRACT (js/swipe.js) —
+  { name: 'swipe5 F1-r: the sourceHost projection is mis-mapped (overlay source -> in-flow) (-> per-pair host projection test)',
+    file: 'js/swipe.js',
+    from: "    const sourceHost = fromKind === 'overlay' ? 'overlay' : 'in-flow';",
+    to:   "    const sourceHost = 'in-flow';" },
+  // — WIRING / L3 adapter (js/app.js) —
+  { name: 'swipe5 F1b: L3 maps the incoming base with the WRONG sign (-> F1b base-sign wiring)',
+    from: "      const baseOf = (slot) => (slot === 'outgoing' ? 0 : off);",
+    to:   "      const baseOf = (slot) => (slot === 'outgoing' ? 0 : -off);" },
+  { name: 'swipe5 F5b: the overlay render branch drops the UNHIDE (-> F5b overlay-unhide wiring)',
+    from: S5_UNHIDE_FROM, to: S5_UNHIDE_TO },
+  { name: 'swipe5 F5c: showAppView drops the stale-overlay cleanup (-> F5c stale-overlay wiring)',
+    from: "      for (const s of ['options', ...SETTINGS_SUBS]) if (!d || d.from.v !== s) $(s).classList.add('hidden');",
+    to:   '      /* mutated: stale-overlay cleanup dropped */' },
+  { name: 'swipe5 F2-r-wiring: L3 SYNTHESIZES a ghostY on the home path (-> F2-r wiring)',
+    from: "        if ('ghostY' in c.capture) d.ghostY = c.capture.ghostY;",
+    to:   "        d.ghostY = ('ghostY' in c.capture) ? c.capture.ghostY : 0;" },
+  { name: 'swipe5 F7b: the row hold no longer precedes the clobbering render (-> F7b ordering wiring)',
+    from: '      takeRowHold();   // from here the outgoing page keeps its rows until this gesture ends\n',
+    to:   '',
+    also: {
+      from: '      const c = Swipe.buildConstruction(d.from, d.dest, env);',
+      to:   '      const c = Swipe.buildConstruction(d.from, d.dest, env);\n      takeRowHold();',
+    } },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

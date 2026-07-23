@@ -50,11 +50,12 @@ const planFrom = (fv, tv) => projectStablePlan(
 
 // ---- classifyTransition: the normalization boundary --------------------------------
 
-// The classification exposes ONLY the fields a stage-4 consumer reads: fromKind/toKind
-// (constructionPlanFor) and decorations (start()). §3.3's sourceHost/destinationHost/
-// sameBrowseHost are NOT emitted until the stage that first consumes them (no-dead-fields
-// rule) — assert the exact key set so re-adding one before its consumer reddens here.
-const CLASSIFICATION_KEYS = ['decorations', 'fromKind', 'toKind'];
+// The classification exposes the fields a current-slice consumer reads: fromKind/toKind
+// (constructionPlanFor), sourceHost/destinationHost (stage-5 buildConstruction, which reads
+// them to resolve the real source element and the render host) and decorations (start()).
+// §3.3's sameBrowseHost is NOT emitted until the stage-6 abort re-render consumes it
+// (no-dead-fields rule) — assert the exact key set so re-adding it before its consumer reddens.
+const CLASSIFICATION_KEYS = ['decorations', 'destinationHost', 'fromKind', 'sourceHost', 'toKind'];
 
 test('classifyTransition derives kinds from the raw names and exposes only consumed fields', () => {
   // Well-formed parameterized descriptors: authorBooks needs an author, files a book
@@ -197,29 +198,23 @@ test('constructionPlanFor throws on an unhandled source kind, not just destinati
     /unhandled destination kind/);
 });
 
-// ── STAGE 5 (RED-FIRST, Curie 2026-07-23) — the reintroduced host fields ──────────────
-// PLAN-swipe-stage5.md F2/F1-r. Build .229 REMOVED sourceHost/destinationHost from
+// ── STAGE 5 — the reintroduced host fields ───────────────────────────────────────────
+// PLAN-swipe-stage5.md F2/F1-r. Build .229 removed sourceHost/destinationHost from
 // classifyTransition (no consumer then; the no-dead-fields rule — see CLASSIFICATION_KEYS
-// above). Stage 5 reintroduces them WITH a consumer (buildConstruction reads them to select
-// the real source element and the render host). These two tests are the red-first target:
-// they fail today because only three keys are emitted, and go green when Brunel emits the
-// two host fields with the projection the frozen spec fixes. In that same commit Brunel also
-// flips the CLASSIFICATION_KEYS assertion above and contract-function-gate.test.js:24 to the
-// five-key set, and removes these todo markers. Tracked: PolicyLedger KR-swipe-stage5-classify-hosts.
-const CLASSIFICATION_KEYS_S5 = ['decorations', 'destinationHost', 'fromKind', 'sourceHost', 'toKind'];
-const KR_HOSTS = 'Stage 5 unbuilt — classifyTransition does not re-emit '
-  + 'sourceHost/destinationHost yet (removed in .229 as dead fields). Red-first; goes green when '
-  + 'Brunel emits the projected host fields. Tracked: PolicyLedger KR-swipe-stage5-classify-hosts.';
+// above). Stage 5 reintroduces them WITH a consumer: Swipe.buildConstruction reads them to
+// resolve the real source element and the render host. classifyTransition now emits the
+// projected values the frozen spec fixes (expectedHosts), and CLASSIFICATION_KEYS above +
+// contract-function-gate.test.js carry the five-key set in lockstep.
 
-test('classifyTransition emits exactly the five stage-5 fields including the two hosts', { todo: KR_HOSTS }, () => {
+test('classifyTransition emits exactly the five stage-5 fields including the two hosts', () => {
   const c = Swipe.classifyTransition({ from: { v: 'home' }, to: { v: 'books' } });
-  assert.deepEqual(Object.keys(c).sort(), CLASSIFICATION_KEYS_S5,
+  assert.deepEqual(Object.keys(c).sort(), CLASSIFICATION_KEYS,
     'stage 5 re-adds sourceHost/destinationHost — the classification must carry exactly the five fields');
   assert.equal(c.sourceHost, 'in-flow', 'a home source is in-flow');
   assert.equal(c.destinationHost, 'browse-host', 'a browse destination is the browse-host');
 });
 
-test('every registry pair projects the sourceHost/destinationHost the frozen spec fixes', { todo: KR_HOSTS }, async () => {
+test('every registry pair projects the sourceHost/destinationHost the frozen spec fixes', async () => {
   const spec = await loadSpec();
   const gen = await loadGen();
   const screens = gen.registry();

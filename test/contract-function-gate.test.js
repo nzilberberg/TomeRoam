@@ -21,7 +21,7 @@ const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
 const CONTRACT = {
   classifyTransition: {
     input: () => ({ from: { v: 'nowplaying' }, to: { v: 'books' } }),   // NP source => a decoration to freeze
-    keys: ['decorations', 'fromKind', 'toKind'],
+    keys: ['decorations', 'destinationHost', 'fromKind', 'sourceHost', 'toKind'],
   },
   constructionPlanFor: {
     // A HAND-CONSTRUCTED classification — NOT via classifyTransition — so the freeze is the
@@ -34,6 +34,9 @@ const CONTRACT = {
 // Exports that are NOT contract-object factories, each with the reason it is exempt.
 const NON_CONTRACT = {
   BROWSE_FAMILY: 'a shared enum array (the browse-family screen names), not a contract-object factory',
+  buildConstruction: 'the stage-5 L1 seam — returns a Construction carrying LIVE DOM nodes '
+    + '(built panes / real elements), so it is not a deep-frozen exact-keyed contract object; its '
+    + 'shape is pinned by test/swipe-construction.test.js instead',
 };
 
 // Recursively assert every object/array reachable from a value is frozen.

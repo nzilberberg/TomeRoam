@@ -1,15 +1,11 @@
-// RED-FIRST (Curie, 2026-07-23) — the Stage-5 `Swipe.buildConstruction` seam, authored
-// before the build from PLAN-swipe-stage5.md §8. See Claude/Curie/swipe-stage5-test-design-2026-07-23.md.
+// The Stage-5 `Swipe.buildConstruction` seam (recipe layer), authored red-first by Curie
+// (2026-07-23) from PLAN-swipe-stage5.md §8, greened by Brunel's build.
+// See Claude/Curie/swipe-stage5-test-design-2026-07-23.md.
 //
-// WHY THESE ARE `{ todo }`. Stage 5 moves the two capture recipes (ghostApp/snapshotHome),
-// the real source resolution, and the NP decoration builder out of js/app.js's start() into
-// ONE construction surface in js/swipe.js, behind an injected `env`, returning a Construction
-// object. That surface does not exist yet: `Swipe.buildConstruction` is unexported, so every
-// test here fails today with "buildConstruction is not a function" — genuine red-unimplemented.
-// Each is registered in Claude/Decisions/PolicyLedger.mjs (KR-swipe-stage5-buildconstruction);
-// node:test runs a todo test and reports its failure WITHOUT failing the run. When Brunel
-// builds the seam to green, each reports `ok … # TODO` and the todo marker + ledger entry are
-// removed in that commit.
+// WHAT THIS DRIVES. Stage 5 moved the two capture recipes (ghostApp/snapshotHome), the real
+// source resolution, and the NP decoration builder out of js/app.js's start() into ONE
+// construction surface in js/swipe.js, behind an injected `env`, returning a Construction
+// object. These tests drive that surface directly.
 //
 // WHY A RECIPE (fake-env) LAYER and not the app-harness. The whole point of the extraction is
 // that the moved builders become drivable through an injected seam with NO ambient DOM — which
@@ -32,10 +28,6 @@ const MOVERS_KEYS = ['decoration', 'incoming', 'outgoing'];
 const CLASSIFICATION_KEYS = ['decorations', 'destinationHost', 'fromKind', 'sourceHost', 'toKind'];
 const PLAN_KEYS = ['decorations', 'incoming', 'outgoing', 'renderDestination'];
 const MOVER_KEYS = ['element', 'ownership', 'slot'];
-
-const KR_MSG = 'Stage 5 unbuilt — Swipe.buildConstruction does not exist yet. '
-  + 'Red-first target; goes green when Brunel builds the seam. '
-  + 'Tracked: PolicyLedger KR-swipe-stage5-buildconstruction.';
 
 // Ambient globals a correctly-relocated builder must NEVER read (plan §7): everything goes
 // through `env`. Poisoned around the buildConstruction call so a bare read throws loudly.
@@ -118,7 +110,7 @@ const desc = (v, payload) => ({ v, ...(payload || {}) });
 const build = (from, dest, ctx) => withPoisonedAmbient(() => Swipe.buildConstruction(from, dest, ctx.env));
 
 // ── F1.1 — the exact Construction contract shape ────────────────────────────────────
-test('buildConstruction returns the exact Construction contract shape', { todo: KR_MSG }, () => {
+test('buildConstruction returns the exact Construction contract shape', () => {
   const ctx = mkEnv();
   const c = build(desc('home'), desc('books'), ctx);
   assert.deepEqual(Object.keys(c).sort(), CONSTRUCTION_KEYS, 'Construction must carry exactly its five fields');
@@ -130,7 +122,7 @@ test('buildConstruction returns the exact Construction contract shape', { todo: 
 });
 
 // ── F1.1 — the mover EXTERNAL shape, not the production {el,base,own} ────────────────
-test('movers carry the external {element,ownership,slot} shape, not the production keys', { todo: KR_MSG }, () => {
+test('movers carry the external {element,ownership,slot} shape, not the production keys', () => {
   const ctx = mkEnv();
   const c = build(desc('home'), desc('books'), ctx);
   for (const which of ['outgoing', 'incoming']) {
@@ -145,7 +137,7 @@ test('movers carry the external {element,ownership,slot} shape, not the producti
 });
 
 // ── F1c — no owned pane ⇒ capture is null, both sides borrowed-real ──────────────────
-test('overlay->overlay builds no owned pane: capture is null and both sides are borrowed-real', { todo: KR_MSG }, () => {
+test('overlay->overlay builds no owned pane: capture is null and both sides are borrowed-real', () => {
   const ctx = mkEnv({ renderDestination: (d, host, doc) => doc.getElementById('nowplaying') });
   const c = build(desc('options'), desc('nowplaying'), ctx);
   assert.equal(c.capture, null, 'overlay<->overlay builds no owned pane, so capture is null');
@@ -154,7 +146,7 @@ test('overlay->overlay builds no owned pane: capture is null and both sides are 
 });
 
 // ── F2-r (recipe) — app-ghost capture carries ghostY; home-snapshot never does ──────
-test('an app-ghost capture carries ghostY; a home-snapshot capture never does', { todo: KR_MSG }, () => {
+test('an app-ghost capture carries ghostY; a home-snapshot capture never does', () => {
   const ghostCtx = mkEnv({ scrollY: 137 });
   const ghost = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ghostCtx);
   assert.ok(ghost.capture, 'a browse->browse transition builds an app-ghost with a capture');
@@ -172,7 +164,7 @@ test('an app-ghost capture carries ghostY; a home-snapshot capture never does', 
 });
 
 // ── F4a — driven with NO ambient DOM; the pane is built in env.document ──────────────
-test('buildConstruction runs with no ambient document/window and builds the pane in env.document', { todo: KR_MSG }, () => {
+test('buildConstruction runs with no ambient document/window and builds the pane in env.document', () => {
   const ctx = mkEnv();
   // withPoisonedAmbient throws on any global document/window/Element/getComputedStyle read.
   const c = build(desc('home'), desc('books'), ctx);
@@ -182,7 +174,7 @@ test('buildConstruction runs with no ambient document/window and builds the pane
 });
 
 // ── F4b — copyAnimPhase seeks through env.document.defaultView.Element ───────────────
-test('copyAnimPhase syncs animation phase through the env Element, not a global one', { todo: KR_MSG }, () => {
+test('copyAnimPhase syncs animation phase through the env Element, not a global one', () => {
   const ctx = mkEnv({ scrollY: 0 });
   const setCt = enableAnims(ctx.win, 500);
   const app = ctx.doc.querySelector('.app');
@@ -197,7 +189,7 @@ test('copyAnimPhase syncs animation phase through the env Element, not a global 
 });
 
 // ── F6 — sourceWasClobbered is true only when the render overwrites the source host ──
-test('sourceWasClobbered is true only when the destination render clobbers the source host', { todo: KR_MSG }, () => {
+test('sourceWasClobbered is true only when the destination render clobbers the source host', () => {
   // browse->browse: source IS #browse and the browse-host render targets #browse → clobbered.
   const clob = mkEnv({
     sourceEl: (host, v, doc) => doc.getElementById('browse'),
@@ -218,7 +210,7 @@ test('sourceWasClobbered is true only when the destination render clobbers the s
 });
 
 // ── F7a — outgoing captured BEFORE env.renderDestination is invoked ──────────────────
-test('the outgoing pane is mounted before env.renderDestination is ever called', { todo: KR_MSG }, () => {
+test('the outgoing pane is mounted before env.renderDestination is ever called', () => {
   const ctx = mkEnv();
   build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ctx);
   const renderCalls = ctx.events.filter((e) => e.call === 'renderDestination');
@@ -229,7 +221,7 @@ test('the outgoing pane is mounted before env.renderDestination is ever called',
 });
 
 // ── F8 / navGhost — GHOST_BG resolves fresh through env; the wrapper contract holds ──
-test('the ghost background resolves through env.getComputedStyle, not an ambient or cached read', { todo: KR_MSG }, () => {
+test('the ghost background resolves through env.getComputedStyle, not an ambient or cached read', () => {
   const ctx = mkEnv();
   const c = build(desc('home'), desc('books'), ctx);
   const wrap = ctx.doc.querySelector('.nav-ghost');
@@ -243,7 +235,7 @@ test('the ghost background resolves through env.getComputedStyle, not an ambient
     || c.movers.outgoing.element === wrap, 'the outgoing owned-pane element IS the nav-ghost wrapper');
 });
 
-test('the nav-ghost wrapper carries its full fixed/clipped/non-interactive contract', { todo: KR_MSG }, () => {
+test('the nav-ghost wrapper carries its full fixed/clipped/non-interactive contract', () => {
   const ctx = mkEnv();
   build(desc('home'), desc('books'), ctx);
   const css = ctx.doc.querySelector('.nav-ghost').style.cssText;
@@ -257,7 +249,7 @@ test('the nav-ghost wrapper carries its full fixed/clipped/non-interactive contr
 });
 
 // ── npPill — the NP decoration recipe ───────────────────────────────────────────────
-test('the NP pill decoration is cloned, stripped, classed, and slotted by endpoint', { todo: KR_MSG }, () => {
+test('the NP pill decoration is cloned, stripped, classed, and slotted by endpoint', () => {
   // NP as SOURCE (nowplaying -> browse): decoration based at the outgoing slot.
   const srcCtx = mkEnv();
   srcCtx.doc.body.appendChild(Object.assign(srcCtx.doc.createElement('div'),
@@ -278,7 +270,7 @@ test('the NP pill decoration is cloned, stripped, classed, and slotted by endpoi
 });
 
 // ── freezeArt — data-art stripped BEFORE the clone connects to the live document ─────
-test('both owned-pane recipes strip data-art before the clone is mounted', { todo: KR_MSG }, () => {
+test('both owned-pane recipes strip data-art before the clone is mounted', () => {
   // app-ghost path (home->browse builds a ghost of .app).
   const ghostCtx = mkEnv();
   addCovers(ghostCtx.doc, ghostCtx.doc.querySelector('.app'), 3);
