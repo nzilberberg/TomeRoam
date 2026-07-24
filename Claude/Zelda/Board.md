@@ -98,11 +98,13 @@ would be an invented read EC §17 forbids; `plan` stays (L3 reads `plan.decorati
 this board updated; §4 ledger already agreed (no return-row). **Next:** Charpy stresses the revised §3 →
 Curie reconciles `CONSTRUCTION_KEYS` (`test/swipe-construction.test.js`) → Brunel makes the narrow code
 change (on his commit the detector goes zero-dead, the known-red flips green, and
-`KR-swipe-construction-dead-classification` + its `TRACKED_OPEN` entry are removed). ⚠️ **Surfaced
-2026-07-23 (via the build-gate-corrections review): this plan is RATIFIED but FAILS `vitruvius-plan-gate.sh`
-today — 6 violations (no `vitruvius-contract`/`-effects`/`-coverage` blocks; 3 ambiguous-owner ledger rows).
-An authoring-gate escape (gate unwired). The Stage-5 chain must populate those machine blocks + disambiguate
-the owner cells so RATIFIED is earned; the prose `ts` return type is exactly why F1 could hide.** **Mendeleev** still
+`KR-swipe-construction-dead-classification` + its `TRACKED_OPEN` entry are removed). ✅ **FINALIZED
+2026-07-24 — the plan now PASSES the wired `vitruvius-plan-gate.sh` (exit 0, node-validated).** The
+authoring-gate escape is closed for this plan: added the `vitruvius-contract` (classification absent =
+dead-field removal), `vitruvius-effects`, and `vitruvius-coverage` machine blocks, and disambiguated the 3
+multi-owner ledger rows (`destinationHost`→L1, `capture`→L1, `d.clobbered`→L3). **Returned to the same
+Stage-5 Charpy session for review.** Fork-slowness note: the gate takes ~2min/run on this box (node + many
+subprocess spawns under MSYS); run it in the background. **Mendeleev** still
 audits §8 incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard,
 reddened by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold applies).
 

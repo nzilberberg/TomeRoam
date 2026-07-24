@@ -716,6 +716,20 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   legitimate NARROWER sub-range (e.g. "the structural disciplines D1–D3") or a historical quote of an old
   range, so it would misfire — 2026-07-24.
 
+- The Stage-5 plan (`Claude/Plans/PLAN-swipe-stage5.md`) is FINALIZED and now PASSES the wired Vitruvius
+  authoring gate (exit 0, node-validated) — the authoring-gate escape recorded above is closed for this
+  plan. Corrected the six gate violations without touching the technical design: added the machine-readable
+  `vitruvius-contract` block (§3 — the four-key return `{plan, movers, capture, sourceWasClobbered}`;
+  `classification` absent, finalizing the dead-field removal), the `vitruvius-effects` block (§5, the
+  replaced-callee effects each assigned one L1/L2/L3 owner), and the `vitruvius-coverage` block (§8, every
+  blocking question F1/F2/F4/F5/F6/F7/F8 covered by a complete row); and disambiguated the three multi-owner
+  ledger rows to a single accountable owner (`destinationHost`→L1 reads+forwards; `capture`→L1 produces+
+  returns; `d.clobbered`→L3 records the session field finalize reads). The contract classes reconcile with
+  the ledger (`sourceHost`/`destinationHost`/`capture` = object in both). Returned to the same Stage-5
+  Charpy session for review; the §3-revision chain (Charpy → Curie `CONSTRUCTION_KEYS` → Brunel drops the
+  field) resumes from Charpy. Gate runtime is ~2 min on this box (MSYS fork-slowness); run it backgrounded —
+  2026-07-24.
+
 - The build-gate spec corrections are INSTALLED into the three global persona specs — 2026-07-24. Ratified
   Charpy FORGE (r2), then Zelda applied the frozen install patch mechanically: Brunel.md Local § Gate A/B
   rewritten to the four-checkpoint split (mechanical authoring gate → Charpy pre-FORGE on existing consumers

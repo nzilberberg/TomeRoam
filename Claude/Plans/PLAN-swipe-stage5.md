@@ -10,7 +10,12 @@ return drops the dead `classification` field (five keys → four: `{ plan, mover
 sourceWasClobbered }`), resolving Poirot F1 (`Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`).
 A ratified return shape cannot change without a re-ratified contract, so this revision goes to Charpy to
 stress → Curie to reconcile the exact-shape test (`CONSTRUCTION_KEYS`, `test/swipe-construction.test.js`)
-→ Brunel for the narrow code change; build of the revised shape waits on that chain. Sub-plan of
+→ Brunel for the narrow code change; build of the revised shape waits on that chain.
+**FINALIZED 2026-07-24 — passes the wired Vitruvius authoring gate (exit 0, node-validated).** The
+authoring-gate escape is closed for this plan: added the machine-readable `vitruvius-contract` (§3,
+`classification` absent — the dead-field removal), `vitruvius-effects` (§5), and `vitruvius-coverage` (§8)
+blocks, and disambiguated the three multi-owner ledger rows (`destinationHost`→L1, `capture`→L1,
+`d.clobbered`→L3). Returned to the same Stage-5 Charpy session for review. Sub-plan of
 `Claude/Plans/PLAN-swipe-reveal.md` §7 step 5. Resolves the seven blocking findings (F1, F2, F4, F5,
 F6, F7, F8) and the F3 recommendation from `Claude/Charpy/PLAN-swipe-stage5-2026-07-22.md`, plus the
 named parity obligations (`np-locked`, `freezeArt`, `.nav-ghost`, `npPillClone`, no-new-`will-change`,
@@ -147,6 +152,24 @@ type Construction = {
 };
 ```
 
+**Machine-readable contract (gate — `vitruvius-contract`).** The canonical `classifyTransition` key set
+(the exact-key contract this plan changes) plus the four-key `Construction` return, as `field | class`,
+reconciled against the §4 ledger classes (`sourceHost`/`destinationHost`/`capture` = `object` in both).
+`classification` is absent — it is derived internally, not returned (F1, dead-field removal).
+
+```vitruvius-contract
+# field | class
+fromKind | string
+toKind | string
+sourceHost | object
+destinationHost | object
+decorations | object
+plan | object
+movers | object
+capture | object
+sourceWasClobbered | boolean
+```
+
 Answers to the required contract questions:
 - **Where canonical `from`/`dest` enter:** as the first two arguments; classification is derived from
   them inside, never supplied alongside (no disagreement path).
@@ -217,7 +240,7 @@ from/dest descriptors (identity+payload) | object | in | start()@S5 | buildConst
 from.v/dest.v (fromV/toV) | object | in | descriptors@S5 | buildConstruction@S5 | L1 reads | per-gesture | F5 test
 classification (fromKind/toKind) | object | in | classifyTransition@S5 | buildConstruction@S5 | L1 derives | per-gesture | swipe-model test
 sourceHost | object | in | classifyTransition@S5 | buildConstruction@S5 | L1 reads | per-gesture | F2 contract + source-resolve test
-destinationHost | object | in | classifyTransition@S5 | env.renderDestination@S5 | L1 reads,passes | per-gesture | F2 contract + render-mode test
+destinationHost | object | in | classifyTransition@S5 | env.renderDestination@S5 | L1 | per-gesture | F2 contract + render-mode test
 isOverlay(fromV) | freeid | in | Nav@S5 | buildConstruction@S5 | Nav (imported) | pure | F5 test
 d.dir/d.w (off) | geometry | in | start()@S5 | start()@S5 | L3 | per-gesture | F1 base test
 window scrollY (ghostY) | geometry | in | env.scrollY@S5 | ghostApp@S5 | L1 via env | per-gesture | F4 no-ambient test
@@ -229,8 +252,8 @@ GHOST_BG page background | closureconst | in | env.document.defaultView@S5 | gho
 clone build+mount to body | domeffect | out | ghostApp/snapshotHome@S5 | env.document.body@S5 | L1 via env.document | per-gesture | recipe test
 stale .np-pill-float removal | domeffect | out | npPillClone@S5 | env.document@S5 | L1 via env | per-gesture | npPillClone test
 mover shape {el,base,own} | object | out | buildConstruction@S5 | start()@S5 | L3 maps | per-gesture | F1 mapping test
-capture {ghostY?, animSync, animRes} | object | out | ghostApp/snapshotHome@S5 | start()@S5 | L1 returns,L3 records | per-gesture | F1 capture test
-d.clobbered same-host carrier | object | out | buildConstruction@S5 | finalize@S5 | L1 returns,L3 records | per-session | F6 abort test
+capture {ghostY?, animSync, animRes} | object | out | ghostApp/snapshotHome@S5 | start()@S5 | L1 | per-gesture | F1 capture test
+d.clobbered same-host carrier | object | out | buildConstruction@S5 | finalize@S5 | L3 | per-session | F6 abort test
 stale settings-overlay cleanup | domeffect | out | env.renderDestination@S5 | shared overlays@S5 | L2 | per-gesture | F5 stale-overlay test
 home park/browse hidden toggles | domeffect | out | env.renderDestination@S5 | #home/#browse@S5 | L2 | per-gesture | F5 host-state test
 payload-bearing Browse.render | domeffect | out | env.renderDestination@S5 | #browse@S5 | L2 | per-gesture | F5 payload test
@@ -272,6 +295,26 @@ choice here, not by an external rule, except where noted.
 The callback does **not** own the entire transition: L1 owns element resolution, clone/capture, and
 ordering; L3 owns geometry, assembly, and session recording. Only render + host-visibility + overlay
 content live in L2.
+
+**Machine-readable effect ownership (gate — `vitruvius-effects`).** Every replaced-callee observable
+effect assigned to exactly one layer (mirrors the table above; predecessor/successor are the
+transition-specific order):
+
+```vitruvius-effects
+# effect | owner | predecessor | successor | verification
+stale settings-overlay cleanup | L2 | outgoing capture done | host park and hidden toggles | F5 stale-overlay test
+home unpark and browse hidden toggle | L2 | stale-overlay cleanup | Browse.render | F5 host-state test
+payload-bearing Browse.render | L2 | host toggles | incoming mover build | F5 payload test
+overlay resolve overlayEl(toV) | L2 | outgoing capture done | overlay content render | F5 overlay test
+overlay content render | L2 | overlay resolve | overlay unhide | F5 overlay test
+overlay unhide (classList.remove hidden) | L2 | overlay content render | incoming mover build | F5 overlay test
+incoming-NP np-locked unlock | L2 | overlay content render | overlay unhide | np-locked test
+outgoing-NP np-locked unlock | L3 | pill built | mover parking | np-locked test
+pill clone construction (npPillClone) | L1 | — | returned as decoration mover | npPillClone test
+owned-pane clone and capture | L1 | Browse hold taken | render callback | recipe tests
+decoration insertion into body | L1 | pill clone | construction return | npPillClone test
+abort metadata d.clobbered recorded | L3 | source resolved | finalize reads d.clobbered | F6 abort test
+```
 
 ## 6. Ordering contract
 
@@ -369,6 +412,34 @@ regression = parity.
 | navGhost | `.nav-ghost` wrapper: fixed full-viewport, beneath bars, non-interactive, clipped, page bg, transform-capable | recipe | `.nav-ghost` behavioral contract broken | recipe |
 | willChange | Real `#home`/`#browse` movers gain **no** new `will-change` | any real-mover swipe | a real in-flow mover promoted (nudges iOS navbar) | regression |
 | parking | Initial mover parking retained or shown redundant (`move()` overwrites same tick, no paint between) | any swipe | — (parity only; retained) | regression |
+
+**Machine-readable coverage (gate — `vitruvius-coverage`).** The matrix above as `id | behavior | fixture
+| mutation | layer`; every blocking question (F1/F2/F4/F5/F6/F7/F8) has at least one complete row.
+
+```vitruvius-coverage
+# id | behavior | fixture | mutation | layer
+F1a | production movers keyed {el base own} after L3 maps | browse-dest swipe | builder emits el/own directly or L3 forgets a key | wiring
+F1b | outgoing base 0 and incoming base signed d.w | back vs forward swipe | wrong base owner or wrong sign | wiring
+F1c | no owned-pane means capture null and d.ghostY untouched | overlay-to-overlay | conflicting capture shape (capture per-mover) | wiring
+F2 | classifyTransition keys match in both pinning sites | contract gate | stale exact-key registration in either site | contract
+F1-r | host values pinned in the frozen spec per case | 8 structural cases and registry pairs | a mis-projected host value | frozen-model
+F2-r | back-to-home records animSync animRes with d.ghostY untouched | back-to-home vs browse-to-browse | L3 synthesizes d.ghostY on the home path | wiring
+F4a | recipes read app home and scroll through env | fake-env recipe | a bare document or window or dollar read | recipe
+F4b | copyAnimPhase syncs via env document defaultView Element | fake-env recipe | ambient Element check silently returns 0 | recipe
+F5a | payload descriptor reaches L2 render intact | authorBooks or files dest | payload lost only v passed | wiring
+F5b | overlay transition preserves resolve render unhide incoming np-locked | back-to-NP overlay | any old overlay-branch effect omitted | wiring
+F5c | browse-host with stale settings overlay ends correct | stale-overlay browse swipe | stale-overlay cleanup dropped | wiring
+F6 | browse-to-browse abort re-renders source under ghost | browse-to-browse abort | d.clobbered not recorded | wiring
+F7a | render moved before outgoing capture reddens | browse-to-browse | renderDestination invoked before ghostApp completes | wiring
+F7b | revealBase and Browse hold precede the clobbering render | browse-to-browse | hold or reveal moved after render | wiring
+F8 | no ambient DOM at module load and GHOST_BG via env | require no-DOM plus recipe | top-level GHOST_BG DOM access | recipe
+npPill | pill recipe strips ids adds class appends correct slot | NP swipe | npPillClone behavior omitted | recipe
+npLock | incoming and outgoing NP preserve np-locked removal | NP in and out | np-locked behavior lost | wiring
+freezeArt | both recipes strip img data-art before live connection | both recipes | freezeArt moved after live connection | recipe
+navGhost | nav-ghost wrapper fixed beneath bars non-interactive clipped | recipe fixture | nav-ghost behavioral contract broken | recipe
+willChange | real home and browse movers gain no new will-change | any real-mover swipe | a real in-flow mover promoted | regression
+parking | initial mover parking retained move overwrites same tick | any swipe | parking transform removed (parity regression) | regression
+```
 
 ## 9. Records reconciliation (APPLIED on ratification, 2026-07-22)
 
