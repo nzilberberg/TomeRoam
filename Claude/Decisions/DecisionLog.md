@@ -730,6 +730,24 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   field) resumes from Charpy. Gate runtime is ~2 min on this box (MSYS fork-slowness); run it backgrounded —
   2026-07-24.
 
+- Charpy r5 (`Claude/Charpy/PLAN-swipe-stage5-2026-07-24-r5.md`) re-reviewed the finalized Stage-5 plan and
+  returned TEMPER; both findings resolved this pass (plan re-passes the authoring gate). F1 (dead NESTED
+  return member): the four-key return `{plan, movers, capture, sourceWasClobbered}` still carried dead data
+  — `plan.outgoing`/`incoming`/`renderDestination` are consumed only inside `buildConstruction`
+  (swipe.js:291/301/305); only `plan.decorations` is read by L3, so the `plan` wrapper is dead on the return,
+  the same no-dead-fields class as `classification` one level down. Fix: HOIST `decorations` to the top level
+  (L3 reads `c.decorations`) and DROP the `plan` wrapper — the return is now `{ decorations, movers, capture,
+  sourceWasClobbered }`. This corrects my earlier decision (2026-07-23) that declined to narrow `plan` as
+  "gold-plating" — that reasoning was wrong: `plan` was live only via one sub-field, and the others were
+  dead returned members. §3 type + `vitruvius-contract` block + §2/§3 prose updated; a `decorations`
+  return-crossing row added to the §4 ledger. F2 (false coverage claim): the `vitruvius-coverage` `parking`
+  row asserted a mutation the §8 prose correctly marks parity-only/unobservable (`move()` overwrites the
+  parking transform the same tick) — corrected to an honest `n/a — parity-only` mutation cell (the gate
+  requires a non-dash string, so honest text, not a fabricated mutation). Charpy also filed a RECOMMENDATION
+  (not reviewer-merged): deepen the dead-return detector to NESTED granularity — routed to proper plan/test/
+  build ownership, NOT built here. The chain resumes at Charpy; on FORGE, Curie reconciles `CONSTRUCTION_KEYS`
+  and Brunel hoists `decorations`/drops the wrapper — 2026-07-24.
+
 - The build-gate spec corrections are INSTALLED into the three global persona specs — 2026-07-24. Ratified
   Charpy FORGE (r2), then Zelda applied the frozen install patch mechanically: Brunel.md Local § Gate A/B
   rewritten to the four-checkpoint split (mechanical authoring gate → Charpy pre-FORGE on existing consumers

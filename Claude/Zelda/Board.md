@@ -98,13 +98,18 @@ would be an invented read EC §17 forbids; `plan` stays (L3 reads `plan.decorati
 this board updated; §4 ledger already agreed (no return-row). **Next:** Charpy stresses the revised §3 →
 Curie reconciles `CONSTRUCTION_KEYS` (`test/swipe-construction.test.js`) → Brunel makes the narrow code
 change (on his commit the detector goes zero-dead, the known-red flips green, and
-`KR-swipe-construction-dead-classification` + its `TRACKED_OPEN` entry are removed). ✅ **FINALIZED
-2026-07-24 — the plan now PASSES the wired `vitruvius-plan-gate.sh` (exit 0, node-validated).** The
-authoring-gate escape is closed for this plan: added the `vitruvius-contract` (classification absent =
-dead-field removal), `vitruvius-effects`, and `vitruvius-coverage` machine blocks, and disambiguated the 3
-multi-owner ledger rows (`destinationHost`→L1, `capture`→L1, `d.clobbered`→L3). **Returned to the same
-Stage-5 Charpy session for review.** Fork-slowness note: the gate takes ~2min/run on this box (node + many
-subprocess spawns under MSYS); run it in the background. **Mendeleev** still
+`KR-swipe-construction-dead-classification` + its `TRACKED_OPEN` entry are removed). Passes the wired
+`vitruvius-plan-gate.sh` (exit 0, node-validated) — added `vitruvius-contract`/`-effects`/`-coverage`
+blocks + disambiguated 3 multi-owner ledger rows. **Charpy r5 (2026-07-24) = TEMPER, RESOLVED:** (F1) the
+return still carried a dead NESTED member — `plan.outgoing`/`incoming`/`renderDestination` were dead on the
+return (only `plan.decorations` read by L3), same class as `classification` one level down. Fixed: hoist
+`decorations` to top level, DROP the `plan` wrapper → return is `{ decorations, movers, capture,
+sourceWasClobbered }`. (I owned this miss — I'd declined to narrow `plan` earlier as "gold-plating.") (F2)
+the `vitruvius-coverage` `parking` row claimed a mutation the §8 prose calls parity-only/unobservable →
+corrected to an honest `n/a — parity-only`. Gate re-passes. ⚠️ Charpy's nested-dead-return DETECTOR
+deepening is a recommendation to route through plan/test/build ownership — NOT reviewer-merged, NOT built.
+**Next: returns to the Stage-5 Charpy session (deliver only when the user asks).** Fork-slowness: gate
+~2min/run on this box; run it backgrounded. **Mendeleev** still
 audits §8 incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard,
 reddened by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold applies).
 

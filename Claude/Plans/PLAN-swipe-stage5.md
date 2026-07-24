@@ -5,17 +5,18 @@ Type: plan
 <!-- vitruvius-gate {"plan_type":"refactor","patterns":{"boundary_relocation":true,"callee_replacement":true,"contract_shape":true,"state_transfer":true,"async_change":false,"persistence_migration":false,"lifecycle_ownership":false},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:345-356","js/app.js:368-497","js/app.js:547-580","js/app.js:582-655"],"callee_ranges":["js/app.js:550-558","js/app.js:632-638"],"affected_contracts":["test/contract-function-gate.test.js:24","test/swipe-transition.test.js:57","test/fixtures/swipe-plan-spec.mjs:45","test/swipe-transition.test.js:90"],"staged_records":["Claude/Plans/PLAN-swipe-reveal.md","js/swipe.js:24-27","Claude/Decisions/DecisionLog.md"],"blocking_questions":["F1","F2","F4","F5","F6","F7","F8"]} -->
 
 Status: **APPROVED / RATIFIED** — 2026-07-22 (Charpy round-2 TEMPER cleared: F1-r/F2-r/F3-r resolved;
-scope B ratified). **§3 CONTRACT REVISION 2026-07-23 — pending re-stress:** the `buildConstruction`
-return drops the dead `classification` field (five keys → four: `{ plan, movers, capture,
-sourceWasClobbered }`), resolving Poirot F1 (`Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`).
-A ratified return shape cannot change without a re-ratified contract, so this revision goes to Charpy to
-stress → Curie to reconcile the exact-shape test (`CONSTRUCTION_KEYS`, `test/swipe-construction.test.js`)
-→ Brunel for the narrow code change; build of the revised shape waits on that chain.
-**FINALIZED 2026-07-24 — passes the wired Vitruvius authoring gate (exit 0, node-validated).** The
-authoring-gate escape is closed for this plan: added the machine-readable `vitruvius-contract` (§3,
-`classification` absent — the dead-field removal), `vitruvius-effects` (§5), and `vitruvius-coverage` (§8)
-blocks, and disambiguated the three multi-owner ledger rows (`destinationHost`→L1, `capture`→L1,
-`d.clobbered`→L3). Returned to the same Stage-5 Charpy session for review. Sub-plan of
+scope B ratified). **§3 CONTRACT REVISION — the `buildConstruction` return drops all dead members.**
+Round 1 (2026-07-23) dropped `classification`; round 2 (2026-07-24, Charpy r5 TEMPER) dropped the dead
+`plan` WRAPPER — `plan.outgoing`/`incoming`/`renderDestination` were dead on the return, the same class one
+level down. Final return is FOUR live keys: `{ decorations, movers, capture, sourceWasClobbered }`
+(`decorations` hoisted from `plan.decorations`, its only L3 consumer). Resolves Poirot F1
+(`Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`) + Charpy r5 F1. A ratified return shape cannot
+change without a re-ratified contract, so it goes to Charpy → Curie (`CONSTRUCTION_KEYS`,
+`test/swipe-construction.test.js`) → Brunel (narrow code change: hoist `decorations`, drop the wrapper).
+**Passes the wired Vitruvius authoring gate (exit 0, node-validated);** the authoring-gate escape is closed
+for this plan (machine-readable `vitruvius-contract`/`-effects`/`-coverage` blocks added; the three
+multi-owner ledger rows disambiguated `destinationHost`→L1, `capture`→L1, `d.clobbered`→L3; Charpy r5 F2's
+false `parking` coverage mutation corrected to honest parity-only). Sub-plan of
 `Claude/Plans/PLAN-swipe-reveal.md` §7 step 5. Resolves the seven blocking findings (F1, F2, F4, F5,
 F6, F7, F8) and the F3 recommendation from `Claude/Charpy/PLAN-swipe-stage5-2026-07-22.md`, plus the
 named parity obligations (`np-locked`, `freezeArt`, `.nav-ghost`, `npPillClone`, no-new-`will-change`,
@@ -85,7 +86,8 @@ Behavioral ownership, not function names.
 - The Now Playing pill recipe (`npPillClone`) as a private decoration builder (F5 coverage).
 - Real **source** element resolution (`overlay` vs `in-flow`), driven by the carried `sourceHost`.
 - Deriving the classification and construction plan internally (single source of truth, §3, F5), and
-  returning the construction **plan** (the `classification` is consumed internally, not returned — F1).
+  returning the construction **outputs** — `movers`, `capture`, `decorations`, `sourceWasClobbered` (the
+  `classification` and the `plan` wrapper are consumed internally, not returned — F1).
 - The **ordering** of outgoing capture before any destination render (§6, F7).
 
 **Stays in `app.js`:**
@@ -139,9 +141,12 @@ type Mover = {
 type Capture = { ghostY?: number; animSync: number; animRes: number };  // ghostY is APP-GHOST ONLY (F2-r)
 
 type Construction = {
-  // `classification` is derived and consumed INTERNALLY (host resolution + plan derivation); it is NOT
-  // returned — no L3 consumer reads it (F1, 2026-07-23; no-dead-fields, EC §17). Return is FOUR keys.
-  plan: Readonly<{ outgoing; incoming; renderDestination; decorations }>;   // returned; L3 reads plan.decorations
+  // Neither `classification` nor the `plan` WRAPPER is returned. `classification` is derived+consumed
+  // internally. Of the plan's fields only `decorations` has an L3 consumer (the outgoing-NP unlock), so
+  // it is HOISTED to the top level; `plan.outgoing`/`incoming`/`renderDestination` are consumed only
+  // inside buildConstruction (swipe.js:291/301/305) and would be dead on the return, so the wrapper is
+  // dropped (F1 NESTED dead-field, 2026-07-24; EC §17 — same class as classification, one level down).
+  decorations: Readonly<{ kind; base }[]>;         // was plan.decorations; L3 reads c.decorations (NP unlock)
   movers: {
     outgoing:   Mover;                             // ownership 'owned-pane' (app-ghost) | 'borrowed-real'
     incoming:   Mover;                             // ownership 'owned-pane' (home-snapshot) | 'borrowed-real'
@@ -153,9 +158,11 @@ type Construction = {
 ```
 
 **Machine-readable contract (gate — `vitruvius-contract`).** The canonical `classifyTransition` key set
-(the exact-key contract this plan changes) plus the four-key `Construction` return, as `field | class`,
-reconciled against the §4 ledger classes (`sourceHost`/`destinationHost`/`capture` = `object` in both).
-`classification` is absent — it is derived internally, not returned (F1, dead-field removal).
+(the exact-key contract this plan changes) plus the four-key `Construction` return
+`{ decorations, movers, capture, sourceWasClobbered }`, as `field | class`, reconciled against the §4
+ledger (`sourceHost`/`destinationHost`/`capture`/`decorations` = `object`). Neither `classification` nor
+the `plan` wrapper is a return member: `classification` is derived internally, and of `plan`'s fields only
+`decorations` has an L3 consumer, so it is hoisted and the wrapper dropped (F1 nested dead-field removal).
 
 ```vitruvius-contract
 # field | class
@@ -164,7 +171,6 @@ toKind | string
 sourceHost | object
 destinationHost | object
 decorations | object
-plan | object
 movers | object
 capture | object
 sourceWasClobbered | boolean
@@ -216,13 +222,13 @@ Answers to the required contract questions:
   path, preserving today's "no ghost ⇒ `d.ghostY` untouched" (both `d.ghostY` readers null-guard it:
   app.js:1163 `cur.ghostY == null ? '?'`, app.js:1212 `(cur.ghostY == null) ? null : …`, so an absent
   `ghostY` on the home path is parity-safe).
-- **Additional construction metadata:** `plan` is returned so L3 reuses the exact decorations objects
-  (the outgoing-NP `np-locked` unlock reads `plan.decorations`) without re-deriving — no second source.
-  `classification` is **not** returned: L3 does no render-mode checks and reads `plan.decorations` (not
-  `classification.decorations`), so a returned `classification` has no consumer — a dead field (F1,
-  2026-07-23; EC §17, the same rule this stage invokes to withhold `sameBrowseHost`). It is derived and
-  consumed internally (host resolution, plan derivation) and returns in the later stage that first reads
-  it, with its consumer.
+- **Additional construction metadata:** the only construction-plan field L3 consumes is `decorations`
+  (the outgoing-NP `np-locked` unlock reads it), so `decorations` is returned at the **top level** and L3
+  reads `c.decorations`. The `plan` WRAPPER is **not** returned — `plan.outgoing`/`incoming`/
+  `renderDestination` are consumed only inside `buildConstruction` (swipe.js:291/301/305) and would be dead
+  returned members, the same class as `classification` one level down (F1 nested dead-field, 2026-07-24;
+  EC §17). `classification` is likewise **not** returned (derived + consumed internally — host resolution,
+  plan derivation). A host/plan field returns in the later stage that first reads it, with its consumer.
 - **How `d.clobbered` is produced and recorded (F6):** `buildConstruction` computes `sourceWasClobbered`
   (it owns source resolution and knows `destinationHost==='browse-host'` and whether the source is also
   `#browse`) and returns it; L3 records `d.clobbered = c.sourceWasClobbered`. The finalizer (app.js:1260/
@@ -253,6 +259,7 @@ clone build+mount to body | domeffect | out | ghostApp/snapshotHome@S5 | env.doc
 stale .np-pill-float removal | domeffect | out | npPillClone@S5 | env.document@S5 | L1 via env | per-gesture | npPillClone test
 mover shape {el,base,own} | object | out | buildConstruction@S5 | start()@S5 | L3 maps | per-gesture | F1 mapping test
 capture {ghostY?, animSync, animRes} | object | out | ghostApp/snapshotHome@S5 | start()@S5 | L1 | per-gesture | F1 capture test
+decorations (NP pill descriptors) | object | out | buildConstruction@S5 | start()@S5 | L1 | per-gesture | npLock test
 d.clobbered same-host carrier | object | out | buildConstruction@S5 | finalize@S5 | L3 | per-session | F6 abort test
 stale settings-overlay cleanup | domeffect | out | env.renderDestination@S5 | shared overlays@S5 | L2 | per-gesture | F5 stale-overlay test
 home park/browse hidden toggles | domeffect | out | env.renderDestination@S5 | #home/#browse@S5 | L2 | per-gesture | F5 host-state test
@@ -438,7 +445,7 @@ npLock | incoming and outgoing NP preserve np-locked removal | NP in and out | n
 freezeArt | both recipes strip img data-art before live connection | both recipes | freezeArt moved after live connection | recipe
 navGhost | nav-ghost wrapper fixed beneath bars non-interactive clipped | recipe fixture | nav-ghost behavioral contract broken | recipe
 willChange | real home and browse movers gain no new will-change | any real-mover swipe | a real in-flow mover promoted | regression
-parking | initial mover parking retained move overwrites same tick | any swipe | parking transform removed (parity regression) | regression
+parking | initial mover parking retained move overwrites same tick | any swipe | n/a — parity-only, unobservable (move() overwrites the parking transform the same tick, no paint between) | regression
 ```
 
 ## 9. Records reconciliation (APPLIED on ratification, 2026-07-22)
