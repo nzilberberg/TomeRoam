@@ -715,3 +715,15 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   which is what caught it), not a gate: a cheap max-heading-vs-range lint has a concrete false-positive on a
   legitimate NARROWER sub-range (e.g. "the structural disciplines D1–D3") or a historical quote of an old
   range, so it would misfire — 2026-07-24.
+
+- The build-gate spec corrections are INSTALLED into the three global persona specs — 2026-07-24. Ratified
+  Charpy FORGE (r2), then Zelda applied the frozen install patch mechanically: Brunel.md Local § Gate A/B
+  rewritten to the four-checkpoint split (mechanical authoring gate → Charpy pre-FORGE on existing consumers
+  → Gate A admission running the code-level returned-key gate for newly-built consumers → Gate B
+  designated-test proof), with the code-level gate (`tools/dead-return-fields.mjs` /
+  `test/construction-consumers.test.js`, plus the exact-key contract gate for destructured reads) named as
+  Gate A's mechanical basis and explicitly TomeRoam-scoped; Charpy.md gained discipline D10 (pre-FORGE
+  contract-member consumer verification, bounded by decidability); the three `D1–D9` range enumerations
+  (Charpy.md:305/:339, Vitruvius.md:507) scrubbed to `D1–D10`. Post-apply verify: HEAD-wide `D1–D9` returns
+  0 hits; git diff touched exactly those three files. The Brunel project-adapter abstraction remains future
+  work (single-project machine).
