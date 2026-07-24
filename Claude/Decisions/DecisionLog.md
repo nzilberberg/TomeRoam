@@ -642,3 +642,26 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   field is consumed by `start()`" known-red flips green, and `KR-swipe-construction-dead-classification` +
   its `TRACKED_OPEN` allowlist entry are removed. Not yet implemented (bench only; the on-device hold
   applies) — 2026-07-23.
+
+- The build-gate spec corrections plan (`Claude/Plans/PLAN-build-gate-spec-corrections.md`) is **RATIFIED**
+  (Charpy FORGE after a TEMPER round; casebook `Claude/Charpy/PLAN-build-gate-spec-corrections-2026-07-23.md`)
+  and its approved wording is **FROZEN** (registered in `~/.claude/frozen-artifacts.txt`; freeze-guard
+  verified to deny edits). It corrects the installed Gate A/B build-gate spec (Brunel.md Local §) for the
+  user's defects, WITHOUT weakening the defense that caught F1: (C1) the code-level returned-key gate
+  (`dead-return-fields.mjs`/`construction-consumers.test.js`) STAYS Gate A's mechanical basis — the
+  contract↔ledger reconciliation is a plan-authoring complement the Vitruvius authoring gate already runs
+  (`vitruvius-plan-gate.sh` 298/313), NOT a build-side re-invention, and it structurally cannot catch a dead
+  RETURNED field (one consumed before the return passes it); (C2) the semantic "does production genuinely
+  read this" check is split by DECIDABILITY — Charpy pre-FORGE for EXISTING consumers, the code-level gate at
+  Brunel admission for consumers the plan newly builds — never the author self-certifying; (C3) Gate B must
+  prove the DESIGNATED test reddens on the mutation's intended assertion (bare sweep `CAUGHT` rejected),
+  mechanized later by `campaign-gate.mjs` (designed, deferred); (C4) `[cell-id]` test/mutation tagging is a
+  new machine protocol, manual until `campaign-gate.mjs` reads it. Corrections are cleared to INSTALL into
+  Brunel.md/Charpy.md per §6 as a SEPARATE step (not done at ratification). CONFIRMED ROOT CAUSE recorded:
+  an AUTHORING-GATE ESCAPE — the Stage-5 plan is RATIFIED yet FAILS `vitruvius-plan-gate.sh` today with 6
+  violations (no `vitruvius-contract`/`-effects`/`-coverage` blocks; 3 ambiguous-owner ledger rows); the
+  gate exists but is unwired, so ratification outran it, and the prose return contract is why F1 could hide.
+  Two items left OPEN (§9, decision owed): (1) wire the Vitruvius authoring gate to block ratification
+  (legacy-plan migration cost is why it is unwired); (2) review-gate persona-spec edits (freeze-guard on
+  `~/.claude/personas/**`). The Brunel.md/Charpy.md specs are GLOBAL (outside this repo); this entry records
+  that this project's build-gate work follows the ratified plan — 2026-07-24.

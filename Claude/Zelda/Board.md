@@ -135,9 +135,9 @@ SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is stil
 The latter two share a root — **conn flapping relay↔local**; pinning board reads to the fast local path would help both.
 
 ## 🔭 Planned / backlog (designed, not built)
-- **Build-gate spec corrections (Vitruvius → Charpy):** `Claude/Plans/PLAN-build-gate-spec-corrections.md`
-  — Charpy TEMPER (`Claude/Charpy/PLAN-build-gate-spec-corrections-2026-07-23.md`) RESOLVED; REVISED,
-  pending Charpy re-verify. Corrects the installed Gate A/B spec (Brunel.md Local §) for the user's
+- **Build-gate spec corrections — RATIFIED + FROZEN (2026-07-24, Charpy FORGE):**
+  `Claude/Plans/PLAN-build-gate-spec-corrections.md`, approved wording locked in `~/.claude/frozen-artifacts.txt`
+  (freeze-guard verified). Corrects the installed Gate A/B spec (Brunel.md Local §) for the user's
   2026-07-23 defects. Charpy's crack (correct): C1 as first written would have relocated the F1 dead-
   returned-field defense OFF the live code-level gate (`dead-return-fields.mjs`/`construction-consumers.test.js`)
   — which is the only check that catches the class — onto a records reconciliation that can't (a field
@@ -150,7 +150,8 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   `vitruvius-plan-gate.sh` today with 6 violations (missing contract/effects/coverage blocks + 3 ambiguous-
   owner rows) — the gate exists but is unwired, so ratification outran it. §7 routes "wire the authoring
   gate?" (legacy-plan migration cost) + §9 "review-gate persona-spec edits?" as OPEN — not unilaterally
-  done. Nothing installed into Brunel.md/Charpy.md until FORGE.
+  done. **Next:** corrections cleared to INSTALL into Brunel.md/Charpy.md per §6 (a separate step, on
+  request — not done at ratification); the two OPEN §9 items await a user/Charpy decision.
 - **Reset identity-envelope hardening** (reviewer-set order): `pb_prog2Keys` identity envelope; **dev8 collision CONTAINMENT** (keep the 32-bit title namespace, match self only on FULL client id — do NOT widen/migrate); download-staleness API split (`hasDownloadRecord`/`isDownloadUsable`/`isDownloadStale`). Depth + the probability-vs-proof reasoning rule → `[[tomeroam-reset-tombstone-plan]]`, `[[tomeroam-durable-progress-plan]]`, and the process lessons in `[[tomeroam-status-board]]`.
 - **Native cross-app resume (no LMS):** capture the currently-discarded `PlaySessionStateNotification.viewOffset` → durable `Progress`; optional `/status/sessions` launch poll → `[[tomeroam-crossapp-resume]]`.
 - **"Delete all downloads":** deferred by user (`.119`); a real data-loss gap (removing the iOS icon destroys everything silently), not a space issue.

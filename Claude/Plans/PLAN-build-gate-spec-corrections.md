@@ -4,10 +4,13 @@ Type: plan
 
 <!-- vitruvius-gate {"plan_type":"process","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":false},"project_adapter":"tomeroam-js-dom","source_ranges":[],"callee_ranges":[],"affected_contracts":[],"staged_records":["~/.claude/personas/Implement/Brunel/Brunel.md","~/.claude/personas/Plan/Charpy/Charpy.md"],"blocking_questions":[]} -->
 
-Status: **REVISED 2026-07-23 — resolves Charpy TEMPER (`Claude/Charpy/PLAN-build-gate-spec-corrections-2026-07-23.md`),
-pending Charpy re-verify.** Authored by Vitruvius. Nothing is installed into any persona spec or tool until
-Charpy returns FORGE and it is ratified. Process/spec plan: all seven change-patterns are false, so by
-policy it carries no machine blocks (the one documented exemption).
+Status: **RATIFIED / APPROVED — 2026-07-24 (Charpy FORGE).** Authored by Vitruvius; tempered and
+re-verified by Charpy (`Claude/Charpy/PLAN-build-gate-spec-corrections-2026-07-23.md`). The approved
+wording is **FROZEN** (registered in the freeze-guard `~/.claude/frozen-artifacts.txt`); any edit requires
+an explicit unfreeze. The corrections are cleared to install into `Brunel.md`/`Charpy.md` per §6, by the
+installer, as a **separate** step (not done by this ratification). The two items in §9 (wire the authoring
+gate; review-gate persona-spec edits) remain OPEN. Process/spec plan: all seven change-patterns are false,
+so by policy it carries no machine blocks (the one documented exemption).
 
 ## Applicability
 
