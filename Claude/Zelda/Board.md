@@ -55,7 +55,8 @@ APPROVED after Charpy rounds 1–2 (`Claude/Charpy/PLAN-swipe-stage5-2026-07-22.
 seven blockers (F1/F2/F4/F5/F6/F7/F8) + F3 and round-2's residuals (F1-r host-field projection +
 frozen-spec value coverage; F2-r app-ghost-only `ghostY?`; F3-r narrower `env.renderDestination` signature)
 are all resolved. **Scope B:** `buildConstruction(from, dest, env)` derives classification internally and
-returns `{classification, plan, movers, capture, sourceWasClobbered}`, never the session `d`; the two
+returns `{classification, plan, movers, capture, sourceWasClobbered}` [return since narrowed to FOUR keys
+— `classification` dropped 2026-07-23, see the F1 item below], never the session `d`; the two
 capture recipes + real `overlayEl`/`appViewEl` source resolution + the NP decoration builder move to
 `swipe.js` behind the injected `env`, while the destination render dispatch and the Browse hold stay in
 app.js until stages 6/7. The four ex-OPEN decisions (F0 scope→B, F1 seam, F3 hosts CARRIED and read by
@@ -89,11 +90,17 @@ DRIFT GUARD riding the contract-gate meta-inventory (every object-returning NON_
 be dead-field-registered, so stage-6's `finalizationPlanFor`/`planFor` can't escape) + hard gate +
 known-red (PolicyLedger `KR-swipe-construction-dead-classification`); proven fail-on-defect,
 pass-on-correct, catches-a-new-seam; residual = destructuring-consumed seams (concrete false-positive shown). Also
-O1 (GHOST_BG per-gesture, plan-disclosed), O2/W11 (unwrapped throw), O5 (eager GHOST_BG, minor). **Next:**
-**Vitruvius/Charpy** decide F1's fix (consume classification in L3, or revise the ratified return to drop
-it) → Curie reconciles the exact-shape test → Brunel makes the narrow change; **Mendeleev** audits §8
-incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard, reddened
-by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold still applies).
+O1 (GHOST_BG per-gesture, plan-disclosed), O2/W11 (unwrapped throw), O5 (eager GHOST_BG, minor).
+**F1 DECIDED (Vitruvius, 2026-07-23) — DROP `classification` (decision 1).** The `buildConstruction`
+return narrows five keys → four `{ plan, movers, capture, sourceWasClobbered }`; reproduced 3 ways (grep
+empty, L3 reads none of it, detector reports it); L3 has no render-mode/host need, so consuming it (dec. 2)
+would be an invented read EC §17 forbids; `plan` stays (L3 reads `plan.decorations`). §3 + DecisionLog +
+this board updated; §4 ledger already agreed (no return-row). **Next:** Charpy stresses the revised §3 →
+Curie reconciles `CONSTRUCTION_KEYS` (`test/swipe-construction.test.js`) → Brunel makes the narrow code
+change (on his commit the detector goes zero-dead, the known-red flips green, and
+`KR-swipe-construction-dead-classification` + its `TRACKED_OPEN` entry are removed). **Mendeleev** still
+audits §8 incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard,
+reddened by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold applies).
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first

@@ -610,10 +610,35 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   frozen-spec value coverage; F2-r app-ghost-only `ghostY?`; F3-r narrower `env.renderDestination` signature)
   are all resolved; the round-2 TEMPER is cleared. This SETTLES the four OPEN stage-5 decisions above: **F0**
   scope → B; **F1** seam → `buildConstruction(from, dest, env)` derives classification internally and returns
-  `{classification, plan, movers, capture, sourceWasClobbered}`, never receiving the session `d`; **F3** →
+  `{classification, plan, movers, capture, sourceWasClobbered}` [SUPERSEDED 2026-07-23: return narrowed to
+  FOUR keys — `classification` dropped as a dead field; see the 2026-07-23 §3-revision entry below], never
+  receiving the session `d`; **F3** →
   `sourceHost`/`destinationHost` are CARRIED (not derived) and read by `buildConstruction`, honouring the
   2026-07-21 host-field entry, with the kind→host projection pinned in the frozen spec
   (`swipe-plan-spec.mjs`) and asserted per registry pair; **F6** → pane `release()`/`dispose()`/`equivalence`
   deferred to stage 6 (Stage 5 movers carry only `element`/`ownership`/`slot` + `capture`). The three
   conflicting records are reconciled to B this pass: `PLAN-swipe-reveal.md` §7 step 5, the `js/swipe.js`
   header (lines 24–27), and this log. Build may proceed — 2026-07-22.
+
+- §3 CONTRACT REVISION — `Swipe.buildConstruction` drops `classification` from its return: the ratified
+  return shape narrows from five keys to **four**, `{ plan, movers, capture, sourceWasClobbered }`.
+  Decision 1 of the F1 resolution (Poirot review `Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`,
+  verdict fix-then-ship). Reproduced three ways before deciding: `grep '\.classification' js/` empty; L3
+  (`start()`, app.js:458–475) reads `movers`/`capture`/`sourceWasClobbered`/`plan.decorations` and never
+  `classification`; `node tools/dead-return-fields.mjs` reports `classification`. `classification` is still
+  DERIVED and consumed INTERNALLY by `buildConstruction` (host resolution + plan derivation); only its slot
+  in the returned object is removed. Decision 2 (consume it in L3) was rejected — L3 has no render-mode or
+  host responsibility that needs it, so any L3 read would be the invented/meaningless read the review and
+  EC §17 forbid. This applies the SAME no-dead-fields rule (EC §17) the stage already invokes to withhold
+  `sameBrowseHost`, and follows the `.229` pattern: a classification/host field returns in the commit that
+  first CONSUMES it, not on spec — if Stage 6's `finalizationPlanFor`/`planFor` needs the classification it
+  returns then, with its consumer. The `plan` field STAYS (live: L3 reads `plan.decorations` for the
+  outgoing-NP `np-locked` unlock); narrowing `plan` to `decorations` was considered and declined as
+  out-of-scope gold-plating (`plan` is not a dead returned field — EC §17 fires at returned-key
+  granularity and `plan` has a consumer). The §4 ledger already carried no return-row for `classification`
+  (only an L1-derives input row), so §3 now AGREES with §4. Handed to Charpy to stress → Curie to reconcile
+  `CONSTRUCTION_KEYS` (`test/swipe-construction.test.js`, the exact-shape test) → Brunel for the narrow code
+  change; on Brunel's commit the detector reports zero dead, the "every `Swipe.buildConstruction` returned
+  field is consumed by `start()`" known-red flips green, and `KR-swipe-construction-dead-classification` +
+  its `TRACKED_OPEN` allowlist entry are removed. Not yet implemented (bench only; the on-device hold
+  applies) — 2026-07-23.

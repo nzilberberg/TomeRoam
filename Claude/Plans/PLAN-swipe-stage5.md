@@ -5,7 +5,12 @@ Type: plan
 <!-- vitruvius-gate {"plan_type":"refactor","patterns":{"boundary_relocation":true,"callee_replacement":true,"contract_shape":true,"state_transfer":true,"async_change":false,"persistence_migration":false,"lifecycle_ownership":false},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:345-356","js/app.js:368-497","js/app.js:547-580","js/app.js:582-655"],"callee_ranges":["js/app.js:550-558","js/app.js:632-638"],"affected_contracts":["test/contract-function-gate.test.js:24","test/swipe-transition.test.js:57","test/fixtures/swipe-plan-spec.mjs:45","test/swipe-transition.test.js:90"],"staged_records":["Claude/Plans/PLAN-swipe-reveal.md","js/swipe.js:24-27","Claude/Decisions/DecisionLog.md"],"blocking_questions":["F1","F2","F4","F5","F6","F7","F8"]} -->
 
 Status: **APPROVED / RATIFIED** — 2026-07-22 (Charpy round-2 TEMPER cleared: F1-r/F2-r/F3-r resolved;
-scope B ratified; build may proceed). Sub-plan of
+scope B ratified). **§3 CONTRACT REVISION 2026-07-23 — pending re-stress:** the `buildConstruction`
+return drops the dead `classification` field (five keys → four: `{ plan, movers, capture,
+sourceWasClobbered }`), resolving Poirot F1 (`Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`).
+A ratified return shape cannot change without a re-ratified contract, so this revision goes to Charpy to
+stress → Curie to reconcile the exact-shape test (`CONSTRUCTION_KEYS`, `test/swipe-construction.test.js`)
+→ Brunel for the narrow code change; build of the revised shape waits on that chain. Sub-plan of
 `Claude/Plans/PLAN-swipe-reveal.md` §7 step 5. Resolves the seven blocking findings (F1, F2, F4, F5,
 F6, F7, F8) and the F3 recommendation from `Claude/Charpy/PLAN-swipe-stage5-2026-07-22.md`, plus the
 named parity obligations (`np-locked`, `freezeArt`, `.nav-ghost`, `npPillClone`, no-new-`will-change`,
@@ -74,7 +79,8 @@ Behavioral ownership, not function names.
 - The `GHOST_BG` value — resolved lazily at runtime through `env`, not the top-level initializer (§7, F8).
 - The Now Playing pill recipe (`npPillClone`) as a private decoration builder (F5 coverage).
 - Real **source** element resolution (`overlay` vs `in-flow`), driven by the carried `sourceHost`.
-- Deriving the classification and construction plan (single source of truth, §3, F5) and returning both.
+- Deriving the classification and construction plan internally (single source of truth, §3, F5), and
+  returning the construction **plan** (the `classification` is consumed internally, not returned — F1).
 - The **ordering** of outgoing capture before any destination render (§6, F7).
 
 **Stays in `app.js`:**
@@ -128,8 +134,9 @@ type Mover = {
 type Capture = { ghostY?: number; animSync: number; animRes: number };  // ghostY is APP-GHOST ONLY (F2-r)
 
 type Construction = {
-  classification: Readonly<{ fromKind; toKind; sourceHost; destinationHost; decorations }>;  // reused by L3
-  plan: Readonly<{ outgoing; incoming; renderDestination; decorations }>;                     // reused by L3
+  // `classification` is derived and consumed INTERNALLY (host resolution + plan derivation); it is NOT
+  // returned — no L3 consumer reads it (F1, 2026-07-23; no-dead-fields, EC §17). Return is FOUR keys.
+  plan: Readonly<{ outgoing; incoming; renderDestination; decorations }>;   // returned; L3 reads plan.decorations
   movers: {
     outgoing:   Mover;                             // ownership 'owned-pane' (app-ghost) | 'borrowed-real'
     incoming:   Mover;                             // ownership 'owned-pane' (home-snapshot) | 'borrowed-real'
@@ -186,8 +193,13 @@ Answers to the required contract questions:
   path, preserving today's "no ghost ⇒ `d.ghostY` untouched" (both `d.ghostY` readers null-guard it:
   app.js:1163 `cur.ghostY == null ? '?'`, app.js:1212 `(cur.ghostY == null) ? null : …`, so an absent
   `ghostY` on the home path is parity-safe).
-- **Additional construction metadata:** `classification` and `plan` are returned so L3 reuses the exact
-  objects (decorations loop, render-mode checks) without re-deriving — no second source.
+- **Additional construction metadata:** `plan` is returned so L3 reuses the exact decorations objects
+  (the outgoing-NP `np-locked` unlock reads `plan.decorations`) without re-deriving — no second source.
+  `classification` is **not** returned: L3 does no render-mode checks and reads `plan.decorations` (not
+  `classification.decorations`), so a returned `classification` has no consumer — a dead field (F1,
+  2026-07-23; EC §17, the same rule this stage invokes to withhold `sameBrowseHost`). It is derived and
+  consumed internally (host resolution, plan derivation) and returns in the later stage that first reads
+  it, with its consumer.
 - **How `d.clobbered` is produced and recorded (F6):** `buildConstruction` computes `sourceWasClobbered`
   (it owns source resolution and knows `destinationHost==='browse-host'` and whether the source is also
   `#browse`) and returns it; L3 records `d.clobbered = c.sourceWasClobbered`. The finalizer (app.js:1260/
