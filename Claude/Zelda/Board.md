@@ -83,9 +83,12 @@ casebook `Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`). Runtime PAR
 adversary no defects). **F1 (Significant, external review credit): `Construction.classification` is a DEAD
 returned field** — no `start()` consumer reads it, violating the no-dead-fields rule the commit itself
 invokes to withhold `sameBrowseHost`. This seat MISSED it (cleared "field-value-used-internally" ≠
-"returned-field-has-a-consumer"); the original SHIP was wrong. **Durably gated** (build `.240`):
-`tools/dead-return-fields.mjs` detector + `test/construction-consumers.test.js` (hard gate + known-red) +
-PolicyLedger `KR-swipe-construction-dead-classification`; proven fail-on-defect / pass-on-correct. Also
+"returned-field-has-a-consumer"); the original SHIP was wrong. **Durably gated for the CLASS** (`.240`
+detector + `.241` widened): `tools/dead-return-fields.mjs` + `test/construction-consumers.test.js` — a
+DRIFT GUARD riding the contract-gate meta-inventory (every object-returning NON_CONTRACT swipe seam must
+be dead-field-registered, so stage-6's `finalizationPlanFor`/`planFor` can't escape) + hard gate +
+known-red (PolicyLedger `KR-swipe-construction-dead-classification`); proven fail-on-defect,
+pass-on-correct, catches-a-new-seam; residual = destructuring-consumed seams (concrete false-positive shown). Also
 O1 (GHOST_BG per-gesture, plan-disclosed), O2/W11 (unwrapped throw), O5 (eager GHOST_BG, minor). **Next:**
 **Vitruvius/Charpy** decide F1's fix (consume classification in L3, or revise the ratified return to drop
 it) → Curie reconciles the exact-shape test → Brunel makes the narrow change; **Mendeleev** audits §8

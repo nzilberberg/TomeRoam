@@ -171,32 +171,45 @@ F1 is the second time this seat cleared a dead classification-derived field on t
 .227 review made the sibling miss and wrote the discipline "turn a rule the commit invokes back on the
 commit's own additions"). A discipline that has now failed twice is vigilance; the fix is structure.
 
-Built this turn (committed in the follow-up `.240`, not part of the reviewed `6bf0d20`):
-- **`tools/dead-return-fields.mjs`** — a mechanical detector. It parses a seam function's `return { … }`
-  top-level keys (brace-depth-aware) and its consumer function's body, and reports any returned key with
-  no `<callVar>.<key>` read. No reasoning, no "is the value used somewhere" — the returned-object→consumer
-  boundary is checked directly.
-- **`test/construction-consumers.test.js`** — auto-running wiring: a HARD gate (`no NEW dead returned
-  field on Swipe.buildConstruction`, green now, reddens on any new dead field) + a known-red `{ todo }`
-  (`every … returned field is consumed by start()`, red now for F1, flips green when F1 is resolved).
-- **`Claude/Decisions/PolicyLedger.mjs`** — `KR-swipe-construction-dead-classification`, so the known-red
-  reconciles and CI stays green.
+The gate is the CLASS, not the one bug — it rides the existing meta-inventory. Built this turn (`.240`
+detector + narrow wiring; `.241` widened to the class):
 
-Proven (must fail on the error, pass on correct content):
-- Detector on the REAL repo → exit 1, reports `classification` (the F1 defect). [D]
-- Detector on a CORRECT fixture (consumer reads all 5 fields) → `[]`, exit 0.
-- Detector on a NEW-dead-field fixture (consumer drops `c.movers`) → `["movers"]` — the class-gate catches
-  a sibling, not just the named instance.
-- Wiring: `node --test test/construction-consumers.test.js` → hard gate `ok`, known-red `not ok … # TODO`;
-  `test/policy-ledger-gate.test.js` 3/3; full suite 682/679-pass/0-fail/3-todo.
+- **`tools/dead-return-fields.mjs`** — a mechanical detector. It parses a seam function's returned object
+  literal keys (brace-depth-aware; handles `return {…}` and `return Object.freeze({…})`; skips a
+  destructured parameter list) and its consumer function(s), and reports any returned key no consumer reads
+  as `<callVar>.<key>`. No reasoning, no "is the value used somewhere" — the returned-object→consumer
+  boundary is checked directly, across multiple consumers.
+- **`test/construction-consumers.test.js`** — three auto-running tests:
+  - **DRIFT GUARD (the class):** `contract-function-gate.test.js` already forces every `js/swipe.js` export
+    into CONTRACT (exact-key gated — a dead field changes the pinned key set) or NON_CONTRACT (a prose
+    exemption, previously NO shape check — the exact hole F1 fell through). This test asserts every
+    object-returning export is EITHER a registered dead-field seam (`SEAM_REGISTRY`, with its consumer) OR
+    exact-key-gated — so a FUTURE NON_CONTRACT object seam (stage 6's `finalizationPlanFor`/`planFor`)
+    cannot ship without a consumer check. The exemption list is itself guarded against rot (each
+    exact-key-gated name must still be a CONTRACT entry).
+  - **HARD GATE:** no dead returned field on any registered seam except the tracked-open one — reddens on a
+    new dead field.
+  - **KNOWN-RED `{ todo }`** for F1, flips green when resolved.
+- **`Claude/Decisions/PolicyLedger.mjs`** — `KR-swipe-construction-dead-classification` reconciles the
+  known-red; CI stays green.
 
-Residual left to discipline (a cheap gate provably over-reaches): the detector is scoped to the ONE named
-seam (`buildConstruction`→`start`). A generalized "any returned object field must have a consumer"
-detector false-positives on legitimate patterns — a field read through a forwarded/renamed binding
-(`const {plan} = c; use(plan)`), an object returned for a DIFFERENT caller than the one scanned, or a
-field consumed in a sibling module — so a naive repo-wide grep would redden correct code. Extending the
-detector to new seams is a per-seam registration (cheap), not a blanket scan; that registration stays a
-discipline until a second seam needs it.
+Proven (fail on the error, pass on correct, catch siblings):
+- Detector on the REAL repo → exit 1, reports `classification` (F1). [D]
+- Correct fixture (all fields read) → `[]`. NEW-dead-field fixture (drop `c.sourceWasClobbered`'s reader) →
+  `["sourceWasClobbered"]`. Drift guard on a hypothetical unregistered new object seam → caught.
+- Wiring: `node --test test/construction-consumers.test.js` → drift guard `ok`, hard gate `ok`, known-red
+  `not ok … # TODO`; `policy-ledger-gate` green; full suite 683/680-pass/0-fail/3-todo.
+
+Residual left to discipline, with the concrete false-positive that resists a cheap gate: a consumer that
+DESTRUCTURES the seam result (`const { sourceHost } = classifyTransition(...)`) hides the read from a
+`<var>.<field>` scan. Demonstrated in this very file — running the detector on `classifyTransition →
+buildConstruction` reports ALL FIVE keys dead (a false positive), because `buildConstruction` consumes the
+classification by destructuring and pass-through, not property access. So destructuring-consumed seams
+cannot be property-access-checked; they are covered by the exact-key gate instead (that is why
+`classifyTransition`/`constructionPlanFor` are exempt, not registered). A truly general "any returned field
+must be read anywhere" gate needs AST binding-analysis (linter-grade), not a scan — that is the boundary,
+shown, not asserted. Registering a new PROPERTY-ACCESS-consumed seam is one `SEAM_REGISTRY` entry, and the
+drift guard forces it, so that registration is structure, not vigilance.
 
 ## The prediction
 
