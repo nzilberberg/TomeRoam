@@ -131,6 +131,18 @@ SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is stil
 The latter two share a root — **conn flapping relay↔local**; pinning board reads to the fast local path would help both.
 
 ## 🔭 Planned / backlog (designed, not built)
+- **Build-gate spec corrections (Vitruvius → Charpy):** `Claude/Plans/PLAN-build-gate-spec-corrections.md`
+  — PROPOSED, awaiting Charpy temper. Corrects the installed Gate A/B build-gate spec (in Brunel.md Local §)
+  for three defects the user surfaced 2026-07-23: (C1) Gate A must reconcile machine-readable
+  `vitruvius-contract` ↔ `vitruvius-ledger`, not scrape the prose `Construction` type; (C2) the SEMANTIC
+  consumer-verification is Charpy's pre-FORGE job, NOT the author's self-certification (mechanical gate =
+  structural only; Gate A pre-Brunel = records complete+unchanged; Vitruvius fixes, never self-certifies);
+  (C3) Gate B must prove the DESIGNATED test reddens on the mutation's intended assertion, not a bare sweep
+  `CAUGHT` — the `campaign-gate.mjs` tooling gap, DESIGNED not built (user deferral). Plus: `[cell-id]` test/
+  mutation tagging is a NEW machine protocol (recorded as such). Nothing installed into Brunel.md/Charpy.md
+  until ratified. ⚠️ Meta-lesson caught this session: the author seat editing the installed persona spec
+  directly (no temper) is the error this plan routes around — §7 asks whether persona-spec edits should be
+  review-gated (open).
 - **Reset identity-envelope hardening** (reviewer-set order): `pb_prog2Keys` identity envelope; **dev8 collision CONTAINMENT** (keep the 32-bit title namespace, match self only on FULL client id — do NOT widen/migrate); download-staleness API split (`hasDownloadRecord`/`isDownloadUsable`/`isDownloadStale`). Depth + the probability-vs-proof reasoning rule → `[[tomeroam-reset-tombstone-plan]]`, `[[tomeroam-durable-progress-plan]]`, and the process lessons in `[[tomeroam-status-board]]`.
 - **Native cross-app resume (no LMS):** capture the currently-discarded `PlaySessionStateNotification.viewOffset` → durable `Progress`; optional `/status/sessions` launch poll → `[[tomeroam-crossapp-resume]]`.
 - **"Delete all downloads":** deferred by user (`.119`); a real data-loss gap (removing the iOS icon destroys everything silently), not a space issue.
