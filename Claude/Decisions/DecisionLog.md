@@ -699,3 +699,19 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   Filed under `Claude/Vitruvius/`, not `Claude/Plans/` — it is not a plan; the newly-wired plan gate
   correctly flagged it as mis-filed when first written to `Claude/Plans/` (a `Status:` line there reads as a
   plan), which is the gate working, not a defect — 2026-07-24.
+
+- The install-patch's Charpy conformance-verify was TEMPER
+  (`Claude/Charpy/INSTALL-PATCH-build-gate-spec-corrections-2026-07-24.md`, F1–F4); resolved this pass,
+  pending re-verify. TWO settled points. (1) **F2 scope decision:** Brunel's Gate A/B protocol is
+  consciously scoped **TomeRoam-specific** — it lives in Brunel's project-Local section and names TomeRoam
+  gate files (`tools/dead-return-fields.mjs` / `test/construction-consumers.test.js`); the patch states this
+  so a global reader does not take the paths as universal. Abstracting the code-level check to the universal
+  principle + a Brunel project adapter (mirroring the Charpy/Vitruvius seats) is FUTURE work, taken when a
+  second project first needs it — not built now (single-project machine; smallest sound thing). (2) The
+  patch adds THREE install targets now (Charpy's F1): D10 extends the discipline range, so the HEAD-wide
+  scrub updates the three `D1–D9` enumerations (`Charpy.md:305`/`:339`, `Vitruvius.md:507`) to `D1–D10`;
+  confirmed those three are the complete set. ADAPT-DURABLY note: the "numbered-range enumeration goes stale
+  when the range is extended" class is left to DISCIPLINE (Charpy D5 sweep + the §6.6/§7 HEAD-wide scrub —
+  which is what caught it), not a gate: a cheap max-heading-vs-range lint has a concrete false-positive on a
+  legitimate NARROWER sub-range (e.g. "the structural disciplines D1–D3") or a historical quote of an old
+  range, so it would misfire — 2026-07-24.

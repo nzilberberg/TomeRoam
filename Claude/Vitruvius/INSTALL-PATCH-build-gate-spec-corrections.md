@@ -2,11 +2,14 @@
 
 Type: install-patch
 
-Status: **PROPOSED — awaiting Charpy conformance-verify, then freeze, then mechanical install by Zelda.**
-This is the artifact the ratified plan's §6 said was "held for the installer." It did not previously exist
-(the ratified plan overclaimed; the drafted text was never produced) — this file produces it now, as a
-separate companion. It does NOT modify the frozen ratified plan
-(`Claude/Plans/PLAN-build-gate-spec-corrections.md`), and it is NOT installed by authoring it.
+Status: **REVISED 2026-07-24 — resolves the Charpy conformance-verify TEMPER
+(`Claude/Charpy/INSTALL-PATCH-build-gate-spec-corrections-2026-07-24.md`, F1–F4); pending Charpy
+re-verify, then freeze, then mechanical install by Zelda.** This is the artifact the ratified plan's §6
+said was "held for the installer." It did not previously exist (the ratified plan overclaimed; the drafted
+text was never produced) — this file produces it now, as a separate companion. It does NOT modify the
+frozen ratified plan (`Claude/Plans/PLAN-build-gate-spec-corrections.md`), and it is NOT installed by
+authoring it. Install targets are now THREE global specs: `Brunel.md` (PATCH 1), `Charpy.md` (PATCH 2:
+D10 + two enumeration scrubs), and `Vitruvius.md` (PATCH 3: one enumeration scrub).
 
 Conforms to: the ratified plan §5 (C1–C4) and §6 (the staged edits), Charpy r1 temper
 (`Claude/Charpy/PLAN-build-gate-spec-corrections-2026-07-23.md`, F1–F7), and Charpy r2 FORGE
@@ -20,6 +23,12 @@ it MECHANICALLY (a Bash/`git apply` step, which the persona-spec-guard does not 
 Edit/Write to the persona specs is denied by `persona-spec-guard.sh`; that is intended — the install is
 mechanical, from this frozen patch.
 
+**NOTE ON APPLY (display-quoting):** every replacement/insert block below is shown as a `> ` blockquote
+for display in THIS artifact. The leading `> ` on each line is quoting for the patch only — the frozen
+text the installer applies is the **un-quoted** content. Strip the leading `> ` (and the single following
+space) from each line on apply; a mechanical `git apply` must operate on the de-quoted text, or it would
+install a blockquoted spec.
+
 ---
 
 ## PATCH 1 — `~/.claude/personas/Implement/Brunel/Brunel.md`
@@ -31,7 +40,7 @@ No other part of Brunel.md changes.
 
 **Replace-with (verbatim):**
 
-> ### Enforced build protocol — one mechanical gate, one independent review, two Brunel reconciliations
+> ### Enforced build protocol — two mechanical gates, one independent review, two Brunel reconciliations
 >
 > These are HARD GATES on the build, not a soft checklist and not optional. They bind to the
 > method above: **Gate A is a precondition of Phase 3 (no production code is modified until it
@@ -81,6 +90,14 @@ No other part of Brunel.md changes.
 > test AND a registered mutation the sweep catches. Reading is the fallback ONLY for the residue that
 > provably resists a cheap gate (dynamic or reflective access; a cell whose oracle is inherently manual),
 > and that residue must be named with a CONCRETE false-positive, never asserted in the abstract.
+>
+> **Scope.** This Gate A/B protocol lives in Brunel's project-Local section and is **TomeRoam-specific**:
+> the named code-level gate files (`tools/dead-return-fields.mjs` / `test/construction-consumers.test.js`)
+> are TomeRoam's. In another project the code-level returned-key check is the same PRINCIPLE — every
+> returned member of every exported contract factory is read downstream — realized by that project's own
+> detector, and the project paths move into a Brunel project adapter, mirroring the Charpy/Vitruvius seats.
+> That abstraction is future work, taken when a second project first needs it; it is not built now, and
+> until then Gate A/B's named files must not be read as universal.
 >
 > #### Gate A — Pre-build contract reconciliation (admission)
 >
@@ -174,7 +191,11 @@ No other part of Brunel.md changes.
 
 ## PATCH 2 — `~/.claude/personas/Plan/Charpy/Charpy.md`
 
-**Operation:** INSERT a new discipline into the Local section, appended to the Universal disciplines
+Two operations: (2a) INSERT the new D10 discipline; (2b) SCRUB two now-stale `D1–D9` enumerations that the
+new discipline makes wrong (the HEAD-wide range-scrub the standards require, StandardsDocument §6.6/§7 —
+adding D10 extends the enumerated range).
+
+**Operation 2a — INSERT** a new discipline into the Local section, appended to the Universal disciplines
 immediately AFTER the last one (D9) and BEFORE the next subsection. It is additive — no existing text is
 replaced. (Exact byte anchor is finalized at mechanical-install time when Zelda reads the file; the
 placement is unambiguous: the new `### D10` follows `### D9` in the Local "Universal disciplines" run.)
@@ -194,6 +215,27 @@ placement is unambiguous: the new `### D10` follows `### D9` in the Local "Unive
 > cannot certify the semantic correctness of its own consumer claim; this independent read is why the seat
 > exists. (This is the pre-FORGE half of the four-checkpoint split recorded in Brunel's Gate A.)
 
+**Operation 2b — SCRUB** the two `D1–D9` enumerations in `Charpy.md` that D10 makes stale. Exact
+find → replace (unique-line anchors; en-dash `–` preserved):
+
+- `Charpy.md:305` — in `1. **Universal reviewer core** — the judgment disciplines D1–D9 below.`
+  replace `D1–D9` → `D1–D10`.
+- `Charpy.md:339` — the heading `### Universal disciplines (D1–D9)` → `### Universal disciplines (D1–D10)`.
+
+---
+
+## PATCH 3 — `~/.claude/personas/Plan/Vitruvius/Vitruvius.md`
+
+**Operation:** SCRUB the third stale `D1–D9` enumeration (the pairing note), so the HEAD-wide range-scrub
+is complete — D10 has no consumer in Vitruvius.md beyond this cross-reference, so this is the only edit.
+
+- `Vitruvius.md:507` — in `Charpy's D1–D9 and Vitruvius's U1–U13 are deliberately paired: …`
+  replace `Charpy's D1–D9` → `Charpy's D1–D10`.
+
+**Verify (post-apply):** a HEAD-wide search for `D1–D9` across `~/.claude/personas/**` returns **zero**
+hits (confirmed 2026-07-24 that exactly these three — `Charpy.md:305`, `Charpy.md:339`, `Vitruvius.md:507`
+— are the complete set; no others exist).
+
 ---
 
 ## Conformance map (what each part implements)
@@ -208,10 +250,21 @@ placement is unambiguous: the new `### D10` follows `### D9` in the Local "Unive
 | Brunel: generalized `PLAN_DEFECT` example (no hard-coded `Construction`) | plan §6-vi; r1 F4 |
 | Charpy: new D10 (pre-FORGE, existing consumers only) | plan §5 C2, §6 (Charpy edit); r1 F2; **r2 F2r** |
 
+## Conformance-verify TEMPER resolution (this review's F1–F4)
+
+| Finding | Nature | Resolution in this revision |
+|---|---|---|
+| F1 | defect | PATCH 2 gains Operation 2b (scrub `Charpy.md:305` + `:339` to `D1–D10`) and a new PATCH 3 scrubs `Vitruvius.md:507` — the complete HEAD-wide `D1–D9` set, so no stale enumeration ships with D10. |
+| F2 | conditional (decision) | Decided **(b)**: Gate A/B is explicitly scoped **TomeRoam-specific** in the Brunel text (it lives in the project-Local section; named gate files are TomeRoam's). Abstracting to a Brunel adapter (option a) is routed as future work, taken when a second project needs it — not built now (U4, smallest sound thing; a single-project machine). |
+| F3 | recommendation | A "NOTE ON APPLY (display-quoting)" states the leading `> ` is display quoting to be stripped on apply. |
+| F4 | recommendation | The Brunel heading now reads "two mechanical gates, one independent review, two Brunel reconciliations" (naming both the authoring gate and the code-level gate). |
+
 ## What this artifact does NOT do
 
 - Does not modify the frozen ratified plan (`PLAN-build-gate-spec-corrections.md`).
-- Does not install into `Brunel.md`/`Charpy.md` (the persona-spec-guard denies direct edits; install is a
-  separate mechanical step from the FROZEN version of this patch).
+- Does not install into `Brunel.md`/`Charpy.md`/`Vitruvius.md` (the persona-spec-guard denies direct
+  edits; install is a separate mechanical step from the FROZEN version of this patch).
+- Does not build the Brunel project-adapter (F2 option a) — Gate A/B is consciously scoped TomeRoam-only
+  for now; the adapter abstraction is future work when a second project first needs it.
 - Does not resolve the two §9 open decisions (already decided/built separately: the authoring gate is
   wired and persona specs are install-only — see the DecisionLog).

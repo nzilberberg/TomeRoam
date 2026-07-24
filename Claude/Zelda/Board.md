@@ -163,10 +163,18 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   — verbatim Brunel.md (Gate A/B Local §) replacement + Charpy.md D10 insertion, conforming to plan §5/§6 +
   r2 F2r ("returned-key gate WITH the exact-key contract gate for destructured reads"). This is the
   artifact the frozen plan §6 CLAIMED was "held" but which never existed (§6 overclaimed; Zelda correctly
-  refused to fabricate persona text on the spot). Status PROPOSED → next: Charpy conformance-verify → freeze
-  → Zelda mechanical install. Filed under `Claude/Vitruvius/` NOT `Claude/Plans/` — it is not a plan, and
-  the newly-wired plan gate correctly flagged it when first mis-filed there (a `Status:` line in
-  `Claude/Plans/*.md` reads as a plan). Not installed; frozen plan untouched.
+  refused to fabricate persona text on the spot). Charpy conformance-verify was **TEMPER**
+  (`Claude/Charpy/INSTALL-PATCH-build-gate-spec-corrections-2026-07-24.md`), now **REVISED** (F1–F4),
+  pending Charpy re-verify. Charpy's catch (correct + pointed): the patch ADDED the sibling-sweep
+  discipline D10 while COMMITTING the sibling-sweep miss — three stale `D1–D9` enumerations
+  (`Charpy.md:305`/`:339`, `Vitruvius.md:507`). Fixed: PATCH 2 gains the two Charpy scrubs + new PATCH 3
+  scrubs Vitruvius.md (now **3 install targets**); HEAD-wide `D1–D9` set confirmed = those three. F2 (global
+  spec bakes in TomeRoam paths) DECIDED **(b)**: Gate A/B scoped TomeRoam-only (lives in Brunel's
+  project-Local §); the Brunel-adapter abstraction is future work when a 2nd project needs it. F3 (strip
+  display `>` on apply) + F4 (heading names both mechanical gates) folded. Filed under `Claude/Vitruvius/`
+  NOT `Claude/Plans/` — the wired plan gate correctly flagged it when first mis-filed there (a `Status:`
+  line reads as a plan). Not installed; frozen plan untouched. **Next:** Charpy re-verify → freeze → Zelda
+  mechanical install (de-quote the `>` on apply).
 - **Reset identity-envelope hardening** (reviewer-set order): `pb_prog2Keys` identity envelope; **dev8 collision CONTAINMENT** (keep the 32-bit title namespace, match self only on FULL client id — do NOT widen/migrate); download-staleness API split (`hasDownloadRecord`/`isDownloadUsable`/`isDownloadStale`). Depth + the probability-vs-proof reasoning rule → `[[tomeroam-reset-tombstone-plan]]`, `[[tomeroam-durable-progress-plan]]`, and the process lessons in `[[tomeroam-status-board]]`.
 - **Native cross-app resume (no LMS):** capture the currently-discarded `PlaySessionStateNotification.viewOffset` → durable `Progress`; optional `/status/sessions` launch poll → `[[tomeroam-crossapp-resume]]`.
 - **"Delete all downloads":** deferred by user (`.119`); a real data-loss gap (removing the iOS icon destroys everything silently), not a space issue.
