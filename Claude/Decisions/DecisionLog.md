@@ -665,3 +665,23 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   (legacy-plan migration cost is why it is unwired); (2) review-gate persona-spec edits (freeze-guard on
   `~/.claude/personas/**`). The Brunel.md/Charpy.md specs are GLOBAL (outside this repo); this entry records
   that this project's build-gate work follows the ratified plan — 2026-07-24.
+
+- The two OPEN §9 items of the build-gate corrections plan are DECIDED and BUILT (the authoring-gate escape
+  and the persona-spec hand-edit are now mechanically closed; supersedes their "OPEN" in the now-frozen
+  plan). (1) The **Vitruvius authoring gate is WIRED**: `~/.claude/hooks/vitruvius-plan-gate-hook.sh`
+  (PostToolUse Edit|Write|MultiEdit, in `~/.claude/settings.json`) runs `vitruvius-plan-gate.sh` on any
+  `Claude/Plans/*.md` write and blocks (exit 2) a structurally-incomplete plan. It applies to NEW, MODIFIED,
+  and RATIFIED plans; untouched legacy plans are GRANDFATHERED BY CONSTRUCTION — a PostToolUse-on-write hook
+  never fires on a plan that is never written, so a legacy plan is gated only the first time it is modified.
+  The gate keys on `Type: plan` OR a `vitruvius-gate` declaration, so a plan cannot dodge it by omitting the
+  declaration (a `Type: plan` file with no declaration is blocked). (2) **Persona specs are INSTALL-ONLY**:
+  `~/.claude/hooks/persona-spec-guard.sh` (PreToolUse Edit|Write|MultiEdit|NotebookEdit) DENIES a direct
+  edit to any `~/.claude/personas/**` file. A persona-spec change must come from a Charpy-FORGED process
+  plan and be installed MECHANICALLY by Zelda from the frozen approved patch (a Bash apply, which the hook
+  does not intercept — same honest scope as freeze-guard: it closes the ad-hoc-hand-edit path, not the
+  filesystem). This makes the exact 2026-07-23 miss (Vitruvius hand-editing Brunel.md) mechanically
+  impossible. Both proven able to fail (fixture) and pass (real): the gate blocks the 6-violation Stage-5
+  plan and a declaration-less `Type: plan` file, passes the ratified build-gate plan, and skips non-plan
+  paths; the persona guard denies Brunel.md/Charpy.md and allows plans/code. GLOBAL hooks (like the Poirot/
+  Charpy/adapt-durably gates); they go live after a `/hooks` reload or restart. This project's DecisionLog
+  records the governing rule — 2026-07-24.

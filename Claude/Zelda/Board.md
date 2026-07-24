@@ -150,8 +150,15 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   `vitruvius-plan-gate.sh` today with 6 violations (missing contract/effects/coverage blocks + 3 ambiguous-
   owner rows) — the gate exists but is unwired, so ratification outran it. §7 routes "wire the authoring
   gate?" (legacy-plan migration cost) + §9 "review-gate persona-spec edits?" as OPEN — not unilaterally
-  done. **Next:** corrections cleared to INSTALL into Brunel.md/Charpy.md per §6 (a separate step, on
-  request — not done at ratification); the two OPEN §9 items await a user/Charpy decision.
+  done. **§9 items DECIDED + BUILT (2026-07-24):** (1) Vitruvius authoring gate WIRED —
+  `~/.claude/hooks/vitruvius-plan-gate-hook.sh` (PostToolUse, `Claude/Plans/*.md`) blocks a structurally-
+  incomplete plan on write; new/modified/ratified plans gated, untouched legacy grandfathered by
+  construction, and a `Type: plan` file can't dodge it by omitting the declaration. (2) Persona specs
+  INSTALL-ONLY — `~/.claude/hooks/persona-spec-guard.sh` (PreToolUse) DENIES direct edits to
+  `~/.claude/personas/**`; changes must come from a Charpy-FORGED plan + mechanical Zelda install of the
+  frozen patch. Both proven (fixture-fail + real-pass); go live after a `/hooks` reload/restart. **Next:**
+  corrections still cleared to INSTALL into Brunel.md/Charpy.md per §6 — now necessarily via the mechanical
+  frozen-patch path (the persona guard blocks hand-editing), on request.
 - **Reset identity-envelope hardening** (reviewer-set order): `pb_prog2Keys` identity envelope; **dev8 collision CONTAINMENT** (keep the 32-bit title namespace, match self only on FULL client id — do NOT widen/migrate); download-staleness API split (`hasDownloadRecord`/`isDownloadUsable`/`isDownloadStale`). Depth + the probability-vs-proof reasoning rule → `[[tomeroam-reset-tombstone-plan]]`, `[[tomeroam-durable-progress-plan]]`, and the process lessons in `[[tomeroam-status-board]]`.
 - **Native cross-app resume (no LMS):** capture the currently-discarded `PlaySessionStateNotification.viewOffset` → durable `Progress`; optional `/status/sessions` launch poll → `[[tomeroam-crossapp-resume]]`.
 - **"Delete all downloads":** deferred by user (`.119`); a real data-loss gap (removing the iOS icon destroys everything silently), not a space issue.
