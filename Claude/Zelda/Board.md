@@ -159,6 +159,14 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   frozen patch. Both proven (fixture-fail + real-pass); go live after a `/hooks` reload/restart. **Next:**
   corrections still cleared to INSTALL into Brunel.md/Charpy.md per §6 — now necessarily via the mechanical
   frozen-patch path (the persona guard blocks hand-editing), on request.
+  **Install patch PRODUCED (2026-07-24):** `Claude/Vitruvius/INSTALL-PATCH-build-gate-spec-corrections.md`
+  — verbatim Brunel.md (Gate A/B Local §) replacement + Charpy.md D10 insertion, conforming to plan §5/§6 +
+  r2 F2r ("returned-key gate WITH the exact-key contract gate for destructured reads"). This is the
+  artifact the frozen plan §6 CLAIMED was "held" but which never existed (§6 overclaimed; Zelda correctly
+  refused to fabricate persona text on the spot). Status PROPOSED → next: Charpy conformance-verify → freeze
+  → Zelda mechanical install. Filed under `Claude/Vitruvius/` NOT `Claude/Plans/` — it is not a plan, and
+  the newly-wired plan gate correctly flagged it when first mis-filed there (a `Status:` line in
+  `Claude/Plans/*.md` reads as a plan). Not installed; frozen plan untouched.
 - **Reset identity-envelope hardening** (reviewer-set order): `pb_prog2Keys` identity envelope; **dev8 collision CONTAINMENT** (keep the 32-bit title namespace, match self only on FULL client id — do NOT widen/migrate); download-staleness API split (`hasDownloadRecord`/`isDownloadUsable`/`isDownloadStale`). Depth + the probability-vs-proof reasoning rule → `[[tomeroam-reset-tombstone-plan]]`, `[[tomeroam-durable-progress-plan]]`, and the process lessons in `[[tomeroam-status-board]]`.
 - **Native cross-app resume (no LMS):** capture the currently-discarded `PlaySessionStateNotification.viewOffset` → durable `Progress`; optional `/status/sessions` launch poll → `[[tomeroam-crossapp-resume]]`.
 - **"Delete all downloads":** deferred by user (`.119`); a real data-loss gap (removing the iOS icon destroys everything silently), not a space issue.

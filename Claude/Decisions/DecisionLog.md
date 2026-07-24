@@ -685,3 +685,17 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   paths; the persona guard denies Brunel.md/Charpy.md and allows plans/code. GLOBAL hooks (like the Poirot/
   Charpy/adapt-durably gates); they go live after a `/hooks` reload or restart. This project's DecisionLog
   records the governing rule — 2026-07-24.
+
+- The ratified build-gate plan's §6 CLAIMED the drafted persona replacement text was "held with this plan
+  for the installer" — but that artifact never existed (an overclaim in the now-frozen plan; the verbatim
+  text was never produced). Zelda correctly refused to compose unreviewed persona wording on the spot. It
+  is now produced as a SEPARATE companion: `Claude/Vitruvius/INSTALL-PATCH-build-gate-spec-corrections.md`
+  — verbatim Brunel.md (Gate A/B Local §) replacement + a Charpy.md D10 insertion, conforming to plan §5/§6,
+  Charpy r1 (F1–F7), and Charpy r2 FORGE including **F2r** (state the code-level check as the returned-key
+  reachability gate WITH the exact-key contract gate for destructured reads, since a `<var>.<field>` scan
+  cannot see `const {x}=obj`). Status PROPOSED: it goes to Charpy for a conformance-verify, is then frozen,
+  and only then applied MECHANICALLY by Zelda (the persona-spec-guard blocks hand-editing). The frozen plan
+  is NOT edited (the overclaim is corrected by this superseding record, not by touching the frozen artifact).
+  Filed under `Claude/Vitruvius/`, not `Claude/Plans/` — it is not a plan; the newly-wired plan gate
+  correctly flagged it as mis-filed when first written to `Claude/Plans/` (a `Status:` line there reads as a
+  plan), which is the gate working, not a defect — 2026-07-24.
