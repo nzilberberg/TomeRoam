@@ -1,157 +1,195 @@
-# PLAN — Build-gate spec corrections (Gate A / Gate B / `[cell-id]` protocol)
+# PLAN — Build-gate spec corrections (Gate A / Gate B / `[cell-id]`)
 
 Type: plan
 
 <!-- vitruvius-gate {"plan_type":"process","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":false},"project_adapter":"tomeroam-js-dom","source_ranges":[],"callee_ranges":[],"affected_contracts":[],"staged_records":["~/.claude/personas/Implement/Brunel/Brunel.md","~/.claude/personas/Plan/Charpy/Charpy.md"],"blocking_questions":[]} -->
 
-Status: **PROPOSED — awaiting Charpy temper.** Authored by Vitruvius. Nothing in this plan is installed
-into any persona spec or tool until Charpy returns a verdict and it is ratified. This is a *process/spec*
-plan: no production code, tests, or tooling change; all seven change-patterns are false, so by policy it
-carries no machine blocks (the one documented exemption).
+Status: **REVISED 2026-07-23 — resolves Charpy TEMPER (`Claude/Charpy/PLAN-build-gate-spec-corrections-2026-07-23.md`),
+pending Charpy re-verify.** Authored by Vitruvius. Nothing is installed into any persona spec or tool until
+Charpy returns FORGE and it is ratified. Process/spec plan: all seven change-patterns are false, so by
+policy it carries no machine blocks (the one documented exemption).
 
 ## Applicability
 
-Process/spec plan — no code boundary moves, no callee replacement, no contract-shape change, no state
-transfer, no async/persistence/lifecycle change. The staged records are two GLOBAL persona specs that
-would be edited *on ratification*, by the installer, not by this authoring pass.
+Process/spec plan — no code boundary moves, no callee replacement, no contract-shape change. The staged
+records are two GLOBAL persona specs edited *on ratification*, by the installer, not by this authoring pass.
 
 ## Index
 1. Goal and scope
 2. Defining records and authority
-3. The defect being corrected (why the current spec is not builder-ready)
-4. Proposed corrections C1–C4
-5. Exact proposed edits (applied only on FORGE)
-6. What this does NOT do
-7. Open question routed to Charpy/the user
-8. How Charpy verifies this plan
+3. Root cause (corrected) — an authoring-gate escape, not a build-gate deficiency
+4. The defects being corrected
+5. Proposed corrections C1–C4
+6. Exact proposed edits (applied only on FORGE)
+7. Open recommendation — wire the authoring gate?
+8. What this does NOT do
+9. Open question routed to Charpy / the user
+10. Charpy-temper resolution (F1–F7)
+11. How Charpy re-verifies
 
 ## 1. Goal and scope
 
-Correct the **Gate A / Gate B build-gate specification** — currently installed in the Local section of
-`~/.claude/personas/Implement/Brunel/Brunel.md` (added by the earlier T10 process task) — for three
-defects and one wording error the user surfaced on review. The corrected spec must be durable (not
-Stage-5-specific) and must not place a semantic self-certification on the seat that authored the claim.
+Correct the **Gate A / Gate B build-gate specification** — installed in the Local section of
+`~/.claude/personas/Implement/Brunel/Brunel.md` (from the earlier T10 process task) — for the defects the
+user surfaced, WITHOUT weakening the defense that actually caught the F1 dead-returned-field. The corrected
+spec must be durable (not Stage-5-specific) and must not place a semantic self-certification on the seat
+that authored the claim, nor relocate a working code-level check onto a records/read check that cannot see
+the class.
 
-Out of scope, explicitly: implementing `campaign-gate.mjs` (deferred by the user); any change to the
-Stage-5 plan or its build (that is a *separate* unresolved chain — §6); installing the corrections into
-the persona specs before ratification.
+Out of scope, explicitly: implementing `campaign-gate.mjs` (deferred by the user); wiring the Vitruvius
+authoring gate (a real decision with a migration cost — §7, routed, not done); any change to the Stage-5
+plan or its build (separate chain — §8); installing anything before ratification.
 
 ## 2. Defining records and authority
 
-| Record | Role | This plan |
+| Record | Authority | Reconciliation |
 |---|---|---|
-| The user's 2026-07-23 review (three defects + wording correction + disposition) | Authoritative direction | Treated as the spec to satisfy; each defect maps to a correction in §4 |
-| `~/.claude/personas/Implement/Brunel/Brunel.md` Local § (Gate A/B, from T10) | The artifact under correction | §5 proposes the edits; not touched until ratified |
-| `~/.claude/personas/Plan/Charpy/Charpy.md` | Gains the pre-FORGE semantic-verification duty (C2) | §5 proposes a new discipline; not touched until ratified |
-| `Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md` (F1) | The incident the spec generalizes | Cited as the illustrative miss; unchanged |
-| Vitruvius spec — "does not review his own plan"; Charpy is the independent temper | Governing scheme rule | This plan exists *because* the correction must be tempered, not self-installed |
+| User review 2026-07-23 (3 defects + wording) | Authoritative direction | AGREE — each defect real; mapped to C1–C4. |
+| `Brunel.md` Local § Gate A/B (installed, T10) | Artifact under correction | Its installed mechanical basis is a **code-level returned-key reachability check** (preamble, lines 240–249) — realized as `tools/dead-return-fields.mjs` + `test/construction-consumers.test.js`. NOT a prose scrape. C1 is repositioned to respect this (F1/F4). |
+| `Vitruvius.md` gate + `~/.claude/hooks/vitruvius-plan-gate.sh` | Governing authoring gate | It ALREADY fails a `contract_shape:true` plan lacking a `vitruvius-contract` block (line 313) and ALREADY class-matches each contract field against the ledger (line 298). C1 is NOT a new build-side reconciliation — it is that authoring-gate check (F3). |
+| `tools/dead-return-fields.mjs` + `test/construction-consumers.test.js` | Live code-level gate | This is what caught F1. It STAYS Gate A's mechanical basis; C1 is a complement, never a replacement (F1). |
+| `PLAN-swipe-stage5.md` (motivating incident) | Sub-plan, marked RATIFIED | Confirmed by running the gate 2026-07-23: it FAILS with **6 violations** (3 ambiguous-owner ledger rows; missing `vitruvius-contract`; missing `vitruvius-effects`; missing `vitruvius-coverage`) while RATIFIED — an authoring-gate escape (§3). |
+| `Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md` (F1) | The incident | AGREE — F1 is a dead *returned* field; the code-level gate is its standing defense. |
 
-Authority note: the corrections change how three seats divide a duty (mechanical gate / Charpy / Brunel /
-Vitruvius). A division recorded in only one seat's spec is half-filed, so C2 deliberately stages an edit
-to **both** Brunel.md and Charpy.md — but as proposals for the installer to apply after FORGE.
+## 3. Root cause (corrected)
 
-## 3. The defect being corrected
+F1 (`Construction.classification` returned but unread by `start()`) did **not** happen because the build
+gate lacked a records reconciliation. It happened because:
 
-The installed Gate A/B spec is close but not builder-ready, for three reasons the user named:
+- The return contract lived in a **prose `ts` type**, not a machine block, so no structural check could see
+  it — and it lived in prose because the Stage-5 plan **never satisfied the Vitruvius authoring gate**. Run
+  today that plan fails with 6 violations (including "contract_shape=true but no `vitruvius-contract`
+  block") yet carries RATIFIED status. That is an **authoring-gate escape**: a plan reached ratification
+  while gate-failing, because the authoring gate is not wired to block ratification.
+- The defense that actually caught the dead *returned* field is the **code-level returned-key reachability
+  gate** (`dead-return-fields.mjs` / `construction-consumers.test.js`), which reads the built code's
+  returned keys against production's actual reads. A records/prose reconciliation **cannot** catch this
+  class: a field consumed *internally before the return* satisfies "has a consumer" in the records while the
+  *returned* field is dead — the Stage-5 §3 itself says `classification` "is consumed INTERNALLY."
 
-- **D1 — Gate A scrapes prose.** Its mechanical basis was "parse the §3 type `Construction`," which is
-  Stage-5-specific and fragile: the next plan with another type name or notation bypasses it. Root cause:
-  the Stage-5 return contract lives in a prose `ts` type, and the plan carries **no** `vitruvius-contract`
-  block (it declares `contract_shape:true` but only a `vitruvius-ledger` block exists) — so scraping prose
-  was the only handle. A durable gate must reconcile the two *machine-readable* blocks.
-- **D2 — semantic confirmation was placed on the author.** The spec let the plan's own consumer
-  justification stand and had the authoring seat effectively certify it. The F1 miss happened precisely
-  because "the plan says L3 consumes it" was accepted without an independent check that L3 *actually reads
-  the returned value*. A mechanical gate cannot prove genuine consumption, and the author must not certify
-  it — that verification belongs to the independent reviewer (Charpy), before FORGE.
-- **D3 — Gate B trusts a bare `CAUGHT`.** A mutation reported only as "some test failed" has a false-pass
-  path: an unrelated test may catch it, leaving the *designated* assertion unproven. This is the smallest
-  real tooling gap.
+So the corrections must (a) keep the code-level gate as the mechanical basis, (b) locate the semantic check
+where it is decidable, and (c) name the authoring-gate escape as the real gap — not invent a build-side
+reconciliation that duplicates the authoring gate and cannot see the class.
 
-Plus a wording error: "no format changes" is true only of the *plan* format; the `[cell-id]` tagging of
-Curie/Brunel test and mutation names is a new machine protocol and must be recorded as one.
+## 4. The defects being corrected
 
-## 4. Proposed corrections
+- **D1 (corrected per F4):** the durable Gate A must not be mechanized by **scraping a prose type** (the
+  "parse the §3 type `Construction`" idea — a *proposed*, never-installed mechanization, Stage-5-specific
+  and fragile). The *installed* basis is already the code-level returned-key check; D1 is the rejection of
+  the prose-scrape proposal, not a claim that the installed spec scrapes prose.
+- **D2:** the semantic "does production genuinely consume this" check must not sit on the author, and must
+  be placed where it is decidable (Charpy pre-FORGE for existing consumers; the code-level gate at build for
+  newly-built ones).
+- **D3:** Gate B must not trust a bare sweep `CAUGHT` (an unrelated test may catch a mutation) — it must
+  bind the mutation to its designated test and intended assertion.
+- **Wording:** `[cell-id]` tagging is a new machine protocol, not a plan-format change.
 
-**C1 (fixes D1) — Gate A reconciles machine-readable records.** The durable Gate A check reconciles the
-plan's `vitruvius-contract` block against its `vitruvius-ledger` block: every contract member must resolve
-to a ledger row naming a production producer, a production consumer, the behaviour that depends on it, and
-a verification. It keys ONLY on the two fenced machine blocks — never a prose type, never a hard-coded
-type name. Consequence: a plan's **return contract must live in the `vitruvius-contract` block** (each
-returned member a row); a prose `ts` type is not machine-reconcilable. This is the existing protocol used
-as intended (the block is already required when `contract_shape:true`), so it is *not* a new plan format.
+## 5. Proposed corrections
 
-**C2 (fixes D2) — the semantic verification is Charpy's, before FORGE; no seat certifies its own claim.**
-The duty splits across four checkpoints:
-- **Mechanical gate (structural):** the contract↔ledger reconciliation of C1 — proves the records are
-  *complete*, not that the consumer is *real*.
-- **Charpy, before FORGE (semantic):** for each contract member, verify the named consumer genuinely reads
-  that specific boundary value in production, and that the member's designated test would redden if the
-  value disappeared. Independent of the author.
-- **Gate A, before Brunel (admission):** Brunel confirms the reconciliation passes on the ratified plan and
-  the records are *unchanged since FORGE* (no drift). Brunel does not re-derive semantics.
-- **Vitruvius:** *fixes* a member a gate or Charpy rejects (drops it, or gives it a real consumer) and
-  re-submits — never self-certifies the semantic claim.
+**C1 (fixes D1/F1/F3/F4/F5) — records reconciliation is a plan-authoring COMPLEMENT the authoring gate
+already runs; Gate A's mechanical basis stays the code-level gate.**
+- The contract↔ledger reconciliation (every `vitruvius-contract` member resolves to a `vitruvius-ledger`
+  row with non-empty `producer`, `consumer`, `verification` — stated in the **real** ledger columns
+  `name | class | dir | producer | consumer | owner | lifecycle | verification`, F5) is **already performed
+  by the Vitruvius authoring gate** (`vitruvius-plan-gate.sh` lines 298/313). It is a *plan-authoring*
+  completeness check, run before Charpy — NOT a new build-side reconciliation and NOT Gate A's basis.
+- It proves records completeness only. It **structurally cannot** catch a dead *returned* field (a field
+  used-before-return passes it). Therefore **Gate A's mechanical basis remains the code-level returned-key
+  reachability gate** (`dead-return-fields.mjs` / `construction-consumers.test.js`). "Genuine production
+  consumer" language stays OUT of the records layer.
+- The return contract must live in the `vitruvius-contract` block (each returned member a row) — this is the
+  existing authoring-gate requirement used as intended, not a new plan format.
 
-**C3 (fixes D3) — Gate B proves the DESIGNATED test catches the mutation.** For each builder-owned cell,
-the evidence is: the designated test green normally → the targeted mutation applied → the **designated test
-failing on the intended assertion** (not merely that the suite went red somewhere) → restoration → the
-designated test green again. A bare sweep `CAUGHT`, a full-suite pass, or "wiring is covered" does not
-close a cell. The mechanization of this (a per-mutation gate binding the mutation to its own designated
-test) is named `campaign-gate.mjs` and is **designed here but deliberately not built** (user deferral);
-until it exists, the designated-test proof is Brunel's manual per-cell obligation.
+**C2 (fixes D2/F1/F2) — the semantic duty is split by WHEN it is decidable; no seat certifies its own claim.**
+- **Vitruvius authoring gate (structural, pre-Charpy):** contract block present and class-matches the ledger
+  (C1). Records complete — not consumer genuine.
+- **Charpy, before FORGE (semantic, on what exists):** verify each contract member whose consumer **already
+  exists** genuinely reads that value in production, and stress the plan's reachability logic. Charpy cannot
+  read production code that Brunel has not written yet, so a consumer *introduced by the same plan* is not
+  fully checkable pre-FORGE.
+- **Code-level gate, at Brunel admission (semantic, on what was just built):** the returned-key reachability
+  gate verifies that every returned member — including a newly-built consumer's — is genuinely read
+  downstream. Gate A's admission step **runs this gate**, not merely "confirms the reconciliation passes."
+- **Vitruvius:** fixes a member a gate or Charpy rejects (drops it, or gives it a real consumer) and
+  re-submits — never self-certifies.
 
-**C4 (fixes the wording error) — `[cell-id]` is a new machine protocol.** Binding a coverage cell to its
-designated test and mutation requires a `[cell-id]` tag in BOTH the test name (Curie) and the mutation
-name (Brunel), so a gate/reader can check the *designated* test reddens, not "some test." Record it as a
-new naming protocol wherever test/mutation conventions live — it is not a plan-format change.
+**C3 (fixes D3) — Gate B proves the DESIGNATED test catches the mutation** (unchanged; sound). Evidence per
+cell: designated test green → targeted mutation applied → **designated test fails on the intended
+assertion** → restore → green. A bare sweep `CAUGHT`, a full-suite pass, or "wiring is covered" does not
+close a cell. Mechanizing this (a per-mutation gate binding the mutation to its own `[cell-id]` designated
+test) is `campaign-gate.mjs` — **designed here, not built** (user deferral); until it exists the proof is
+Brunel's manual per-cell obligation.
 
-## 5. Exact proposed edits (applied only on FORGE, by the installer)
+**C4 (fixes the wording error, + F6) — `[cell-id]` is a new machine protocol, manual until read.** A
+`[cell-id]` tag in BOTH the Curie test name and the Brunel mutation name binds cell→test→mutation. It is a
+new naming protocol on test/mutation names (not a plan-format change). **Until `campaign-gate.mjs` exists,
+nothing reads the tag** — the binding is a manual per-cell obligation (the same caveat C3 carries), not an
+enforced binding.
 
-Presented so Charpy can stress the actual wording, and so ratification is a mechanical apply — not a
-re-drafting. None of these is applied by this authoring pass.
+## 6. Exact proposed edits (applied only on FORGE, by the installer)
 
-- **Brunel.md Local § (Gate A/B):** replace the "two mandatory reconciliations" framing with the four-
-  checkpoint split (C2); rewrite Gate A's basis to the contract↔ledger reconciliation + non-drift (C1/C2);
-  strengthen Gate B's required evidence to the designated-test green→mutate→red-on-intended→restore chain
-  (C3); add the `[cell-id]`-protocol note (C4) and the `campaign-gate.mjs`-deferred note (C3); generalize
-  the illustrative `PLAN_DEFECT` example so it does not hard-code `Construction`/`buildConstruction`.
-- **Charpy.md Local § (new discipline):** add the pre-FORGE contract-member semantic verification (C2) —
-  for each `vitruvius-contract` member, confirm the named consumer genuinely reads the value and the
-  designated test reddens on its removal; a plan's own justification is not sufficient evidence.
+- **Brunel.md Local § (Gate A/B):** keep the four-checkpoint framing of C2, but (i) keep the code-level
+  returned-key gate named as Gate A's mechanical basis — do NOT let "rewrite" drop it; (ii) label the
+  contract↔ledger reconciliation a plan-authoring complement the Vitruvius gate already runs; (iii) state
+  Brunel Gate A's delta precisely as **(authoring gate passed on the ratified plan) + (records unchanged
+  since FORGE) + (the code-level returned-key gate runs at admission)**; (iv) strengthen Gate B to the
+  designated-test proof (C3); (v) add the `[cell-id]` note (C4) and the `campaign-gate.mjs`-deferred note;
+  (vi) generalize the illustrative `PLAN_DEFECT` example so it does not hard-code `Construction`.
+- **Charpy.md Local § (new discipline):** add the pre-FORGE semantic check *bounded by decidability* (C2) —
+  for each `vitruvius-contract` member with an **existing** consumer, confirm it genuinely reads the value
+  and the designated test reddens on removal; note that a consumer newly introduced by the plan is verified
+  by the build-time code-level gate, not pre-FORGE.
 
-The drafted replacement text is held with this plan for the installer; it is intentionally *not* pasted
-into the specs now.
+The drafted replacement text is held with this plan for the installer; it is not pasted into the specs now.
 
-## 6. What this does NOT do
+## 7. Open recommendation — wire the authoring gate?
+
+The confirmed root cause (§3) is that `vitruvius-plan-gate.sh` is **not wired**, so a plan can be ratified
+while gate-failing (Stage-5 is the standing proof). Wiring it (a PreToolUse gate on `Claude/Plans/*.md`, or
+a ratification precondition) would close the escape. It is **not done here** because it has a real
+migration cost the gate's own docs name: legacy plans predate the machine-block declaration and would fail
+on first touch, so they must be migrated first. That is a decision with a tradeoff, and unilaterally wiring
+it would repeat the "install without review" error — so it is **routed to Charpy/the user** (§9), not
+executed.
+
+## 8. What this does NOT do
 
 - Does not implement `campaign-gate.mjs` (deferred).
+- Does not wire the Vitruvius authoring gate (§7, routed).
 - Does not install any edit into Brunel.md or Charpy.md — those happen on ratification, by the installer.
-- Does not touch Stage 5. Stage 5 remains a separate open chain: **Vitruvius revised the `Construction`
-  contract (done, prior turn — `classification` dropped) → Charpy ratifies → Curie updates the exact-shape
-  test → Brunel removes the field → Poirot re-reviews → Mendeleev audits.** (Note for that chain, surfaced
-  here: the Stage-5 plan lacks a populated `vitruvius-contract` block — its return contract is prose — which
-  is why C1's reconciliation cannot yet run against it; adding that block is Vitruvius work inside the
-  Stage-5 chain, not this plan.)
+- Does not touch Stage 5. Stage 5 remains a separate open chain — **Vitruvius revised `Construction`
+  (`classification` dropped) → Charpy ratifies → Curie → Brunel → Poirot → Mendeleev** — and it now carries
+  a known authoring-gate failure (6 violations) that the Stage-5 chain must fix (populate the contract/
+  effects/coverage blocks, disambiguate the three owner cells) so its RATIFIED status is earned, not
+  escaped.
 
-## 7. Open question routed to Charpy / the user
+## 9. Open question routed to Charpy / the user
 
-This very session exposed the meta-instance: an author seat (Vitruvius) edited an installed authoritative
-persona spec directly, without the temper. Should persona-spec edits themselves be *review-gated* (e.g. a
-freeze-guard-style block on `~/.claude/personas/**` until a ratification marker is present), or is that
-over-mechanizing a judgment better held by the "author-plans-not-installs" discipline plus this routing?
-Flagged, not resolved — resolving it by unilaterally building the gate would repeat the error. Charpy's and
-the user's call.
+Two open items, both left unresolved by the planner (resolving either by unilateral action would repeat the
+error that motivated this plan):
+1. Should persona-spec edits be review-gated (a freeze-guard on `~/.claude/personas/**` until a ratification
+   marker is present)?
+2. Should the Vitruvius authoring gate be wired to block ratification (§7), accepting the legacy-plan
+   migration cost?
 
-## 8. How Charpy verifies this plan
+## 10. Charpy-temper resolution (F1–F7)
 
-Process plan, so the temper is about the division, not code:
-- **C1:** confirm the reconciliation keys on `vitruvius-contract` ↔ `vitruvius-ledger` only, with no prose-
-  type or type-name dependency; confirm the "return contract lives in the contract block" consequence is
-  stated and is not mis-labelled a new plan format.
-- **C2:** confirm the semantic check sits with Charpy pre-FORGE, that Vitruvius is fix-only, and that the
-  division is staged into *both* specs (not half-filed).
-- **C3:** confirm Gate B's evidence names the DESIGNATED test and the INTENDED assertion, and that a bare
-  `CAUGHT` is explicitly rejected; confirm `campaign-gate.mjs` is deferred, not assumed built.
-- **C4:** confirm `[cell-id]` is recorded as a new machine protocol distinct from the plan format.
-- Confirm §6 keeps Stage 5 and the tooling out of scope, and §7's meta-question is left open, not decided.
+| Finding | Nature | Resolution in this revision |
+|---|---|---|
+| F1 | defect | §5 C1 keeps the code-level returned-key gate as Gate A's basis; the records reconciliation is labelled a complement, never a replacement (§3, §5, §6-i/-iii). |
+| F2 | defect | §5 C2 splits the semantic duty by decidability; the admission checkpoint RUNS the code-level gate for newly-built consumers (§5, §6-iii). |
+| F3 | defect | §3 + §5 C1 name Brunel Gate A's delta precisely (authoring-gate-passed + non-drift + code-level gate); the class-match reconciliation is credited to `vitruvius-plan-gate.sh` (298/313), not re-invented. |
+| F4 | defect | §4 D1 corrected: "parse §3 type" was a *proposed, never-installed* mechanization; the installed basis is the code-level check. |
+| F5 | recommendation | §5 C1 states the check in the real ledger columns (`producer`/`consumer`/`verification`), keeping "genuine" out of the mechanical layer. |
+| F6 | recommendation | §5 C4 adds the "manual until `campaign-gate.mjs`" note to `[cell-id]`. |
+| F7 | open-unknown | §9 keeps the meta-question open (now two open items); no planner action taken. |
+
+## 11. How Charpy re-verifies
+
+- **F1:** §5 C1 / §6 name `dead-return-fields.mjs` / `construction-consumers.test.js` as RETAINED Gate A
+  basis; "rewrite/replace" is not applied to the code-level gate.
+- **F2:** §5 C2's admission checkpoint runs the code-level gate (not only a reconciliation pass); the
+  pre-FORGE Charpy check is bounded to existing consumers.
+- **F3:** §3 + §5 C1 credit the class-match reconciliation to the authoring gate (298/313) and state Brunel's
+  delta as three named parts.
+- **F4/F5/F6:** folded as above; **F7** left open in §9.

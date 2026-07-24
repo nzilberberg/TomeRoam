@@ -98,7 +98,11 @@ would be an invented read EC §17 forbids; `plan` stays (L3 reads `plan.decorati
 this board updated; §4 ledger already agreed (no return-row). **Next:** Charpy stresses the revised §3 →
 Curie reconciles `CONSTRUCTION_KEYS` (`test/swipe-construction.test.js`) → Brunel makes the narrow code
 change (on his commit the detector goes zero-dead, the known-red flips green, and
-`KR-swipe-construction-dead-classification` + its `TRACKED_OPEN` entry are removed). **Mendeleev** still
+`KR-swipe-construction-dead-classification` + its `TRACKED_OPEN` entry are removed). ⚠️ **Surfaced
+2026-07-23 (via the build-gate-corrections review): this plan is RATIFIED but FAILS `vitruvius-plan-gate.sh`
+today — 6 violations (no `vitruvius-contract`/`-effects`/`-coverage` blocks; 3 ambiguous-owner ledger rows).
+An authoring-gate escape (gate unwired). The Stage-5 chain must populate those machine blocks + disambiguate
+the owner cells so RATIFIED is earned; the prose `ts` return type is exactly why F1 could hide.** **Mendeleev** still
 audits §8 incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard,
 reddened by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold applies).
 
@@ -132,17 +136,21 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
 
 ## 🔭 Planned / backlog (designed, not built)
 - **Build-gate spec corrections (Vitruvius → Charpy):** `Claude/Plans/PLAN-build-gate-spec-corrections.md`
-  — PROPOSED, awaiting Charpy temper. Corrects the installed Gate A/B build-gate spec (in Brunel.md Local §)
-  for three defects the user surfaced 2026-07-23: (C1) Gate A must reconcile machine-readable
-  `vitruvius-contract` ↔ `vitruvius-ledger`, not scrape the prose `Construction` type; (C2) the SEMANTIC
-  consumer-verification is Charpy's pre-FORGE job, NOT the author's self-certification (mechanical gate =
-  structural only; Gate A pre-Brunel = records complete+unchanged; Vitruvius fixes, never self-certifies);
-  (C3) Gate B must prove the DESIGNATED test reddens on the mutation's intended assertion, not a bare sweep
-  `CAUGHT` — the `campaign-gate.mjs` tooling gap, DESIGNED not built (user deferral). Plus: `[cell-id]` test/
-  mutation tagging is a NEW machine protocol (recorded as such). Nothing installed into Brunel.md/Charpy.md
-  until ratified. ⚠️ Meta-lesson caught this session: the author seat editing the installed persona spec
-  directly (no temper) is the error this plan routes around — §7 asks whether persona-spec edits should be
-  review-gated (open).
+  — Charpy TEMPER (`Claude/Charpy/PLAN-build-gate-spec-corrections-2026-07-23.md`) RESOLVED; REVISED,
+  pending Charpy re-verify. Corrects the installed Gate A/B spec (Brunel.md Local §) for the user's
+  2026-07-23 defects. Charpy's crack (correct): C1 as first written would have relocated the F1 dead-
+  returned-field defense OFF the live code-level gate (`dead-return-fields.mjs`/`construction-consumers.test.js`)
+  — which is the only check that catches the class — onto a records reconciliation that can't (a field
+  consumed BEFORE the return passes a records check). Revised: (C1) code-level gate STAYS Gate A's basis;
+  the contract↔ledger reconciliation is a plan-authoring complement the Vitruvius authoring gate ALREADY
+  runs (`vitruvius-plan-gate.sh` 298/313), not a new build check; (C2) semantic duty split by DECIDABILITY —
+  Charpy pre-FORGE for EXISTING consumers, the code-level gate at Brunel admission for newly-built ones;
+  (C3) Gate B designated-test proof, `campaign-gate.mjs` deferred; (C4) `[cell-id]` new protocol, manual
+  until read. **Confirmed root cause = an AUTHORING-GATE ESCAPE:** the Stage-5 plan is RATIFIED yet FAILS
+  `vitruvius-plan-gate.sh` today with 6 violations (missing contract/effects/coverage blocks + 3 ambiguous-
+  owner rows) — the gate exists but is unwired, so ratification outran it. §7 routes "wire the authoring
+  gate?" (legacy-plan migration cost) + §9 "review-gate persona-spec edits?" as OPEN — not unilaterally
+  done. Nothing installed into Brunel.md/Charpy.md until FORGE.
 - **Reset identity-envelope hardening** (reviewer-set order): `pb_prog2Keys` identity envelope; **dev8 collision CONTAINMENT** (keep the 32-bit title namespace, match self only on FULL client id — do NOT widen/migrate); download-staleness API split (`hasDownloadRecord`/`isDownloadUsable`/`isDownloadStale`). Depth + the probability-vs-proof reasoning rule → `[[tomeroam-reset-tombstone-plan]]`, `[[tomeroam-durable-progress-plan]]`, and the process lessons in `[[tomeroam-status-board]]`.
 - **Native cross-app resume (no LMS):** capture the currently-discarded `PlaySessionStateNotification.viewOffset` → durable `Progress`; optional `/status/sessions` launch poll → `[[tomeroam-crossapp-resume]]`.
 - **"Delete all downloads":** deferred by user (`.119`); a real data-loss gap (removing the iOS icon destroys everything silently), not a space issue.
