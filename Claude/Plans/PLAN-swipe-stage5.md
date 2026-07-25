@@ -98,7 +98,7 @@ Behavioral ownership, not function names.
   surfaces.
 - The gesture session `d`, numeric `base` geometry, `d.movers` assembly, initial mover parking, and
   recording returned capture/`clobbered` onto `d` — the call-site adapter ("L3", `start()`).
-- The outgoing-NP `np-locked` unlock (rides with `plan.decorations`, app.js:645).
+- The outgoing-NP `np-locked` unlock (rides with the returned `c.decorations`, app.js:645).
 
 **Split across the seam:** the old `start()` construction block (app.js:582–655) becomes L1 (build) +
 L2 (render callback) + L3 (adapt). §5 assigns every observable effect to exactly one of the three.
@@ -146,7 +146,7 @@ type Construction = {
   // it is HOISTED to the top level; `plan.outgoing`/`incoming`/`renderDestination` are consumed only
   // inside buildConstruction (swipe.js:291/301/305) and would be dead on the return, so the wrapper is
   // dropped (F1 NESTED dead-field, 2026-07-24; EC §17 — same class as classification, one level down).
-  decorations: Readonly<{ kind; base }[]>;         // was plan.decorations; L3 reads c.decorations (NP unlock)
+  decorations: Readonly<{ kind; base }[]>;         // PROJECTED {kind,base}; the role leaf is stripped (F2); L3 reads c.decorations
   movers: {
     outgoing:   Mover;                             // ownership 'owned-pane' (app-ghost) | 'borrowed-real'
     incoming:   Mover;                             // ownership 'owned-pane' (home-snapshot) | 'borrowed-real'
@@ -163,6 +163,14 @@ type Construction = {
 ledger (`sourceHost`/`destinationHost`/`capture`/`decorations` = `object`). Neither `classification` nor
 the `plan` wrapper is a return member: `classification` is derived internally, and of `plan`'s fields only
 `decorations` has an L3 consumer, so it is hoisted and the wrapper dropped (F1 nested dead-field removal).
+The authoring-gate contract format is FLAT `field | class` with lead-word ledger reconciliation (verified
+against the gate). `decorations` appears once — `classifyTransition.decorations` and the hoisted
+`Construction.decorations` are the SAME value, so the flat block is unambiguous here — and
+`sourceWasClobbered` reconciles by name+class to its ledger row `sourceWasClobbered (recorded onto
+d.clobbered) | boolean`. The format does **not** support qualified/scoped field names, so a future case
+where two distinct same-named fields must DIVERGE, or richer contract↔ledger reconciliation, is a
+gate-format enhancement **routed to maker-owned process work** (a plan → Charpy → mechanical gate change),
+not written here as syntax the gate cannot parse (F3, 2026-07-24).
 
 ```vitruvius-contract
 # field | class
@@ -224,7 +232,11 @@ Answers to the required contract questions:
   `ghostY` on the home path is parity-safe).
 - **Additional construction metadata:** the only construction-plan field L3 consumes is `decorations`
   (the outgoing-NP `np-locked` unlock reads it), so `decorations` is returned at the **top level** and L3
-  reads `c.decorations`. The `plan` WRAPPER is **not** returned — `plan.outgoing`/`incoming`/
+  reads `c.decorations`. **`buildConstruction` returns `decorations` as an explicit projection**
+  `plan.decorations.map(({ kind, base }) => ({ kind, base }))`: the raw plan-decoration objects are
+  `{ kind, role, base }` (swipe.js:97–98), and no L3 consumer reads `role` (app.js:475 reads only
+  `deco.kind`/`deco.base`), so `role` is projected away — not shipped as a dead cross-boundary leaf (F2,
+  2026-07-24). The `plan` WRAPPER is **not** returned — `plan.outgoing`/`incoming`/
   `renderDestination` are consumed only inside `buildConstruction` (swipe.js:291/301/305) and would be dead
   returned members, the same class as `classification` one level down (F1 nested dead-field, 2026-07-24;
   EC §17). `classification` is likewise **not** returned (derived + consumed internally — host resolution,
@@ -260,7 +272,7 @@ stale .np-pill-float removal | domeffect | out | npPillClone@S5 | env.document@S
 mover shape {el,base,own} | object | out | buildConstruction@S5 | start()@S5 | L3 maps | per-gesture | F1 mapping test
 capture {ghostY?, animSync, animRes} | object | out | ghostApp/snapshotHome@S5 | start()@S5 | L1 | per-gesture | F1 capture test
 decorations (NP pill descriptors) | object | out | buildConstruction@S5 | start()@S5 | L1 | per-gesture | npLock test
-d.clobbered same-host carrier | object | out | buildConstruction@S5 | finalize@S5 | L3 | per-session | F6 abort test
+sourceWasClobbered (recorded onto d.clobbered; finalize reads it) | boolean | out | buildConstruction@S5 | finalize@S5 | L3 | per-session | F6 abort test
 stale settings-overlay cleanup | domeffect | out | env.renderDestination@S5 | shared overlays@S5 | L2 | per-gesture | F5 stale-overlay test
 home park/browse hidden toggles | domeffect | out | env.renderDestination@S5 | #home/#browse@S5 | L2 | per-gesture | F5 host-state test
 payload-bearing Browse.render | domeffect | out | env.renderDestination@S5 | #browse@S5 | L2 | per-gesture | F5 payload test
@@ -293,7 +305,7 @@ choice here, not by an external rule, except where noted.
 | Overlay content render `renderNowPlaying`/`renderScreen` (634–635) | L2 | `dest.v` | overlay resolve | unhide | Stage-7 boundary (policy) | F5 overlay test |
 | Overlay unhide `classList.remove('hidden')` (636) | L2 | overlay el | overlay render | incoming mover build | this design | F5 overlay test |
 | Incoming-NP `np-locked` unlock (634) | L2 | — | `renderNowPlaying` | unhide | this design | np-locked test |
-| Outgoing-NP `np-locked` unlock (645) | L3 | `plan.decorations` | pill built | mover parking | stays app-side, `plan.decorations` (policy) | np-locked test |
+| Outgoing-NP `np-locked` unlock (645) | L3 | `c.decorations` | pill built | mover parking | stays app-side, `c.decorations` (policy) | np-locked test |
 | Pill clone construction (npPillClone, 351–354) | L1 | `env.navPill` | — | returned as decoration mover | this design | npPillClone test |
 | Owned-pane clone+capture (ghostApp/snapshotHome) | L1 | `env` | Browse hold taken | (ghost) render callback | this design | recipe tests |
 | Decoration insertion into body (354) | L1 | `env.document.body` | pill clone | return | this design | npPillClone test |

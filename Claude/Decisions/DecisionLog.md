@@ -748,6 +748,25 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   build ownership, NOT built here. The chain resumes at Charpy; on FORGE, Curie reconciles `CONSTRUCTION_KEYS`
   and Brunel hoists `decorations`/drops the wrapper — 2026-07-24.
 
+- Charpy r7 (`Claude/Charpy/PLAN-swipe-stage5-2026-07-24-r7.md`) returned TEMPER on three more; all resolved
+  this pass (plan re-passes the authoring gate, exit 0). F1 (sibling-sweep miss — mine): §3 was scrubbed to
+  `c.decorations` but §2 (the outgoing-NP unlock note) and §5 (the effect-table row) still instructed
+  `plan.decorations`, the abolished wrapper — a self-contradictory spec. Scrubbed both to `c.decorations`.
+  F2 (dead LEAF one more level down): the returned `decorations` objects are `{ kind, role, base }`
+  (`constructionPlanFor`, swipe.js:97–98) but L3 reads only `deco.kind`/`deco.base` (app.js:475), so `role`
+  ships as a dead cross-boundary leaf — a type annotation does not strip it. Fix: the plan now specifies
+  `buildConstruction` returns `decorations` as an explicit projection
+  `plan.decorations.map(({ kind, base }) => ({ kind, base }))`. F3 (machine contract↔ledger reconciliation):
+  (a) VERIFIED against the gate that the `vitruvius-contract` format is FLAT `field | class` with lead-word
+  reconciliation and does NOT support qualified/scoped names — so a case needing two distinct same-named
+  fields, or richer reconciliation, is a gate-format enhancement ROUTED to maker-owned process work (a plan →
+  Charpy → mechanical gate change), not written here as syntax the gate cannot parse; (b) reconciled the
+  `sourceWasClobbered ↔ d.clobbered` name+class mismatch — the ledger clobber row is renamed/reclassed to
+  `sourceWasClobbered (recorded onto d.clobbered) | boolean` so it matches the contract field by name and
+  class. Two maker-owned tooling items are now routed (NOT built, NOT reviewer-merged): the nested-dead-return
+  detector deepening (r5) and the authoring-gate qualified-name/reconciliation support (r7); both go through
+  proper plan/test/build ownership. The chain still resumes at Charpy on FORGE → Curie → Brunel — 2026-07-24.
+
 - The build-gate spec corrections are INSTALLED into the three global persona specs — 2026-07-24. Ratified
   Charpy FORGE (r2), then Zelda applied the frozen install patch mechanically: Brunel.md Local § Gate A/B
   rewritten to the four-checkpoint split (mechanical authoring gate → Charpy pre-FORGE on existing consumers

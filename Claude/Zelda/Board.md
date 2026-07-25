@@ -106,10 +106,17 @@ return (only `plan.decorations` read by L3), same class as `classification` one 
 `decorations` to top level, DROP the `plan` wrapper → return is `{ decorations, movers, capture,
 sourceWasClobbered }`. (I owned this miss — I'd declined to narrow `plan` earlier as "gold-plating.") (F2)
 the `vitruvius-coverage` `parking` row claimed a mutation the §8 prose calls parity-only/unobservable →
-corrected to an honest `n/a — parity-only`. Gate re-passes. ⚠️ Charpy's nested-dead-return DETECTOR
-deepening is a recommendation to route through plan/test/build ownership — NOT reviewer-merged, NOT built.
-**Next: returns to the Stage-5 Charpy session (deliver only when the user asks).** Fork-slowness: gate
-~2min/run on this box; run it backgrounded. **Mendeleev** still
+corrected to an honest `n/a — parity-only`. **Charpy r7 (2026-07-24) = TEMPER, RESOLVED:** (F1) sibling-
+sweep miss — §3 said `c.decorations` but §2/§5 still instructed `plan.decorations` (abolished wrapper);
+scrubbed both. (F2) the returned decoration carried a dead LEAF `role` (`{kind,role,base}` from
+constructionPlanFor; L3 reads only kind/base) → the plan now projects `decorations` to `{kind,base}`,
+stripping `role`. (F3) contract↔ledger reconciliation — reconciled `sourceWasClobbered`↔the clobber ledger
+row (renamed + reclassed `boolean` to match by name+class); the flat-format limit (no qualified names, can't
+distinguish two same-named fields) was VERIFIED against the gate and ROUTED as maker-owned gate-format work,
+not written as unparseable syntax. Gate re-passes (exit 0). ⚠️ Two routed maker-owned items (NOT built, NOT
+reviewer-merged): nested-dead-return detector deepening; authoring-gate qualified-name/reconciliation
+support. **Next: returns to the Stage-5 Charpy session (deliver only when the user asks).** Fork-slowness:
+gate ~2-3min/run on this box; run it backgrounded. **Mendeleev** still
 audits §8 incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard,
 reddened by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold applies).
 
