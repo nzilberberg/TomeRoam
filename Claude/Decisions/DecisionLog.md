@@ -767,6 +767,22 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   detector deepening (r5) and the authoring-gate qualified-name/reconciliation support (r7); both go through
   proper plan/test/build ownership. The chain still resumes at Charpy on FORGE → Curie → Brunel — 2026-07-24.
 
+- Charpy r8 (`Claude/Charpy/PLAN-swipe-stage5-2026-07-24-r8.md`) returned TEMPER on one self-contradiction my
+  r7 fixes introduced; resolved (plan re-passes the gate). The r7 F3 justification claimed
+  `classifyTransition.decorations` and `Construction.decorations` are "the SAME value" (justifying one flat
+  `decorations | object` contract row) and framed a divergence of two same-named fields as "a future case" —
+  but the r7 F2 projection makes `Construction.decorations` `{ kind, base }` while `classifyTransition.decorations`
+  stays `{ kind, role, base }`: they diverge in SHAPE NOW. The named risk: a builder trusting "same value /
+  hoisted" hoists `decorations` unchanged and re-introduces the `role` dead leaf. Fix: the single flat row is
+  accurate because the format records CLASS (both `object`), NOT shape; the shape divergence is PRESENT (the
+  F2 projection), carried by the §3 prose + the `{ kind, base }` return type, with scoped/shape-level contract
+  representation being the routed maker-owned gate-format work. Also swept the sibling "hoisted" phrasings
+  (the status line and §3) to state "projected to `{kind,base}`, never hoisted unchanged," closing the
+  builder-risk. This is the U13 internal-consistency class (a fix in one section contradicting a claim in
+  another) — caught by Charpy's independent read; a mechanical gate for cross-prose contradiction is
+  infeasible (NL semantics), so the residual stays on discipline + the review. Chain resumes at Charpy on
+  FORGE → Curie → Brunel — 2026-07-24.
+
 - The build-gate spec corrections are INSTALLED into the three global persona specs — 2026-07-24. Ratified
   Charpy FORGE (r2), then Zelda applied the frozen install patch mechanically: Brunel.md Local § Gate A/B
   rewritten to the four-checkpoint split (mechanical authoring gate → Charpy pre-FORGE on existing consumers

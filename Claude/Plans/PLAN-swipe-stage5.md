@@ -9,7 +9,8 @@ scope B ratified). **§3 CONTRACT REVISION — the `buildConstruction` return dr
 Round 1 (2026-07-23) dropped `classification`; round 2 (2026-07-24, Charpy r5 TEMPER) dropped the dead
 `plan` WRAPPER — `plan.outgoing`/`incoming`/`renderDestination` were dead on the return, the same class one
 level down. Final return is FOUR live keys: `{ decorations, movers, capture, sourceWasClobbered }`
-(`decorations` hoisted from `plan.decorations`, its only L3 consumer). Resolves Poirot F1
+(`decorations` hoisted from `plan.decorations` AND projected to `{kind,base}` — F2 strips the dead `role`
+leaf; do not hoist unchanged). Resolves Poirot F1
 (`Claude/Poirot/6bf0d20-swipe-stage5-buildconstruction.md`) + Charpy r5 F1. A ratified return shape cannot
 change without a re-ratified contract, so it goes to Charpy → Curie (`CONSTRUCTION_KEYS`,
 `test/swipe-construction.test.js`) → Brunel (narrow code change: hoist `decorations`, drop the wrapper).
@@ -162,15 +163,19 @@ type Construction = {
 `{ decorations, movers, capture, sourceWasClobbered }`, as `field | class`, reconciled against the §4
 ledger (`sourceHost`/`destinationHost`/`capture`/`decorations` = `object`). Neither `classification` nor
 the `plan` wrapper is a return member: `classification` is derived internally, and of `plan`'s fields only
-`decorations` has an L3 consumer, so it is hoisted and the wrapper dropped (F1 nested dead-field removal).
+`decorations` has an L3 consumer, so it is hoisted to the top level (projected to `{ kind, base }`, F2 —
+never hoisted unchanged) and the wrapper dropped (F1 nested dead-field removal).
 The authoring-gate contract format is FLAT `field | class` with lead-word ledger reconciliation (verified
-against the gate). `decorations` appears once — `classifyTransition.decorations` and the hoisted
-`Construction.decorations` are the SAME value, so the flat block is unambiguous here — and
-`sourceWasClobbered` reconciles by name+class to its ledger row `sourceWasClobbered (recorded onto
-d.clobbered) | boolean`. The format does **not** support qualified/scoped field names, so a future case
-where two distinct same-named fields must DIVERGE, or richer contract↔ledger reconciliation, is a
-gate-format enhancement **routed to maker-owned process work** (a plan → Charpy → mechanical gate change),
-not written here as syntax the gate cannot parse (F3, 2026-07-24).
+against the gate). `decorations` appears once because the flat block records CLASS — both
+`classifyTransition.decorations` and the returned `Construction.decorations` are class `object` — **not**
+because they are the same SHAPE. Their shapes DIVERGE now, not in some future case:
+`classifyTransition.decorations` is `{ kind, role, base }`, and the returned `Construction.decorations` is
+the projected `{ kind, base }` (the F2 `role`-stripping projection). The flat format has no scoped field
+names and cannot represent that shape-level divergence; the divergence is carried by this prose and by the
+§3 return type (`{ kind, base }[]`), and scoped/shape-level contract representation is the gate-format
+enhancement **routed to maker-owned process work** (a plan → Charpy → mechanical gate change), not written
+here as syntax the gate cannot parse (F3, 2026-07-24). `sourceWasClobbered` reconciles by name+class to its
+ledger row `sourceWasClobbered (recorded onto d.clobbered) | boolean`.
 
 ```vitruvius-contract
 # field | class

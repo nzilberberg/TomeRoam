@@ -113,10 +113,17 @@ constructionPlanFor; L3 reads only kind/base) → the plan now projects `decorat
 stripping `role`. (F3) contract↔ledger reconciliation — reconciled `sourceWasClobbered`↔the clobber ledger
 row (renamed + reclassed `boolean` to match by name+class); the flat-format limit (no qualified names, can't
 distinguish two same-named fields) was VERIFIED against the gate and ROUTED as maker-owned gate-format work,
-not written as unparseable syntax. Gate re-passes (exit 0). ⚠️ Two routed maker-owned items (NOT built, NOT
-reviewer-merged): nested-dead-return detector deepening; authoring-gate qualified-name/reconciliation
-support. **Next: returns to the Stage-5 Charpy session (deliver only when the user asks).** Fork-slowness:
-gate ~2-3min/run on this box; run it backgrounded. **Mendeleev** still
+not written as unparseable syntax. Gate re-passes (exit 0). **Charpy r8 (2026-07-24) = TEMPER, RESOLVED:** my r7 F2 and F3 fixes contradicted
+each other — the F3 justification claimed `classifyTransition.decorations` and `Construction.decorations`
+are "the SAME value" (a divergence being "a future case"), but F2 projects the return to `{kind,base}` while
+classifyTransition stays `{kind,role,base}` — they diverge in SHAPE NOW. Risk: a builder trusting "same
+value/hoisted" hoists unchanged and re-adds the `role` leaf. Fixed the justification (the single flat row is
+CLASS-accurate — both `object` — not shape-identical; the shape divergence is present, carried by prose + the
+`{kind,base}` return type; scoped/shape-level representation is the routed maker gate-format work), and swept
+sibling "hoisted" phrasings (status line + §3) to say "projected, never hoisted unchanged." Gate re-passes.
+⚠️ Two routed maker-owned items (NOT built): nested-dead-return detector deepening; authoring-gate
+qualified-name/reconciliation support. **Next: returns to the Stage-5 Charpy session (deliver only when the
+user asks).** Fork-slowness: gate ~2-3min/run on this box; run it backgrounded. **Mendeleev** still
 audits §8 incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard,
 reddened by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold applies).
 
