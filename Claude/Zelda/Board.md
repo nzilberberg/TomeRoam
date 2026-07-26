@@ -144,7 +144,9 @@ owed. Ratified §8 Mendeleev audit + Loki R2 remain pending as before.
 (`Claude/Poirot/0049a13-swipe-stage5-buildconstruction.md`, return_to none, verified by execution); Mendeleev
 ADEQUATE (`Claude/Mendeleev/AUDIT-swipe-stage5.md`) — every in-scope Coverage Model cell proven by concrete
 tests, the two contract cells NEW red-first, the no-dead-returned-field invariant now unconditional +
-non-vacuous. Deploy/push DEFERRED (on-device hold + user decision). **Routed to Curie as future
+non-vacuous. Deploy/push DEFERRED — pending a user deploy decision. (On-device verification is DOWNSTREAM of a push,
+not a gate on it: the device receives web builds only via OTA from GitHub Pages, so a build must be pushed
+before it can be tested on-device.) **Routed to Curie as future
 test-authoring specs (out of scope for 0049a13, non-blocking):** (F5a) no test asserts the full `dest`
 payload reaches `env.renderDestination`/`showAppView` intact (only `v`); (F1a L3-half) `toMover`'s
 `{el,base,own}` key-completeness is unpinned (a dropped `own` is uncaught; F1b pins only the `base` value);
@@ -178,7 +180,9 @@ immutability claim. No code change (`0049a13` already conforms); no fresh Loki (
 behavior/contract/coverage change); no Curie/Brunel/Poirot/Mendeleev re-run. There is NO structural hole —
 NON_CONTRACT object-returning seams are unfreezably-live by design, not a gate that failed. **All six gates
 run (Charpy r1–r9 FORGE + r10 FORGE, Curie red, Brunel green, Poirot SHIP, Mendeleev ADEQUATE, Loki HELD
-STONE), zero blocking findings. Bench-verified; NOT pushed — on-device hold + deploy decision pending.**
+STONE), zero blocking findings. Bench-verified; NOT pushed — pending a user deploy decision. On-device
+verification FOLLOWS a push (OTA from GitHub Pages delivers the build to the device); it cannot precede or
+gate it.**
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
