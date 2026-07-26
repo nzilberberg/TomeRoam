@@ -54,18 +54,27 @@ test('run-checks strips git location vars at the boundary — an injected git-sh
     "import { execFileSync } from 'node:child_process';\n" +
     "execFileSync('git', ['config', 'user.email', 'probe@wrote'], { cwd: process.argv[2], stdio: 'pipe' });\n");
 
-  const saved = { d: process.env.GIT_DIR, i: process.env.GIT_INDEX_FILE };
+  const saved = {};
+  for (const k of GIT_LOCATION_VARS) saved[k] = process.env[k];
   try {
     setup(ambient, 'init', '-q');
     setup(ambient, 'config', 'user.email', 'real@real.real');
     setup(work, 'init', '-q');
     setup(work, 'config', 'user.email', 'work@work.work');
 
-    // Poison the environment exactly as `git` does when it invokes a hook: GIT_DIR points at the
-    // ambient repo, so any git that inherits it ignores cwd and operates on `ambient`.
+    // Poison the environment exactly as `git` does when it invokes a hook — set ALL seven location
+    // vars at the ambient repo, so any git that inherits them ignores cwd and operates on `ambient`
+    // (GIT_DIR is the vector that actually hijacks; the rest are set so the "was stripped" check
+    // below is non-vacuous for every var the belt claims to clear).
+    const ag = path.join(ambient, '.git');
     const poison = () => {
-      process.env.GIT_DIR = path.join(ambient, '.git');
-      process.env.GIT_INDEX_FILE = path.join(ambient, '.git', 'index');
+      process.env.GIT_DIR = ag;
+      process.env.GIT_INDEX_FILE = path.join(ag, 'index');
+      process.env.GIT_WORK_TREE = ambient;
+      process.env.GIT_PREFIX = '';
+      process.env.GIT_COMMON_DIR = ag;
+      process.env.GIT_OBJECT_DIRECTORY = path.join(ag, 'objects');
+      process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = path.join(ag, 'objects');
     };
 
     // TREATMENT — drive the naive probe through the runner's real boundary. runChecks strips the
@@ -74,12 +83,13 @@ test('run-checks strips git location vars at the boundary — an injected git-sh
     poison();
     const code = runChecks({ steps: [['probe', [probePath, work]]] });
     assert.equal(code, 0, 'the injected probe step ran and passed through runChecks');
+    assert.equal(emailOf(ambient), 'real@real.real',
+      'the ambient repo is UNTOUCHED — runChecks stripped the location vars before spawning the probe (this reddens first if the boundary unset is removed)');
     assert.equal(emailOf(work), 'probe@wrote',
       'the probe write landed in the cwd work repo — the boundary belt cleaned the spawned env');
-    assert.equal(emailOf(ambient), 'real@real.real',
-      'the ambient repo is UNTOUCHED — runChecks stripped GIT_DIR before spawning the probe (this reddens if the boundary unset is removed)');
-    // The belt is a mutation of this process's own env — after the boundary ran, the location vars
-    // are gone from the runner's process too, so nothing downstream can re-leak them.
+    // The belt is a mutation of this process's own env — after the boundary ran, EVERY location var
+    // is gone from the runner's process too, so nothing downstream can re-leak them. Non-vacuous:
+    // poison() set all seven above.
     for (const k of GIT_LOCATION_VARS) assert.equal(process.env[k], undefined, `${k} was stripped from the runner env`);
 
     // CONTROL — the SAME naive probe with NO boundary (a future test under a runner that stopped
@@ -90,8 +100,9 @@ test('run-checks strips git location vars at the boundary — an injected git-sh
     assert.equal(emailOf(ambient), 'probe@wrote',
       'control: the naive spawn WITHOUT the boundary belt DID hijack the ambient repo (scenario is real)');
   } finally {
-    if (saved.d === undefined) delete process.env.GIT_DIR; else process.env.GIT_DIR = saved.d;
-    if (saved.i === undefined) delete process.env.GIT_INDEX_FILE; else process.env.GIT_INDEX_FILE = saved.i;
+    for (const k of GIT_LOCATION_VARS) {
+      if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
+    }
     fs.rmSync(ambient, { recursive: true, force: true });
     fs.rmSync(work, { recursive: true, force: true });
     fs.rmSync(probeDir, { recursive: true, force: true });

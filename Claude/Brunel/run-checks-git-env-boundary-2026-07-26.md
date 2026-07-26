@@ -65,3 +65,23 @@ this per call, but the RUNNER did not strip the vars, so a FUTURE git-shelling t
 
 Ready for Poirot review (builder does not review own work). Belt-and-suspenders now both structural: the
 runner unset makes the whole class impossible; `cleanGitEnv` keeps a single out-of-runner git call correct.
+
+## Poirot review + apply (2026-07-26)
+
+Independent review (`Claude/Poirot/67bc895-runner-git-env-boundary.md`): **SHIP (PASS)** — belt correct,
+regression test proven non-vacuous by execution (green; red-on-neuter; full suite 684/0-fail/2-todo; real
+repo config confirmed untouched). One Minor + two Observations, none blocking. Applied the Minor as a
+hardening in the review round:
+
+- **F1 (Minor) — test guarded only 2 of 7 vars.** `poison()` set only `GIT_DIR`/`GIT_INDEX_FILE`, so the
+  "was stripped" loop was vacuously true for the other five. Fixed: `poison()` now sets all seven location
+  vars at the ambient repo, and save/restore loops over `GIT_LOCATION_VARS` — the strip assertion is now
+  non-vacuous for every var the belt claims to clear.
+- **Obs-2 (assertion naming) — folded in.** Reordered the treatment assertions so "ambient repo is
+  UNTOUCHED" is checked first; it is the assertion that reddens first on neuter, so the comment and this log
+  now name it accurately (re-verified: neuter fails on the ambient-untouched assertion).
+- **Obs-3 (`GIT_LOCATION_VARS` duplication) — left as-is.** Considered-and-rejected: sharing would couple
+  the fast runner to `mutate.mjs`'s top-level `await import` side effect, and the two functions differ in
+  contract (mutate-in-place vs copy). Poirot concurred.
+
+Re-verified after apply: new test green; neuter reddens on the ambient-untouched assertion; restored.
