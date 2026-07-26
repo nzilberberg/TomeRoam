@@ -94,15 +94,15 @@ test('WIRING — an overlay-source back-swipe moves the real overlay and builds 
   } finally { h.dispose(); }
 });
 
-// ── WIRING (stage 4) — start() consumes the construction plan's DECORATIONS ─────────
+// ── WIRING — an NP-source back-swipe BUILDS the Now Playing pill clone (L1 effect) ───
 // swipe-transition.test.js proves the DECISION (js/swipe.js: an NP endpoint puts a
-// now-playing-pill mover on the plan, based at the outgoing slot when NP is the source).
-// This proves start() actually CONSUMES plan.decorations: it drives a real NP-source
-// back-swipe and asserts a .np-pill-float mover clone gets built. A mutation that ignores
-// plan.decorations (drops start()'s decorations loop, js/app.js) leaves NO pill and this
-// reddens — the same wiring-seam blind spot the OUTGOING test closed, left open for the
-// decoration seam (review of .227, F1). Without this, a stage-5 miswire of npPillClone()
-// ships green and is found only on device.
+// now-playing-pill mover on the construction, based at the outgoing slot when NP is the
+// source). This drives a real NP-source back-swipe end-to-end and asserts a .np-pill-float
+// clone gets built. Post-Stage-5 relocation the pill CLONE is an L1 effect — it is built
+// inside Swipe.buildConstruction (npPillClone), NOT by start()'s decorations loop — so a
+// mutation that miswires npPillConstruction ships green at the recipe layer and is caught
+// here: no pill clone, this reddens. (start()'s OWN decorations consumer is the np-locked
+// unlock, a distinct effect guarded by `npLock` in test/swipe-stage5-residuals.test.js.)
 const npFloats = (h) => h.document.querySelectorAll('.np-pill-float').length;
 
 test('WIRING — an NP-source back-swipe builds the Now Playing pill mover from plan.decorations', async () => {

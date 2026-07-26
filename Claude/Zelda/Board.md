@@ -146,14 +146,16 @@ ADEQUATE (`Claude/Mendeleev/AUDIT-swipe-stage5.md`) — every in-scope Coverage 
 tests, the two contract cells NEW red-first, the no-dead-returned-field invariant now unconditional +
 non-vacuous. Deploy/push DEFERRED — pending a user deploy decision. (On-device verification is DOWNSTREAM of a push,
 not a gate on it: the device receives web builds only via OTA from GitHub Pages, so a build must be pushed
-before it can be tested on-device.) **Routed to Curie as future
-test-authoring specs (out of scope for 0049a13, non-blocking):** (F5a) no test asserts the full `dest`
+before it can be tested on-device.) **Stage-5 residual coverage — CLOSED 2026-07-26 (backfilled green, no latent bug; had been out of scope for 0049a13):** (F5a) no test asserts the full `dest`
 payload reaches `env.renderDestination`/`showAppView` intact (only `v`); (F1a L3-half) `toMover`'s
 `{el,base,own}` key-completeness is unpinned (a dropped `own` is uncaught; F1b pins only the `base` value);
 (npLock, N1) no test asserts `document.body` loses `np-locked` on an NP-source swipe — the runtime effect
 this `c.decorations` consumer edit exists to preserve. (N2) §7 comment scrub owed at
 `test/swipe-invariants.test.js:97-105` (claims the pill test proves `start()` consumes decorations — an L1
-effect since the relocation).
+effect since the relocation). ✅ **ALL CLOSED (build `2026-07-26.248`):** F5a / F1a-L3 / npLock authored
+as live regression guards in `test/swipe-stage5-residuals.test.js` (each reds on a targeted mutation); Curie
+found NO latent bug — the audit's predicted device failure shapes (empty drilled-in page from a dropped
+payload; wrong-pane teardown from a dropped `own`) are correct on HEAD and now guarded. N2 comment corrected.
 
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
