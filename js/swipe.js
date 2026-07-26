@@ -318,7 +318,13 @@ const Swipe = (() => {
       decoration = mover(npPillClone(), 'owned-decoration', deco.base);   // slot: outgoing | incoming
     }
 
-    return { classification, plan, movers: { outgoing, incoming, decoration }, capture, sourceWasClobbered };
+    // The FOUR-key Construction contract (plan §3, 2026-07-24 revision): `classification` is
+    // derived and consumed above (host resolution, plan derivation) and is NOT returned; the
+    // `plan` WRAPPER is dropped — of its fields only `decorations` has an L3 consumer (the
+    // outgoing-NP `np-locked` unlock, app.js:474), so it is HOISTED to the top level and
+    // PROJECTED to `{ kind, base }` (the `role` leaf stripped — no L3 consumer reads it, F2).
+    const decorations = plan.decorations.map(({ kind, base }) => ({ kind, base }));
+    return { decorations, movers: { outgoing, incoming, decoration }, capture, sourceWasClobbered };
   }
 
   return { classifyTransition, constructionPlanFor, buildConstruction, BROWSE_FAMILY };

@@ -470,8 +470,10 @@
       d.clobbered = c.sourceWasClobbered;
       // Outgoing-NP np-locked unlock stays app-side (plan §5): when NP is the SOURCE the
       // body unlocks so the real nav buttons show as the pill slides out. (The incoming-NP
-      // unlock rides with env.renderDestination above.)
-      for (const deco of c.plan.decorations) {
+      // unlock rides with env.renderDestination above.) `decorations` is hoisted to the
+      // top level of the Construction return (plan §3, 2026-07-24 revision) — the `plan`
+      // wrapper is dropped, so this reads `c.decorations`, not `c.plan.decorations`.
+      for (const deco of c.decorations) {
         if (deco.kind === 'now-playing-pill' && deco.base === 'outgoing') document.body.classList.remove('np-locked');
       }
 

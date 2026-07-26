@@ -794,3 +794,18 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   (Charpy.md:305/:339, Vitruvius.md:507) scrubbed to `D1–D10`. Post-apply verify: HEAD-wide `D1–D9` returns
   0 hits; git diff touched exactly those three files. The Brunel project-adapter abstraction remains future
   work (single-project machine).
+
+- Stage-5 `Swipe.buildConstruction` four-key return IMPLEMENTED and green — 2026-07-25. The return narrows
+  to `{ decorations, movers, capture, sourceWasClobbered }`: `classification` is derived and consumed
+  inside `buildConstruction` but no longer returned; the `plan` wrapper is dropped, with `decorations`
+  hoisted to top level and projected to `{kind,base}` (the `role` leaf stripped). The sole production
+  consumer, `start()` in `js/app.js`, reads `c.decorations` (was `c.plan.decorations`);
+  `docs/swipe-model.generated.txt` regenerated. Red-first: Curie proved `test/swipe-construction.test.js`
+  red against the old five-key shape before any code change (`Claude/Curie/RED-swipe-stage5.md`); Brunel
+  greened it (`Claude/Brunel/swipe-stage5-buildconstruction-green.md`). `tools/dead-return-fields.mjs`
+  reports zero dead fields, so `KR-swipe-construction-dead-classification` is retired — its PolicyLedger
+  entry, its `{todo}` known-red in `test/construction-consumers.test.js`, and the `TRACKED_OPEN` allowlist
+  are removed, and the HARD GATE now asserts zero dead returned fields on `buildConstruction`
+  unconditionally. Full suite 683 tests / 0 fail / 2 todo (the unrelated `KR-swipe-scroll-restore` +
+  `KR-swipe-source-rerender`). Ratified plan `Claude/Plans/PLAN-swipe-stage5.md` (Charpy FORGE r9;
+  r1–r9 casebooks committed `f6d6985`). Bench only; the on-device hold applies; not yet pushed/deployed.

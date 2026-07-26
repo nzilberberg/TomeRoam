@@ -127,6 +127,19 @@ user asks).** Fork-slowness: gate ~2-3min/run on this box; run it backgrounded. 
 audits §8 incl. O3 (F5a payload), O4 (F1a L3-key), Loki R2 (`swipe-invariants` confirmed a genuine guard,
 reddened by mutation #30). ⚠️ NOT folded into a real-device verification session (the standing hold applies).
 
+**Stage 5 BUILT GREEN (2026-07-25) — bench only, not yet pushed/deployed.** `Swipe.buildConstruction` now
+returns the four-key `{ decorations, movers, capture, sourceWasClobbered }`: `classification` is
+derived+consumed internally (not returned), the `plan` wrapper is dropped, and `decorations` is hoisted +
+projected to `{kind,base}`. Sole L3 consumer updated (`start()` reads `c.decorations`);
+`docs/swipe-model.generated.txt` regenerated. Red-first: Curie reddened `test/swipe-construction.test.js`
+(five→four keys) before the code change (`Claude/Curie/RED-swipe-stage5.md`); Brunel greened it
+(`Claude/Brunel/swipe-stage5-buildconstruction-green.md`). **`KR-swipe-construction-dead-classification`
+RETIRED** — detector reports zero dead fields, so its PolicyLedger entry + `{todo}` known-red +
+`TRACKED_OPEN` allowlist are gone; the HARD GATE now asserts zero dead returned fields on
+`buildConstruction` unconditionally. Charpy r1–r9 casebooks committed (`f6d6985`); plan FORGE at r9. Full
+suite 683 / 0-fail / 2-todo (unrelated scroll-restore + source-rerender). ⚠️ On-device verification still
+owed. Ratified §8 Mendeleev audit + Loki R2 remain pending as before.
+
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
 subsystem addendum; this DecisionLog is the Ledger. **Mechanized sections (gates, not vigilance):**

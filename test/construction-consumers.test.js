@@ -4,7 +4,8 @@
 // reads: the field's VALUE is used INSIDE the seam before the return, so a review checking
 // "is this value used?" clears it — while the RETURNED field has no consumer and is dead
 // (Engineering Contract §17). The .239 review missed exactly this: `Construction.classification`
-// is returned but `start()` reads only `c.movers`/`c.capture`/`c.sourceWasClobbered`/`c.plan`.
+// was returned unread by `start()` — the class of defect this gate exists to catch. The stage-5
+// §3 contract revision has since dropped it (and the `plan` wrapper), so the seam returns no dead field.
 //
 // WHY IT COVERS THE CLASS, NOT ONE BUG. contract-function-gate.test.js is a META-gate: every
 // js/swipe.js export is classified CONTRACT (exact-key + immutability checked — which catches a
@@ -25,12 +26,6 @@ const { pathToFileURL } = require('node:url');
 const ROOT = path.resolve(__dirname, '..');
 const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
 const load = () => import(pathToFileURL(path.join(ROOT, 'tools', 'dead-return-fields.mjs')).href);
-
-// The one field tracked OPEN in the PolicyLedger (F1, external review of 6bf0d20): its
-// resolution (consume it, or revise the ratified return contract to drop it) is a plan decision.
-// This allowlist entry is removed in the commit that resolves it — the known-red test reddens
-// until then, so the allowlist cannot silently outlive the defect.
-const TRACKED_OPEN = { buildConstruction: ['classification'] };
 
 // CONTRACT seams whose dead-field protection is the exact-key gate, NOT this one — because their
 // consumers DESTRUCTURE the result (buildConstruction does `const { sourceHost } = classification`),
@@ -74,25 +69,9 @@ test('no NEW dead returned field on any registered Swipe seam', async () => {
   const { SEAM_REGISTRY, seamDeadFields } = await load();
   for (const seam of Object.keys(SEAM_REGISTRY)) {
     const dead = seamDeadFields(seam, ROOT);
-    const unexpected = dead.filter((k) => !(TRACKED_OPEN[seam] || []).includes(k));
-    assert.deepEqual(unexpected, [],
-      `Swipe.${seam} returns field(s) no consumer reads: ${unexpected.join(', ')}. `
+    assert.deepEqual(dead, [],
+      `Swipe.${seam} returns field(s) no consumer reads: ${dead.join(', ')}. `
       + 'A returned contract field with no consumer is a dead field (Engineering Contract §17) — '
       + 'consume it in the caller or remove it from the return.');
   }
 });
-
-// ── KNOWN-RED (F1) — the tracked-open field must reach zero dead ────────────────────────────────
-// Direction-neutral: consuming `classification` OR dropping it from the ratified return both satisfy
-// this. Goes green when F1 resolves; remove the todo, this test, TRACKED_OPEN's entry, and the
-// ledger entry in that commit. Tracked: PolicyLedger KR-swipe-construction-dead-classification.
-test('every Swipe.buildConstruction returned field is consumed by start()',
-  { todo: 'F1 (external review of 6bf0d20 / build .239): Construction.classification is returned '
-        + 'but unread by start(). Resolve by consuming it in L3 or revising the ratified return '
-        + 'contract to drop it (a plan decision — Vitruvius/Charpy). Tracked: PolicyLedger '
-        + 'KR-swipe-construction-dead-classification.' },
-  async () => {
-    const { seamDeadFields } = await load();
-    assert.deepEqual(seamDeadFields('buildConstruction', ROOT), [],
-      'no field returned by Swipe.buildConstruction may be dead (unread by start())');
-  });

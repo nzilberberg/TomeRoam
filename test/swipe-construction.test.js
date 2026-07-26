@@ -21,13 +21,18 @@ const { readRoot, ROOT } = require('./dom-fixture.js');
 
 const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
 
-// The exact contract shapes from plan §3. Asserted by sorted key set so a missing OR a
-// dead/extra field both redden (§4.11 exact-key discipline).
-const CONSTRUCTION_KEYS = ['capture', 'classification', 'movers', 'plan', 'sourceWasClobbered'];
+// The exact contract shapes from plan §3 (the 2026-07-24 §3 CONTRACT REVISION). Asserted by
+// sorted key set so a missing OR a dead/extra field both redden (§4.11 exact-key discipline).
+// The ratified return is FOUR live keys: `classification` is derived and consumed INTERNALLY
+// (never returned), and the `plan` WRAPPER is dropped — of its fields only `decorations` has an
+// L3 consumer, so it is HOISTED to the top level and PROJECTED to {kind, base} (the dead `role`
+// leaf stripped, F2). See PLAN-swipe-stage5.md §3, Poirot F1, Charpy r5 F1.
+const CONSTRUCTION_KEYS = ['capture', 'decorations', 'movers', 'sourceWasClobbered'];
 const MOVERS_KEYS = ['decoration', 'incoming', 'outgoing'];
-const CLASSIFICATION_KEYS = ['decorations', 'destinationHost', 'fromKind', 'sourceHost', 'toKind'];
-const PLAN_KEYS = ['decorations', 'incoming', 'outgoing', 'renderDestination'];
 const MOVER_KEYS = ['element', 'ownership', 'slot'];
+// The returned decoration descriptor is projected to {kind, base}; the classification's `role`
+// leaf is stripped at the seam (no L3 consumer reads it — plan §3, F2).
+const DECORATION_PROJECTION_KEYS = ['base', 'kind'];
 
 // Ambient globals a correctly-relocated builder must NEVER read (plan §7): everything goes
 // through `env`. Poisoned around the buildConstruction call so a bare read throws loudly.
@@ -109,16 +114,38 @@ function addCovers(doc, container, n) {
 const desc = (v, payload) => ({ v, ...(payload || {}) });
 const build = (from, dest, ctx) => withPoisonedAmbient(() => Swipe.buildConstruction(from, dest, ctx.env));
 
-// ── F1.1 — the exact Construction contract shape ────────────────────────────────────
-test('buildConstruction returns the exact Construction contract shape', () => {
+// ── F1.1 — the exact four-key Construction contract shape (2026-07-24 §3 revision) ───
+test('buildConstruction returns the exact four-key Construction contract shape', () => {
   const ctx = mkEnv();
   const c = build(desc('home'), desc('books'), ctx);
-  assert.deepEqual(Object.keys(c).sort(), CONSTRUCTION_KEYS, 'Construction must carry exactly its five fields');
+  assert.deepEqual(Object.keys(c).sort(), CONSTRUCTION_KEYS,
+    'Construction must carry EXACTLY its four fields {capture, decorations, movers, sourceWasClobbered} '
+    + '(plan §3, F1) — `classification` is derived+consumed internally and the `plan` wrapper is dropped');
   assert.deepEqual(Object.keys(c.movers).sort(), MOVERS_KEYS, 'movers must be {outgoing, incoming, decoration}');
-  assert.deepEqual(Object.keys(c.classification).sort(), CLASSIFICATION_KEYS,
-    'classification must carry the five stage-5 fields including both hosts');
-  assert.deepEqual(Object.keys(c.plan).sort(), PLAN_KEYS, 'plan must carry its four construction fields');
+  assert.ok(!('classification' in c),
+    '`classification` must NOT be a return member — it is derived internally and consumed there (plan §3, F1)');
+  assert.ok(!('plan' in c),
+    'the `plan` wrapper must NOT be a return member — its one live field, decorations, is hoisted (plan §3, F1)');
   assert.equal(typeof c.sourceWasClobbered, 'boolean', 'sourceWasClobbered is a boolean');
+});
+
+// ── F1/F2 — decorations HOISTED to the top level, PROJECTED to {kind, base} ──────────
+test('decorations is a top-level projected {kind, base} list with the role leaf stripped', () => {
+  // A non-NP transition carries an empty decorations list at the top level (not on a wrapper).
+  const plain = build(desc('home'), desc('books'), mkEnv());
+  assert.ok(Array.isArray(plain.decorations),
+    'decorations is a top-level array on every construction (hoisted off the dropped plan wrapper — plan §3, F1)');
+  assert.equal(plain.decorations.length, 0, 'home->books has no NP endpoint, so decorations is empty');
+
+  // An NP-source transition carries exactly one decoration, projected to {kind, base}.
+  const np = build(desc('nowplaying'), desc('books'), mkEnv());
+  assert.equal(np.decorations.length, 1, 'an NP endpoint yields exactly one decoration descriptor');
+  assert.deepEqual(Object.keys(np.decorations[0]).sort(), DECORATION_PROJECTION_KEYS,
+    'the returned decoration is projected to {kind, base}; the classification role leaf is stripped (plan §3, F2)');
+  assert.equal(np.decorations[0].kind, 'now-playing-pill', 'the decoration kind survives the projection');
+  assert.equal(np.decorations[0].base, 'outgoing', 'NP-as-source bases the decoration at the outgoing slot');
+  assert.ok(!('role' in np.decorations[0]),
+    'the dead `role` leaf must NOT cross the seam — no L3 consumer reads it (plan §3, F2)');
 });
 
 // ── F1.1 — the mover EXTERNAL shape, not the production {el,base,own} ────────────────
