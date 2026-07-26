@@ -2,7 +2,7 @@
 
 Type: plan
 
-<!-- vitruvius-gate {"plan_type":"refactor","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":true,"persistence_migration":false,"lifecycle_ownership":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:539-561","js/app.js:746-796","js/app.js:1142-1161"],"callee_ranges":[],"affected_contracts":["test/swipe-invariants.test.js:220","test/swipe-invariants.test.js:569","test/swipe-invariants.test.js:598","test/swipe-invariants.test.js:623"],"staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Plans/PLAN-swipe-reveal.md"],"blocking_questions":["DF","SF","RR","SS","EP"]} -->
+<!-- vitruvius-gate {"plan_type":"refactor","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":true,"persistence_migration":false,"lifecycle_ownership":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:539-561","js/app.js:746-796","js/app.js:1142-1161"],"callee_ranges":[],"affected_contracts":["test/swipe-invariants.test.js:220","test/swipe-invariants.test.js:569","test/swipe-invariants.test.js:598","test/swipe-invariants.test.js:623"],"staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Plans/PLAN-swipe-reveal.md"],"blocking_questions":["DF","SF","RR","EP"]} -->
 
 Status: **DRAFT — for Charpy** (2026-07-26). First Stage-6b slice, following shipped Stage 6a
 (supersession pre-stack recovery, build `2026-07-26.246`). Behavior is PARITY at the user-visible layer;
@@ -114,9 +114,12 @@ Behavioral ownership, not function names. All changes are inside `js/app.js` `se
 **The retirement rule, stated once (the load-bearing property, §3):** each of the two terminal
 resolvers — `finalize` (the settle→finalize handles: `settleFrame`, `settleTimer`, `transitionListener`)
 and `drop` (the reveal handles: `revealFrames`, `revealTimer`) — retires EVERY handle in its phase: the
-one that fired is nulled, and each one still pending is cancelled/removed and then nulled. A retire reads
-the stored handle off `cur`, so a late continuation from a COMPLETED session finds its handle already
-null and performs no cancel and no write (cell SS).
+one that fired is nulled, and each one still pending is cancelled/removed and then nulled. Each resolver
+closes over its own `cur`, so it retires exactly the correct loser and never a wrong or a successor's
+handle (the misattribution mutations of cells DF/RR). A late continuation from a COMPLETED session is
+inert by the shipped `done`/`dropped` guards and the shipped settle-`rAF` cancel — unchanged by this
+slice (§5); the retirement's own property is that the completed session then names no live handle (field
+inspection, cells SF/EP), NOT a defense the continuation reads.
 
 **Stays exactly as today (parity — do NOT re-touch):**
 - The exactly-once GUARDS themselves — the `done` boolean in `finalize` (1143) and the `dropped` boolean
@@ -157,16 +160,23 @@ asynchronous continuations is a SESSION-OWNED handle with exactly one retirement
    (`cur.revealFrames`, `cur.revealTimer`): the gate that fired is nulled; each other pending gate is
    cancelled/cleared and then nulled. Because `drop` runs exactly once (the `dropped` guard, unchanged),
    the two losers of the decode-vs-paint-vs-600ms triple-race are retired (I14/I15, cell RR).
-3. **A retirement reads the handle off `cur`.** A continuation scheduled by a session that has since
-   finalized (e.g. a hidden-tab settle `rAF` that resumes after the 340ms timer already finalized — the
-   .226 scenario) finds its stored handle already null, so it neither re-cancels a resource nor writes a
-   transform onto a borrowed-real element nor re-enters `finalize`/`drop` (I12 for these async surfaces,
-   §4.6; cell SS).
-4. **Ownership endpoint.** The session's ownership ends (`sessionDone(cur)`) only after every handle in
+3. **The stored handle is nulled at retirement; the DOM stale-write is the shipped cancel's job, not the
+   null's.** The null-on-retire makes the completed session truthfully name no live handle (§4.5) — a
+   bookkeeping property verified by FIELD INSPECTION (cells SF, EP), whose PRODUCTION consumer is the
+   deferred I12 retirement-check (§11). It is NOT a stale-write defense: no continuation reads its own
+   handle, and §2/§5 keep the continuations' bodies unchanged. The stale DOM transform a hidden-tab settle
+   `rAF` could otherwise write is prevented by the shipped `cancelAnimationFrame(cur.settleFrame)`
+   (app.js:1146, .226), which this slice preserves; every other late fire is absorbed by the shipped
+   `done`/`dropped` guards. A late continuation is therefore inert by the shipped cancel/guards, not by
+   reading a handle (regression cell RGcancel).
+4. **Correct-loser retirement, by construction.** Each resolver closes over its own `cur`, so it retires
+   exactly the phase's loser and never a wrong handle — the misattribution axis Loki strikes (cells DF,
+   RR; §4.10 wrong-owner). This is the retirement's load-bearing, reddening property.
+5. **Ownership endpoint.** The session's ownership ends (`sessionDone(cur)`) only after every handle in
    the completed phase is retired; a completed session (`session === null`) names no live handle
    (Engineering Contract §4.5; cell EP).
 
-**Basis (U11).** Items 1-4 are the resource-handle realization of I13/I14/I15 and the "Owed to stage 6"
+**Basis (U11).** Items 1-5 are the resource-handle realization of I13/I14/I15 and the "Owed to stage 6"
 ledger entry; the mechanism is fixed because exactly one design satisfies it — store the handle on the
 session at its scheduling site and retire it at the single phase resolver, exactly as the shipped .226
 settle-rAF fix does, extended to the four remaining handles with the null-on-retire the .226 fix omitted.
@@ -186,9 +196,12 @@ now, but the phase-resolver retirement does, so the fields are live at introduct
 wins, and removing the listener when the 340ms timer wins, only ELIMINATES a no-op call that the `done`
 guard already neutralized — nothing the user can see changes, and the flash-sensitive finalize/reveal
 choreography is untouched. The slice's value is at the ownership contract: the session object truthfully
-describes live ownership (§4.5), each late continuation is inert by retirement rather than only by a flag
-(§4.14), and I12 enforcement + the finalization centralization (§11) gain the clean handle foundation
-they require. This is stated as parity-plus-ownership, not as user-visible behavior change.
+describes live ownership (§4.5), each loser resource is actively released rather than left bound as a
+no-op (§4.14), and I12 enforcement + the finalization centralization (§11) gain the clean handle
+foundation they require. The late continuation stays inert by the shipped `done`/`dropped` guards and the shipped settle-`rAF`
+cancel (RGcancel); the retirement adds that each loser resource is actively released (§4.14) and the
+completed session names no live handle (§4.5), which the deferred I12 enforcement consumes. This is stated
+as parity-plus-ownership, not as user-visible behavior change.
 
 ## 4. Value-crossing ledger
 
@@ -218,8 +231,11 @@ changes; the change is the OWNERSHIP and RETIREMENT of five continuations that a
   finalized: a settle `rAF` paused by a hidden tab resumes on foreground after the 340ms timer already
   ran `finalize` (the exact .226 mechanism, subsystem §11); a `transitionend` arriving after the 340ms
   fallback already finalized; a reveal double-`rAF` or 600ms timer firing after another reveal gate
-  already dropped the pane. In every case the fired continuation reads its stored handle off `cur`, finds
-  it null (retired by the phase resolver), and performs no write (cell SS). Tests deliberately deliver
+  already dropped the pane. In every case the fired continuation hits its guarded resolver
+  (`done`/`dropped`) or, for the settle `rAF`, the shipped `cancelAnimationFrame` (app.js:1146) — so it
+  performs no write and no re-entry, unchanged by this slice. The retirement does not gate the continuation
+  (§2 keeps the continuations' bodies intact); its own property is that the completed session names no live
+  handle (field inspection, cells SF/EP) and each loser resource is released (RGcancel regression). Tests deliberately deliver
   each late fire (deferred `rAF` + fake-clock advance past the fallback, per `test/swipe-invariants.test.js:598`).
 - **Cancellation.** Each pending loser is actively cancelled at the phase resolver:
   `cancelAnimationFrame(cur.settleFrame)` (already shipped), `clearTimeout(cur.settleTimer)`,
@@ -272,9 +288,8 @@ successor.** Inside each phase resolver: (1) the exactly-once guard (`done`/`dro
 before retirement runs (unchanged), so retirement cannot re-enter; (2) each pending handle is
 cancelled/removed while the stored handle is still LIVE, THEN the slot is nulled — nulling first would
 make `clearTimeout`/`cancelAnimationFrame`/`removeEventListener` read `null` and leak the resource; (3)
-the retirement reads handles off the specific `cur` the resolver closed over, so a stale resolver from a
-completed session A retires only A's (already-null) handles and can never cancel a successor session B's
-live handle (I12/§4.6; cell SS).
+the retirement reads handles off the specific `cur` the resolver closed over, so it retires exactly the
+phase's correct loser and never a wrong handle (I12/§4.6; the misattribution mutations of cells DF/RR).
 
 Incidental (not a new universal order): the relative order among the three finalize-phase retirements (or
 the two reveal-phase retirements) is unconstrained — they touch independent handles — and the existing
@@ -291,10 +306,10 @@ reason. Absence is a defect; a dimension not listed is an omission.
 |---|---|---|
 | Lifecycle / phases | Yes | Each async handle is created at its scheduling site and retired at exactly one phase resolver; the ownership endpoint is reached only after retirement (cells DF, RR, EP). |
 | Identities | N/A | No identifier is created, changed, or reinterpreted; `d.id`/`sessionSeq` semantics are unchanged. |
-| Ordering | Yes | Cancel-before-null, and retire-the-loser-not-a-successor's-handle (cells DF, RR, SS); the retirement reads handles off the resolver's own `cur`. |
+| Ordering | Yes | Cancel-before-null, and retire the correct loser (misattribution-safe by closing over `cur`) (cells DF, RR, EP). |
 | Resources: acquired / owner / endpoint | Yes | The four bare timers/listener/frames become session-owned handles with one retirement site each; a completed session names no live handle (cells DF, RR, SF, EP; §4.3/§4.5/§4.14). |
-| Async operations | Yes | A continuation firing after its session finalized (hidden-tab settle rAF resume; late transitionend; late reveal gate) is inert by retirement — no re-entry, no stale write (cell SS; §5). |
-| Stale completions | Yes | The .226 hidden-tab class extended to all five handles: the late fire finds its handle null and writes nothing (cell SS; regression `test/swipe-invariants.test.js:598`). |
+| Async operations | Yes | A continuation firing after its session finalized (hidden-tab settle rAF resume; late transitionend; late reveal gate) is inert by the shipped `done`/`dropped` guards and the shipped settle-rAF cancel; the retirement additionally releases each loser and nulls its slot (cells DF, RR; regression RGcancel; §5). |
+| Stale completions | Yes | The .226 hidden-tab stale-write stays prevented by the shipped `cancelAnimationFrame` (regression RGcancel, `test/swipe-invariants.test.js:598`); the retirement adds field-verified truthfulness that no handle survives on the completed session (cells SF, EP). |
 | Normal completion | Yes (parity) | Exactly-once finalize under the transitionend+340ms dual-fire (I13) and exactly-once reveal drop under the decode/paint/timeout race (I15) stay green with retirement added (cells DF, RR; regression `:220`, `:569`). |
 | Recovery authority boundary | N/A | This slice does not enter `begin()`/supersession or the recovery path (Stage 6a owns it; a superseded session holds none of these handles — §2). |
 | Emergency disposal | N/A | No pane disposal path changes; the orphan-pane hard reset and `dispose(reason)` are untouched (Stage 6a / deferred §11). |
@@ -303,9 +318,9 @@ reason. Absence is a defect; a dimension not listed is an omission.
 | Invariants | Yes | I13 (finalize once), I14 (every timer/listener/frame released or invalidated), I15 (deferred repaint once) — I14 extended to the four newly-owned handles; I13/I15 keep their flag defense and gain retirement. |
 | Mutation cases | Yes | Each cell in §9 names the mutation that reddens it (misattribution/ordering: retire the winner not the loser; null before cancel; retire the wrong session's handle — not only omission). |
 | Known-red | N/A | This slice introduces no known-red; PolicyLedger has no active entries after Stage 6a and none is added. |
-| Composition | Yes | The retirement composes with the exactly-once guards (`done`/`dropped`) — belt to their suspenders — and with the Stage-6a Browse-hold/supersession lifecycle (a superseded pre-settle session owns none of these handles), and with the future I12 enforcement that reads the nulled handles (cells DF, RR, SS). |
+| Composition | Yes | The retirement composes with the exactly-once guards (`done`/`dropped`) — belt to their suspenders — and with the Stage-6a Browse-hold/supersession lifecycle (a superseded pre-settle session owns none of these handles), and with the future I12 enforcement that reads the nulled handles (cells DF, RR, EP). |
 | Contract claims (exact schema) | N/A | No exact-key contract changes (Applicability contract_shape:false); the session `d` is exempt mutable lifecycle state, not a registered `classifyTransition`/`buildConstruction` contract. |
-| Concurrency | Yes (parity) | Single-writer within the process; `begin()` still REJECTS while `finishing` (I17), so no second session schedules these handles concurrently; retirement runs inside the single-threaded resolver with the guard already set (cell SS). |
+| Concurrency | Yes (parity) | Single-writer within the process; `begin()` still REJECTS while `finishing` (I17), so no second session schedules these handles concurrently; retirement runs inside the single-threaded resolver with the guard already set (cells DF, EP). |
 
 ## 9. Coverage and mutation matrix
 
@@ -314,30 +329,39 @@ real `settle()`/`finalize()`/`holdGhostUntilPaintable()` through the app-harness
 `h.touch` + `h.clock`), each with the mutation that must redden it. Layer: wiring = app-harness driving
 the real gesture; the regression rows are existing green tests that must stay green.
 
+The retirement's observable behavior is PARITY (the shipped `done`/`dropped` guards and the shipped
+settle-`rAF` cancel already hold every DOM outcome); its honest, reddening coverage is therefore
+OWNERSHIP-level — an ownership SPY that the correct loser's `clearTimeout`/`removeEventListener`/
+`cancelAnimationFrame` is invoked (misattribution mutation per §4.10, "wrong owner rather than no owner"),
+plus FIELD INSPECTION that the completed session names no live handle. This is the SF/EP shape. The DOM
+parity that the guards/cancel hold is pinned by regression cells (RGcancel/RG13/RGH/RGT), whose mutation
+is "the retirement REPLACES (not joins) the shipped defense."
+
 | id | Behavior proved | Fixture / transition | Mutation that must fail it | Layer |
 |---|---|---|---|---|
-| DF | The loser of the transitionend-vs-340ms dual-fire is RETIRED: transitionend wins → `settleTimer` cleared + nulled; 340ms wins → `transitionListener` removed + nulled; finalize body runs exactly once | a settling swipe; fire transitionend first (then advance the clock past 340ms), and separately advance past 340ms with no transitionend | retire the WINNER's handle instead of the loser's (the loser survives as a live handle / a late fire re-enters); OR null before cancel (`clearTimeout(null)` leaks, the 340ms fires again) | wiring (intermediate-state, §4.7) |
-| SF | After finalize cancels the settle rAF AND after a normal rAF fire, `cur.settleFrame` reads null (the session names no stale frame handle) | a settling swipe finalized by the 340ms fallback while the tab was hidden (deferred rAF), and a normal foreground settle | leave `settleFrame` set after cancel/fire → a completed session names a live frame handle (a re-entrant cancel double-targets; the future I12 retirement-check reads a stale handle) | wiring (extends `:598`) |
-| RR | The two losers of the decode-vs-paint-vs-600ms reveal race are retired: the winning drop cancels `revealFrames` + clears `revealTimer` and nulls both; the pane drops exactly once | a commit→home or abort browse→browse HELD reveal; let the paint gate win, then advance past 600ms | after a paint-gate drop, don't clear the 600ms timer (its handle survives; a re-entrant drop is only flag-guarded); OR cancel `revealTimer` where `revealFrames` was meant (misattribution) | wiring (intermediate-state, §4.7) |
-| SS | A continuation firing after its session finalized finds its handle null and writes nothing — no transform on a borrowed-real element, no second finalize, no successor touched | the .226 hidden-tab recipe: defer the settle rAF, advance the clock past 340ms to finalize, then resume the rAF; assert `#browse`/`#home` carries no stale transform | omit the null-on-retire → the resumed rAF (reading a still-live handle path) proceeds and writes a stale `translateX` onto the real view | wiring (the load-bearing promise; extends `:598`) |
-| EP | After the terminal resolver (no-pane finalize, or held-reveal drop), `session === null` AND every handle that was on `cur` is retired/null | a no-pane commit (browse→overlay) and a held-reveal commit→home | retire only some phase handles → a completed session (`session===null`) still leaves a non-null handle reachable on the released `cur` | wiring (endpoint, §4.5) |
+| DF | `finalize` retires exactly the correct dual-fire loser: when `transitionend` wins, `clearTimeout` is invoked on `cur.settleTimer` and its slot reads null after; when the 340ms wins, `removeEventListener` is invoked on `cur.transitionListener` and its slot reads null after | a settling swipe with `transitionend` fired first; separately the 340ms fallback alone (no `transitionend`) | misattribution (§4.10): retire the WINNER's handle instead of the loser's — the spy sees cancel/remove invoked on the wrong handle and the loser's slot stays non-null | wiring (ownership spy + field inspection) |
+| SF | After `finalize` cancels the settle rAF AND after a normal rAF fire, `cur.settleFrame` reads null (the session names no stale frame handle) | a settling swipe finalized by the 340ms fallback while the tab was hidden (deferred rAF), and a normal foreground settle | leave `settleFrame` set after cancel/fire → a completed session names a live frame handle (the future I12 retirement-check reads a stale handle) | wiring (field inspection) |
+| RR | The winning reveal `drop` retires exactly the correct two reveal losers: `cancelAnimationFrame` on `cur.revealFrames` and `clearTimeout` on `cur.revealTimer`, each on its own handle, both slots null after | a commit→home or abort browse→browse HELD reveal; let the paint gate win, then advance the clock past 600ms | misattribution (§4.10): cancel `cur.revealTimer` where `cur.revealFrames` was meant (wrong handle), or leave a loser's slot non-null | wiring (ownership spy + field inspection) |
+| EP | After the terminal resolver, the completed session names no live handle across every handle it acquired — for BOTH the no-pane finalize path and the held-reveal two-phase (finalize→drop) path; `session === null` | a no-pane commit (browse→overlay) and a held-reveal commit→home | retire only some phase handles → a completed session (`session===null`) still leaves a non-null handle reachable on the released `cur` | wiring (field inspection) |
+| RGcancel | The shipped `cancelAnimationFrame(cur.settleFrame)` still prevents a stale `translateX` on the real `#browse`/`#home` after finalize, and the `done`/`dropped` guards still absorb late fires — the retirement JOINS them, it does not replace them | the .226 hidden-tab recipe: defer the settle rAF, advance past 340ms to finalize, resume the rAF; assert no stale transform | the retirement REPLACES (removes) the shipped settle-rAF cancel → the resumed rAF writes a stale transform onto the real view | wiring (existing green, `:598`) |
 | RG13 | Finalization still occurs exactly once despite transitionend AND the 340ms both firing (I13 parity) | the existing duplicate-gesture-ending-event fixture | retirement removes the `done` guard → both finalize bodies run | wiring (existing green, `:220`) |
 | RGH | A HELD reveal still keeps the owner THROUGH finalize, releasing it only at drop (parity) | the existing Authors→Home held-reveal fixture | retirement nulls/ends the owner at finalize instead of at drop → owner released while the ghost still covers | wiring (existing green, `:569`) |
 | RGT | A throw in finalize still restores `finishing` so the next swipe engages (parity) | the existing throwing-abort fixture | retirement runs outside the try/finally and swallows the throw path → `finishing` stays stuck true | wiring (existing green, `:623`) |
 
 **Machine-readable coverage (gate — `vitruvius-coverage`).** The matrix as `id | behavior | fixture |
-mutation | layer`; each blocking question (DF/SF/RR/SS/EP) has a complete row.
+mutation | layer`; each blocking question (DF/SF/RR/EP) has a complete row; the RG* rows pin the shipped
+DOM parity.
 
 ```vitruvius-coverage
 # id | behavior | fixture | mutation | layer
-DF | the loser of the transitionend versus 340ms dual-fire is retired and finalize runs exactly once | a settling swipe with transitionend first and separately the 340ms fallback alone | retire the winner handle instead of the loser or null before cancel so the cleared handle leaks and the loser fires again | wiring
-SF | after cancel and after a normal fire the settle rAF handle reads null so the session names no stale frame | a hidden-tab settle finalized by the 340ms fallback and a normal foreground settle | leave settleFrame set after cancel or fire so a completed session names a live frame handle | wiring
-RR | the two losers of the decode versus paint versus 600ms reveal race are retired and the pane drops exactly once | a held commit-to-home or abort browse-to-browse reveal with the paint gate winning then the clock advanced past 600ms | after a paint-gate drop do not clear the 600ms timer or cancel the wrong reveal handle | wiring
-SS | a continuation firing after its session finalized finds its handle null and writes nothing on a borrowed-real element or a successor | the hidden-tab recipe deferring the settle rAF then finalizing via the 340ms fallback then resuming the rAF | omit the null-on-retire so the resumed rAF writes a stale transform onto the real view | wiring
-EP | after the terminal resolver the session is null and every handle that was on the session is retired | a no-pane commit and a held-reveal commit-to-home | retire only some phase handles so a completed session still leaves a non-null handle | wiring
-RG13 | finalization occurs exactly once despite transitionend and the 340ms both firing | the existing duplicate gesture-ending-event fixture | retirement removes the done guard so both finalize bodies run | wiring
-RGH | a held reveal keeps the owner through finalize releasing it only at drop | the existing Authors-to-Home held-reveal fixture | retirement ends the owner at finalize instead of at drop | wiring
-RGT | a throw in finalize restores finishing so the next swipe engages | the existing throwing-abort fixture | retirement runs outside the try finally and swallows the throw path so finishing stays stuck true | wiring
+DF | finalize retires exactly the correct dual-fire loser clearing settleTimer when transitionend wins or removing transitionListener when the 340ms wins with the loser slot null after | a settling swipe with transitionend first and separately the 340ms fallback alone | misattribution retire the winner handle instead of the loser so cancel or remove hits the wrong handle and the loser slot stays non-null | wiring ownership spy and field inspection
+SF | after cancel and after a normal fire the settle rAF handle reads null so the session names no stale frame | a hidden-tab settle finalized by the 340ms fallback and a normal foreground settle | leave settleFrame set after cancel or fire so a completed session names a live frame handle | wiring field inspection
+RR | the winning reveal drop retires exactly the correct two reveal losers cancelling revealFrames and clearing revealTimer each on its own handle with both slots null after | a held commit-to-home or abort browse-to-browse reveal with the paint gate winning then the clock advanced past 600ms | misattribution cancel revealTimer where revealFrames was meant or leave a loser slot non-null | wiring ownership spy and field inspection
+EP | after the terminal resolver the completed session names no live handle across every handle it acquired for both the no-pane finalize path and the held-reveal two-phase path | a no-pane commit and a held-reveal commit-to-home | retire only some phase handles so a completed session still leaves a non-null handle | wiring field inspection
+RGcancel | the shipped cancelAnimationFrame still prevents a stale transform after finalize and the done and dropped guards still absorb late fires so the retirement joins them not replaces them | the hidden-tab recipe deferring the settle rAF then finalizing via the 340ms fallback then resuming the rAF | the retirement replaces the shipped settle-rAF cancel so the resumed rAF writes a stale transform | wiring existing green 598
+RG13 | finalization occurs exactly once despite transitionend and the 340ms both firing | the existing duplicate gesture-ending-event fixture | retirement removes the done guard so both finalize bodies run | wiring existing green 220
+RGH | a held reveal keeps the owner through finalize releasing it only at drop | the existing Authors-to-Home held-reveal fixture | retirement ends the owner at finalize instead of at drop | wiring existing green 569
+RGT | a throw in finalize restores finishing so the next swipe engages | the existing throwing-abort fixture | retirement runs outside the try finally and swallows the throw path so finishing stays stuck true | wiring existing green 623
 ```
 
 ## 10. Records reconciliation (APPLY ON APPROVAL)
@@ -350,7 +374,10 @@ for the maker/Zelda, not done here.
   timers and the transitionend listener ARE now session-owned handles retired (cancelled/removed and
   nulled) at their phase resolver. §10/§11 — add the four newly-owned handles (`settleTimer`,
   `transitionListener`, `revealFrames`, `revealTimer`) to the async-operations / stale-completions lists
-  as retired-on-fire-or-cancel. §19 — register the new mutations (DF/SF/RR/SS/EP) mapped to their tests.
+  as retired-on-fire-or-cancel. §19 — register the new mutations (the ownership cells DF/SF/RR/EP and the
+  RGcancel/RG13/RGH/RGT parity regressions) mapped to their tests. §21 — strike or update the "the stage-6
+  cleanup debt (null the timer/listener handles)" policy-ledger reference (swipe-reveal.md:100) to current
+  truth: the debt is closed in Stage 6b; it goes stale in HEAD otherwise (F3, StandardsDocument §6.6).
   §23 — annotate the stage-6 revision condition as sub-sliced (6b = async-handle ownership done; 6c/7 =
   finalization centralization + `sameBrowseHost` + pane lifecycle + I10 reveal-gating + `recoverSession`
   matrix).
@@ -429,5 +456,7 @@ centralization owns and retires the same handles through the restructured state 
 handle-ownership boundary so Stage 6c restructures the finalize/reveal path in one pass on a clean
 ownership base, without unwinding a 6b change. Handoff order: Charpy (temper) -> Curie (red suite from §9)
 -> Brunel (green) -> Poirot (review) -> Mendeleev (coverage audit) -> Loki (strike the §3 load-bearing
-promise — the dual-fire/stale-fire retirement, cell DF/SS). Campaign definition-of-done: the
+promise — that each phase resolver retires exactly the correct loser and the completed session names no
+live handle; the misattribution/ownership axis of cells DF/RR/EP, not the DOM axis the shipped guards
+already hold). Campaign definition-of-done: the
 `swipe-stage6` gates, with the 6b artifact-name reconciliation flagged in §10.
