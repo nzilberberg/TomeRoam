@@ -114,15 +114,84 @@ the embedded `begin/supersession` fingerprint printed in the doc).
   `Claude/Decisions/DecisionLog.md` — not annotated (deferred §10 scrub).
 - No git commit; no build-number stamp (Zelda's job at commit time, per the assignment).
 
+## Poirot review fixes (build f09cf9d → this pass) — FIX-THEN-SHIP
+
+Review: `Claude/Poirot/f09cf9d-swipe-stage6-supersession.md` (verdict FIX-THEN-SHIP, blocking id F1).
+Both findings routed to Brunel; both fixed here.
+
+### F1 (blocking, Minor — `js/app.js` `begin()`) — orphan sub-case lost its scroll-to-top
+
+The recovery's shared `applyScreen(currentDesc(), { render: d?d.clobbered:false, resetScroll: false })`
+forced `resetScroll:false` onto the ORPHAN branch (`d === null`) as well as the live-recovery branch.
+`resetScroll:false` is only NEEDED on the live branch (so `applyScreen` does not stomp the explicit
+`d.scroll0` restore). On the orphan branch, for a `home` or options/sub `currentDesc()`, the pre-6a code
+reset the document scroll to top (nav.js:127/134, default `resetScroll:true`); f09cf9d silently dropped
+it — an unclassified behavior change on a path plan §2 declared parity, invisible to the OB test (browse
+source, where `resetScroll` is inert).
+
+- **Reproduce-before-accept:** Curie's red-first guard `OB-home` (`test/swipe-stage6.test.js`, an orphan
+  hard-reset on a HOME source asserting `window.scrollTo(0, 1)`) was RED on f09cf9d for exactly this
+  reason. I did not touch that test.
+- **Fix (js/app.js:385):** `resetScroll: d ? false : undefined` — forces `false` only when a live session
+  exists; the orphan passes `undefined`, so `applyScreen` keeps nav.js's default (`resetScroll:true`) and
+  home/options still resets to top. The recovery comment was corrected (it had claimed both expressions
+  "degrade to the prior top-level nav restore" — the very bug F1 caught).
+- **Mutation-verified (Gate B):** new registry mutation #18 (`F1_ORPHAN_RESETSCROLL_TO`, reverts to
+  `resetScroll: false`) reddens OB-home and ONLY OB-home; OB/VR/OR/NC stay green. Sweep: `#18 caught`.
+
+### F2 (non-blocking — `tools/gen-swipe-model.mjs`) — §6 label inconsistency
+
+The §6 TERMINATION table stamped the `hard-reset` row `[parity]` while its own screen/scroll columns now
+render the SR/SC repairs, which §10 (the gated §8A ledger) classifies as NEW POLICY — a within-document
+label inconsistency (StandardsDocument §7). The swipe-model gate requires every TERMINATION row's DATA
+`basis` to stay `'parity'` with a `where` (it means "verified against current code at the region"), so the
+fix is in the RENDER, not the data:
+
+- Added a `policyRef` field to the hard-reset row (leaves `basis:'parity'` intact — ledger test still
+  green) and a basis-column legend clarifying `[parity]` = verified-current-code, distinct from the §10
+  parity-vs-policy ledger.
+- The hard-reset row now renders `[parity] †` with a footnote: its screen/scroll are the SR/SC repairs,
+  NEW POLICY (§10), implemented 6a; the `[parity]` basis covers only the supersede-not-reject routing +
+  orphan disposal; and the orphan sub-case keeps nav.js default scroll-to-top.
+- Regenerated `docs/swipe-model.generated.txt` via `node tools/gen-swipe-model.mjs`.
+
+### Fingerprint moved again (for Curie)
+
+The F1 code change moves the `begin/supersession` SOURCE region again. New value:
+**`gen.supersessionFingerprint()` = `d39534854e3cc348`** (was `9227f47ff3d3c7db`). Curie re-pins
+`VERIFIED.supersession` in `test/swipe-model.test.js` to `d39534854e3cc348`. I did not edit the pin.
+
+### Bench (this fix pass)
+
+- `test/swipe-stage6.test.js`: **7 tests, 6 pass, 1 skip** — OB-home now GREEN; OB/VR/OR/NC/PS green;
+  KEEPER skip.
+- `test/swipe-model.test.js`: fail #1 (`committed model == generator`) GREEN; §8A ledger GREEN; only the
+  `VERIFIED.supersession` pin red (Curie's, value handed off above).
+- `test/mutation-anchors.test.js`: 2/2 green (re-anchored #13/#14/#16 to the new `applyScreen` line +
+  the SR mutation's `render:false` target; added #18 for F1).
+- `node tools/mutation-sweep.mjs 14 15 16 17 18`: all 5 CAUGHT, `0 uncaught, 0 unapplied, 0 stale flags`.
+- Full suite `node --test "test/*.test.js"`: **690 tests, 686 pass, 1 fail, 1 skip, 2 todo.** The 1 fail
+  is the `VERIFIED.supersession` pin (`expected 9227f47ff3d3c7db, actual d39534854e3cc348`) — Curie's
+  re-pin. 1 skip = KEEPER (device-only). 2 todo = SR/SC (deferred §10 scrub). The suite gained one test
+  (Curie's OB-home) vs the prior 689.
+
+### Build number
+
+The F1 change is a product change → requires a build-number bump from `2026-07-26.245` to the next
+(`2026-07-26.246`) at commit time, per the PWA deploy rule (web-only OTA; no native change → no APK
+rebuild). Named here; NOT applied — Zelda stamps at commit.
+
 ## Files changed
 
-- `js/app.js` — the production change (`begin()`'s hard-reset/recovery branch).
-- `tools/mutate.mjs` — re-anchored one existing mutation the recovery's rewrite invalidated; registered
-  four new stage-6a mutations (one candidate removed as empirically non-functional, see above).
-- `tools/gen-swipe-model.mjs` — updated the supersession mirror (TERMINATION row + §5 prose) to the new
-  behavior.
+- `js/app.js` — the production change (`begin()`'s hard-reset/recovery branch); Poirot F1 fix
+  (`resetScroll: d ? false : undefined`).
+- `tools/mutate.mjs` — re-anchored the mutations the recovery's rewrites invalidated (the F1 `applyScreen`
+  line change rotted #13/#14/#16 + the SR target); added the F1 mutation (#18, defends OB-home). Earlier:
+  registered the four original stage-6a mutations (one candidate removed as empirically non-functional).
+- `tools/gen-swipe-model.mjs` — supersession mirror updated (TERMINATION row + §5 prose) to the new
+  behavior; Poirot F2 fix (basis-label footnote/legend).
 - `docs/swipe-model.generated.txt` — regenerated from the updated generator.
 
 ```json
-{"persona":"brunel","stage":6,"input_artifact":"6e3a596","verdict":"BUILD_GREEN","files_changed":["js/app.js","tools/mutate.mjs","tools/gen-swipe-model.mjs","docs/swipe-model.generated.txt"],"suite_result":"685 pass / 1 fail / 1 skip / 2 todo (689 total) — the single fail is test/swipe-model.test.js's VERIFIED.supersession pin (expected c70d4ed49257af8e, actual 9227f47ff3d3c7db), a test-file constant this pass may not edit; handed to Curie","supersession_fingerprint":"9227f47ff3d3c7db","handoff_to_curie":"update VERIFIED.supersession to 9227f47ff3d3c7db in test/swipe-model.test.js","return_to":"poirot"}
+{"persona":"brunel","stage":6,"input_artifact":"f09cf9d","verdict":"BUILD_GREEN","findings_fixed":["F1","F2"],"files_changed":["js/app.js","tools/mutate.mjs","tools/gen-swipe-model.mjs","docs/swipe-model.generated.txt"],"suite_result":"686 pass / 1 fail / 1 skip / 2 todo (690 total) — the single fail is test/swipe-model.test.js's VERIFIED.supersession pin (expected 9227f47ff3d3c7db, actual d39534854e3cc348), a test-file constant this pass may not edit; handed to Curie","supersession_fingerprint":"d39534854e3cc348","handoff_to_curie":"re-pin VERIFIED.supersession to d39534854e3cc348 in test/swipe-model.test.js","build_bump_owed":"2026-07-26.245 -> .246 at commit (Zelda)","return_to":"poirot"}
 ```

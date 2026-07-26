@@ -367,18 +367,22 @@
         // the source screen (re-rendering it into #browse iff the superseded drag had
         // clobbered the shared host — d.clobbered, set by start() only for a live
         // browse->browse mid-drag render), then restore the session-start document scroll
-        // (d.scroll0). `d` is null on the ORPHAN-pane path (a leftover ghost with no live
-        // session, I17(b)) — there is no session-start state to restore there, and both
-        // expressions degrade to the prior top-level nav restore. The Browse hold is
-        // released ONLY AFTER this render+scroll (releasing it first would deactivate a
-        // suspended virtualized source and dematerialize its kept rows before the render
-        // could reuse them — Loki strike, STRIKE-swipe-stage6-recover-before-arm), and the
-        // superseded session's IDENTITY is dropped LAST of all: releaseGesture() and
-        // dropRowHold() both READ `session` (dropRowHold no-ops on a null session), so
-        // nulling it any earlier would leak the hold and the source rows would never be
-        // realized (the same ordering `finalize()` observes at its own hold release).
+        // (d.scroll0). `resetScroll:false` is forced ONLY on the live-recovery branch, so
+        // applyScreen does not stomp the explicit d.scroll0 restore below; the ORPHAN-pane
+        // path (`d` null — a leftover ghost with no live session, I17(b)) passes
+        // `resetScroll:undefined` and keeps nav.js's default (resetScroll:true), so a home
+        // or options/sub source still resets to top exactly as the pre-6a hard reset did
+        // (parity; Poirot F1). The orphan has no session-start state, so the render flag is
+        // `false` and no d.scroll0 restore runs. The Browse hold is released ONLY AFTER this
+        // render+scroll (releasing it first would deactivate a suspended virtualized source
+        // and dematerialize its kept rows before the render could reuse them — Loki strike,
+        // STRIKE-swipe-stage6-recover-before-arm), and the superseded session's IDENTITY is
+        // dropped LAST of all: releaseGesture() and dropRowHold() both READ `session`
+        // (dropRowHold no-ops on a null session), so nulling it any earlier would leak the
+        // hold and the source rows would never be realized (the same ordering `finalize()`
+        // observes at its own hold release).
         resetSwipeStyles();
-        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: false });
+        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });
         if (d) window.scrollTo(0, d.scroll0);
         dropRowHold();
         session = null;

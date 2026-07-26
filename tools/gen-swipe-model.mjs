@@ -233,7 +233,13 @@ export const TERMINATION = [
   { reason: 'touch-cancel (dragging)', nav: 'settle decision', screen: 'from decision', scroll: 'commit/abort', pane: 'normal settle',
     basis: 'parity', where: 'touchcancel shares onEnd with touchend' },
   { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: 'currentDesc(); rerender iff d.clobbered', scroll: 'restore d.scroll0 (live)', pane: 'dispose orphan',
-    basis: 'parity', where: 'begin(): releaseGesture, resetSwipeStyles, applyScreen(currentDesc(),{render:d.clobbered}), scrollTo(d.scroll0), dropRowHold LAST, session/d=null LAST' },
+    // basis stays 'parity' — the swipe-model gate requires every TERMINATION row to name
+    // where its behavior is VERIFIED against current code, and this row does. But its
+    // screen/scroll columns now carry the SR/SC repairs, which §10 (the gated §8A ledger)
+    // classifies as NEW POLICY. policyRef marks that so the rendered basis is not read as
+    // "not a policy change" (Poirot F2 / StandardsDocument §7 within-document consistency).
+    basis: 'parity', policyRef: 'screen+scroll = SR/SC, NEW POLICY (§10)',
+    where: 'begin(): releaseGesture, resetSwipeStyles, applyScreen(currentDesc(),{render:d.clobbered, resetScroll:d?false:undefined}), scrollTo(d.scroll0), dropRowHold LAST, session/d=null LAST' },
 ];
 
 /** §3.7 — recovery is keyed on PHASE, never on reason. ALL ROWS ARE NEW POLICY. */
@@ -432,10 +438,26 @@ export function render() {
   P('            the .178 class, now closed. Guarded by tests in swipe-invariants.test.js.');
   P('');
   P('6. TERMINATION REASONS (§3.7)');
+  P('   basis [parity] = the row is VERIFIED against current code at its `where`. It is NOT');
+  P('   the parity-vs-policy classification — that is §10 (the gated §8A ledger). A † basis');
+  P('   marks a row whose columns carry behavior §10 classifies as NEW POLICY (see footnote).');
   P('   reason                      basis     nav              screen        scroll              pane');
   P('   --------------------------  --------  ---------------  ------------  ------------------  --------------');
+  let terminationFootnote = false;
   for (const t of TERMINATION) {
-    P(`   ${pad(t.reason, 26)}  ${pad('[' + t.basis + ']', 8)}  ${pad(t.nav, 15)}  ${pad(t.screen, 12)}  ${pad(t.scroll, 18)}  ${t.pane}`);
+    const basisCell = '[' + t.basis + ']' + (t.policyRef ? ' †' : '');
+    if (t.policyRef) terminationFootnote = true;
+    P(`   ${pad(t.reason, 26)}  ${pad(basisCell, 8)}  ${pad(t.nav, 15)}  ${pad(t.screen, 12)}  ${pad(t.scroll, 18)}  ${t.pane}`);
+  }
+  if (terminationFootnote) {
+    P('   ---');
+    for (const t of TERMINATION) if (t.policyRef) {
+      P(`   † ${t.reason}: ${t.policyRef} — implemented stage 6a. The [parity] basis covers`);
+      P('     the supersede-not-reject routing + orphan disposal (verified at `where`); the');
+      P('     screen/scroll RESTORE behaviors are the new policy §10 records, not pre-rewrite');
+      P('     behavior reproduced. (The ORPHAN sub-case, d===null, keeps nav.js default');
+      P('     scroll-to-top — resetScroll:d?false:undefined — so only the live path is policy.)');
+    }
   }
   P('');
   P('7. RECOVERY — ONE RULE, KEYED ON PHASE (§3.7, I18)');

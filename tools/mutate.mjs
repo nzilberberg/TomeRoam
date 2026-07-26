@@ -53,21 +53,21 @@ const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'left
 // ghost disposed anyway.
 const HARDRESET_DISPOSE_FROM = [
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: false });',
+  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });',
 ].join('\n');
 const HARDRESET_DISPOSE_TO = '        /* mutated: no hard reset */';
 // stage 6a §9 VR — the two ordering defects the Loki strike measured against the real
 // js/browse.js + js/virtuallist.js (STRIKE-swipe-stage6-recover-before-arm-r2.md §3).
 const VR_HOLD_ORDER_FROM = [
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: false });',
+  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });',
   '        if (d) window.scrollTo(0, d.scroll0);',
   '        dropRowHold();',
 ].join('\n');
 const VR_HOLD_ORDER_TO = [
   '        dropRowHold();',
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: false });',
+  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });',
   '        if (d) window.scrollTo(0, d.scroll0);',
 ].join('\n');
 const VR_IDENTITY_ORDER_FROM = [
@@ -88,8 +88,13 @@ const VR_IDENTITY_ORDER_TO = [
 // calls renderScreen(), never Browse.render()), so the flag's value cannot leak into a
 // #browse render for that fixture regardless. NC's genuine proof is the scroll mutation
 // below, which reddens its scroll-restore clause directly.
-const RECOVERY_RENDER_LINE = '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: false });';
-const RECOVERY_RENDER_ALWAYS_FALSE = '        applyScreen(currentDesc(), { render: false, resetScroll: false });';
+const RECOVERY_RENDER_LINE = '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });';
+const RECOVERY_RENDER_ALWAYS_FALSE = '        applyScreen(currentDesc(), { render: false, resetScroll: d ? false : undefined });';
+// stage 6a Poirot F1 (Claude/Poirot/f09cf9d-swipe-stage6-supersession.md) — the orphan
+// sub-case (d===null) must keep nav.js's default resetScroll so a home/options source
+// still scrolls to top. Forcing resetScroll:false back onto the orphan (the f09cf9d bug)
+// reds the OB-home cell in test/swipe-stage6.test.js.
+const F1_ORPHAN_RESETSCROLL_TO = '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: false });';
 
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
 const S5_GHOSTBG_FROM = [
@@ -212,6 +217,8 @@ const MUTATIONS = [
   { name: 'stage6a: recovery stops restoring the session-start scroll (-> SC known-red test, NC scroll clause)',
     from: '        if (d) window.scrollTo(0, d.scroll0);',
     to: '        /* mutated: no scroll restore */' },
+  { name: 'stage6a F1: orphan sub-case forces resetScroll:false, dropping home scroll-to-top (-> OB-home test)',
+    from: RECOVERY_RENDER_LINE, to: F1_ORPHAN_RESETSCROLL_TO },
   { name: 'swipe: supersession stops releasing the old target listeners (-> I20 stale-callback test)',
     from: "releaseGesture();   // never leave a dead gesture's listeners on a stale node",
     to: '/* mutated: listeners left bound */' },

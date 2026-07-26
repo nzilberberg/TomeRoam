@@ -14,7 +14,7 @@ before this document is trusted again. Never update a pinned constant alone.
   navTo stack rule      0e84abdf6d072586
   begin/nav-relation    ac356cd1a669c2a3
   end/state-routing     9a82592f5d21db7b
-  begin/supersession    9227f47ff3d3c7db
+  begin/supersession    d39534854e3cc348
 
 1. REGISTRY — PARTLY DERIVED, PARTLY PINNED (say which, and mean it)
    12 screens, 132 ordered name pairs.
@@ -55,9 +55,9 @@ before this document is trusted again. Never update a pinned constant alone.
      js/app.js:140   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
      js/app.js:141   else navStack.push(desc);
      js/app.js:164   navStack.push({ v }); fwdStack.length = 0;
-     js/app.js:711   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
-     js/app.js:712   else navStack.push(fwdStack.pop());
-     js/app.js:1246  navStack = [{ v: 'home' }];
+     js/app.js:715   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:716   else navStack.push(fwdStack.pop());
+     js/app.js:1250  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------
@@ -162,11 +162,20 @@ before this document is trusted again. Never update a pinned constant alone.
             the .178 class, now closed. Guarded by tests in swipe-invariants.test.js.
 
 6. TERMINATION REASONS (§3.7)
+   basis [parity] = the row is VERIFIED against current code at its `where`. It is NOT
+   the parity-vs-policy classification — that is §10 (the gated §8A ledger). A † basis
+   marks a row whose columns carry behavior §10 classifies as NEW POLICY (see footnote).
    reason                      basis     nav              screen        scroll              pane
    --------------------------  --------  ---------------  ------------  ------------------  --------------
    vertical-intent (pre-drag)  [parity]  unchanged        source        unchanged           none built
    touch-cancel (dragging)     [parity]  settle decision  from decision  commit/abort        normal settle
-   hard-reset (leftover)       [parity]  unchanged        currentDesc(); rerender iff d.clobbered  restore d.scroll0 (live)  dispose orphan
+   hard-reset (leftover)       [parity] †  unchanged        currentDesc(); rerender iff d.clobbered  restore d.scroll0 (live)  dispose orphan
+   ---
+   † hard-reset (leftover): screen+scroll = SR/SC, NEW POLICY (§10) — implemented stage 6a. The [parity] basis covers
+     the supersede-not-reject routing + orphan disposal (verified at `where`); the
+     screen/scroll RESTORE behaviors are the new policy §10 records, not pre-rewrite
+     behavior reproduced. (The ORPHAN sub-case, d===null, keeps nav.js default
+     scroll-to-top — resetScroll:d?false:undefined — so only the live path is policy.)
 
 7. RECOVERY — ONE RULE, KEYED ON PHASE (§3.7, I18)
    reasons: lease-invalid | destination-gone | finalize-threw | superseded

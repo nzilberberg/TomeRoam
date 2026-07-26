@@ -168,6 +168,36 @@ is fully green (11/11); full suite: 689 tests, 686 pass, 0 fail, 1 skipped (KEEP
 three red-first cells (VR/OR/NC) are now green under the built recovery. The mirror's semantic correctness
 is Brunel's and is Poirot's to review.
 
+## 9. F1 regression guard (2026-07-26, post-Poirot review of f09cf9d)
+
+Poirot F1 (`Claude/Poirot/f09cf9d-swipe-stage6-supersession.md`, W23): begin()'s shared
+`applyScreen(currentDesc(), { render: d?d.clobbered:false, resetScroll: false })` forces
+`resetScroll:false` onto the ORPHAN sub-case (`d===null`), not just the live-recovery branch. For an
+orphan hard-reset whose `currentDesc()` is `home`, the pre-6a code reset the document scroll to top
+(nav.js:127, `window.scrollTo(0, 1)` under default `resetScroll:true`); f09cf9d does not — an
+unclassified parity regression the OB cell is blind to (it drives a BROWSE source, inert to resetScroll).
+
+Added ONE red-first cell to `test/swipe-stage6.test.js`: **`OB-home — an orphan hard-reset on a HOME
+source resets the document scroll to top (pre-6a parity; Poirot F1)`**. It injects a leftover
+`.nav-ghost` with no live session on a home `currentDesc()`, trips the orphan hard reset, and asserts a
+`window.scrollTo(0, 1)`. Captured RED against f09cf9d: `ERR_ASSERTION` — "an orphan hard-reset on a home
+source must reset the document scroll to top (applyScreen home → window.scrollTo(0, 1)); got scrollTo
+calls []" (the fixture-sanity "the orphan tripped the hard reset" assertion passed first — it fails for
+the orphan-parity reason, not a harness error). Options/sub sources reset a panel `scrollTop`, not
+window, so home is the window-observable source kind. Brunel's fix (`resetScroll: d ? false : undefined`,
+so only the live-recovery branch forces false) greens it while the OB browse guard stays green.
+`test/swipe-stage6.test.js`: 5 pass, 1 fail (OB-home, red-first), 1 skip (KEEPER). Did NOT re-pin
+VERIFIED.supersession — Brunel's fix changes the region fingerprint; re-pin follows the fix.
+
+## 10. Pin reconciliation #2 (2026-07-26, post-F1/F2 fix)
+
+Brunel fixed F1 (orphan-scroll guard in `js/app.js`) + F2 (generator label) and regenerated the doc,
+moving the begin()/supersession region fingerprint again. Re-pinned `VERIFIED.supersession` in
+`test/swipe-model.test.js` `9227f47ff3d3c7db` → `d39534854e3cc348` (confirmed by running
+`gen.supersessionFingerprint()`, not blind-pasted). Only that constant was touched. `test/swipe-model.test.js`
+fully green (11/11); the OB-home F1 guard is now green under the fix. Full suite: 690 tests, 687 pass,
+0 fail, 1 skipped (KEEPER), 2 todo (SR/SC).
+
 ```json
 {"persona":"curie","stage":6,"input_artifact":"6e3a596","verdict":"RED_SUITE_READY","files_changed":["test/swipe-stage6.test.js","test/app-harness.js","Claude/Curie/RED-swipe-stage6.md"],"red_command":"C:/Users/nzilb/tools/node-dist/node.exe --test \"test/swipe-stage6.test.js\"","new_red_tests":["VR — superseding a live drag on a VIRTUALIZED browse->browse source keeps the source rows ACTIVE and realized, not rebuilt or leaked","OR — the source re-render precedes the successor arming: recovery restores the source before the new gesture renders its destination","NC — an overlay-source supersession issues NO spurious #browse re-render but still restores the scroll"],"return_to":"brunel"}
 ```
