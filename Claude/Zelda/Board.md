@@ -168,6 +168,18 @@ projection + add an immutability cell — Brunel + Curie — if `Readonly` is lo
 §3 to documentary — Vitruvius/Charpy. **Stage 5 is all-gates-run but NOT clean-closed until NB1 is
 dispositioned.** Supersedes the "SCHEME-COMPLETE" line above.
 
+**NB1 RESOLVED (2026-07-26): DOCUMENTARY — Stage 5 now CLEAN-CLOSED.** Vitruvius ruled `Readonly` a
+compile-time annotation, not a runtime-freeze requirement: `buildConstruction` is NON_CONTRACT (its return
+carries live DOM nodes, cannot be deep-frozen), exempt from the §4.11 gate by design; the prior freeze was
+incidental-transitive from the now-dropped frozen `plan` wrapper. §3:150 restated to current truth
+(fresh-unfrozen), committed `c743c49`; Charpy re-gated the edit **FORGE (r10)**
+(`Claude/Charpy/PLAN-swipe-stage5-2026-07-26-r10.md`), independently scrub-confirming §3:150 was the sole
+immutability claim. No code change (`0049a13` already conforms); no fresh Loki (documentary edit, no
+behavior/contract/coverage change); no Curie/Brunel/Poirot/Mendeleev re-run. There is NO structural hole —
+NON_CONTRACT object-returning seams are unfreezably-live by design, not a gate that failed. **All six gates
+run (Charpy r1–r9 FORGE + r10 FORGE, Curie red, Brunel green, Poirot SHIP, Mendeleev ADEQUATE, Loki HELD
+STONE), zero blocking findings. Bench-verified; NOT pushed — on-device hold + deploy decision pending.**
+
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
 subsystem addendum; this DecisionLog is the Ledger. **Mechanized sections (gates, not vigilance):**
