@@ -153,6 +153,21 @@ this `c.decorations` consumer edit exists to preserve. (N2) §7 comment scrub ow
 `test/swipe-invariants.test.js:97-105` (claims the pill test proves `start()` consumes decorations — an L1
 effect since the relocation).
 
+**Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
+`Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
+`0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired
+true→false identically (non-vacuous; instrument proven able-to-fail). The consumer-parity promise HOLDS by
+construction. ⚠️ **NB1 — OPEN, ratified-contract deviation:** §3:150 declares
+`decorations: Readonly<{kind,base}[]>` and the OLD return handed a deep-frozen array, but the hoisted
+projection at `0049a13` is UNFROZEN. Effect-free today (sole consumer reads only `kind`/`base`) — but it
+misses the ratified §3 `Readonly` promise, and BOTH Poirot and Mendeleev missed it, because the immutability
+gate (`test/contract-function-gate.test.js`) covers only CONTRACT seams and `buildConstruction` is
+NON_CONTRACT (dead-field-gated only, no immutability gate). **Structural hole:** NON_CONTRACT
+object-returning seams have no immutability gate. Disposition PENDING (user decision): (a) freeze the
+projection + add an immutability cell — Brunel + Curie — if `Readonly` is load-bearing; or (b) reconcile
+§3 to documentary — Vitruvius/Charpy. **Stage 5 is all-gates-run but NOT clean-closed until NB1 is
+dispositioned.** Supersedes the "SCHEME-COMPLETE" line above.
+
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
 subsystem addendum; this DecisionLog is the Ledger. **Mechanized sections (gates, not vigilance):**
