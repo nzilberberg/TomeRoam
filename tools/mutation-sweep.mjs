@@ -66,11 +66,25 @@ export function parseChangedFiles(zOut) {
   return files;
 }
 
+// git exports these "location" vars into a hook's environment (and any child it spawns).
+// A plain `git … { cwd }` inherits them, and an ambient GIT_DIR OVERRIDES cwd — so git
+// silently operates on the hook's repo, not `cwd`'s. That is how running this suite from a
+// pre-commit hook let a throwaway-repo `git init` flip the REAL repo to bare and write junk
+// into its config. Stripping them makes every git call resolve the repo from `cwd`, full
+// stop; standalone (no hook) they're unset, so this is a no-op there.
+const GIT_LOCATION_VARS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX',
+  'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES'];
+export function cleanGitEnv(env = process.env) {
+  const e = { ...env };
+  for (const k of GIT_LOCATION_VARS) delete e[k];
+  return e;
+}
+
 // Repo-relative paths changed vs HEAD (staged + unstaged + untracked). See
 // parseChangedFiles for why the -z / --untracked-files=all form is used. `cwd` is a
 // parameter so the parser+command can be exercised against a throwaway repo in tests.
 export function changedFiles(cwd = ROOT) {
-  const out = execSync('git status --porcelain=v1 -z --untracked-files=all', { cwd }).toString();
+  const out = execSync('git status --porcelain=v1 -z --untracked-files=all', { cwd, env: cleanGitEnv() }).toString();
   return parseChangedFiles(out);
 }
 

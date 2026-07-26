@@ -136,10 +136,13 @@ test('shardIndices: single shard covers everything; bad args throw', async () =>
 });
 
 test('changedFiles: end-to-end against a real repo — rename, new dir, odd name', { skip: !hasGit }, async () => {
-  const { changedFiles } = await load();
+  const { changedFiles, cleanGitEnv } = await load();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-sweep-'));
   try {
-    const git = (...a) => execFileSync('git', a, { cwd: dir, stdio: 'pipe' });
+    // cleanGitEnv() strips inherited GIT_DIR/GIT_INDEX_FILE/etc. When this suite runs from a
+    // pre-commit hook git sets those, and without stripping them these throwaway-repo commands
+    // escape to the REAL repo (git init flips it bare, config writes leak). See the hermetic gate.
+    const git = (...a) => execFileSync('git', a, { cwd: dir, stdio: 'pipe', env: cleanGitEnv() });
     git('init', '-q');
     git('config', 'user.email', 't@t.t');
     git('config', 'user.name', 't');
@@ -161,10 +164,10 @@ test('changedFiles: end-to-end against a real repo — rename, new dir, odd name
 });
 
 test('changedFiles: end-to-end — a WORKTREE rename (mv + git add -N) yields the source', { skip: !hasGit }, async () => {
-  const { changedFiles } = await load();
+  const { changedFiles, cleanGitEnv } = await load();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-sweep-y-'));
   try {
-    const git = (...a) => execFileSync('git', a, { cwd: dir, stdio: 'pipe' });
+    const git = (...a) => execFileSync('git', a, { cwd: dir, stdio: 'pipe', env: cleanGitEnv() });
     git('init', '-q');
     git('config', 'user.email', 't@t.t');
     git('config', 'user.name', 't');
@@ -179,5 +182,53 @@ test('changedFiles: end-to-end — a WORKTREE rename (mv + git add -N) yields th
     assert.ok(!s.has('.js'), 'no garbage token leaked');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// GATE — cleanGitEnv must neutralize an ambient GIT_DIR so a throwaway-repo git WRITE cannot
+// escape to the hook's repo. This reproduces the exact pre-commit corruption: git runs hooks
+// with GIT_DIR/GIT_INDEX_FILE exported, run-checks runs this whole suite as a hook child, and
+// a `git config`/`git init` that inherits those vars writes to the HOOK's repo instead of its
+// `cwd` (that is what flipped the real repo to bare=true and leaked user=t@t.t into it).
+//
+// The test is self-validating: a CONTROL write with the naive inherited env MUST corrupt the
+// ambient repo (proving the poison is real), while the treatment write via cleanGitEnv() MUST
+// leave it pristine. Neuter cleanGitEnv (stop stripping GIT_DIR) and the treatment leaks too,
+// turning the "unchanged" assertion red. All repos here are throwaways under os.tmpdir().
+test('cleanGitEnv makes a throwaway-repo git write hermetic — an ambient GIT_DIR cannot hijack it (guards the pre-commit corruption)', { skip: !hasGit }, async () => {
+  const { cleanGitEnv } = await load();
+  const ambient = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-ambient-')); // stands in for the hook's REAL repo
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-work-'));       // the throwaway repo a test operates on
+  const bare = (...a) => execFileSync('git', a, { cwd: ambient, stdio: 'pipe', env: cleanGitEnv() });
+  const emailOf = (repo) => execFileSync('git', ['config', '--local', '--get', 'user.email'],
+    { cwd: repo, stdio: 'pipe', env: cleanGitEnv() }).toString().trim();
+  const saved = { d: process.env.GIT_DIR, i: process.env.GIT_INDEX_FILE };
+  try {
+    bare('init', '-q');
+    bare('config', 'user.email', 'real@real.real');
+    execFileSync('git', ['init', '-q'], { cwd: work, stdio: 'pipe', env: cleanGitEnv() });
+
+    // Poison the environment exactly as `git` does when it invokes a hook: GIT_DIR points at
+    // the ambient repo, so any git that inherits it ignores cwd and operates on `ambient`.
+    process.env.GIT_DIR = path.join(ambient, '.git');
+    process.env.GIT_INDEX_FILE = path.join(ambient, '.git', 'index');
+
+    // TREATMENT — the pattern the real tests use: strip the env, so the write lands in `work`.
+    execFileSync('git', ['config', 'user.email', 'hermetic@work'],
+      { cwd: work, stdio: 'pipe', env: cleanGitEnv() });
+    assert.equal(emailOf(work), 'hermetic@work', 'the stripped-env write landed in the cwd repo');
+    assert.equal(emailOf(ambient), 'real@real.real',
+      'the stripped-env write did NOT leak into the ambient GIT_DIR repo');
+
+    // CONTROL — the naive pattern (inherit the poisoned env). This MUST corrupt `ambient`,
+    // proving the poison is genuine and that cleanGitEnv() is the only thing preventing it.
+    execFileSync('git', ['config', 'user.email', 'leaked@ambient'], { cwd: work, stdio: 'pipe' });
+    assert.equal(emailOf(ambient), 'leaked@ambient',
+      'control: the naive inherited-env write DID hijack the ambient repo (scenario is real)');
+  } finally {
+    if (saved.d === undefined) delete process.env.GIT_DIR; else process.env.GIT_DIR = saved.d;
+    if (saved.i === undefined) delete process.env.GIT_INDEX_FILE; else process.env.GIT_INDEX_FILE = saved.i;
+    fs.rmSync(ambient, { recursive: true, force: true });
+    fs.rmSync(work, { recursive: true, force: true });
   }
 });

@@ -16,3 +16,11 @@ android/build/
 .DS_Store
 Thumbs.db
 node_modules/
+
+# Test-generated plan-gate fixtures. A gate test synthesizes plan variants into
+# Claude/Plans/ on every `node --test` run (suffixes: synthetic/ratified/migrated/
+# m_<mutation>, prefixed `_gatetest_<pid>_`) and does not clean them up. Ignoring the
+# reserved `_gatetest_` prefix so `git status`/`git add -A` can never sweep the debris
+# into a commit or muddy a reconciliation. No real plan uses this prefix. The deeper fix
+# — make the generating test write to a temp dir / clean up — is a separate task.
+Claude/Plans/_gatetest_*
