@@ -434,6 +434,14 @@ function boot(opts = {}) {
     artUrl: (t) => (t ? 'art:' + t : null),
     streamUrl: (t) => 'stream:' + t,
     getBooks: async () => books,
+    // Authors/author fakes exist so a browse->browse transition can render a REAL
+    // second page under opts.realBrowse (the VR cell needs an actual source AND dest
+    // rendered by the real js/browse.js). Faithful to the real Plex interface (which
+    // has all three) — absent, render('authors') would throw and cache an error page.
+    // Default-tiny; opts.authors overrides for a virtualized author list if ever needed.
+    getAuthors: async () => (opts.authors || [{ ratingKey: 'authorA', title: 'Author', childCount: books.length }]),
+    getAuthor: async (rk) => (opts.authors || [{ ratingKey: 'authorA', title: 'Author', childCount: books.length }]).find((a) => a.ratingKey === rk) || { ratingKey: rk, title: 'Author', childCount: books.length },
+    getAuthorBooks: async () => books,
     getAlbum: async (rk) => books.find((b) => b.ratingKey === rk) || books[0],
     getAlbumTracks: (rk) => {
       log.calls.push({ name: 'plex.getAlbumTracks', args: [rk] });
@@ -582,6 +590,19 @@ function boot(opts = {}) {
     delete require.cache[require.resolve(rel)];
     return require(rel);
   };
+  // opts.realBrowse — swap the fake Browse for the REAL js/browse.js wired to the
+  // REAL js/virtuallist.js. The default fake records render/hold CALLS but cannot
+  // exercise the virtualizer's suspend/realize/deactivate state machine, so the one
+  // cell that turns on it (VR: a superseded virtualized source must keep its rows
+  // REALIZED, not merely present) is unobservable against the fake. VirtualList must
+  // be a global BEFORE browse.js is required — browse.js captures `VL` at module-eval
+  // time (js/browse.js:31). app.js's bind() then calls the REAL Browse.init($('browse')),
+  // so begin()'s recovery drives the real hold/realize path. Everything else (Plex.getBooks
+  // returning opts.books, the author fakes above) already suffices.
+  if (opts.realBrowse) {
+    put('VirtualList', real('../js/virtuallist.js'));
+    put('Browse', real('../js/browse.js'));
+  }
   put('PBLogic', real('../js/logic.js'));
   put('Settings', real('../js/settings.js'));
   put('Playback', real('../js/playback.js'));
@@ -617,6 +638,11 @@ function boot(opts = {}) {
     dom, window, document, $, screenDeps,
     audio: FakeAudio.last,
     plex, presence, progress, downloads, banking, browse, net, screens,
+    // Under opts.realBrowse these are the REAL modules app.js is driving (else the
+    // fake Browse and undefined). Live getters so a test reaches Browse._test / the
+    // VirtualList force + metrics knobs after boot.
+    get Browse() { return window.Browse; },
+    get VirtualList() { return window.VirtualList; },
     log,
     pendingTracks,
     objectUrls,

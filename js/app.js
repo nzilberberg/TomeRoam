@@ -362,16 +362,27 @@
         if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset'
           + (session ? ' sid=' + session.id : ''));
         releaseGesture();   // never leave a dead gesture's listeners on a stale node
-        dropRowHold();      // …nor its row hold
-        // Drop the superseded session's IDENTITY before re-arming (stage 3). Teardown
-        // of its resources is unchanged — releaseGesture/dropRowHold above and
-        // resetSwipeStyles below already do it; this only clears the owner ref so the
-        // superseded id can never be mistaken for current. It is the hook stage 6's
-        // state machine will consult once `finishing` is retired; today it is pure
-        // bookkeeping. If the new gesture does not arm (not an edge, no destination),
-        // session stays null, which is the correct "no active owner" state.
+        // Recover the superseded session PRE-STACK (stage 6a, PLAN-swipe-stage6.md §3/§6)
+        // before its resources are released: dispose the old pane / stray ghosts, restore
+        // the source screen (re-rendering it into #browse iff the superseded drag had
+        // clobbered the shared host — d.clobbered, set by start() only for a live
+        // browse->browse mid-drag render), then restore the session-start document scroll
+        // (d.scroll0). `d` is null on the ORPHAN-pane path (a leftover ghost with no live
+        // session, I17(b)) — there is no session-start state to restore there, and both
+        // expressions degrade to the prior top-level nav restore. The Browse hold is
+        // released ONLY AFTER this render+scroll (releasing it first would deactivate a
+        // suspended virtualized source and dematerialize its kept rows before the render
+        // could reuse them — Loki strike, STRIKE-swipe-stage6-recover-before-arm), and the
+        // superseded session's IDENTITY is dropped LAST of all: releaseGesture() and
+        // dropRowHold() both READ `session` (dropRowHold no-ops on a null session), so
+        // nulling it any earlier would leak the hold and the source rows would never be
+        // realized (the same ordering `finalize()` observes at its own hold release).
+        resetSwipeStyles();
+        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: false });
+        if (d) window.scrollTo(0, d.scroll0);
+        dropRowHold();
         session = null;
-        d = null; resetSwipeStyles(); applyScreen(currentDesc(), { render: false });
+        d = null;
       }
       // NOTE: `.alphaindex` is deliberately NOT excluded. It sits on the forward-swipe
       // edge band (measured: 77% of the band, 80% of the screen height), so excluding

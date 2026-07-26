@@ -14,7 +14,7 @@ before this document is trusted again. Never update a pinned constant alone.
   navTo stack rule      0e84abdf6d072586
   begin/nav-relation    ac356cd1a669c2a3
   end/state-routing     9a82592f5d21db7b
-  begin/supersession    c70d4ed49257af8e
+  begin/supersession    9227f47ff3d3c7db
 
 1. REGISTRY — PARTLY DERIVED, PARTLY PINNED (say which, and mean it)
    12 screens, 132 ordered name pairs.
@@ -55,9 +55,9 @@ before this document is trusted again. Never update a pinned constant alone.
      js/app.js:140   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
      js/app.js:141   else navStack.push(desc);
      js/app.js:164   navStack.push({ v }); fwdStack.length = 0;
-     js/app.js:700   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
-     js/app.js:701   else navStack.push(fwdStack.pop());
-     js/app.js:1235  navStack = [{ v: 'home' }];
+     js/app.js:711   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:712   else navStack.push(fwdStack.pop());
+     js/app.js:1246  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------
@@ -129,35 +129,44 @@ before this document is trusted again. Never update a pinned constant alone.
             gesture. I17(a) is the separate rule: while an active session is
             SETTLING / FINALIZING / REVEALING a new gesture does NOT arm, and
             that session's pane is NOT disposed to make room (I10 must hold).
-   [parity] What today ACTUALLY does on supersession: releaseGesture, dropRowHold,
-            d = null, resetSwipeStyles, applyScreen(currentDesc(), {render:false}).
-            Listeners, row hold, panes and inline styles are all released; the nav
-            stack and navbar return to the source. Movers are torn down BY
-            OWNERSHIP (§3.2) — panes disposed, decorations removed, borrowed real
-            views restored and NEVER removed.
+   [parity] What the hard reset ACTUALLY does on supersession, IN ORDER (stage 6a
+            landed the pre-stack recovery): releaseGesture; resetSwipeStyles
+            (dispose the old pane / stray ghosts + clear inline styles); recover the
+            source PRE-STACK while the Browse hold is STILL held —
+            applyScreen(currentDesc(), {render: d.clobbered, resetScroll:false})
+            re-renders the source into #browse iff the drag clobbered it, then
+            window.scrollTo(0, d.scroll0) restores the start scroll; dropRowHold
+            LAST (endHold then realizes the SUSPENDED source rows against the
+            settled scroll, reusing them rather than rebuilding); session = null,
+            d = null LAST of all (both are read by releaseGesture/dropRowHold, so
+            nulling earlier would leak the hold); then the new gesture arms. The nav
+            stack and navbar return to the source; movers are torn down BY OWNERSHIP
+            (§3.2). On the ORPHAN path (d === null) there is no session-start state,
+            so render + scroll degrade to the prior top-level restore.
 
-   ⚠️ TWO SEPARATE DEFECTS live here, and BOTH are new policy. An earlier draft of
-   this document labelled the whole of supersession [parity]; that was wrong, and
-   an external review of .218 caught it. The pre-stack recovery row this section
-   leans on is itself [policy], so "recovered pre-stack" cannot be parity.
+   ⚠️ TWO SEPARATE REPAIRS live here, and BOTH are NEW POLICY (§10), not parity —
+   they do not reproduce the pre-rewrite code, they CLOSE two known-red defects an
+   external review of .218 caught. An earlier draft labelled the whole of
+   supersession [parity]; that was wrong. Stage 6a IMPLEMENTS both as the pre-stack
+   recovery above; the recovery ROW they lean on is itself [policy] (§7).
 
-   [policy] (1) SCROLL. Today's hard reset does NOT restore the starting scroll,
-            so a superseded browse->browse drag can be left at the DESTINATION's
-            scroll (its mid-drag render ran positionOnEnter).
-   [policy] (2) SOURCE CONTENT. `render:false` means nothing re-renders the source
-            into the shared #browse, so the host keeps the DESTINATION's content
-            while the stack and navbar say source. MEASURED at .218:
-            renders = ["books","authors","books"] after Authors->Books is
-            superseded. That is an I11 violation and the same wrong-page/wrong-tap
-            class as .178 — the nav says one screen and Browse shows another.
-            Both are covered by `{todo}` tests in test/swipe-invariants.test.js.
+   [policy] (1) SCROLL — IMPLEMENTED (stage 6a). The recovery restores the
+            session-start scroll (d.scroll0), so a superseded browse->browse drag is
+            no longer left at the DESTINATION's scroll (its mid-drag render had run
+            positionOnEnter).
+   [policy] (2) SOURCE CONTENT — IMPLEMENTED (stage 6a). The recovery re-renders the
+            source into #browse when the drag clobbered it (d.clobbered), so the host
+            no longer keeps the DESTINATION's content while the stack and navbar say
+            source. The .218 defect was renders = ["books","authors","books"] after
+            Authors->Books is superseded — an I11 wrong-page/wrong-tap violation of
+            the .178 class, now closed. Guarded by tests in swipe-invariants.test.js.
 
 6. TERMINATION REASONS (§3.7)
    reason                      basis     nav              screen        scroll              pane
    --------------------------  --------  ---------------  ------------  ------------------  --------------
    vertical-intent (pre-drag)  [parity]  unchanged        source        unchanged           none built
    touch-cancel (dragging)     [parity]  settle decision  from decision  commit/abort        normal settle
-   hard-reset (leftover)       [parity]  unchanged        currentDesc()  NOT restored today  dispose orphan
+   hard-reset (leftover)       [parity]  unchanged        currentDesc(); rerender iff d.clobbered  restore d.scroll0 (live)  dispose orphan
 
 7. RECOVERY — ONE RULE, KEYED ON PHASE (§3.7, I18)
    reasons: lease-invalid | destination-gone | finalize-threw | superseded

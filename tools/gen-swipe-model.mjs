@@ -232,8 +232,8 @@ export const TERMINATION = [
     basis: 'parity', where: 'move(): releaseGesture(); d = null; return — before start()' },
   { reason: 'touch-cancel (dragging)', nav: 'settle decision', screen: 'from decision', scroll: 'commit/abort', pane: 'normal settle',
     basis: 'parity', where: 'touchcancel shares onEnd with touchend' },
-  { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: 'currentDesc()', scroll: 'NOT restored today', pane: 'dispose orphan',
-    basis: 'parity', where: 'begin(): releaseGesture, dropRowHold, d=null, resetSwipeStyles, applyScreen({render:false})' },
+  { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: 'currentDesc(); rerender iff d.clobbered', scroll: 'restore d.scroll0 (live)', pane: 'dispose orphan',
+    basis: 'parity', where: 'begin(): releaseGesture, resetSwipeStyles, applyScreen(currentDesc(),{render:d.clobbered}), scrollTo(d.scroll0), dropRowHold LAST, session/d=null LAST' },
 ];
 
 /** §3.7 — recovery is keyed on PHASE, never on reason. ALL ROWS ARE NEW POLICY. */
@@ -399,28 +399,37 @@ export function render() {
   P('            gesture. I17(a) is the separate rule: while an active session is');
   P('            SETTLING / FINALIZING / REVEALING a new gesture does NOT arm, and');
   P('            that session\'s pane is NOT disposed to make room (I10 must hold).');
-  P('   [parity] What today ACTUALLY does on supersession: releaseGesture, dropRowHold,');
-  P('            d = null, resetSwipeStyles, applyScreen(currentDesc(), {render:false}).');
-  P('            Listeners, row hold, panes and inline styles are all released; the nav');
-  P('            stack and navbar return to the source. Movers are torn down BY');
-  P('            OWNERSHIP (§3.2) — panes disposed, decorations removed, borrowed real');
-  P('            views restored and NEVER removed.');
+  P('   [parity] What the hard reset ACTUALLY does on supersession, IN ORDER (stage 6a');
+  P('            landed the pre-stack recovery): releaseGesture; resetSwipeStyles');
+  P('            (dispose the old pane / stray ghosts + clear inline styles); recover the');
+  P('            source PRE-STACK while the Browse hold is STILL held —');
+  P('            applyScreen(currentDesc(), {render: d.clobbered, resetScroll:false})');
+  P('            re-renders the source into #browse iff the drag clobbered it, then');
+  P('            window.scrollTo(0, d.scroll0) restores the start scroll; dropRowHold');
+  P('            LAST (endHold then realizes the SUSPENDED source rows against the');
+  P('            settled scroll, reusing them rather than rebuilding); session = null,');
+  P('            d = null LAST of all (both are read by releaseGesture/dropRowHold, so');
+  P('            nulling earlier would leak the hold); then the new gesture arms. The nav');
+  P('            stack and navbar return to the source; movers are torn down BY OWNERSHIP');
+  P('            (§3.2). On the ORPHAN path (d === null) there is no session-start state,');
+  P('            so render + scroll degrade to the prior top-level restore.');
   P('');
-  P('   ⚠️ TWO SEPARATE DEFECTS live here, and BOTH are new policy. An earlier draft of');
-  P('   this document labelled the whole of supersession [parity]; that was wrong, and');
-  P('   an external review of .218 caught it. The pre-stack recovery row this section');
-  P('   leans on is itself [policy], so "recovered pre-stack" cannot be parity.');
+  P('   ⚠️ TWO SEPARATE REPAIRS live here, and BOTH are NEW POLICY (§10), not parity —');
+  P('   they do not reproduce the pre-rewrite code, they CLOSE two known-red defects an');
+  P('   external review of .218 caught. An earlier draft labelled the whole of');
+  P('   supersession [parity]; that was wrong. Stage 6a IMPLEMENTS both as the pre-stack');
+  P('   recovery above; the recovery ROW they lean on is itself [policy] (§7).');
   P('');
-  P('   [policy] (1) SCROLL. Today\'s hard reset does NOT restore the starting scroll,');
-  P('            so a superseded browse->browse drag can be left at the DESTINATION\'s');
-  P('            scroll (its mid-drag render ran positionOnEnter).');
-  P('   [policy] (2) SOURCE CONTENT. `render:false` means nothing re-renders the source');
-  P('            into the shared #browse, so the host keeps the DESTINATION\'s content');
-  P('            while the stack and navbar say source. MEASURED at .218:');
-  P('            renders = ["books","authors","books"] after Authors->Books is');
-  P('            superseded. That is an I11 violation and the same wrong-page/wrong-tap');
-  P('            class as .178 — the nav says one screen and Browse shows another.');
-  P('            Both are covered by `{todo}` tests in test/swipe-invariants.test.js.');
+  P('   [policy] (1) SCROLL — IMPLEMENTED (stage 6a). The recovery restores the');
+  P('            session-start scroll (d.scroll0), so a superseded browse->browse drag is');
+  P('            no longer left at the DESTINATION\'s scroll (its mid-drag render had run');
+  P('            positionOnEnter).');
+  P('   [policy] (2) SOURCE CONTENT — IMPLEMENTED (stage 6a). The recovery re-renders the');
+  P('            source into #browse when the drag clobbered it (d.clobbered), so the host');
+  P('            no longer keeps the DESTINATION\'s content while the stack and navbar say');
+  P('            source. The .218 defect was renders = ["books","authors","books"] after');
+  P('            Authors->Books is superseded — an I11 wrong-page/wrong-tap violation of');
+  P('            the .178 class, now closed. Guarded by tests in swipe-invariants.test.js.');
   P('');
   P('6. TERMINATION REASONS (§3.7)');
   P('   reason                      basis     nav              screen        scroll              pane');
