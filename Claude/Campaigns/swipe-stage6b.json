@@ -6,7 +6,7 @@
     { "gate": "plan-review",    "owner": "charpy",    "required": true, "verdictArtifactGlob": "Claude/Charpy/PLAN-swipe-stage6b-*.md",  "acceptVerdict": ["FORGE"] },
     { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6b.md",       "acceptVerdict": ["RED_SUITE_READY"] },
     { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-stage6b-*.md",        "acceptVerdict": ["BUILD_GREEN"] },
-    { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage6b-*.md",       "acceptVerdict": ["PASS", "SHIP"] },
+    { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage6b*.md",        "acceptVerdict": ["PASS", "SHIP"] },
     { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6b.md", "acceptVerdict": ["ADEQUATE"] },
     { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-stage6b-*.md",   "acceptVerdict": ["HELD_STONE"] }
   ]

@@ -166,6 +166,20 @@ stays pristine). Done in the task-chip session (branch `claude/pensive-faraday-0
 onto main (branch was pre-Stage-6a-stale; only the two boundary files + records taken). The stale branch +
 `origin/claude/pensive-faraday-0d5932` are now redundant — safe to delete.
 
+**Stage 6b SCHEME-COMPLETE (2026-07-26) — bench, not pushed.** Async-handle ownership (RELEASE half):
+settle()'s finalize/reveal path session-owns + retires the 340ms settle fallback (`cur.settleTimer`), the
+reveal double-`rAF` (`cur.revealFrames`, a two-id handle always naming the currently-pending frame), and the
+600ms reveal safety-net (`cur.revealTimer`) at one resolver each — no loser leaks the scheduler queue. Ran
+under full automation: Vitruvius→Charpy (r1/r2 TEMPER on vacuous coverage cells, r3 FORGE, **Loki KILL** on
+the one-id double-`rAF` inner-frame leak → two-id fix → r4 FORGE), a fresh **Loki HELD_STONE** on the two-id
+promise (10 interleavings), Curie red-first (DF + RR a/b/c via a per-id delta oracle, never emptiness; RR(b)
+half-fired = the discriminator), Brunel green, **Poirot PASS**, **Mendeleev ADEQUATE**. §10 records scrub
+done (subsystem §8/§21 + parent §7 step 6 reconciled; no known-red this slice). Completion gate 6/6 (caught +
+fixed a manifest glob mismatch — the value of the gate). Build `2026-07-26.250`; **not pushed — on-device
+owed**. **Deferred to 6c/7** (PLAN-swipe-stage6b.md §11): the I12 null-half (finishing-gate + I12
+enforcement), finalizationPlanFor/`sameBrowseHost`/pane-lifecycle, and the **I10 reveal centralization** —
+the one that fixes the headline aborted-swipe flash bug.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired

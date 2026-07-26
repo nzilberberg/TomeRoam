@@ -36,8 +36,12 @@ scroll at a time); supersession is ordered by `sessionSeq`. No cross-device orde
 
 **8. Resource owner.** The gesture session (`d`/`cur`). Stage 3 stamped the session id;
 resource-handle ownership (settle rAF stored on the session, cancelled in finalize) landed at
-`.226`. **OPEN (stage 6):** the settle/reveal timers and the transitionend listener are not
-yet session-owned handles that null on cancel/fire (DecisionLog).
+`.226`. **Stage 6b (release half, 2026-07-26):** the 340ms settle fallback timer, the reveal
+double-`rAF` (a two-id handle that always names the currently-pending frame), and the 600ms reveal
+safety-net timer are now SESSION-OWNED handles retired at their phase resolver (finalize/drop), so no
+loser continuation leaks onto the scheduler queue. Still deferred to the I12 stage (its consumer): the
+NULL-on-retire writes, the `transitionend` listener's session-ownership/removal, and a per-handle-liveness
+observability surface (no testable/consumed surface exists until I12).
 
 **9. Ownership endpoint.** `sessionDone(cur)` / `endOwnership()`. ARMED end: after listeners
 released. Vertical abandon: after listeners + resources released. Commit/abort without a pane:
@@ -97,7 +101,7 @@ headline aborted-swipe repaint/flash (memory `tomeroam-swipe-repaint-saga`).
 
 **21. Current policy-ledger references.** DecisionLog: the staged-review policy; construction-
 only planFor phase-split; three-layer oracle + mirror retirement; same-destination
-documented-impossible; the stage-6 cleanup debt (null the timer/listener handles).
+documented-impossible; the stage-6 cleanup debt release-half done in 6b (settle/reveal timers session-owned + retired), the null-write/listener half deferred to the I12 stage.
 
 **22. Explicitly out of scope.** Cross-device sync; the visual flash bug's root cause
 (separate open investigation); playback; the nav stacks themselves (Nav).

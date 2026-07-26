@@ -859,3 +859,21 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   boundary line reds it. Authored + Poirot-SHIP-reviewed in a separate task-chip session (branch
   claude/pensive-faraday-0d5932); grafted onto main — the branch was stale (pre-Stage-6a), so only the two
   boundary files + their Brunel/Poirot records were taken, never the branch's diverged tree. Build 2026-07-26.249.
+
+- Stage 6b (async-handle ownership, RELEASE half) IMPLEMENTED and green — 2026-07-26. settle()'s
+  finalize/reveal path now session-owns and retires three loser continuations at one resolver each:
+  `cur.settleTimer` (340ms finalize fallback, cleared when the transitionend path wins), `cur.revealFrames`
+  (the reveal double-`rAF` as a TWO-ID handle — the outer callback re-stores the inner id so the field always
+  names the currently-pending frame; the winning `drop` cancels whichever is pending), and `cur.revealTimer`
+  (600ms reveal safety-net, cleared at the winning `drop`) — so no loser timer/frame leaks onto the scheduler
+  queue. Scope = the RELEASE half only; the NULL-on-retire writes, the `transitionend` listener's
+  session-ownership/removal, and a per-handle-liveness observability surface are deferred to the I12 stage
+  (their consumer — adding them now is unobservable/dead, §4.15). Gates: Charpy FORGE (r4, after r1/r2 TEMPER
+  on vacuous coverage cells and a Loki KILL on the one-id double-`rAF` design → two-id fix → r3/r4), Loki
+  HELD_STONE on the two-id promise (survived ten constructed interleavings), Curie red-first (DF + RR a/b/c
+  via a per-id delta oracle, never queue emptiness — the winner's own continuations share the queues; RR(b)
+  half-fired is the load-bearing discriminator), Brunel green, Poirot PASS, Mendeleev ADEQUATE. Build
+  `2026-07-26.250` (bench; on-device owed). The Loki KILL is the headline: the ratified one-id handle leaked
+  the inner paint frame in the half-fired timeout-drop interleaving (rAF stalled in a hidden tab), caught
+  pre-build. Part of PLAN-swipe-reveal.md §7 step 6; the finalization centralization (I10/I17) + the rest of
+  the seven deferred workstreams remain 6c/7.
