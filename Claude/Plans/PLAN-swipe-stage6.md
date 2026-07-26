@@ -4,7 +4,8 @@ Type: plan
 
 <!-- vitruvius-gate {"plan_type":"feature","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:361-375"],"callee_ranges":[],"affected_contracts":["test/swipe-invariants.test.js:339","test/swipe-invariants.test.js:391","Claude/Decisions/PolicyLedger.mjs:15"],"staged_records":["Claude/Plans/PLAN-swipe-reveal.md","Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Decisions/PolicyLedger.mjs"],"blocking_questions":["SR","SC","PS","OB","OR","VR"]} -->
 
-Status: **DRAFT — for Charpy** (2026-07-26, Loki-corrected r2). First Stage-6 slice ("Stage 6a").
+Status: **DRAFT — for Charpy** (2026-07-26, Loki-corrected + Charpy-F3-corrected r3). First Stage-6 slice
+("Stage 6a").
 Behavior-CHANGING: it closes the two standing known-red supersession policies (`KR-swipe-source-rerender`,
 `KR-swipe-scroll-restore`). Grounded against HEAD: `js/app.js` `begin()`/`start()`/`settle()`/
 `runFinalize()`/`finalize()`; `js/browse.js` `beginHold()`/`endHold()`/`showPage()`; `js/virtuallist.js`
@@ -27,6 +28,15 @@ Stage 6b/7 (§11), with reasons.
 > moves the hold release to LAST (§6), reclassifies `dropRowHold`'s position as CHANGED not parity (§2),
 > corrects §8's requirement to release-after-RECOVER, and adds a virtualized-source coverage cell VR (§9)
 > the small-list classic fixtures could not reach.
+>
+> **Coupled correction (2026-07-26, Charpy r3 F3, `Claude/Charpy/PLAN-swipe-stage6-2026-07-26-r3.md`).**
+> Moving `dropRowHold` after the recovery render is correct, but a prior draft still nulled `session` in the
+> release step BEFORE it — and `dropRowHold`/`releaseGesture` READ `session` (app.js:324, :339-342;
+> `dropRowHold` no-ops on a null `session`), so `endHold` never fired and the hold LEAKED, defeating the
+> fix's own goal. Corrected: `session = null`/`d = null` move to the LAST teardown step, after the hold
+> release, preserving the app.js:1132 invariant ("dropRowHold reads session.hold, so it must run BEFORE
+> endOwnership clears the session"). §2/§5/§6 reconciled; cell VR's mutation extended to catch the
+> null-before-release ordering (mutation (b)).
 
 ## Applicability
 
@@ -107,13 +117,22 @@ Behavioral ownership, not function names.
   (today's `render:false` hard reset, app.js:365) to AFTER the recovery render+scroll. The CALL is
   unchanged; only its ordering is (§6). This is the one existing teardown step this slice's added render
   makes load-bearing.
+- **`session = null` / `d = null` POSITION also changes** (coupled to the above; NOT parity): both
+  `releaseGesture()` and `dropRowHold()` READ `session` (app.js:324, :339-342 — `dropRowHold` no-ops when
+  `session` is null), so the identity drop MUST run AFTER the hold release, not before it. It moves to the
+  LAST teardown step, after `dropRowHold`. This preserves the existing invariant the current `begin()` and
+  `finalize()` both obey (app.js:1132: "dropRowHold reads session.hold, so it must run BEFORE endOwnership
+  clears the session"; current `begin()` nulls `session` at :373, after `dropRowHold` at :365). The
+  recovery also reads the old `d` (`d.clobbered`/`d.scroll0`/`d.live`), so `d = null` is likewise deferred
+  to the last step, after the recovery render+scroll.
 
 **Stays exactly as today (parity — already correct, do NOT re-touch):**
-- Listener release (`releaseGesture()`), session-identity drop (`session = null`), inline-style reset
-  (`resetSwipeStyles()`), and superseded-pane disposal — the existing hard reset already tears the old
-  session down by ownership. The `I2/I20 — superseding a LIVE drag disposes its pane` test is GREEN and
-  must stay green (cell PD). (The Browse hold RETURN call also already exists, but its POSITION is a change,
-  not parity — see above.)
+- Listener release (`releaseGesture()`), inline-style reset (`resetSwipeStyles()`), and superseded-pane
+  disposal — the existing hard reset already tears the old session down by ownership. The `I2/I20 —
+  superseding a LIVE drag disposes its pane` test is GREEN and must stay green (cell PD). (Two existing
+  calls have their POSITION changed, not their behavior: the Browse hold RETURN — released last, after the
+  recovery — and the `session = null`/`d = null` identity drop — deferred to after the hold release; see
+  above and §6.)
 - Stale move/end/cancel from the superseded gesture stay harmless (the `I20 — stale ... cannot touch the
   new session` test is GREEN and must stay green, cell ST).
 - The ORPHAN-pane branch (`d === null` but a leftover `.nav-ghost` exists): disposed as `hard-reset`, with
@@ -210,12 +229,19 @@ Who creates, borrows, mutates, releases, restores, and destroys, at the superses
   `window` scroll — borrowed-real; it never removes them.
 - **Mutate:** the recovery re-renders the source into the borrowed `#browse` (only when `d.clobbered`) and
   writes the document scroll to `d.scroll0`. It writes no session state onto the old `d` beyond reading it.
-- **Release:** the old session's listeners (`releaseListeners`) and identity (`session = null`) are
-  released BEFORE the recovery — UNCHANGED. The Browse hold (`dropRowHold` -> `endHold`) is released LAST,
-  AFTER the recovery render+scroll — its POSITION is the one release that CHANGES (§2, §6 step 4), because
-  `endHold` outside the restore envelope dematerializes the suspended source rows.
+- **Release:** the old session's listeners (`releaseListeners`) are released BEFORE the recovery
+  (`releaseGesture()`, which reads `session`) — UNCHANGED. The Browse hold (`dropRowHold` -> `endHold`) is
+  released AFTER the recovery render+scroll — its POSITION CHANGES (§2, §6 step 4), because `endHold`
+  outside the restore envelope dematerializes the suspended source rows. The **identity drop
+  (`session = null` / `d = null`) is released LAST of all**, AFTER the hold release — because both
+  `releaseGesture()` and `dropRowHold()` READ `session` (`dropRowHold` no-ops when `session` is null,
+  app.js:339-342), so clearing identity earlier would leak the hold (`holdRows` stuck true, the source rows
+  never realized). This is the app.js:1132 invariant ("dropRowHold reads session.hold, so it must run
+  BEFORE endOwnership clears the session"). The recovery also reads the old `d`, so `d = null` is deferred
+  to the same last step.
 - **Restore:** the recovery is the RESTORE step this slice adds — source content and document scroll to
-  the session-start state, performed while the hold is still held (§3 item 4).
+  the session-start state, performed while the hold is still held AND the old `session`/`d` are still set
+  (§3 item 4; §6 step 3).
 - **Destroy:** the old session's owned pane is disposed — UNCHANGED (the existing hard reset;
   `resetSwipeStyles()` + the leftover-`.nav-ghost` handling). The recovery adds no pane lifecycle method;
   `release()`/`dispose(reason)` are Stage 6b (§11).
@@ -229,27 +255,34 @@ paint barrier (there is none on this path today — §11 keeps I10 reveal-gating
 
 ## 6. Ordering contract
 
-Two correctness invariants: **recover-before-arm** (cell OR) and **hold-release-after-recover** (cell VR).
-The current code's order is the DEFECT to re-plan here, not an invariant to preserve — adding the recovery
-render makes the position of `dropRowHold` load-bearing (§2). Required order:
+Three coupled ordering invariants: **recover-before-arm** (cell OR), **hold-release-after-recover** (cell
+VR), and **identity-null-after-hold-release** (the app.js:1132 invariant — `dropRowHold`/`releaseGesture`
+read `session`, so `session = null` must come after them). The current code's order is the DEFECT to
+re-plan here, not an invariant to preserve — adding the recovery render makes the position of both
+`dropRowHold` AND the `session`/`d` null load-bearing (§2). Required order:
 
 1. **Detect supersession** — `begin()` sees `d` non-null (or a leftover pane) while `finishing` is false
    (I17(a): a settling/finalizing/revealing session still REJECTS; unchanged).
-2. **Release the old session's listeners + identity** — `releaseGesture()`, `session = null`. Do NOT drop
-   the Browse hold yet (moved from here; §2). Reset the old inline styles / dispose the old pane
-   (`resetSwipeStyles()` and the leftover-`.nav-ghost` handling) — these do not re-render, so their position
-   relative to the hold is unconstrained.
+2. **Release the old session's listeners** — `releaseGesture()` (reads `session`; keep `session` set).
+   Reset the old inline styles / dispose the old pane (`resetSwipeStyles()` and the leftover-`.nav-ghost`
+   handling) — these read no `session` and do not re-render, so their position is unconstrained. Do NOT
+   drop the Browse hold yet, and do NOT null `session`/`d` yet (both moved to the end; §2).
 3. **Recover pre-stack, INSIDE the hold envelope** — while `session.hold` is still held (so the source page
-   stays SUSPENDED with its rows kept, `browse.js` `showPage` `holdRows` suspend branch): re-render the
-   source into `#browse` iff `d.clobbered` (`applyScreen(currentDesc(), { render: d.clobbered,
-   resetScroll: false })`), then restore the scroll (`window.scrollTo(0, d.scroll0)`).
-4. **Release the hold LAST** — `dropRowHold()` -> `Browse.endHold()`, which performs its single realization
-   against the now-settled scroll, REUSING the suspended source rows (`browse.js` `endHold`, ~149-179).
-   This mirrors `finalize()`'s `finally` (app.js:1138-1139), which drops the hold only after `runFinalize()`
-   has rendered and scrolled.
-5. **Only then arm the successor** — allocate the new `d`, set `session = d`, `bindGesture(target)`.
+   stays SUSPENDED with its rows kept, `browse.js` `showPage` `holdRows` suspend branch) and the old `d` is
+   still set (the recovery reads `d.clobbered`/`d.scroll0`/`d.live`): re-render the source into `#browse`
+   iff `d.clobbered` (`applyScreen(currentDesc(), { render: d.clobbered, resetScroll: false })`), then
+   restore the scroll (`window.scrollTo(0, d.scroll0)`).
+4. **Release the hold** — `dropRowHold()` -> `Browse.endHold()` (reads `session.hold`; `session` still set),
+   which performs its single realization against the now-settled scroll, REUSING the suspended source rows
+   (`browse.js` `endHold`, ~149-179). This mirrors `finalize()`'s `finally` (app.js:1138-1139), which drops
+   the hold only after `runFinalize()` has rendered and scrolled.
+5. **Drop identity LAST** — `session = null`, `d = null`, AFTER `releaseGesture` and `dropRowHold` (both of
+   which read `session`). Nulling earlier makes `dropRowHold` a no-op and LEAKS the hold (`holdRows` stuck
+   true -> the source rows are never realized -> defeats step 3-4). This is the app.js:1132 invariant that
+   the current `begin()` (:365 before :373) and `finalize()` (`dropRowHold(); endOwnership();`) both obey.
+6. **Only then arm the successor** — allocate the new `d`, set `session = d`, `bindGesture(target)`.
 
-**Correctness requirement A (cell OR) — recover before arm.** Steps 3-4 MUST precede step 5. The
+**Correctness requirement A (cell OR) — recover before arm.** Steps 3-4 MUST precede step 6 (arm). The
 successor's `start()` (fired on its first `move()`) snapshots `#browse` for its own ghost
 (`revealBase = snapBrowse(true)`, app.js:429; the app-ghost clone, swipe.js `ghostApp`). If the source
 re-render ran AFTER the successor armed, the successor would snapshot the stale DESTINATION content,
@@ -293,8 +326,8 @@ reason. Absence is a defect; a dimension not listed is an omission.
 |---|---|---|
 | Lifecycle / phases | Yes | The superseded-session endpoint restores source+scroll before the successor arms (cells OR, PS). |
 | Identities | N/A | No identifier is created, changed, or reinterpreted; `d.id`/`sessionSeq` semantics are unchanged. |
-| Ordering | Yes | Two ordering invariants: recover-before-arm (cell OR) AND hold-release-after-recover — the Browse hold (`endHold`) drops only after the source re-render + scroll, so a virtualized source's suspended rows are realized, not dematerialized (cell VR). Render-then-scroll micro-order preserved. |
-| Resources: acquired / owner / endpoint | Yes | The old session's listeners + identity release BEFORE the recovery; the Browse hold releases LAST (after the recovery render+scroll, cell VR); the pane is disposed exactly once (cell PD); ownership ends before the new arms (I20 regression). |
+| Ordering | Yes | Three coupled ordering invariants: recover-before-arm (cell OR); hold-release-after-recover — the Browse hold (`endHold`) drops only after the source re-render + scroll, so a virtualized source's suspended rows are realized, not dematerialized (cell VR); and identity-null-after-hold-release — `session`/`d` are nulled only after `releaseGesture`/`dropRowHold` (which read `session`), else `dropRowHold` no-ops and the hold leaks (app.js:1132 invariant; cell VR mutation (b)). Render-then-scroll micro-order preserved. |
+| Resources: acquired / owner / endpoint | Yes | Release order is load-bearing: listeners release BEFORE the recovery; the Browse hold releases AFTER the recovery render+scroll (cell VR); the identity drop (`session`/`d` null) releases LAST, after the hold — because `releaseGesture`/`dropRowHold` read `session` (app.js:1132). The pane is disposed exactly once (cell PD); ownership ends before the new arms (I20 regression). |
 | Async operations | N/A | The recovery is synchronous in `begin()`; a superseded gesture is pre-`settle()`, so the old session has no scheduled rAF/timer/`transitionend`. `endHold`'s realization is synchronous and — because it runs after the scroll write while the scroll dispatcher is still suspended (§6 step 4, §7) — schedules no post-arm rAF realize (Loki NB1 addressed by ordering, not a new async surface; Applicability async_change:false). |
 | Stale completions | Yes (parity) | Stale move/end/cancel from the superseded gesture stay harmless (cell ST, existing green). |
 | Normal completion | N/A | This slice does not touch the normal `settle()`/`runFinalize()` commit/abort path; that behavior is unchanged and its existing tests (I7, I11 abort) must stay green as regression. |
@@ -323,7 +356,7 @@ existing `{ todo }` tests made active.
 | PS | Supersession is PRE-STACK: stack + authoritative descriptor stay on the source | supersede, then a 2nd back-swipe must offer the SAME transition | recovery pushes/pops the nav stack -> the next gesture reports a different transition pair | wiring |
 | OB | An ORPHAN pane hard-reset (no live session, `d===null`) attempts no session-scroll restore and disposes as hard-reset | a leftover `.nav-ghost` with `d` null at `begin()` | recovery reads `d.scroll0`/`d.clobbered` unconditionally -> throws / spurious scroll on the orphan path | wiring |
 | OR | The source re-render + scroll restore PRECEDE the successor arming, so the new `start()` snapshots the RESTORED source `#browse` | supersede a live browse->browse drag, then drive the new gesture live | move the recovery AFTER `bindGesture` -> the new ghost/`revealBase` snapshots the stale destination | wiring (intermediate-state, §4.7) |
-| VR | On a VIRTUALIZED browse->browse source, the successor snapshots the ORIGINAL rows (the hold is released AFTER the recovery render, so the suspended rows are realized, not dematerialized) | **forced-virtual** source (the `test/browse-virtual.test.js` recipe: injected metrics, >600-item list) scrolled deep with its realized rows identity-stamped; live browse->browse drag; supersede | `dropRowHold()`/`endHold` moved BEFORE the recovery render (the current order) -> the source controller deactivates, kept rows dematerialize, and the snapshot reads `keptOriginalRows=0, freshRebuiltRows>0` instead of every original row surviving | wiring (virtualized fixture — drives real `browse.js`/`virtuallist.js`) |
+| VR | On a VIRTUALIZED browse->browse source, the successor snapshots the ORIGINAL rows, REALIZED — the hold is released AFTER the recovery render, AND `session` is nulled only AFTER `dropRowHold`, so `endHold` actually fires and realizes the suspended rows | **forced-virtual** source (the `test/browse-virtual.test.js` recipe: injected metrics, >600-item list) scrolled deep with its realized rows identity-stamped; live browse->browse drag; supersede | Either ordering defect leaves the rows unrealized: (a) `dropRowHold`/`endHold` moved BEFORE the recovery render -> the source controller deactivates and kept rows dematerialize (`keptOriginalRows=0, freshRebuiltRows>0`); (b) `session = null` moved BEFORE `dropRowHold` -> `dropRowHold` no-ops (reads a null `session`), `endHold` never fires, the hold LEAKS and the suspended source rows are never realized | wiring (virtualized fixture — drives real `browse.js`/`virtuallist.js`) |
 | NC | A non-clobber supersession (overlay source) issues NO spurious `#browse` re-render but still restores scroll when live | live overlay-source (or home->overlay) drag; supersede | recovery re-renders unconditionally (ignores `d.clobbered`) -> a stray `browse.render` on an overlay supersession | wiring |
 | PD | Supersession still disposes the superseded pane exactly once (I2 parity) | live drag; supersede; settle | recovery strands the old pane -> `ghosts>0` | wiring (existing green) |
 | ST | Stale move/end/cancel from the superseded gesture stay harmless (I20 parity) | supersede; dispatch the old target's event tail | recovery leaves the old listeners bound -> a stale touchmove drags the new session | wiring (existing green) |
@@ -338,7 +371,7 @@ SC | superseding a live drag restores the session-start document scroll | live b
 PS | supersession is pre-stack so the nav stack and authoritative descriptor stay on the source | supersede then a second back-swipe offers the same transition | recovery mutates the nav stack by push or pop | wiring
 OB | an orphan pane hard-reset with no live session attempts no session-scroll restore and disposes as hard-reset | a leftover nav-ghost with d null at begin | recovery reads d.scroll0 or d.clobbered unconditionally on the orphan path | wiring
 OR | the source re-render and scroll restore precede the successor arming so the new start snapshots the restored source browse host | supersede a live browse-to-browse drag then drive the new gesture live | the recovery is moved after bindGesture so the new ghost snapshots the stale destination | wiring
-VR | on a virtualized browse-to-browse source the successor snapshots the original rows because the Browse hold is released after the recovery render | forced-virtual deep-scrolled source with realized rows identity-stamped then a live browse-to-browse drag then supersede | dropRowHold and endHold moved before the recovery render so the suspended source controller deactivates and kept rows dematerialize to a rebuilt cover-less grid | wiring
+VR | on a virtualized browse-to-browse source the successor snapshots the original rows realized because the hold is released after the recovery render and session is nulled after dropRowHold | forced-virtual deep-scrolled source with realized rows identity-stamped then a live browse-to-browse drag then supersede | either dropRowHold and endHold moved before the recovery render dematerializing kept rows OR session nulled before dropRowHold so endHold never fires and the hold leaks leaving rows unrealized | wiring
 NC | a non-clobber supersession issues no spurious browse re-render but still restores scroll when live | live overlay-source drag then supersede | recovery re-renders unconditionally ignoring d.clobbered | wiring
 PD | supersession still disposes the superseded pane exactly once | live drag then supersede then settle | recovery strands the old pane | wiring
 ST | stale move end and cancel from the superseded gesture stay harmless | supersede then dispatch the old target event tail | recovery leaves the old listeners bound | wiring
