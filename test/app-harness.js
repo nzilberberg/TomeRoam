@@ -346,7 +346,11 @@ function boot(opts = {}) {
   const tq = [];                                     // {id, fn, due}
   const fakeSetTimeout = (fn, ms, ...a) => {
     const id = nextTid++;
-    tq.push({ id, fn: () => fn(...a), due: vnow + (Number(ms) || 0) });
+    // `ms` (the ORIGINAL requested delay) is recorded alongside `due` so a per-id
+    // retirement test can identify a specific timer by the magic delay it was scheduled
+    // with (the 340ms finalize fallback, the 600ms reveal safety-net) regardless of how
+    // far virtual time has since advanced — see clock.pendingDump().
+    tq.push({ id, fn: () => fn(...a), due: vnow + (Number(ms) || 0), ms: Number(ms) || 0 });
     return id;
   };
   const fakeClearTimeout = (id) => {
@@ -772,6 +776,18 @@ function boot(opts = {}) {
       now: () => vnow,
       pending: () => tq.length,
       /**
+       * The pending fake-timeout LEDGER — one entry per queued timeout: `{id, ms, delay}`
+       * where `ms` is the original requested delay and `delay` is the time still
+       * remaining (`due - now`). Exists so a per-id retirement test can name the SPECIFIC
+       * loser timer it expects a resolver to clear (find it by its `ms` — 340 for the
+       * finalize fallback, 600 for the reveal safety-net — then capture its `id`), rather
+       * than asserting queue emptiness. The WINNER's own continuations (the reveal
+       * diagnostic's 500ms window, the pane-fade timer) share this queue, so the loser's
+       * removal is a delta on a NON-empty queue; emptiness would be the wrong oracle and
+       * would pass a build that cancels nothing.
+       */
+      pendingDump: () => tq.map((t) => ({ id: t.id, ms: t.ms, delay: t.due - vnow })),
+      /**
        * Advance VIRTUAL time, firing due timeouts in chronological order and letting
        * each one's promise chain settle before the next (a retry awaits a reprobe,
        * so the continuation must run before later timers fire).
@@ -798,6 +814,14 @@ function boot(opts = {}) {
     raf: {
       /** How many callbacks are waiting for a frame. */
       pending: () => rafQ.length,
+      /**
+       * The pending frame ids, in queue order. Same purpose as clock.pendingDump: a
+       * per-id retirement test names the SPECIFIC reveal frame it expects drop() to
+       * cancel and asserts that id is gone afterward. The winner's watchFrames chain
+       * queues its OWN frame into this same array, so the loser's absence is a delta on
+       * a non-empty queue, never emptiness.
+       */
+      pendingIds: () => rafQ.map((e) => e.id),
       /**
        * Run ONE frame's worth of callbacks. Callbacks queued BY those callbacks wait
        * for the next frame, exactly as a browser schedules them — which is what makes

@@ -749,6 +749,14 @@
           let dropped = false, decoded = false, painted = false;
           const drop = (why) => {
             if (dropped) return; dropped = true;
+            // The reveal gates are session-owned resources, not fire-and-forget (Stage
+            // 6b, PLAN-swipe-stage6b.md §2/§3): cancel whichever one did NOT win so it
+            // never fires a dropped-guarded no-op later. cur.revealFrames always names
+            // the CURRENTLY-PENDING frame of the double-rAF below (the outer callback
+            // re-stores the inner id onto it), so this one cancel removes the pending
+            // frame whether the outer has fired yet or not.
+            cancelAnimationFrame(cur.revealFrames);
+            clearTimeout(cur.revealTimer);
             // Stamp the exact moment the view stops being covered BEFORE removing the
             // pane, so the reveal watcher can split what churned while hidden from what
             // churned in front of the user. That split is the whole question.
@@ -791,8 +799,17 @@
             .then(() => { decoded = true; gate('decode'); });
           // rAF does not fire in a hidden tab (a known trap here) — the safety net below
           // is what releases the ghost in that case, so it can never be stranded.
-          requestAnimationFrame(() => requestAnimationFrame(() => { painted = true; gate('paint'); }));
-          setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever
+          // cur.revealFrames is a two-entry handle (Stage 6b): it is set to the OUTER
+          // frame id here, and the outer callback RE-STORES the INNER frame id onto the
+          // same field before scheduling it, so the field always names whichever frame
+          // is currently pending. drop()'s single cancelAnimationFrame(cur.revealFrames)
+          // then removes the actual pending loser in every interleaving, including the
+          // half-fired case (outer fired, inner still pending) where a single-outer-id
+          // handle would cancel a spent id and leak the inner frame.
+          cur.revealFrames = requestAnimationFrame(() => {
+            cur.revealFrames = requestAnimationFrame(() => { painted = true; gate('paint'); });
+          });
+          cur.revealTimer = setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever
         };
         // FLASH DIAGNOSTIC (.180). The reported "cover images flicker on every aborted
         // swipe return" already had one evidence-free fix (.179) that did not land, so
@@ -1144,6 +1161,11 @@
         // Cancel the paused settle rAF so it cannot write a stale transform on foreground
         // after this finalize clears them (review of .223, finding 1a).
         cancelAnimationFrame(cur.settleFrame);
+        // Cancel the 340ms fallback's loser: when transitionend won this race, the
+        // fallback is still pending and would otherwise fire a done-guarded no-op
+        // (Stage 6b, PLAN-swipe-stage6b.md §2/§3). When the fallback itself won, this
+        // clears an already-fired id — a harmless no-op.
+        clearTimeout(cur.settleTimer);
         // Order matters: dropRowHold reads session.hold, so it must run BEFORE
         // endOwnership clears the session. `finishing` is restored ONLY on a throw
         // (review of .223, finding 2): the no-pane path already cleared it in
@@ -1157,7 +1179,7 @@
       };
       const anchor = cur.movers[0] && cur.movers[0].el;
       if (anchor) anchor.addEventListener('transitionend', finalize, { once: true });
-      setTimeout(finalize, 340);
+      cur.settleTimer = setTimeout(finalize, 340);
     }
 
     // Only ARMING is document-wide — at touchstart the target is by definition still
