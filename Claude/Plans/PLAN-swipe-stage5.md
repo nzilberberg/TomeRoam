@@ -147,7 +147,7 @@ type Construction = {
   // it is HOISTED to the top level; `plan.outgoing`/`incoming`/`renderDestination` are consumed only
   // inside buildConstruction (swipe.js:291/301/305) and would be dead on the return, so the wrapper is
   // dropped (F1 NESTED dead-field, 2026-07-24; EC §17 — same class as classification, one level down).
-  decorations: Readonly<{ kind; base }[]>;         // PROJECTED {kind,base}; the role leaf is stripped (F2); L3 reads c.decorations
+  decorations: { kind; base }[];                   // PROJECTED {kind,base}; the role leaf is stripped (F2); L3 reads c.decorations. FRESH UNFROZEN array: the Construction is NON_CONTRACT (it carries live DOM nodes), exempt from the §4.11 deep-freeze gate, so this projection is not runtime-frozen. The prior freeze was TRANSITIVE — inherited from the now-dropped frozen `plan` wrapper — and is intentionally not preserved (DecisionLog 2026-07-26, NB1)
   movers: {
     outgoing:   Mover;                             // ownership 'owned-pane' (app-ghost) | 'borrowed-real'
     incoming:   Mover;                             // ownership 'owned-pane' (home-snapshot) | 'borrowed-real'

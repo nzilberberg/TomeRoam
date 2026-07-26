@@ -809,3 +809,24 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   unconditionally. Full suite 683 tests / 0 fail / 2 todo (the unrelated `KR-swipe-scroll-restore` +
   `KR-swipe-source-rerender`). Ratified plan `Claude/Plans/PLAN-swipe-stage5.md` (Charpy FORGE r9;
   r1–r9 casebooks committed `f6d6985`). Bench only; the on-device hold applies; not yet pushed/deployed.
+
+- The `Readonly` on `Construction.decorations` in `PLAN-swipe-stage5.md` §3 is DOCUMENTARY, not a
+  runtime-immutability requirement — 2026-07-26. Ruling on Loki strike NB1
+  (`Claude/Loki/STRIKE-swipe-stage5-narrowing.md`), which noted the narrowed return (commit `0049a13`)
+  hands `start()` a fresh UNFROZEN projected `decorations` array where the old five-key return handed a
+  deep-frozen one. Primary evidence: `Swipe.buildConstruction` is registered `NON_CONTRACT` in
+  `test/contract-function-gate.test.js` and `js/swipe.js` (the return carries live DOM nodes, so it is
+  deliberately exempt from the §4.11 deep-freeze gate — the whole Construction is by ratified design not
+  runtime-frozen). §3's type block is explicitly "TypeScript-style notation; project is vanilla JS," in
+  which `Readonly<T>` is a compile-time annotation with no runtime effect; only `decorations` carries it
+  while `movers`/`capture`/`Mover`/`Capture` do not, the asymmetry of a documentary type annotation rather
+  than a freeze policy. The prior freeze was INCIDENTAL — transitive from embedding `constructionPlanFor`'s
+  deep-frozen contract output by reference (`c.plan.decorations`); it was never a property `buildConstruction`
+  authored on its own top-level return, and the ratified narrowing replaced the embedded frozen sub-object
+  with a projection (`plan.decorations.map(({kind,base}) => ({kind,base}))`) the plan authored WITHOUT an
+  `Object.freeze` wrapper, whereas everywhere the plan wants a freeze it writes `Object.freeze` explicitly.
+  Consequence: no implementation gap at `0049a13`; commit `0049a13` meets the plan as now stated. §3 line 150
+  edited to drop `Readonly` and state the fresh-unfrozen truth. Because this edits a RATIFIED plan, the §3
+  scope re-opens ratification and routes to Charpy to re-gate. No general immutability gate for NON_CONTRACT
+  object-returning seams is in scope — NON_CONTRACT returns cannot be deep-frozen (live DOM), so there is no
+  hole to close there.
