@@ -205,6 +205,24 @@ dead-ends, and the 8 environment traps → `[[tomeroam-swipe-repaint-saga]]` (RE
 SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is still live in `css/app.css`
 — remove once background movement is confirmed fixed.
 
+## 🔧 Tooling — pre-commit runner boundary git-env unset (SHIP, on `main`? NO — PR open)
+**Scheme-complete, awaiting a merge/deploy decision (build `2026-07-26.244`, 2026-07-26).**
+`tools/hooks/run-checks.mjs` strips the seven git location vars (`GIT_DIR`/`GIT_WORK_TREE`/
+`GIT_INDEX_FILE`/`GIT_PREFIX`/`GIT_COMMON_DIR`/`GIT_OBJECT_DIRECTORY`/`GIT_ALTERNATE_OBJECT_DIRECTORIES`)
+from its own `process.env` ONCE at the boundary (exported `stripGitLocationEnv`, first line of the new
+exported `runChecks`), before it spawns the suite — so no git-shelling test can reintroduce the
+ambient-`GIT_DIR` corruption even if it forgets `cleanGitEnv`. Structural BELT to `mutation-sweep.mjs`
+`cleanGitEnv`'s per-call SUSPENDERS (`e1a0c46`). Guarded by `test/run-checks-strips-git-env.test.js`.
+**Poirot SHIP** (`Claude/Poirot/67bc895-runner-git-env-boundary.md`, verified by execution: green /
+red-on-neuter / real repo untouched). One Minor applied in-round (test now poisons all 7 vars, not 2, so
+the strip assertion is non-vacuous for every var; assertions reordered so ambient-untouched reddens first).
+Full suite 684/0-fail/2-todo; runner CLI exit 0. Commit `67bc895` (+ review round). **PR #1**
+(https://github.com/nzilberberg/TomeRoam/pull/1), base `main`. ⚠️ Branch is 1 behind `origin/main` (`6dc60d0`
+stage-gate check) — needs merge/rebase before it lands. Build log
+`Claude/Brunel/run-checks-git-env-boundary-2026-07-26.md`; DecisionLog appended. Mendeleev N/A (no Coverage
+Model — tooling belt); Loki N/A (no ratified-promise campaign). **Merge + deploy `.244` is a user deploy
+decision** (per the standing deploy-decision-is-the-user's rule).
+
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |
 |---|---|---|---|
