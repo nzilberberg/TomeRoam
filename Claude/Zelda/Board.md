@@ -140,6 +140,19 @@ RETIRED** — detector reports zero dead fields, so its PolicyLedger entry + `{t
 suite 683 / 0-fail / 2-todo (unrelated scroll-restore + source-rerender). ⚠️ On-device verification still
 owed. Ratified §8 Mendeleev audit + Loki R2 remain pending as before.
 
+**Stage 5 SCHEME-COMPLETE (2026-07-25) — bench, not pushed.** Poirot SHIP on `0049a13`
+(`Claude/Poirot/0049a13-swipe-stage5-buildconstruction.md`, return_to none, verified by execution); Mendeleev
+ADEQUATE (`Claude/Mendeleev/AUDIT-swipe-stage5.md`) — every in-scope Coverage Model cell proven by concrete
+tests, the two contract cells NEW red-first, the no-dead-returned-field invariant now unconditional +
+non-vacuous. Deploy/push DEFERRED (on-device hold + user decision). **Routed to Curie as future
+test-authoring specs (out of scope for 0049a13, non-blocking):** (F5a) no test asserts the full `dest`
+payload reaches `env.renderDestination`/`showAppView` intact (only `v`); (F1a L3-half) `toMover`'s
+`{el,base,own}` key-completeness is unpinned (a dropped `own` is uncaught; F1b pins only the `base` value);
+(npLock, N1) no test asserts `document.body` loses `np-locked` on an NP-source swipe — the runtime effect
+this `c.decorations` consumer edit exists to preserve. (N2) §7 comment scrub owed at
+`test/swipe-invariants.test.js:97-105` (claims the pill test proves `start()` consumes decorations — an L1
+effect since the relocation).
+
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
 subsystem addendum; this DecisionLog is the Ledger. **Mechanized sections (gates, not vigilance):**
