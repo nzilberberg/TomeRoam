@@ -830,3 +830,18 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   scope re-opens ratification and routes to Charpy to re-gate. No general immutability gate for NON_CONTRACT
   object-returning seams is in scope — NON_CONTRACT returns cannot be deep-frozen (live DOM), so there is no
   hole to close there.
+
+- The pre-commit RUNNER strips git location vars once at its boundary — 2026-07-26 (build `2026-07-26.244`).
+  `tools/hooks/run-checks.mjs` deletes `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_PREFIX`,
+  `GIT_COMMON_DIR`, `GIT_OBJECT_DIRECTORY`, and `GIT_ALTERNATE_OBJECT_DIRECTORIES` from its own
+  `process.env` (via exported `stripGitLocationEnv`) as the first action in `runChecks`, before it reads
+  git config or spawns any step. Every child it spawns — the whole test suite — inherits the sanitized
+  environment, so a git-shelling test that operates on a throwaway repo cannot reintroduce the
+  ambient-`GIT_DIR` corruption (a temp `git init`/`git config` escaping to the real repo, flipping it to
+  `core.bare=true` and leaking config) even if it forgets to sanitize its own child env. This is the
+  STRUCTURAL BELT to `tools/mutation-sweep.mjs` `cleanGitEnv`, which remains the per-call SUSPENDERS for a
+  git call made outside this runner. Guarded by `test/run-checks-strips-git-env.test.js`: a control that
+  reproduces the corruption with the naive inherited env and a treatment that drives a naive probe through
+  `runChecks` and stays pristine — the treatment reddens if the boundary unset is removed. Hazard writeup
+  in memory `git-subprocess-in-tests-must-strip-git-dir`. Build log
+  `Claude/Brunel/run-checks-git-env-boundary-2026-07-26.md`.

@@ -205,6 +205,18 @@ dead-ends, and the 8 environment traps → `[[tomeroam-swipe-repaint-saga]]` (RE
 SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is still live in `css/app.css`
 — remove once background movement is confirmed fixed.
 
+## 🔧 Tooling (shipped)
+**Pre-commit runner boundary git-env unset (Brunel, build `2026-07-26.244`, 2026-07-26) — awaiting Poirot.**
+`tools/hooks/run-checks.mjs` now strips the seven git location vars (`GIT_DIR`/`GIT_WORK_TREE`/
+`GIT_INDEX_FILE`/`GIT_PREFIX`/`GIT_COMMON_DIR`/`GIT_OBJECT_DIRECTORY`/`GIT_ALTERNATE_OBJECT_DIRECTORIES`)
+from its own `process.env` ONCE at the boundary (exported `stripGitLocationEnv`, first line of the new
+exported `runChecks`), before it spawns the suite — so no git-shelling test can reintroduce the
+ambient-`GIT_DIR` corruption even if it forgets `cleanGitEnv`. Structural BELT to `mutation-sweep.mjs`
+`cleanGitEnv`'s per-call SUSPENDERS (`e1a0c46`). Guarded by `test/run-checks-strips-git-env.test.js`
+(control reproduces corruption / treatment stays pristine via `runChecks`; treatment reddens if the belt is
+removed — proven). Full suite 684/0-fail/2-todo; runner CLI exit 0. Build log
+`Claude/Brunel/run-checks-git-env-boundary-2026-07-26.md`; DecisionLog appended.
+
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |
 |---|---|---|---|
