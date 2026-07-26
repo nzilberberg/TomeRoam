@@ -157,6 +157,15 @@ as live regression guards in `test/swipe-stage5-residuals.test.js` (each reds on
 found NO latent bug — the audit's predicted device failure shapes (empty drilled-in page from a dropped
 payload; wrong-pane teardown from a dropped `own`) are correct on HEAD and now guarded. N2 comment corrected.
 
+**Git-env boundary hardening — LANDED (build `2026-07-26.249`).** `tools/hooks/run-checks.mjs` now strips
+git's location env vars ONCE at the runner boundary (`stripGitLocationEnv(process.env)` before any git read
+or child spawn), so no future git-shelling test can reintroduce the ambient-GIT_DIR corruption by forgetting
+per-call `cleanGitEnv` — the structural belt to that per-call suspender. Guarded by a self-validating gate
+(`test/run-checks-strips-git-env.test.js`: CONTROL corrupts an ambient repo, TREATMENT through the boundary
+stays pristine). Done in the task-chip session (branch `claude/pensive-faraday-0d5932`, Poirot SHIP), grafted
+onto main (branch was pre-Stage-6a-stale; only the two boundary files + records taken). The stale branch +
+`origin/claude/pensive-faraday-0d5932` are now redundant — safe to delete.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired

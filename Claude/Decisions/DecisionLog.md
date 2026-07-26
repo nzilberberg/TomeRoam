@@ -846,3 +846,16 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   the corrected promise, Curie red-first (VR/OR/NC/OB-home), Brunel green, Poirot PASS, Mendeleev ADEQUATE.
   Built + reviewed at build `2026-07-26.246` (bench); on-device verification owed. The one residual: a
   device-only KEEPER guard (Loki NB-post-endHold-scroll-realize) is `{skip}` in jsdom — exercised on device.
+
+- Pre-commit runner git-env boundary hardening LANDED — 2026-07-26. tools/hooks/run-checks.mjs now strips
+  git's location env vars (GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE, GIT_PREFIX, GIT_COMMON_DIR,
+  GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES) ONCE at the boundary — `stripGitLocationEnv(process.env)`
+  before reading git config or spawning the test suite — so no FUTURE git-shelling test can reintroduce the
+  ambient-GIT_DIR corruption (a throwaway-repo git write escaping to the real repo, flipping it bare/leaking
+  config) by forgetting the per-call cleanGitEnv. This is the structural belt to the per-call cleanGitEnv
+  suspenders in tools/mutation-sweep.mjs — the belt makes the class impossible. Guarded by
+  test/run-checks-strips-git-env.test.js, a self-validating gate: its CONTROL corrupts an ambient throwaway
+  repo under a poisoned GIT_DIR; its TREATMENT through the runner boundary stays pristine; deleting the
+  boundary line reds it. Authored + Poirot-SHIP-reviewed in a separate task-chip session (branch
+  claude/pensive-faraday-0d5932); grafted onto main — the branch was stale (pre-Stage-6a), so only the two
+  boundary files + their Brunel/Poirot records were taken, never the branch's diverged tree. Build 2026-07-26.249.
