@@ -2,17 +2,31 @@
 
 Type: plan
 
-<!-- vitruvius-gate {"plan_type":"feature","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:361-375"],"callee_ranges":[],"affected_contracts":["test/swipe-invariants.test.js:339","test/swipe-invariants.test.js:391","Claude/Decisions/PolicyLedger.mjs:15"],"staged_records":["Claude/Plans/PLAN-swipe-reveal.md","Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Decisions/PolicyLedger.mjs"],"blocking_questions":["SR","SC","PS","OB","OR"]} -->
+<!-- vitruvius-gate {"plan_type":"feature","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:361-375"],"callee_ranges":[],"affected_contracts":["test/swipe-invariants.test.js:339","test/swipe-invariants.test.js:391","Claude/Decisions/PolicyLedger.mjs:15"],"staged_records":["Claude/Plans/PLAN-swipe-reveal.md","Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Decisions/PolicyLedger.mjs"],"blocking_questions":["SR","SC","PS","OB","OR","VR"]} -->
 
-Status: **DRAFT — for Charpy** (2026-07-26). First Stage-6 slice ("Stage 6a"). Behavior-CHANGING:
-it closes the two standing known-red supersession policies (`KR-swipe-source-rerender`,
+Status: **DRAFT — for Charpy** (2026-07-26, Loki-corrected r2). First Stage-6 slice ("Stage 6a").
+Behavior-CHANGING: it closes the two standing known-red supersession policies (`KR-swipe-source-rerender`,
 `KR-swipe-scroll-restore`). Grounded against HEAD: `js/app.js` `begin()`/`start()`/`settle()`/
-`runFinalize()`; the two `{ todo }` tests in `test/swipe-invariants.test.js`; `Claude/Decisions/
+`runFinalize()`/`finalize()`; `js/browse.js` `beginHold()`/`endHold()`/`showPage()`; `js/virtuallist.js`
+`deactivate()`; the two `{ todo }` tests in `test/swipe-invariants.test.js`; `Claude/Decisions/
 PolicyLedger.mjs`; the parent plan-of-record `Claude/Plans/PLAN-swipe-reveal.md` §3.7/§7 step 6 and the
 subsystem addendum `Claude/Subsystems/swipe-reveal.md`. Passes the wired Vitruvius authoring gate
 (machine `vitruvius-ledger`/`vitruvius-coverage` blocks present; single-owner rows). Sub-slice of
 `PLAN-swipe-reveal.md` §7 step 6; the rest of step 6 (finalization/reveal centralization) is deferred to
 Stage 6b/7 (§11), with reasons.
+
+> **Correction (2026-07-26, Loki KILL on the `recover-before-arm` promise,
+> `Claude/Loki/STRIKE-swipe-stage6-recover-before-arm.md`, input `66f1d30`).** A prior draft ordered the
+> recovery as release-hold-THEN-render, frozen from the current code and mislabeled parity. On a
+> VIRTUALIZED browse->browse source that inverts the promise: `dropRowHold()` -> `Browse.endHold()`
+> deactivates the suspended source controller and dematerializes its kept rows (`virtuallist.js`
+> `deactivate()`), so the recovery re-renders the page from nothing and the successor's `start()` snapshots
+> a rebuilt, cover-less grid — the .178/.202 wrong-content class the hold exists to prevent. The abort the
+> draft claimed to "mirror" releases the hold LAST (in `finalize()`'s `finally`, after `runFinalize()`
+> renders+scrolls); the draft transplanted the middle restore pair without that envelope. This revision
+> moves the hold release to LAST (§6), reclassifies `dropRowHold`'s position as CHANGED not parity (§2),
+> corrects §8's requirement to release-after-RECOVER, and adds a virtualized-source coverage cell VR (§9)
+> the small-list classic fixtures could not reach.
 
 ## Applicability
 
@@ -59,7 +73,7 @@ decision, not a conflict resolution.**
 |---|---|---|---|---|
 | `PolicyLedger.mjs` `KR-swipe-scroll-restore` | "Superseding a live drag must restore the starting document scroll." removalTrigger: "Stage 6 finalization implements the scroll restore; the test then goes green and this entry is removed." | Enforced known-red policy (§4.19 gate) | Implements it (§3, cell SC) | Remove the entry; drop the `{ todo }` marker (§10) |
 | `PolicyLedger.mjs` `KR-swipe-source-rerender` | "Superseding a live browse->browse drag must re-render the SOURCE into #browse." removalTrigger: "Stage 6 (or the swipe rewrite) implements the source re-render; the test then goes green and this entry is removed." | Enforced known-red policy (§4.19 gate) | Implements it (§3, cell SR) | Remove the entry; drop the `{ todo }` marker (§10) |
-| `PLAN-swipe-reveal.md` §3.7 (SUPERSESSION) | "a new gesture beginning while a session is ARMED or DRAGGING synchronously recovers the old session as superseded / pre-stack — restore the source, return its Browse lease, tear down its movers BY OWNERSHIP, release its listeners — and only then arms the new session." Plus the flagged deliberate difference: restore the starting scroll (today's hard reset does not). | Plan-of-record (strategic) | Implements the two MISSING deltas (source re-render + scroll restore); lease return / mover teardown / listener release already exist (§2) | Annotate §7 step 6 as slice 6a done, 6b deferred (§10) |
+| `PLAN-swipe-reveal.md` §3.7 (SUPERSESSION) | "a new gesture beginning while a session is ARMED or DRAGGING synchronously recovers the old session as superseded / pre-stack — **restore the source, return its Browse lease**, tear down its movers BY OWNERSHIP, release its listeners — and only then arms the new session." Plus the flagged deliberate difference: restore the starting scroll (today's hard reset does not). | Plan-of-record (strategic) | Implements the two MISSING deltas (source re-render + scroll restore) IN §3.7's own order — **restore the source BEFORE returning the Browse lease** (endHold inside the restore envelope, §6). The listener release / mover teardown / pane disposal already exist; the lease-return CALL exists but its POSITION moves (§2). | Annotate §7 step 6 as slice 6a done, 6b deferred (§10) |
 | `PLAN-swipe-reveal.md` I11 / I20 / I18 | I20: a superseding gesture recovers the old session pre-stack and fully releases it before the new arms, and only the new session may thereafter mutate transforms/stacks/scroll/panes. I11: after every exit the stack top, visible screen and authoritative settled descriptor AGREE; for supersession the authoritative descriptor is the SOURCE (pre-stack). I18: recovery is keyed on PHASE; supersession is pre-stack. | Invariants (strategic) | Honors: recovery restores the source screen+content and leaves the stack on the source (pre-stack); §3, cells PS/OR | — |
 | `PLAN-swipe-reveal.md` §7 step 6 | "Centralize finalization and reveal ordering (I10, I17)." | Plan-of-record (staging) | Delivers the supersession half; the finalization/reveal-centralization half is Stage 6b/7 (§11) | Annotate as sliced (§10) |
 | `Subsystems/swipe-reveal.md` §20 | "Two stage-2 NEW-POLICY todos remain red by design: I20 superseding a live drag restores starting scroll; I11/I20 superseding a live browse->browse drag re-renders the SOURCE into #browse." | Subsystem addendum | Both close | Remove both from §20 (§10) |
@@ -82,15 +96,24 @@ Behavioral ownership, not function names.
   session is recovered **pre-stack** before the new one arms: the source screen is re-rendered into
   `#browse` **iff** the old session clobbered it (`d.clobbered`, the Stage-5 `sourceWasClobbered` carrier,
   app.js:470), and the document scroll is restored to the old session's start (`d.scroll0`, app.js:393).
-- This is the same restore pair the normal abort already performs (app.js:1091-1093 / 1116-1117); the
-  recovery step reuses `applyScreen(currentDesc(), { render, resetScroll: false })` + `window.scrollTo(0,
-  scroll0)`, not a new mechanism.
+- The recovery reuses the abort's `applyScreen(currentDesc(), { render, resetScroll: false })` +
+  `window.scrollTo(0, scroll0)` pair — but that pair is only the MIDDLE of the abort's three-part
+  choreography, which the Browse hold defines. It must run **inside the hold envelope**: render + scroll
+  **while the hold is still held**, then release the hold (`dropRowHold()` -> `Browse.endHold()`) LAST, so
+  `endHold` performs its single realization against the settled scroll reusing the SUSPENDED source rows —
+  exactly as `finalize()`'s `finally` releases the hold after `runFinalize()` (app.js:1138-1139). This is
+  the fracture the Loki strike found: the middle pair without the envelope rebuilds a virtualized source.
+- **`dropRowHold()`'s POSITION changes** (it is NOT parity): it moves from before the recovery render
+  (today's `render:false` hard reset, app.js:365) to AFTER the recovery render+scroll. The CALL is
+  unchanged; only its ordering is (§6). This is the one existing teardown step this slice's added render
+  makes load-bearing.
 
 **Stays exactly as today (parity — already correct, do NOT re-touch):**
-- Listener release (`releaseGesture()`), Browse hold return (`dropRowHold()`), session-identity drop
-  (`session = null`), inline-style reset (`resetSwipeStyles()`), and superseded-pane disposal — the
-  existing hard reset already tears the old session down by ownership. The `I2/I20 — superseding a LIVE
-  drag disposes its pane` test is GREEN and must stay green (cell PD).
+- Listener release (`releaseGesture()`), session-identity drop (`session = null`), inline-style reset
+  (`resetSwipeStyles()`), and superseded-pane disposal — the existing hard reset already tears the old
+  session down by ownership. The `I2/I20 — superseding a LIVE drag disposes its pane` test is GREEN and
+  must stay green (cell PD). (The Browse hold RETURN call also already exists, but its POSITION is a change,
+  not parity — see above.)
 - Stale move/end/cancel from the superseded gesture stay harmless (the `I20 — stale ... cannot touch the
   new session` test is GREEN and must stay green, cell ST).
 - The ORPHAN-pane branch (`d === null` but a leftover `.nav-ghost` exists): disposed as `hard-reset`, with
@@ -127,13 +150,24 @@ reason/phase matrix (lease-invalid / destination-gone / finalize-threw; post-sta
 3. **Pre-stack authority.** The recovery does **not** mutate `navStack`/`fwdStack`; the authoritative
    settled descriptor remains the SOURCE (I11 for `abort`/`pre-stack recovery`; I18 phase = pre-stack).
 
+**Item 4 — the hold envelope (the load-bearing ordering).** The source re-render + scroll restore run while
+the Browse hold is STILL HELD, and the hold is released (`dropRowHold()` -> `Browse.endHold()`) only AFTER
+them. On a virtualized source, releasing the hold first deactivates the suspended source controller and
+dematerializes its kept rows (`browse.js` `endHold` line ~174 -> `virtuallist.js` `deactivate()`), so the
+re-render rebuilds the page from nothing and the successor's `start()` snapshots a cover-less grid. Holding
+until after the render lets `endHold` do its single realization against the settled scroll REUSING the kept
+rows (`browse.js` `showPage`'s `returningFromSwipe` defer, ~line 300-311; `endHold` contract "the ONE
+realization the gesture gets, against the settled scroll", ~line 149-179) — which is why the normal abort
+releases the hold in `finalize()`'s `finally`, after `runFinalize()` (§6, cell VR).
+
 **Basis (U11).** Items 1-2 are new policy explicitly ratified in `PLAN-swipe-reveal.md` §3.7 and pinned as
-enforced known-red entries in `PolicyLedger.mjs`; item 3 is invariant I11/I18. The mechanism (which
-`applyScreen`/`scrollTo` calls) is fixed only because exactly one design satisfies the invariant while
-preserving parity with the normal abort (mirror the abort's restore pair); the *locus* (a named
-`recoverSuperseded` helper vs inline in `begin()`) is a **recommendation**, not a requirement — any
-structure that produces the three effects at the right point (§6) satisfies this contract. There is one
-admissible behavior; no other section contradicts it.
+enforced known-red entries in `PolicyLedger.mjs`; item 3 is invariant I11/I18; item 4 is the abort's proven
+choreography (app.js `finalize()` `finally` at ~1138-1139) and §3.7's own sequence ("restore the source,
+return its Browse lease"). The mechanism is fixed because exactly one design satisfies the invariant:
+reproduce the abort's full restore ENVELOPE — render + scroll INSIDE the hold, `endHold` LAST — not merely
+its middle pair. The *locus* (a named `recoverSuperseded` helper vs inline in `begin()`) is a
+**recommendation**, not a requirement — any structure that produces the four effects in this order (§6)
+satisfies this contract. There is one admissible behavior; no other section contradicts it.
 
 **Why `d.clobbered` and not a new `sameBrowseHost` field (U4 consumer-now):** the source-rerender
 condition already exists as a live session field — `start()` records `d.clobbered = c.sourceWasClobbered`
@@ -154,13 +188,17 @@ d.scroll0 session-start scroll | geometry | in | begin@S6 | recoverSuperseded@S6
 d.clobbered source-clobbered flag | boolean | in | start@S6 | recoverSuperseded@S6 | recoverSuperseded | per-gesture | SR and NC tests
 d.live drag-began flag | boolean | in | start@S6 | recoverSuperseded@S6 | recoverSuperseded | per-gesture | OB boundary test
 currentDesc source descriptor | object | in | navStack@S6 | recoverSuperseded@S6 | recoverSuperseded | per-gesture | PS pre-stack test
+Browse row hold token | resource | in | start@S6 | dropRowHold@S6 | dropRowHold | per-gesture | VR realization ordering test
 source re-render into browse host | domeffect | out | recoverSuperseded@S6 | browse host@S6 | recoverSuperseded | per-gesture | SR test
 session-start scroll restore | domeffect | out | recoverSuperseded@S6 | document scroll@S6 | recoverSuperseded | per-gesture | SC test
 ```
 
 Notes: `currentDesc` reads the source because supersession is pre-stack (the stack is unmutated), so it is
 an `in` read the recovery relies on, not a value it produces. The nav stack is deliberately absent as a
-crossing — it is an invariant the recovery must NOT write (cell PS), not a value it moves.
+crossing — it is an invariant the recovery must NOT write (cell PS), not a value it moves. The **Browse row
+hold token** (taken in `start()` via `takeRowHold`, stored `session.hold`) is consumed by `dropRowHold`
+(`Browse.endHold`), which MUST run after the source re-render + scroll restore so `endHold` realizes the
+suspended source rows rather than dematerializing them (cell VR; §6 step 4).
 
 ## 5. Lifecycle ownership — the superseded-session endpoint
 
@@ -172,10 +210,12 @@ Who creates, borrows, mutates, releases, restores, and destroys, at the superses
   `window` scroll — borrowed-real; it never removes them.
 - **Mutate:** the recovery re-renders the source into the borrowed `#browse` (only when `d.clobbered`) and
   writes the document scroll to `d.scroll0`. It writes no session state onto the old `d` beyond reading it.
-- **Release:** the old session's listeners (`releaseListeners`), Browse hold (`dropRowHold`), and identity
-  (`session = null`) are released — UNCHANGED from today.
+- **Release:** the old session's listeners (`releaseListeners`) and identity (`session = null`) are
+  released BEFORE the recovery — UNCHANGED. The Browse hold (`dropRowHold` -> `endHold`) is released LAST,
+  AFTER the recovery render+scroll — its POSITION is the one release that CHANGES (§2, §6 step 4), because
+  `endHold` outside the restore envelope dematerializes the suspended source rows.
 - **Restore:** the recovery is the RESTORE step this slice adds — source content and document scroll to
-  the session-start state (§3).
+  the session-start state, performed while the hold is still held (§3 item 4).
 - **Destroy:** the old session's owned pane is disposed — UNCHANGED (the existing hard reset;
   `resetSwipeStyles()` + the leftover-`.nav-ghost` handling). The recovery adds no pane lifecycle method;
   `release()`/`dispose(reason)` are Stage 6b (§11).
@@ -189,33 +229,60 @@ paint barrier (there is none on this path today — §11 keeps I10 reveal-gating
 
 ## 6. Ordering contract
 
-The proven correctness invariant is **recover-before-arm**; the rest is the existing supersession order.
+Two correctness invariants: **recover-before-arm** (cell OR) and **hold-release-after-recover** (cell VR).
+The current code's order is the DEFECT to re-plan here, not an invariant to preserve — adding the recovery
+render makes the position of `dropRowHold` load-bearing (§2). Required order:
 
 1. **Detect supersession** — `begin()` sees `d` non-null (or a leftover pane) while `finishing` is false
    (I17(a): a settling/finalizing/revealing session still REJECTS; unchanged).
-2. **Release the old session** — `releaseGesture()`, `dropRowHold()`, `session = null` (unchanged order).
-3. **Recover pre-stack** — restore the source screen; re-render the source into `#browse` iff
-   `d.clobbered`; `window.scrollTo(0, d.scroll0)`; dispose the old pane / reset styles.
-4. **Only then arm the successor** — allocate the new `d`, set `session = d`, `bindGesture(target)`.
+2. **Release the old session's listeners + identity** — `releaseGesture()`, `session = null`. Do NOT drop
+   the Browse hold yet (moved from here; §2). Reset the old inline styles / dispose the old pane
+   (`resetSwipeStyles()` and the leftover-`.nav-ghost` handling) — these do not re-render, so their position
+   relative to the hold is unconstrained.
+3. **Recover pre-stack, INSIDE the hold envelope** — while `session.hold` is still held (so the source page
+   stays SUSPENDED with its rows kept, `browse.js` `showPage` `holdRows` suspend branch): re-render the
+   source into `#browse` iff `d.clobbered` (`applyScreen(currentDesc(), { render: d.clobbered,
+   resetScroll: false })`), then restore the scroll (`window.scrollTo(0, d.scroll0)`).
+4. **Release the hold LAST** — `dropRowHold()` -> `Browse.endHold()`, which performs its single realization
+   against the now-settled scroll, REUSING the suspended source rows (`browse.js` `endHold`, ~149-179).
+   This mirrors `finalize()`'s `finally` (app.js:1138-1139), which drops the hold only after `runFinalize()`
+   has rendered and scrolled.
+5. **Only then arm the successor** — allocate the new `d`, set `session = d`, `bindGesture(target)`.
 
-**Correctness requirement (cell OR):** step 3 MUST precede step 4. The successor's `start()` (fired on its
-first `move()`) snapshots `#browse` for its own ghost (`revealBase = snapBrowse(true)`, app.js:429; the
-app-ghost clone, swipe.js `ghostApp`). If the source re-render ran AFTER the successor armed, the successor
-would snapshot the stale DESTINATION content, reintroducing the wrong-page/wrong-tap class .178 fixed. The
-current code already re-renders (as `render:false`) before arming; this slice keeps that position and only
-changes `false` -> `d.clobbered` and adds the scroll write, so the ordering holds by construction — but it
-is asserted (cell OR) so a future reorder reddens.
+**Correctness requirement A (cell OR) — recover before arm.** Steps 3-4 MUST precede step 5. The
+successor's `start()` (fired on its first `move()`) snapshots `#browse` for its own ghost
+(`revealBase = snapBrowse(true)`, app.js:429; the app-ghost clone, swipe.js `ghostApp`). If the source
+re-render ran AFTER the successor armed, the successor would snapshot the stale DESTINATION content,
+reintroducing the wrong-page/wrong-tap class .178 fixed.
 
-Incidental (not a new universal order): the micro-order between `applyScreen` and `scrollTo` mirrors the
-normal abort (render, then scroll) and is preserved, not reinvented.
+**Correctness requirement B (cell VR) — hold released after recover.** Step 4 MUST follow step 3 on a
+VIRTUALIZED source. If `dropRowHold()` -> `endHold()` runs BEFORE the recovery render (the current code's
+order), `endHold` deactivates the suspended source controller and dematerializes every kept row
+(`virtuallist.js` `deactivate()`), so the step-3 render rebuilds the page from nothing and the successor
+snapshots a cover-less grid (`ghostApp`'s `freezeArt` then strips `data-art`, so the skeletons never fill).
+The Loki strike measured this against the real `js/browse.js`/`js/virtuallist.js`: released-first yields
+`keptOriginalRows=0, freshRebuiltRows=13, 48 covers released`; released-last yields `keptOriginalRows=13`.
+The small-list classic fixtures cannot see it (a cache hit reuses the page node with rows intact, no
+suspend/`endHold` realization), which is why cell VR uses a forced-virtual source (§9).
+
+Incidental (not a new universal order): the micro-order between `applyScreen` and `scrollTo` (render, then
+scroll) mirrors the normal abort and is preserved, not reinvented.
 
 ## 7. Runtime dependency policy
 
 This slice runs entirely inside `js/app.js` (which reads DOM globals bare by design — subsystem §16, trap
 T11). It introduces **no** new ambient dependency and **no** module-load-time DOM access. It reuses the
-existing app-side calls: `applyScreen` (nav.js), `currentDesc()`, `window.scrollTo`. No value is cached; no
-cache owner or invalidation policy is created. `js/swipe.js` (the DOM-free classification/construction
-module) is not touched, so its `require()` no-DOM gate is unaffected.
+existing app-side calls: `applyScreen` (nav.js), `currentDesc()`, `window.scrollTo`, `dropRowHold` ->
+`Browse.endHold`. No value is cached; no cache owner or invalidation policy is created. `js/swipe.js` (the
+DOM-free classification/construction module) is not touched, so its `require()` no-DOM gate is unaffected.
+
+**Async N/A holds, and why the corrected order preserves it (addresses Loki NB1).** The recovery is
+synchronous. `endHold` un-suspends the VirtualList scroll dispatcher (`setScrollSuspended(false)`), so a
+scroll write AFTER `endHold` could schedule a rAF'd realize that lands after the successor arms — but §6
+step 4 places `endHold` AFTER the step-3 `window.scrollTo`, so the scroll write occurs while the dispatcher
+is still SUSPENDED and `endHold`'s realization is the single synchronous one against the settled scroll. No
+recovery-window scroll write survives to schedule a post-arm realize; `async_change` stays false by
+construction of the order.
 
 ## 8. Coverage Model (Mendeleev catalog)
 
@@ -226,9 +293,9 @@ reason. Absence is a defect; a dimension not listed is an omission.
 |---|---|---|
 | Lifecycle / phases | Yes | The superseded-session endpoint restores source+scroll before the successor arms (cells OR, PS). |
 | Identities | N/A | No identifier is created, changed, or reinterpreted; `d.id`/`sessionSeq` semantics are unchanged. |
-| Ordering | Yes | Recover-before-arm (cell OR); render-then-scroll micro-order preserved. |
-| Resources: acquired / owner / endpoint | Yes | The old session's listeners/hold/pane are released and its ownership ends before the new arms (cells PD, and I20 regression). |
-| Async operations | N/A | The recovery is synchronous in `begin()`; a superseded gesture is pre-`settle()`, so the old session has no scheduled rAF/timer/`transitionend` (Applicability async_change:false). |
+| Ordering | Yes | Two ordering invariants: recover-before-arm (cell OR) AND hold-release-after-recover — the Browse hold (`endHold`) drops only after the source re-render + scroll, so a virtualized source's suspended rows are realized, not dematerialized (cell VR). Render-then-scroll micro-order preserved. |
+| Resources: acquired / owner / endpoint | Yes | The old session's listeners + identity release BEFORE the recovery; the Browse hold releases LAST (after the recovery render+scroll, cell VR); the pane is disposed exactly once (cell PD); ownership ends before the new arms (I20 regression). |
+| Async operations | N/A | The recovery is synchronous in `begin()`; a superseded gesture is pre-`settle()`, so the old session has no scheduled rAF/timer/`transitionend`. `endHold`'s realization is synchronous and — because it runs after the scroll write while the scroll dispatcher is still suspended (§6 step 4, §7) — schedules no post-arm rAF realize (Loki NB1 addressed by ordering, not a new async surface; Applicability async_change:false). |
 | Stale completions | Yes (parity) | Stale move/end/cancel from the superseded gesture stay harmless (cell ST, existing green). |
 | Normal completion | N/A | This slice does not touch the normal `settle()`/`runFinalize()` commit/abort path; that behavior is unchanged and its existing tests (I7, I11 abort) must stay green as regression. |
 | Recovery authority boundary | Yes | Pre-stack: the stack is never mutated; the authoritative descriptor stays the SOURCE (cell PS; I11/I18). |
@@ -238,7 +305,7 @@ reason. Absence is a defect; a dimension not listed is an omission.
 | Invariants | Yes | I7 (superseded scroll), I11/I18 (pre-stack authority), I2 (pane once), I20 (supersede + stale-harmless). |
 | Mutation cases | Yes | Each cell in §9 names the mutation that reddens it (misattribution/ordering, not only omission). |
 | Known-red | Yes | `KR-swipe-source-rerender` (SR) and `KR-swipe-scroll-restore` (SC) flip green and are scrubbed (§10). |
-| Composition | Yes | The restored source `#browse` is what the SUCCESSOR's `start()` snapshots (cell OR) — the recovery composes with the next gesture's construction. |
+| Composition | Yes | The restored source `#browse` is what the SUCCESSOR's `start()` snapshots — with its ORIGINAL realized rows and loaded covers on a virtualized source, not a rebuilt grid (cells OR, VR). The recovery composes with the next gesture's `ghostApp` construction AND with the Browse hold/VirtualList suspend-realize lifecycle. |
 | Contract claims (exact schema) | N/A | No exact-key contract changes (Applicability contract_shape:false); `classifyTransition`/`buildConstruction` shapes are untouched. |
 | Concurrency | Yes (parity) | I17: `begin()` still REJECTS while `finishing` (a settling/finalizing/revealing session is not superseded); the recovery runs only when `finishing` is false and a live session or orphan pane exists. |
 
@@ -256,12 +323,13 @@ existing `{ todo }` tests made active.
 | PS | Supersession is PRE-STACK: stack + authoritative descriptor stay on the source | supersede, then a 2nd back-swipe must offer the SAME transition | recovery pushes/pops the nav stack -> the next gesture reports a different transition pair | wiring |
 | OB | An ORPHAN pane hard-reset (no live session, `d===null`) attempts no session-scroll restore and disposes as hard-reset | a leftover `.nav-ghost` with `d` null at `begin()` | recovery reads `d.scroll0`/`d.clobbered` unconditionally -> throws / spurious scroll on the orphan path | wiring |
 | OR | The source re-render + scroll restore PRECEDE the successor arming, so the new `start()` snapshots the RESTORED source `#browse` | supersede a live browse->browse drag, then drive the new gesture live | move the recovery AFTER `bindGesture` -> the new ghost/`revealBase` snapshots the stale destination | wiring (intermediate-state, §4.7) |
+| VR | On a VIRTUALIZED browse->browse source, the successor snapshots the ORIGINAL rows (the hold is released AFTER the recovery render, so the suspended rows are realized, not dematerialized) | **forced-virtual** source (the `test/browse-virtual.test.js` recipe: injected metrics, >600-item list) scrolled deep with its realized rows identity-stamped; live browse->browse drag; supersede | `dropRowHold()`/`endHold` moved BEFORE the recovery render (the current order) -> the source controller deactivates, kept rows dematerialize, and the snapshot reads `keptOriginalRows=0, freshRebuiltRows>0` instead of every original row surviving | wiring (virtualized fixture — drives real `browse.js`/`virtuallist.js`) |
 | NC | A non-clobber supersession (overlay source) issues NO spurious `#browse` re-render but still restores scroll when live | live overlay-source (or home->overlay) drag; supersede | recovery re-renders unconditionally (ignores `d.clobbered`) -> a stray `browse.render` on an overlay supersession | wiring |
 | PD | Supersession still disposes the superseded pane exactly once (I2 parity) | live drag; supersede; settle | recovery strands the old pane -> `ghosts>0` | wiring (existing green) |
 | ST | Stale move/end/cancel from the superseded gesture stay harmless (I20 parity) | supersede; dispatch the old target's event tail | recovery leaves the old listeners bound -> a stale touchmove drags the new session | wiring (existing green) |
 
 **Machine-readable coverage (gate — `vitruvius-coverage`).** The matrix as `id | behavior | fixture |
-mutation | layer`; each blocking question (SR/SC/PS/OB/OR) has a complete row.
+mutation | layer`; each blocking question (SR/SC/PS/OB/OR/VR) has a complete row.
 
 ```vitruvius-coverage
 # id | behavior | fixture | mutation | layer
@@ -270,6 +338,7 @@ SC | superseding a live drag restores the session-start document scroll | live b
 PS | supersession is pre-stack so the nav stack and authoritative descriptor stay on the source | supersede then a second back-swipe offers the same transition | recovery mutates the nav stack by push or pop | wiring
 OB | an orphan pane hard-reset with no live session attempts no session-scroll restore and disposes as hard-reset | a leftover nav-ghost with d null at begin | recovery reads d.scroll0 or d.clobbered unconditionally on the orphan path | wiring
 OR | the source re-render and scroll restore precede the successor arming so the new start snapshots the restored source browse host | supersede a live browse-to-browse drag then drive the new gesture live | the recovery is moved after bindGesture so the new ghost snapshots the stale destination | wiring
+VR | on a virtualized browse-to-browse source the successor snapshots the original rows because the Browse hold is released after the recovery render | forced-virtual deep-scrolled source with realized rows identity-stamped then a live browse-to-browse drag then supersede | dropRowHold and endHold moved before the recovery render so the suspended source controller deactivates and kept rows dematerialize to a rebuilt cover-less grid | wiring
 NC | a non-clobber supersession issues no spurious browse re-render but still restores scroll when live | live overlay-source drag then supersede | recovery re-renders unconditionally ignoring d.clobbered | wiring
 PD | supersession still disposes the superseded pane exactly once | live drag then supersede then settle | recovery strands the old pane | wiring
 ST | stale move end and cancel from the superseded gesture stay harmless | supersede then dispatch the old target event tail | recovery leaves the old listeners bound | wiring
@@ -350,6 +419,29 @@ Each deferral names the consumer that does not yet exist and the stage that intr
 - **The headline aborted-swipe repaint/flash.** Untouched and independent (`PLAN-swipe-reveal.md` §6;
   memory `tomeroam-swipe-repaint-saga`). Parity for the flash is the bar; this slice adds no paint-gating
   to the supersession path.
+
+### Loki lesser planes (NB1-NB4) — disposition
+
+The strike (`Claude/Loki/STRIKE-swipe-stage6-recover-before-arm.md` §6) named four un-prosecuted planes.
+Disposition:
+
+- **NB1 (recovery-window scroll writes schedule post-arm rAF realizes).** FOLDED IN and closed by the
+  corrected order: §6 step 4 places `endHold` (which un-suspends the scroll dispatcher) AFTER the step-3
+  scroll write, so no recovery-window scroll write survives to schedule a post-arm realize (§7, §8 Async).
+- **NB2 (`endHold` replays `heldRepaints` — a mid-drag SWR revalidate can rebuild the source page).**
+  NOTED, out of scope. This is a pre-existing Browse-hold behavior shared IDENTICALLY with the normal abort
+  (which also calls `endHold` in `finalize()`'s `finally` and replays the same `heldRepaints`). It is not
+  introduced by this slice; closing it is a Browse-hold concern independent of supersession. Flagged so a
+  Browse-hold change accounts for it.
+- **NB3 (classic path: step-2 `display:none` round-trip drops decoded covers on iOS — the .194
+  mechanism).** NOTED, out of scope — flash-class. Consistent with the standing flash deferral above; the
+  classic re-show round-trip is the abort's behavior too, and the flash root cause is a separate open
+  investigation. Parity is the bar.
+- **NB4 (a cache-miss source makes the step-3 render async -> the successor could snapshot a
+  placeholder/spinner).** NOTED, out of scope. Shared with the abort (an abort re-render of a cache-evicted
+  source is equally async); the promise's "synchronous restored source" holds for a cache-resident source,
+  which is every path except a mid-drag `clearCache`/eviction. Closing it needs the render to await the
+  fetch — an async change the abort also lacks and this slice does not introduce. Bounded residual, flagged.
 
 ## 12. Sequencing
 
