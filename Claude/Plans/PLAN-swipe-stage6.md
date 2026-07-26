@@ -283,7 +283,26 @@ for the maker/Zelda, not done here.
 
 - **`Claude/Decisions/PolicyLedger.mjs`** — remove `KR-swipe-scroll-restore` and `KR-swipe-source-rerender`
   (both go green; the §4.19 policy-ledger gate requires that a declared known-red still be red, so leaving
-  them would fail CI). The two entries' removalTrigger is exactly this slice.
+  them would fail CI). The two entries' removalTrigger is exactly this slice. After removal `POLICY_LEDGER`
+  holds **no** `knownRed` entry (it held exactly these two).
+- **`tools/mutate.mjs` — mutation anchor `§4.19: a policy-ledger known-red test reference is dangled`
+  (registered at ~`:275-278`).** Its `from` anchor is the literal string `restores the starting scroll'],`,
+  which is line 25 of `PolicyLedger.mjs` inside the `KR-swipe-scroll-restore` entry the bullet above
+  removes. `test/mutation-anchors.test.js` (assertion ~`:50`) requires every registered anchor's `from` to
+  still `includes()` in its target file, so removing the ledger entry without this step reds the
+  mutation-anchor gate at build — a HEAD reference the abort-mirror change never touches but the ledger
+  scrub invalidates (Engineering Contract §4.10 "mutation evidence must remain runnable"; StandardsDocument
+  §6.6). **Resolution (planner's call): DELETE this mutation** in the SAME commit as the ledger removal.
+  Re-pointing it is not available — after 6a no `knownRed` entry remains for it to target (verified: the
+  ledger held exactly the two 6a entries). Record in the commit message which guard is now undefended, per
+  the gate's own remedy text. Confirm `node --test test/mutation-anchors.test.js` is green after both edits.
+  - *Deferred, flagged (Curie/Mendeleev): the policy-ledger gate (`test/policy-ledger-gate.test.js`) loses
+    its only defending mutation when this specimen is deleted.* The gate's three assertions still pass on an
+    empty ledger (verified in review), so nothing reds — but its mutation coverage goes to zero until a
+    future known-red re-seeds it, OR a replacement guard is authored (e.g. a fixture-ledger mutation that
+    does not depend on a live `POLICY_LEDGER` entry). This slice adds no known-red, so it cannot re-seed the
+    specimen itself; restoring structural coverage of the policy-ledger gate is a coverage-audit question,
+    not a 6a build obligation. Out of scope here, named so it is a decision owed, not a silent loss.
 - **`test/swipe-invariants.test.js`** — drop the `{ todo }` marker on the two tests (`:339`, `:391`) in the
   SAME commit, so they run as active green tests. Do not invert an assertion; they already state the
   required behavior.
