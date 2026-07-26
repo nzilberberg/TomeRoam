@@ -180,9 +180,12 @@ immutability claim. No code change (`0049a13` already conforms); no fresh Loki (
 behavior/contract/coverage change); no Curie/Brunel/Poirot/Mendeleev re-run. There is NO structural hole —
 NON_CONTRACT object-returning seams are unfreezably-live by design, not a gate that failed. **All six gates
 run (Charpy r1–r9 FORGE + r10 FORGE, Curie red, Brunel green, Poirot SHIP, Mendeleev ADEQUATE, Loki HELD
-STONE), zero blocking findings. Bench-verified; NOT pushed — pending a user deploy decision. On-device
-verification FOLLOWS a push (OTA from GitHub Pages delivers the build to the device); it cannot precede or
-gate it.**
+STONE), zero blocking findings. SHIPPED 2026-07-26.** Pushed + CI-green + deployed: build `2026-07-26.243` live on GitHub Pages (the
+git-env tooling fix `e1a0c46` rode on top). **On-device: the user confirmed main-path swipe parity —
+behavior unchanged, which is the PASS condition for this parity-only refactor** (the superseded-drag /
+overlay-commit / NP-source / back→home scenarios were not separately exercised). **Stage 5 CLOSED** —
+supersedes every "not pushed" / "deploy deferred" note above. The visible swipe-behavior changes
+(scroll-restore, source-rerender) remain Stage-6 new-policy work.
 
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
