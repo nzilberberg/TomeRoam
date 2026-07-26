@@ -187,6 +187,20 @@ overlay-commit / NP-source / back→home scenarios were not separately exercised
 supersedes every "not pushed" / "deploy deferred" note above. The visible swipe-behavior changes
 (scroll-restore, source-rerender) remain Stage-6 new-policy work.
 
+**Stage 6a SUPERSESSION RECOVERY — SCHEME-COMPLETE (2026-07-26), bench, not pushed.** The two known-red
+supersession policies are IMPLEMENTED: begin() recovers the source INSIDE the Browse hold (re-render iff
+`d.clobbered` + restore `d.scroll0` while rows stay suspended), releases the hold LAST, nulls session/`d`
+LAST, then arms — so a superseded live browse→browse drag restores the source page + starting scroll even on
+a virtualized library. Ran under full automation: Vitruvius→Charpy (r1 TEMPER F1-scrub, r2 FORGE, **Loki
+KILL** on the release-before-recover order → Vitruvius → Charpy r3 TEMPER F3-coupled-order → r4 FORGE), a
+fresh **Loki HELD_STONE** on the corrected promise, Curie red-first (VR/OR/NC + OB-home for Poirot F1),
+Brunel green, **Poirot PASS** (after a fix-then-ship F1 orphan-scroll / F2 label round), **Mendeleev
+ADEQUATE**. §10 scrub done: SR/SC `{todo}` retired to live guards; both PolicyLedger entries + the dangled
+mutation removed; PolicyLedger now empty. Completion gate (`stage-gate-check`) passes 6/6. Build
+`2026-07-26.246`; **not pushed — on-device verification owed** (incl. the device-only KEEPER guard, Loki
+NB-post-endHold-scroll-realize, `{skip}` in jsdom). **6b deferred** with reasons (finalization /
+`sameBrowseHost` / pane-lifecycle / finishing-gate — PLAN-swipe-stage6.md §11).
+
 **Contract = DURABLE ENGINEERING CONTRACT v2 (three-layer: Core / Subsystem / Ledger).**
 `Claude/EngineeringContract.md` is the Core; `Claude/Subsystems/swipe-reveal.md` is the first
 subsystem addendum; this DecisionLog is the Ledger. **Mechanized sections (gates, not vigilance):**

@@ -331,12 +331,14 @@ const MUTATIONS = [
     file: 'js/swipe.js',
     from: '    const decorations = Object.freeze((c.decorations || []).map((d) => Object.freeze({ ...d })));',
     to:   '    const decorations = Object.freeze(c.decorations);' },
-  // §4.19 policy ledger — a known-red ledger reference that no longer matches its test must be
-  // caught (untracked known-red / stale exception / dangling reference).
-  { name: '§4.19: a policy-ledger known-red test reference is dangled (-> policy-ledger gate)',
-    file: 'Claude/Decisions/PolicyLedger.mjs',
-    from: "restores the starting scroll'],",
-    to:   "restores the starting scroll DANGLED']," },
+  // §4.19 policy-ledger dangling-reference mutation REMOVED (stage 6a §10 scrub): its `from`
+  // anchored the literal `restores the starting scroll'],` on the KR-swipe-scroll-restore
+  // PolicyLedger entry, which this commit removes. Re-pointing is not available — after the
+  // scrub no `knownRed` entry remains for it to target. Deleting it here keeps
+  // test/mutation-anchors.test.js green (its `from` would otherwise rot). This leaves the
+  // policy-ledger gate (test/policy-ledger-gate.test.js) without a defending mutation; its
+  // three assertions still pass on an empty ledger, but restoring structural mutation
+  // coverage of that gate is a coverage-audit question (plan §10), not a 6a build obligation.
   // ── SWIPE stage 5: the buildConstruction seam (js/swipe.js) + the L3 adapter (js/app.js) ─
   // Every §8 cell of PLAN-swipe-stage5.md that this stage introduced. The recipe/contract
   // mutations bite js/swipe.js (recipe layer, test/swipe-construction.test.js; contract layer,

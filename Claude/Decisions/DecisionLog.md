@@ -830,3 +830,19 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   scope re-opens ratification and routes to Charpy to re-gate. No general immutability gate for NON_CONTRACT
   object-returning seams is in scope — NON_CONTRACT returns cannot be deep-frozen (live DOM), so there is no
   hole to close there.
+
+- Stage 6a (swipe supersession recovery) IMPLEMENTED and green — 2026-07-26. On a gesture superseding a live
+  drag, begin() now recovers the old session's source INSIDE the Browse hold — re-render into #browse iff
+  `d.clobbered`, restore `d.scroll0` while the rows stay suspended — then releases the hold LAST
+  (`dropRowHold`→`endHold` after the render+scroll), nulls the session/`d` identity LAST, and only then arms,
+  so the successor's start() snapshots the restored, kept-row source even on a virtualized library. Closes
+  the two supersession known-reds (KR-swipe-scroll-restore, KR-swipe-source-rerender); their tests
+  (I20, I11/I20) are now live green guards and both PolicyLedger entries + the dangled-anchor mutation are
+  removed. `begin()`'s recovery `applyScreen` forces `resetScroll:false` only when a live session exists
+  (`resetScroll: d ? false : undefined`), preserving the orphan hard-reset's reset-to-top (Poirot F1). Scope
+  bounded to these two policies (Stage 6a); the larger finalization / `sameBrowseHost` / pane-lifecycle work
+  is deferred to a future 6b with recorded reasons (PLAN-swipe-stage6.md §11). Gates: Charpy FORGE (r4, after
+  a Loki KILL on the original release-before-recover order + an F3 coupled-order TEMPER), Loki HELD_STONE on
+  the corrected promise, Curie red-first (VR/OR/NC/OB-home), Brunel green, Poirot PASS, Mendeleev ADEQUATE.
+  Built + reviewed at build `2026-07-26.246` (bench); on-device verification owed. The one residual: a
+  device-only KEEPER guard (Loki NB-post-endHold-scroll-realize) is `{skip}` in jsdom — exercised on device.

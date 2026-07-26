@@ -329,18 +329,13 @@ test('I7 — an aborted browse->browse swipe issues a scroll restore', async () 
   } finally { h.dispose(); }
 });
 
-// KNOWN RED — the frozen model's one deliberate behaviour change (§8A / §5 of the
-// generated model). Today's hard reset does releaseGesture, dropRowHold, d = null,
-// resetSwipeStyles and applyScreen({render:false}) — and NO scroll restore. A
-// superseded browse->browse drag has already run its mid-drag render, whose
-// positionOnEnter moved the document, so the user is left at the DESTINATION's scroll
-// after a gesture that navigated nowhere. The assertion below states what the model
-// REQUIRES; it is deliberately not inverted to bless the current behaviour.
+// LIVE GUARD (Stage 6a, closed KR-swipe-scroll-restore). The supersession pre-stack
+// recovery restores the session-start document scroll (app.js begin(): window.scrollTo(0,
+// d.scroll0) after the source re-render, inside the hold envelope). A superseded
+// browse->browse drag has run its mid-drag render, whose positionOnEnter moved the
+// document; the recovery puts the scroll back, so a gesture that navigated nowhere leaves
+// the scroll where it started. Was `{ todo }` (new policy) through stage 5; Brunel built it.
 test('I20 — superseding a live drag restores the starting scroll',
-  { todo: 'NEW POLICY, not yet implemented. app.js begin()\'s hard reset performs no '
-        + 'scroll restore, so a superseded browse->browse drag is left at the '
-        + 'destination\'s scroll. Closing this is part of the rewrite, not of extraction '
-        + 'parity, and it needs its own device check.' },
   async () => {
     const h = boot({ fakeTimers: true });
     try {
@@ -378,22 +373,14 @@ test('supersession CONTROL — the mid-drag render really does put the destinati
   } finally { h.dispose(); }
 });
 
-// KNOWN RED #2 — MEASURED, not argued. Run as a plain test first, it failed with
-//   renders = ["books", "authors", "books"]
-// i.e. the mid-drag render put Books into the shared #browse and NOTHING put Authors
-// back, while applyScreen(currentDesc(), { render: false }) returned the stack and the
-// navbar to Authors. Stack and navbar say one screen, the Browse host shows another.
-//
-// This also CORRECTS the stage-1 model, which labelled supersession's source
-// restoration [parity]. It is not: begin()'s hard reset restores nav selection and
-// top-level visibility only, deliberately passing render:false. The pre-stack recovery
-// row it relies on is itself [policy], so this is new behaviour the rewrite must close.
+// LIVE GUARD (Stage 6a, closed KR-swipe-source-rerender). The supersession pre-stack
+// recovery re-renders the SOURCE into the shared #browse (app.js begin():
+// applyScreen(currentDesc(), { render: d.clobbered }) inside the hold envelope), so the
+// host content matches the screen the stack + navbar return to — closing the wrong-page/
+// wrong-tap class .178 fixed. Before the build it failed MEASURED with
+// renders = ["books","authors","books"] (mid-drag put Books in, nothing put Authors back);
+// after the build renders end on 'authors'. Was `{ todo }` (new policy); Brunel built it.
 test('I11/I20 — superseding a live browse->browse drag re-renders the SOURCE into #browse',
-  { todo: 'NEW POLICY, not yet implemented. begin()\'s hard reset calls '
-        + 'applyScreen(currentDesc(), {render:false}), so the shared #browse keeps the '
-        + 'DESTINATION\'s content while the stack and navbar return to the source. '
-        + 'Measured: renders = ["books","authors","books"]. Same wrong-page/wrong-tap '
-        + 'class as .178. Distinct from the scroll todo above — two separate defects.' },
   async () => {
     const h = boot({ fakeTimers: true });
     try {

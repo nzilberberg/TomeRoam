@@ -181,13 +181,31 @@ The F1 change is a product change → requires a build-number bump from `2026-07
 (`2026-07-26.246`) at commit time, per the PWA deploy rule (web-only OTA; no native change → no APK
 rebuild). Named here; NOT applied — Zelda stamps at commit.
 
+## §10 scrub — tooling part (KR-swipe-scroll-restore ledger removal)
+
+Per plan §10 and Vitruvius's ruling, the `KR-swipe-scroll-restore` `PolicyLedger.mjs` entry is removed
+this commit. The mutation whose `from` string lived on that ledger line had to be deleted in the SAME
+commit or `test/mutation-anchors.test.js` would red on a rotted anchor.
+
+- **Deleted (`tools/mutate.mjs`):** the mutation `§4.19: a policy-ledger known-red test reference is
+  dangled (-> policy-ledger gate)` (file `Claude/Decisions/PolicyLedger.mjs`, `from:
+  "restores the starting scroll'],"`, `to: "restores the starting scroll DANGLED'],"`). Re-pointing was
+  not available — after this scrub no `knownRed` entry remains for it to target. Replaced the entry with a
+  comment recording the removal and the consequence (the policy-ledger gate keeps its three assertions but
+  loses its one defending mutation; restoring structural coverage of that gate is a coverage-audit
+  question per plan §10, not a 6a build obligation). Touched no other mutation, no test, not the
+  PolicyLedger, not `js/app.js`.
+- **Confirmed:** `node --test test/mutation-anchors.test.js` → 2 pass / 0 fail; `MUTATIONS.length` = 63
+  (> 0 still holds); the mutation sweep still runs (`node tools/mutation-sweep.mjs 17` → CAUGHT).
+
 ## Files changed
 
 - `js/app.js` — the production change (`begin()`'s hard-reset/recovery branch); Poirot F1 fix
   (`resetScroll: d ? false : undefined`).
 - `tools/mutate.mjs` — re-anchored the mutations the recovery's rewrites invalidated (the F1 `applyScreen`
-  line change rotted #13/#14/#16 + the SR target); added the F1 mutation (#18, defends OB-home). Earlier:
-  registered the four original stage-6a mutations (one candidate removed as empirically non-functional).
+  line change rotted #13/#14/#16 + the SR target); added the F1 mutation (#18, defends OB-home); deleted
+  the KR-swipe-scroll-restore dangling-reference mutation (§10 scrub, above). Earlier: registered the four
+  original stage-6a mutations (one candidate removed as empirically non-functional).
 - `tools/gen-swipe-model.mjs` — supersession mirror updated (TERMINATION row + §5 prose) to the new
   behavior; Poirot F2 fix (basis-label footnote/legend).
 - `docs/swipe-model.generated.txt` — regenerated from the updated generator.

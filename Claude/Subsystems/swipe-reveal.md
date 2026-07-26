@@ -87,10 +87,13 @@ documented impossible-before-the-planner, not a production branch.
 fields/F-i/F-ii/§15/§4.11), each mapped to the test it reddens; re-run by
 `tools/mutation-sweep.mjs`, anchors gated by `test/mutation-anchors.test.js`.
 
-**20. Known-red behavior.** Two stage-2 NEW-POLICY todos remain red by design (DecisionLog):
-I20 superseding a live drag restores starting scroll; I11/I20 superseding a live browse→browse
-drag re-renders the SOURCE into #browse. Also OPEN, unrelated: the headline aborted-swipe
-repaint/flash (memory `tomeroam-swipe-repaint-saga`).
+**20. Known-red behavior.** No swipe known-red todos remain. The two stage-2 NEW-POLICY todos —
+I20 (superseding a live drag restores the starting scroll) and I11/I20 (superseding a live
+browse→browse drag re-renders the SOURCE into #browse) — were IMPLEMENTED and retired in Stage 6a:
+begin() recovers the source inside the Browse hold (re-render iff clobbered + restore scroll, hold
+released last, identity nulled last, then arm); their tests are now live green guards in
+test/swipe-invariants.test.js and their PolicyLedger entries removed. Still OPEN, unrelated: the
+headline aborted-swipe repaint/flash (memory `tomeroam-swipe-repaint-saga`).
 
 **21. Current policy-ledger references.** DecisionLog: the staged-review policy; construction-
 only planFor phase-split; three-layer oracle + mirror retirement; same-destination

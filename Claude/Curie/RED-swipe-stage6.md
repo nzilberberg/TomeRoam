@@ -198,6 +198,17 @@ moving the begin()/supersession region fingerprint again. Re-pinned `VERIFIED.su
 fully green (11/11); the OB-home F1 guard is now green under the fix. Full suite: 690 tests, 687 pass,
 0 fail, 1 skipped (KEEPER), 2 todo (SR/SC).
 
+## 11. Known-red retirement (2026-07-26, §10 scrub)
+
+Retired the two supersession known-reds now that Stage 6a built their behavior (Poirot PASS, Mendeleev
+ADEQUATE): dropped the `{ todo }` marker on SR (`I11/I20 — superseding a live browse->browse drag
+re-renders the SOURCE into #browse`) and SC (`I20 — superseding a live drag restores the starting
+scroll`) in `test/swipe-invariants.test.js` — assertions unchanged, they now run as LIVE green regression
+guards; their stale "not yet implemented" comments were rewritten to shipped-behavior notes. Full suite:
+690 tests, 688 pass, todo 2 → 0. The single fail is `policy-ledger-gate.test.js §4.19` (the ledger still
+declares the two now-green entries) — expected/transient, cleared when Zelda removes the two
+`PolicyLedger.mjs` entries in the same commit; not touched here. No other failures.
+
 ```json
 {"persona":"curie","stage":6,"input_artifact":"6e3a596","verdict":"RED_SUITE_READY","files_changed":["test/swipe-stage6.test.js","test/app-harness.js","Claude/Curie/RED-swipe-stage6.md"],"red_command":"C:/Users/nzilb/tools/node-dist/node.exe --test \"test/swipe-stage6.test.js\"","new_red_tests":["VR — superseding a live drag on a VIRTUALIZED browse->browse source keeps the source rows ACTIVE and realized, not rebuilt or leaked","OR — the source re-render precedes the successor arming: recovery restores the source before the new gesture renders its destination","NC — an overlay-source supersession issues NO spurious #browse re-render but still restores the scroll"],"return_to":"brunel"}
 ```
