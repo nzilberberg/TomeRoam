@@ -4,7 +4,8 @@ Type: plan
 
 <!-- vitruvius-gate {"plan_type":"refactor","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":true,"persistence_migration":false,"lifecycle_ownership":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:746-796","js/app.js:1142-1161"],"callee_ranges":[],"affected_contracts":["test/swipe-invariants.test.js:220","test/swipe-invariants.test.js:569","test/swipe-invariants.test.js:588","test/swipe-invariants.test.js:598","test/swipe-invariants.test.js:623"],"staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Plans/PLAN-swipe-reveal.md"],"blocking_questions":["DF","RR"]} -->
 
-Status: **DRAFT — for Charpy** (2026-07-26, r3 — shrunk per Charpy r2 F5). First Stage-6b slice, following
+Status: **DRAFT — for Charpy** (2026-07-26, r4 — Loki-KILL corrected: the reveal frame is a TWO-entry
+double-rAF, so `cur.revealFrames` tracks the currently-pending frame id, not just the outer). First Stage-6b slice, following
 shipped Stage 6a (build `2026-07-26.246`). Behavior is PARITY at the user-visible layer; the change is a
 resource-release improvement (Engineering Contract §4.3/§4.14). Grounded against HEAD `js/app.js`:
 `settle()` → `runFinalize()`/`holdGhostUntilPaintable()` (693-796) and `finalize()` with the 340ms fallback
@@ -23,6 +24,18 @@ this slice. Layer 2 (the null-writes) and the `transitionListener` removal have 
 and their only consumer is the DEFERRED I12 retirement-check — so nulling them now is a dead write (§4.15).
 They are deferred to the I12 stage that reads the nulled handles and scopes the observability then (§11).
 A smaller honest slice: 6b cancels the losers; the I12 stage nulls them for its own reader.
+
+**Correction (2026-07-26, Loki KILL on the retire-correct-loser promise, `Claude/Loki/STRIKE-swipe-
+stage6b-retire-loser.md`, input `f83c4a5`).** A prior draft stored the reveal paint gate — a DOUBLE `rAF`
+on one line (`app.js:794`) — as a SINGLE outer-frame id. In the timeout-driven half-fired interleaving (a
+tab hidden AFTER the first reveal frame fires — the trap the code names at app.js:792-793 — so the outer
+fires, schedules the inner, then the 600ms safety-net wins the drop), `drop()` cancelled the spent OUTER
+id while the INNER paint frame stayed pending: an executed leak (`h.raf.pending()`=2 vs 1). This revision
+makes `cur.revealFrames` a two-entry resource that always names the CURRENTLY-PENDING reveal frame — the
+outer callback RE-STORES the inner id onto `cur.revealFrames` — so the one `cancelAnimationFrame` at drop
+removes the actual pending loser across the half-fired state (§2, §3 item 2/3). The RR cell gains the
+half-fired fixture the F6 binary split missed (§9), and the deferred I12 null-bookkeeping is confirmed
+implementable on the always-current-id model (§11).
 
 ## Applicability
 
@@ -81,7 +94,7 @@ limit, not a conflict resolution.**
 | `PLAN-swipe-reveal.md` §7 step 6 | "Centralize finalization and reveal ordering (I10, I17)." | Plan-of-record (staging) | Delivers the loser-cancel resource-release foundation the centralization rests on; the state-machine restructure, `finalizationPlanFor`, `sameBrowseHost`, pane lifecycle, I10 reveal-gating, the `recoverSession` matrix, the null-bookkeeping, and the observability surface stay Stage 6c/7 (§11) | Annotate as sub-sliced (§10) |
 | `DecisionLog.md` .223-review dispositions (2026-07-20) | Finding 1b (the settle timer + transitionend listener) and finding 3 (global-session cleanup helpers) were "Deferred to stage 6, unchanged." | Active decision ledger | Finding 1b's settle-timer half (the 340ms fallback cancel) is this slice; its transitionend-listener half and finding 3 stay deferred (§11) | Note the settle-timer half closed (§10) |
 | `js/app.js` `finalize()` (1142-1160) | `setTimeout(finalize, 340)` (1160) is a bare local, never stored or cleared; exactly-once is held by the `done` boolean (1143); `cancelAnimationFrame(cur.settleFrame)` (1146) is shipped (.226). | Code under change | Stores the 340ms as `cur.settleTimer` and clears it in `finalize` when it is the pending loser (transitionend won); the settleFrame cancel is untouched (pinned by regression RGcancel) | — |
-| `js/app.js` `holdGhostUntilPaintable()` (794-795) | The reveal double-`rAF` (794) and the 600ms safety-net `setTimeout` (795) are bare locals, never cancelled; the drop is held exactly-once by the `dropped` boolean (751). | Code under change | Stores the double-`rAF` as `cur.revealFrames` and the 600ms as `cur.revealTimer`; the winning `drop()` cancels each pending loser (§2, §3, cell RR) | — |
+| `js/app.js` `holdGhostUntilPaintable()` (794-795) | The reveal paint gate is a DOUBLE `rAF` on one line (794) — two scheduler entries, of which at most one is pending; the 600ms safety-net `setTimeout` (795) is a bare local; neither is cancelled; the drop is held exactly-once by the `dropped` boolean (751). | Code under change | Stores the currently-pending reveal frame as `cur.revealFrames` (the outer callback re-stores the inner id — §2) and the 600ms as `cur.revealTimer`; the winning `drop()` cancels each pending loser across the half-fired state (§2, §3, cell RR) | — |
 | `test/app-harness.js` (773, 800) | `h.clock.pending()` returns `tq.length` (pending fake timeouts); `h.raf.pending()` returns `rafQ.length` (queued deferred rAFs); `cancelAnimationFrame`/`clearTimeout` splice from those queues but record nothing to `log`. `PBSwipeSession` (app.js:245) exposes `{id, dragging}` and nulls post-completion. | Verified test tooling | The observable channel for this slice: a cancelled loser leaves `tq`/`rafQ`, so a misattribution/omission mutation leaves it pending (cells DF, RR). No field-inspection surface exists, which is WHY the null-bookkeeping is deferred (§11) | — |
 
 Authority precedence: the "Owed to stage 6" entry and subsystem §8 govern that this is Stage-6 ownership
@@ -98,10 +111,16 @@ Behavioral ownership, not function names. All changes are inside `js/app.js` `se
   session. `finalize` (which runs once, `done`-guarded) calls `clearTimeout(cur.settleTimer)`: when
   `transitionend` won, this clears the still-pending 340ms so it never fires; when the 340ms itself won, it
   has already left the queue and the clear is a harmless no-op on a fired id.
-- **`cur.revealFrames`** — the reveal outer `requestAnimationFrame` (794) is stored on the session. The
-  winning `drop()` (which runs once, `dropped`-guarded) calls `cancelAnimationFrame(cur.revealFrames)`:
-  when the decode gate or the 600ms safety-net won, this cancels the still-pending paint frame; when the
-  paint gate itself won, it has already run and the cancel is a no-op.
+- **`cur.revealFrames`** — the reveal paint gate is a DOUBLE `requestAnimationFrame` on one line (794):
+  the outer frame, when it fires, schedules the inner paint frame — two scheduler entries with two distinct
+  ids, of which at most one is ever pending. `cur.revealFrames` must name the CURRENTLY-PENDING one: it is
+  set to the outer id when scheduled, and the outer callback RE-STORES the inner id onto `cur.revealFrames`
+  before scheduling it (`cur.revealFrames = requestAnimationFrame(() => { cur.revealFrames =
+  requestAnimationFrame(() => { painted = true; gate('paint'); }); })`). The winning `drop()` (once,
+  `dropped`-guarded) calls one `cancelAnimationFrame(cur.revealFrames)`, which removes whichever frame is
+  pending — the outer if it has not yet fired, the inner if it has (the half-fired case) — so no reveal
+  frame survives the resolver in any interleaving; when the paint gate itself won, the field holds a spent
+  id and the cancel is a no-op. (Storing BOTH ids and cancelling both is an admissible alternative — §3.)
 - **`cur.revealTimer`** — the reveal 600ms safety-net (`setTimeout(() => drop('timeout'), 600)`, 795) is
   stored on the session. The winning `drop()` calls `clearTimeout(cur.revealTimer)`: when the decode or
   paint gate won, this clears the still-pending timeout; when the 600ms itself won, no-op.
@@ -143,12 +162,18 @@ continuations is a SESSION-OWNED handle cancelled at exactly one resolver:
    `transitionend`-vs-340ms race is actively cleared and leaves the scheduler queue, rather than remaining
    pending to fire a `done`-guarded no-op (I14; cell DF, observable via `h.clock.pending()`).
 2. **Reveal phase.** The winning `drop(why)` cancels its losers: `cancelAnimationFrame(cur.revealFrames)`
-   and `clearTimeout(cur.revealTimer)`. Because `drop` runs exactly once (the `dropped` guard, unchanged),
-   the two losing gates of the decode-vs-paint-vs-600ms race leave the scheduler queue rather than firing
-   `dropped`-guarded no-ops (I14/I15; cell RR, observable via `h.raf.pending()`/`h.clock.pending()`).
+   and `clearTimeout(cur.revealTimer)`. Because `cur.revealFrames` names the currently-pending frame of the
+   double-`rAF` (the outer callback re-stores the inner id — §2), the one cancel removes the actual pending
+   frame whether or not the outer has fired — including the half-fired timeout-driven interleaving the Loki
+   strike found. Because `drop` runs exactly once (the `dropped` guard, unchanged), the losing gates of the
+   decode-vs-paint-vs-600ms race leave the scheduler queue rather than firing `dropped`-guarded no-ops
+   (I14/I15; cell RR, observable via `h.raf.pending()`/`h.clock.pending()`).
 3. **Correct-loser cancel, by construction.** Each resolver closes over its own `cur`, so it cancels
    exactly the phase's loser and never a wrong handle — the misattribution axis Loki strikes (cells DF, RR;
-   §4.10 wrong-owner). This is the retirement's load-bearing, reddening property.
+   §4.10 wrong-owner). For the reveal frame this holds ONLY because `cur.revealFrames` tracks the pending id
+   across the outer→inner transition; a single-outer-id design cancels a spent handle in the half-fired
+   state (the killed construction). The mechanism (re-store the inner id, or hold both ids and cancel both)
+   is a **recommendation**; the invariant is "the reveal-frame cancel removes the actually-pending frame."
 4. **Ownership endpoint (parity).** The session's ownership still ends at `sessionDone(cur)`, unchanged —
    the no-pane path via `finalize`/`endOwnership` (1141/1154), the held-reveal path via `drop` (785). The
    loser-cancel runs before those and does not move the endpoint; `session === null` after a terminal path
@@ -197,9 +222,12 @@ cur.revealTimer reveal 600ms safety-net handle | resource | inout | holdGhost@S6
 
 Notes: every row is `inout` — the handle is produced at its scheduling site (`settle`'s finalize wiring /
 `holdGhost`) and consumed (cancelled) at exactly one resolver (`finalize`/`drop`). Each owner is a single
-accountable site. No handle is produced in a stage later than it is consumed (all S6b). `cur.settleFrame`
-is absent — it is already produced+cancelled today (.226) and this slice does not re-touch it (regression
-RGcancel). `cur.transitionListener` is absent — deferred (§11).
+accountable site. No handle is produced in a stage later than it is consumed (all S6b). `cur.revealFrames`
+is a DOUBLE-`rAF` two-entry resource: `holdGhost` produces the outer id and the outer callback re-produces
+the inner id onto the same field, so the field always names the one currently-pending frame; the single
+owner (`drop`) cancels that pending frame (§2, §3 — the Loki-KILL correction). `cur.settleFrame` is absent
+— already produced+cancelled today (.226), not re-touched (regression RGcancel). `cur.transitionListener`
+is absent — deferred (§11).
 
 ## 5. Async operations — cancellation, exactly-once, stale completions
 
@@ -210,7 +238,10 @@ changes; the change is that three continuations that already exist are cancelled
   `finalize`; `cancelAnimationFrame(cur.revealFrames)` and `clearTimeout(cur.revealTimer)` in the winning
   `drop`. A cancelled entry leaves the fake queue, so the cancel is observable as a drop in
   `h.clock.pending()`/`h.raf.pending()` (cells DF, RR). This extends the shipped `.226`
-  `cancelAnimationFrame(cur.settleFrame)` (app.js:1146) to the three loser continuations.
+  `cancelAnimationFrame(cur.settleFrame)` (app.js:1146) to the three loser continuations. The reveal frame
+  is a double-`rAF`, so `cur.revealFrames` tracks the currently-pending id (the outer callback re-stores
+  the inner id); the single cancel then removes the pending frame even in the half-fired hidden-tab case
+  (app.js:792-793) where the outer has fired and the inner is pending — the leak the Loki strike executed.
 - **Exactly-once.** `finalize` (`done` guard, 1143) and `drop` (`dropped` guard, 751) each run their body
   once; the cancel is added inside that single run and does not alter the guards. I13 (finalize once
   despite dual-fire) and I15 (deferred repaint once) keep their flag defense (regressions RG13/RGH,
@@ -232,7 +263,9 @@ changes; the change is that three continuations that already exist are cancelled
 Named concerns for the `lifecycle_ownership` pattern.
 
 - **Create.** `finalize`'s wiring creates `cur.settleTimer` (from the 340ms at 1160); `holdGhost` creates
-  `cur.revealFrames` (from 794) and `cur.revealTimer` (from 795). Each is stored on `cur` at its site.
+  `cur.revealFrames` (the outer frame at 794) and `cur.revealTimer` (the 600ms at 795). The outer reveal
+  callback RE-CREATES `cur.revealFrames` with the inner frame id before scheduling it, so the field always
+  names the currently-pending reveal frame (§2). Each is stored on `cur` at its site.
 - **Borrow.** None of these three borrows a DOM node (they are scheduler tokens). (`transitionListener`,
   which would borrow the anchor element, is deferred — §11.)
 - **Mutate.** None mutates session state beyond its own stored slot; the continuations' effects (the paint
@@ -280,7 +313,7 @@ reason. Absence is a defect; a dimension not listed is an omission.
 | Invariants | Yes | I14 (every timer/frame released or invalidated) — extended to the three loser handles; I13/I15 keep their flag defense (regressions RG13/RGH). |
 | Mutation cases | Yes | Each cell in §9 names a misattribution/omission mutation observable on the scheduler queue (cancel the wrong handle, or omit a cancel, so a loser stays pending — not only total omission). |
 | Known-red | N/A | This slice introduces no known-red; PolicyLedger has no active entries after Stage 6a and none is added. |
-| Composition | Yes | The loser-cancel composes with the exactly-once guards (`done`/`dropped`) — belt to their suspenders — and with the Stage-6a supersession lifecycle (a superseded pre-settle session owns none of these handles), and with the deferred I12 stage that will null and read these session-stored handles (cells DF, RR). |
+| Composition | Yes | The loser-cancel composes with the exactly-once guards (`done`/`dropped`) — belt to their suspenders — with the double-`rAF` reveal gate (the field tracks the pending id across the outer→inner transition, so the cancel composes with the half-fired state — the Loki-KILL correction), with the Stage-6a supersession lifecycle (a superseded pre-settle session owns none of these handles), and with the deferred I12 stage that will null and read these session-stored handles (cells DF, RR). |
 | Contract claims (exact schema) | N/A | No exact-key contract changes (contract_shape:false); the session `d` is exempt mutable lifecycle state. |
 | Concurrency | Yes (parity) | Single-writer within the process; `begin()` still REJECTS while `finishing` (I17), so no second session schedules these handles concurrently; the cancel runs inside the single-threaded resolver with the guard already set (cells DF, RR). |
 | Observability | Yes | The cells are proven against the REAL harness queue channel (`h.clock.pending()`, `h.raf.pending()`); the null-bookkeeping is deferred BECAUSE no field-inspection surface exists (§11), not asserted against a surface that does not exist (Charpy r2 F5). |
@@ -297,7 +330,7 @@ pending. The RG* rows pin shipped DOM/endpoint parity.
 | id | Behavior proved | Fixture / transition | Mutation that must fail it | Layer |
 |---|---|---|---|---|
 | DF | `finalize` cancels its loser — when `transitionend` wins, the 340ms `cur.settleTimer` is cleared and leaves the clock queue, so no leaked fallback survives the phase | a settling swipe with `fakeTimers`; dispatch `transitionend` on the anchor before advancing past 340ms; inspect `h.clock.pending()` | misattribution/omission (§4.10): clear the wrong handle or omit `clearTimeout(cur.settleTimer)` → the 340ms stays pending in the clock queue after finalize | wiring (queue inspection, `h.clock.pending()`) |
-| RR | the winning reveal `drop` cancels its losers — `cur.revealFrames` leaves the rAF queue and `cur.revealTimer` leaves the clock queue, so no leaked reveal continuation survives the phase | a held commit→home or abort browse→browse reveal with `deferRaf`+`fakeTimers`; let one gate win the drop; inspect `h.raf.pending()` and `h.clock.pending()` | misattribution/omission (§4.10): cancel the wrong handle or omit a cancel → a loser stays pending in the rAF or clock queue after drop | wiring (queue inspection, `h.raf.pending()`/`h.clock.pending()`) |
+| RR | the winning reveal `drop` cancels its losers — the currently-pending reveal frame leaves the rAF queue and `cur.revealTimer` leaves the clock queue, so no leaked reveal continuation survives the phase, INCLUDING the half-fired state (outer reveal frame fired, inner paint frame pending, timeout wins) | THREE interleavings on a held commit→home / abort browse→browse reveal with `deferRaf`+`fakeTimers`: (a) timeout wins, no frame fired (outer pending); (b) **half-fired** — `h.raf.frame()` once so the outer fires and schedules the inner, THEN advance past 600ms so the timeout wins (inner pending); (c) a gate wins (revealTimer pending). Inspect `h.raf.pending()` and `h.clock.pending()` after the resolver | misattribution/omission (§4.10): store only the OUTER frame id (the killed single-id design) or cancel the wrong handle → in the half-fired interleaving (b) the cancel hits the spent outer id and the inner paint frame stays pending in the rAF queue after drop; OR omit a cancel → a loser stays pending | wiring (queue inspection, `h.raf.pending()`/`h.clock.pending()`) |
 | RGcancel | the shipped `cancelAnimationFrame(cur.settleFrame)` still prevents a stale `translateX` on the real `#browse`/`#home` after finalize, and `done`/`dropped` still absorb late fires | the .226 hidden-tab recipe: defer the settle rAF, advance past 340ms to finalize, resume the rAF; assert no stale transform | the slice REPLACES (removes) the shipped settle-rAF cancel → the resumed rAF writes a stale transform | wiring (existing green, `:598`) |
 | RG13 | finalization occurs exactly once despite transitionend AND the 340ms both firing (I13 parity) | the existing duplicate-gesture-ending-event fixture | the loser-cancel removes the `done` guard → both finalize bodies run | wiring (existing green, `:220`) |
 | RGH | a HELD reveal keeps the owner THROUGH finalize, releasing it only at drop (parity) | the existing Authors→Home held-reveal fixture | the loser-cancel nulls/ends the owner at finalize instead of at drop | wiring (existing green, `:569`) |
@@ -310,7 +343,7 @@ mutation | layer`; each blocking question (DF/RR) has a complete row; the RG* ro
 ```vitruvius-coverage
 # id | behavior | fixture | mutation | layer
 DF | finalize cancels its loser clearing the 340ms settleTimer when transitionend wins so no leaked fallback stays pending in the clock queue | a settling swipe with fakeTimers where transitionend is dispatched before the 340ms then the clock queue is inspected | misattribution clear the wrong handle or omit the clear so the 340ms stays pending in the clock queue after finalize | wiring queue inspection clock pending
-RR | the winning reveal drop cancels its losers so the reveal double rAF leaves the rAF queue and the 600ms revealTimer leaves the clock queue | a held commit-to-home or abort browse-to-browse reveal with deferRaf and fakeTimers where one gate wins then the rAF and clock queues are inspected | misattribution cancel the wrong handle or omit a cancel so a loser stays pending in the rAF or clock queue after drop | wiring queue inspection rAF and clock pending
+RR | the winning reveal drop cancels the currently-pending reveal frame and the 600ms revealTimer so no reveal continuation stays pending including the half-fired state where the outer frame fired and the inner paint frame is pending | a held commit-to-home or abort browse-to-browse reveal with deferRaf and fakeTimers across three interleavings timeout with no frame fired then half-fired where one raf frame fires the outer before the timeout wins then a gate win then the rAF and clock queues are inspected | misattribution store only the outer frame id or cancel the wrong handle so in the half-fired interleaving the cancel hits the spent outer and the inner paint frame stays pending or omit a cancel so a loser stays pending | wiring queue inspection rAF and clock pending
 RGcancel | the shipped cancelAnimationFrame still prevents a stale transform after finalize and the done and dropped guards still absorb late fires | the hidden-tab recipe deferring the settle rAF then finalizing via the 340ms fallback then resuming the rAF | the slice replaces the shipped settle-rAF cancel so the resumed rAF writes a stale transform | wiring existing green 598
 RG13 | finalization occurs exactly once despite transitionend and the 340ms both firing | the existing duplicate gesture-ending-event fixture | the loser-cancel removes the done guard so both finalize bodies run | wiring existing green 220
 RGH | a held reveal keeps the owner through finalize releasing it only at drop | the existing Authors-to-Home held-reveal fixture | the loser-cancel ends the owner at finalize instead of at drop | wiring existing green 569
@@ -364,7 +397,13 @@ Each deferral names the consumer that does not yet exist and the stage that intr
   the I12 retirement-check (§4.6, "the resource has not already been retired"); no production code reads a
   nulled handle today and no test surface can observe one (`PBSwipeSession` exposes `{id, dragging}` and
   nulls post-completion; the harness records no cancel/remove call). Writing it now is a dead write with no
-  reddening test — §4.15. It lands in the I12 stage, which reads the nulled handle.
+  reddening test — §4.15. It lands in the I12 stage, which reads the nulled handle. **Confirmed
+  implementable on the two-entry reveal-frame model (Loki-KILL correction):** because `cur.revealFrames`
+  always names the ONE currently-pending reveal frame (the outer callback re-stores the inner id — §2),
+  nulling it at the resolver — after `drop` cancels that pending frame — truthfully says "no live reveal
+  frame," with no second stored id left dangling. A single-outer-id design would have made this null false
+  in the half-fired state (the inner pending while the field reads null), which is why the KILL had to be
+  fixed HERE, in the field model, not deferred to I12.
 - **The `transitionListener` session-ownership + `removeEventListener`.** Deferred: unobservable (no spy;
   `{once:true}`), and today NOT removed when the 340ms wins (its late fire is a `done`-guarded no-op — so
   deferring is parity). Its removal's only consumer is the same I12 check. It lands with the null-bookkeeping.
