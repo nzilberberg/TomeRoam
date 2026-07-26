@@ -1,0 +1,13 @@
+{
+  "campaign": "swipe-stage5",
+  "stage": 5,
+  "note": "Completion manifest: the gates this stage must clear before it may be called complete. Checked by tools/campaign/stage-gate-check.mjs. A required gate with no filed, accepted verdict artifact fails the check. To skip a gate legitimately, set \"waived\": {\"reason\": \"...\"} on it (a recorded decision), never by deletion.",
+  "gates": [
+    { "gate": "plan-review",    "owner": "charpy",    "required": true, "verdictArtifactGlob": "Claude/Charpy/PLAN-swipe-stage5-*.md",   "acceptVerdict": ["FORGE"] },
+    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage5.md",        "acceptVerdict": ["RED_SUITE_READY"] },
+    { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-stage5-*.md",         "acceptVerdict": ["BUILD_GREEN"] },
+    { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage5-*.md",        "acceptVerdict": ["PASS", "SHIP"] },
+    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage5.md",  "acceptVerdict": ["ADEQUATE"] },
+    { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-stage5-*.md",    "acceptVerdict": ["HELD_STONE"] }
+  ]
+}
