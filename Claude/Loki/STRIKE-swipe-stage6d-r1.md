@@ -44,7 +44,7 @@ The attack: find a reachable (from, to) where the identity check and
 home→browse (in-flow source that is NOT #browse) and overlay→browse (browse-host render
 whose source is an overlay).
 
-Instrument: `loki-stage6d-probe.js` (scratch; reproduced below) — drives the REAL
+Instrument: `probe-stage6d-r1-equivalence.js` (filed beside this record) — drives the REAL
 `Swipe.classifyTransition` + `Swipe.constructionPlanFor` (js/swipe.js required DOM-free,
 which internally requires the real js/nav.js `isOverlay`), with the nav.js:35-36 /
 app.js:482/:485 identity semantics mirrored line-faithfully onto sentinel nodes, over
@@ -107,13 +107,12 @@ changes no reachable throw/kind outcome.
 
 ## The instrument
 
-Scratch probe (reproducible; run with
-`node loki-stage6d-probe.js` against the repo's real js/swipe.js + js/nav.js):
-sentinel-node identity env mirroring nav.js:35-36 and app.js:482/:485, full ordered-pair
-enumeration, phase matrix as above. Output: `pairs checked: 132`,
+`Claude/Loki/probe-stage6d-r1-equivalence.js` (reproducible; run with
+`node Claude/Loki/probe-stage6d-r1-equivalence.js` from the repo root — it requires the
+repo's real js/swipe.js, which requires the real js/nav.js): sentinel-node identity env
+mirroring nav.js:35-36 and app.js:482/:485, full ordered-pair enumeration, phase matrix
+as above. Output: `pairs checked: 132`,
 `browse->browse sessions that are pane-less (must be 0): 0`, `divergences: 0`.
-Probe source preserved in this record's git history alongside this file if routed;
-otherwise disposable per the seat's contract.
 
 ## Blast radius
 
