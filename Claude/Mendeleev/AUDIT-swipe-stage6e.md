@@ -8,7 +8,7 @@ Coverage Model: `Claude/Plans/PLAN-swipe-stage6e.md` §7 (catalog) + §8 (cell/m
 Suite: `test/swipe-stage6e.test.js` (9 tests); registry `tools/mutate.mjs`; sweep `tools/mutation-sweep.mjs`;
 anchors `test/mutation-anchors.test.js`; model `test/swipe-model.test.js`.
 
-Verdict: **BARE_CELLS**
+Verdict: **BARE_CELLS** (original pass) → **ADEQUATE** after Curie remediation — see §Re-audit (2026-07-27, target `1ebbf5d+rem`).
 
 The behavioural suite spans its contract: every applicable Coverage-Model cell is swept by a passing test
 that genuinely forces its condition on a real observable channel (proven by execution below). The gap is
@@ -216,4 +216,55 @@ in exactly the assertion whose whole job is to prevent a no-op — a no-op in th
 - **Not a finding / correctly owed:** the deeper Loki-residual-2 invariant (unconstructible at HEAD; owed to
   a future guard — Curie §5 / Poirot [W9]); BR tested invariant green; RGsup by-reference.
 
-`Verdict: **BARE_CELLS**`
+`Verdict: **BARE_CELLS**` (original pass; superseded below)
+
+---
+
+## Re-audit — 2026-07-27, target `1ebbf5d+rem` (Curie remediation of B1/B2/N1)
+
+Re-audit gate: publish gate, post-remediation. Curie registered five mutants in `tools/mutate.mjs`
+(indices 72–76); **production code is UNCHANGED vs `1ebbf5d`** (`git diff 1ebbf5d -- js/` empty — Poirot's
+SHIP stands), the remediation is pure registry work. All runs synchronous; tree restored pristine after
+every mutant (`git status --short js/` empty; no `*.mutbak`/`*.probebak`).
+
+Re-audit verdict: **ADEQUATE**
+
+### Executed evidence
+
+- **(a) Full suite green.** `node --test "test/*.test.js"` → **722 tests, 721 pass, 0 fail, 1 skip**
+  (byte-matches Poirot's SHIP figures — the registration added no test, only mutants).
+- **(d) Anchors green.** `node --test test/mutation-anchors.test.js` → 2/2 — every new anchor still applies
+  to exactly its source line.
+- **(b) Sweep.** `node tools/mutation-sweep.mjs 72 73 74 75 76` → all **caught**; `0 uncaught, 0 unapplied,
+  0 stale flags` (#72→1, #73→1, #74→1, #75→2, #76→1 failing).
+- **(c) Each mutant reddens its INTENDED cell, right reason** (per-mutant vs the 6e suite):
+
+| Mutant | Fault | Reddens | Right reason (executed) |
+|---|---|---|---|
+| #72 NOOP-a | drop keepGhosts at explicit `resetSwipeStyles` (:441) | **only NOOP.mechanism** | on `sweeps===0` — "Global sweeps during recovery=1"; NOOP.attribution stays green (pane still owner-removed) |
+| #73 NOOP-b | drop keepGhosts in `applyScreen` opts (:442) | **only NOOP.mechanism** | on `sweeps===0`, count 1 — DISTINCT `:442` line from #72's `:441` (proven non-redundant: each independently lets exactly one of the two sweep sites run) |
+| #74 RSN-mistag | reason token → `'wrong-reason'` | **only RSN** | line present but no `/superseded/i` match → the "superseded recorded" clause reddens (token specificity, which #69's line-absence did not defend) |
+| #75 RSN-emit | drop the `disposed &&` guard → unconditional emit | **RSN** (+1 full-suite diagnostic test) | a pane-LESS supersession claims a disposal that never happened → RSN part-2 / Charpy F2 reddens |
+| #76 HR | force keepGhosts on the ORPHAN branch at BOTH sites (`from`+`also`) | **only HR** | owned branch unchanged (keepGhosts already true there) → NOOP/DP/BR/RSN/DEC all green; the stray orphan is never swept and `disposeOwnedPanes` no-ops (`cur` null) → orphan strands. Orphan-specific, unlike coarse #13 which reddened 8/9 cells |
+
+### Disposition of the original findings
+
+- **B1 (NOOP.mechanism `sweeps===0`) — CLOSED.** #72 and #73 are registered, sweep-runnable, and each
+  reddens the anti-no-op guard on its own site with count 1 (the DOM outcome is unchanged, so only the
+  mechanism cell catches it — exactly the property the cell exists for). The two mutants target distinct
+  lines (`:441` vs `:442`), so a build that misses keepGhosts at *either* site is now caught durably in
+  tooling, not by hand. The slice's non-vacuity guard has a runnable defender (EC §4.10 satisfied).
+- **B2 (RSN reason correctness) — CLOSED.** #74 defends token specificity; #75 defends the Charpy-F2
+  emit-only-on-disposal clause. Both reddening RSN for the right reason.
+- **N1 (HR coarse defence) — CLOSED.** #76 is the orphan-discriminating mutant plan §9 promised; HR is now
+  caught alone, not only coincidentally by the whole-block #13.
+
+### No new bare cell
+
+Every applicable Coverage-Model cell is swept AND has a registered, sweep-runnable mutation defender for its
+load-bearing assertion. The Mutation-cases dimension — the sole gap in the original pass — is now complete.
+The deeper Loki-residual-2 invariant remains correctly OWED (unconstructible at HEAD; not a bare cell), and
+BR/RGsup handling is unchanged. Production code is untouched vs `1ebbf5d`, so all prior behavioural evidence
+(Poirot SHIP, the 9/9 suite, byte-parity) carries forward without re-litigation.
+
+`Verdict: **ADEQUATE**`
