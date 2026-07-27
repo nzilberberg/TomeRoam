@@ -34,7 +34,15 @@ scroll at a time); supersession is ordered by `sessionSeq`. No cross-device orde
 (ghost, home-snapshot); the NP pill clone (owned-decoration); borrowed real nodes
 (#home/#browse/overlay) with temporary transforms; a row hold. **Stage 6e:** owned-pane
 disposal on a supersession is now a typed operation, `disposeOwnedPanes(session, reason)`
-(js/app.js), not a resource of its own.
+(js/app.js), not a resource of its own. **Stage 6f (in-flow→overlay outgoing app-ghost,
+2026-07-27):** for the in-flow→overlay family (browse→overlay, home→overlay, and the NP-decorated
+browse→nowplaying/home→nowplaying) the OUTGOING is now an owned-pane app-ghost (the shipped
+`ghostApp` recipe), not the borrowed-real in-flow view with a temporary transform. The real
+`#browse`/`#home` is no longer borrowed as a mover on these transitions — it stays in flow,
+untransformed, never removed — and the new outgoing ghost is disposed once per exit through the
+existing owned-pane paths (`dropPanes` on the plain no-hold finalize; `disposeOwnedPanes(session,
+'superseded')` on supersession, stage 6e; the orphan sweep). One-line decision-value flip in
+`constructionPlanFor` (js/swipe.js); js/app.js UNTOUCHED.
 
 **8. Resource owner.** The gesture session (`d`/`cur`). Stage 3 stamped the session id;
 resource-handle ownership (settle rAF stored on the session, cancelled in finalize) landed at
@@ -129,7 +137,14 @@ production planner — enforced by convention + the spec-import structure; §4.1
 branch-fingerprint mirror is RETIRED. Stage 6d turned the frozen `expectedFinalization: { abortRender }`
 data (per STRUCTURAL_CASE, inert since stage 4) ON: `swipe-transition.test.js` now compares production
 `finalizationPlanFor().abortRender` against the frozen spec across all 8 cases, so the three-layer oracle
-covers the abort re-render decision as well as construction.
+covers the abort re-render decision as well as construction. **Stage 6f (2026-07-27):** the frozen
+`expectedConstruction.outgoing` for the in-flow→overlay cases (home→overlay, browse→overlay, and the
+browse→nowplaying modifier) flipped from `real-source` to `app-ghost` in `swipe-plan-spec.mjs`;
+`swipe-transition.test.js` compares production `constructionPlanFor().outgoing` against it, and both
+generated inventories (`docs/transition-matrix.generated.txt`, `docs/swipe-model.generated.txt`)
+regenerated (the in-flow→overlay pairs move from no-pane to a pane; the concrete pane count rose
+27→62). The app.js mirrored-region fingerprints in the model are UNCHANGED, which proves app.js was
+not touched.
 
 **18. Invariants.** classifyTransition emits ONLY current-slice fields `{fromKind,toKind,
 decorations}` (no dead §3.3 host fields until a consumer lands — §4.15); its output, the
@@ -138,7 +153,15 @@ construction plan, and the finalization plan `finalizationPlanFor().abortRender`
 is rejected with a named reason (I16/§4.3, all seven §15 cases covered); no default branch
 (unhandled kind THROWS — `finalizationPlanFor` throws on an unhandled `fromKind` OR `toKind`,
 mirroring `constructionPlanFor`'s own-contract guard); same-destination (bare same-v) is
-documented impossible-before-the-planner, not a production branch.
+documented impossible-before-the-planner, not a production branch. **Stage 6f (2026-07-27)** adds
+the structural invariant: for every reachable in-flow→overlay gesture (browse→overlay, home→overlay,
+and their NP-decorated members) the real in-flow source view (`#browse` for a browse source, `#home`
+for home) is NEVER a mover and never receives a swipe-written inline transform at any phase; the
+outgoing is an owned-pane app-ghost and the real view stays in flow, untransformed, never promoted to
+or demoted from a compositing layer by the swipe. This is the OUTGOING half of the §7-step-6
+structural fix for the in-flow→overlay family ONLY — the INCOMING real-`#browse` transform
+(browse→browse headline, home→browse, overlay→browse) and the browse→home outgoing transform are
+still open (§22/§23).
 
 **19. Mutation cases.** Registered in `tools/mutate.mjs` (swipe4 F1/F3/F4/F5/F6/F7/no-dead-
 fields/F-i/F-ii/§15/§4.11; stage-6d FP/AB — force `abortRender` to `'none'`; RC — drop the
@@ -157,14 +180,23 @@ browse→browse drag re-renders the SOURCE into #browse) — were IMPLEMENTED an
 begin() recovers the source inside the Browse hold (re-render iff clobbered + restore scroll, hold
 released last, identity nulled last, then arm); their tests are now live green guards in
 test/swipe-invariants.test.js and their PolicyLedger entries removed. Still OPEN, unrelated: the
-headline aborted-swipe repaint/flash (memory `tomeroam-swipe-repaint-saga`).
+headline aborted-swipe repaint/flash (memory `tomeroam-swipe-repaint-saga`). **Stage 6f
+(2026-07-27)** introduced NO known-red — the frozen spec and generated model were updated to the new
+`app-ghost` expected values and the suite stays green (new policy, EC §4.19; no PolicyLedger entry,
+no `§8A NEW_POLICIES` entry). The headline aborted-swipe repaint/flash is NOT addressed by 6f: it is
+the INCOMING real-`#browse` transform (T8-forked), still OPEN.
 
 **21. Current policy-ledger references.** DecisionLog: the staged-review policy; construction-
 only planFor phase-split; three-layer oracle + mirror retirement; same-destination
 documented-impossible; the stage-6 cleanup debt — release-half done in 6b (settle/reveal timers session-owned + retired), pane-less-supersession + settle-phase identity guard done in 6c; **the finalization-decision extraction done in 6d — `sourceWasClobbered`/`d.clobbered` retired in favour of the declared frozen `finalizationPlanFor(classification).abortRender`, the FIRST finalization field of the rich §3.3 `planFor()`, behaviour-preserving (no PolicyLedger entry, EC §4.19);** **the owner-driven owned-pane disposal done in 6e — `disposeOwnedPanes(session,'superseded')` replaces the DOM-global `.nav-ghost` sweep's owned-pane effect at the `begin()`-recovery site, behaviour-preserving (no PolicyLedger entry, EC §4.19);** the null-write/listener half + pane-owning supersession (release half) + the finalization remainder deferred to 7.
 
 **22. Explicitly out of scope.** Cross-device sync; the visual flash bug's root cause
-(separate open investigation); playback; the nav stacks themselves (Nav).
+(separate open investigation); playback; the nav stacks themselves (Nav). **Stage 6f note (2026-07-27):** 6f removes the OUTGOING
+real-in-flow-view transform on in-flow→overlay transitions (a structural step on the transform axis),
+but does NOT fix the compositor flash. The flash is compositor-level and invisible to CI/local
+instrumentation; its confirmation is device-only and downstream; and the ghost-teardown/layer-demotion
+suspect remains open on device — finalize yanks a full-viewport composited ghost in one frame (Loki
+observation). Structural-green (no swipe transform on the real view) is not a flash fix.
 
 **23. Conditions requiring revision.** Stage 5 (move the pane builders into swipe.js — done); stage 6
 finalization half: the `abortRender` field is DONE (Stage 6d — `finalizationPlanFor(classification)
@@ -182,4 +214,17 @@ current consumer, so each returns in the commit that first reads it (§4.15). A 
 unguarded stranding invariant named in §14 (Loki residual 2) is also owed, routed to a plan amendment.
 Also: any change to navTo's push/replace rule (the same-destination-impossible argument depends on it);
 adding a screen kind or a parameterized descriptor family; a synchronous rewrite of `Browse.render` or
-`env.renderDestination` (reopens §14's residual).
+`env.renderDestination` (reopens §14's residual). **Stage 6f (2026-07-27)** opened the STRUCTURAL-FIX
+axis (never transform the real in-flow view) with its first slice — the in-flow→overlay OUTGOING is
+now an owned-pane app-ghost, so the real `#browse`/`#home` is never a mover on browse→overlay/
+home→overlay (and their NP members). It rests on an ENUMERATED precondition: all seven overlay kinds
+(`options`, `nowplaying`, `general`, `playback`, `buffering`, `downloads`, `diagnostics`) paint an
+opaque `background: var(--page-bg)` over their own rect (css/app.css, verified at HEAD). A kind-level
+`constructionPlanFor` flip cannot exclude a single overlay, so any change to an overlay's background,
+or adding a new overlay kind, REOPENS this precondition and must re-verify it. The no-peek for the
+vertically-INSET overlay destinations (`options` z25, the five settings subs z26) is DEVICE-VERIFIED
+only — the translucent topbar (z30, ~0.86 opacity + blur) and navbar (z40) bands can expose the
+now-stationary untransformed real view; `nowplaying` (full-viewport z60) has no band exposure. Still
+owed on this axis: the browse→home OUTGOING transform (its commit takes the home-reveal HOLD path);
+the INCOMING real-`#browse` transform (browse→browse headline [T8-forked], home→browse,
+overlay→browse); and workstream C (I10/I17 paint-gated reveal centralization, the flash core).

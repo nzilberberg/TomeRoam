@@ -954,3 +954,41 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   pane object; the remaining `dispose(reason)` enum members and the folded orphan/decoration path (G); a
   production guard for the unguarded stranding invariant (Loki residual 2, routed to a plan amendment); the
   finalization remainder. Bench only; on-device verification owed.
+
+- Stage 6f (in-flow→overlay outgoing app-ghost — the FIRST slice of the structural fix) IMPLEMENTED and
+  green — 2026-07-27. For the in-flow→overlay transition family (browse→overlay, home→overlay, and their
+  NP-decorated members browse→nowplaying/home→nowplaying) the OUTGOING is now represented by an owned-pane
+  app-ghost instead of the transformed real in-flow view: `Swipe.constructionPlanFor` (js/swipe.js:135-136)
+  changes ONE decision value — `outgoing = fromKind==='overlay' ? 'real-source' : (toKind==='home' ?
+  'real-source' : 'app-ghost')` (was `toKind==='browse' ? 'app-ghost' : 'real-source'`). CI-observable
+  structural invariant: the real `#browse`/`#home` is NEVER a mover and never receives a swipe-written
+  inline transform on those transitions (SIbrowse/SIhome drive the real gesture through
+  `test/app-harness.js` and read the real DOM). The change routes through the already-shipped `ghostApp`
+  recipe + `buildConstruction` app-ghost branch + `disposeOwnedPanes` (6e), so js/app.js is UNTOUCHED —
+  Loki's HELD_STONE strike on the §3 promise stays valid (Zelda-verified app.js unchanged; the
+  mirrored-region fingerprints in `docs/swipe-model.generated.txt` are unchanged, which proves it; the
+  concrete pane count in the regenerated matrix rose 27→62). Classified NEW POLICY (EC §4.19 — the
+  construction REPRESENTATION changes), with NO known-red (the frozen `expectedConstruction` spec + the
+  generated model are updated to the new `app-ghost` expected values and the suite stays green), NO
+  PolicyLedger entry, and NO `§8A NEW_POLICIES` entry (an intended observable-parity, construction-
+  representation change guarded by the frozen spec + the `swipe-transition` oracle — reverting the value
+  reddens `test/swipe-transition.test.js` — not the behaviour-deviation ledger). HONESTY: this CI-verifies
+  ONLY the structural invariant (the real in-flow view is not transformed on in-flow→overlay). It does NOT
+  fix the headline browse→browse flash — that is the INCOMING real-`#browse` transform, a disclosed
+  T8-forked deferral. And the visual no-peek for the vertically-INSET overlay destinations (`options` z25,
+  the five settings subs z26) is DEVICE-VERIFIED only: the translucent topbar (z30, ~0.86 opacity + blur)
+  and navbar (z40) bands can expose the now-stationary untransformed real view; `nowplaying` (full-viewport
+  z60) has no band exposure. Loki's residual observation stands as an owed device obligation — finalize
+  yanks a full-viewport composited ghost in one frame, so the flash saga's layer-teardown suspect is still
+  open on device. The slice rests on an ENUMERATED precondition: all seven overlay kinds (`options`,
+  `nowplaying`, `general`, `playback`, `buffering`, `downloads`, `diagnostics`) paint an opaque
+  `background: var(--page-bg)` over their own rect (css/app.css, verified at HEAD); a kind-level flip cannot
+  exclude one overlay, so any overlay-background change or new overlay kind reopens it (subsystem §23
+  trigger). Gates: Charpy FORGE, Loki HELD_STONE, Curie RED, Brunel BUILD_GREEN, Poirot SHIP, Mendeleev
+  ADEQUATE; completion gate COMPLETE. Ratified plan `Claude/Plans/PLAN-swipe-stage6f.md`; build target
+  54a4d27 (suite 731 tests / 730 pass / 0 fail / 1 skip). Bench only; on-device verification owed
+  (re-confirm the T4 opaque precondition; the T3 inset-band exposure; and any flash differential against
+  the still-transformed browse→browse). STILL DEFERRED: the browse→home OUTGOING transform (its commit
+  takes the home-reveal HOLD path); the INCOMING real-`#browse` transform (browse→browse headline
+  [T8-forked], home→browse, overlay→browse); workstream C (I10/I17 paint-gated reveal centralization, the
+  flash core); and the borrowed-real OVERLAY transforms (out of the invariant's scope).

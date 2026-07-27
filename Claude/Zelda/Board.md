@@ -236,6 +236,29 @@ owned-pane mover" invariant — unconstructible at HEAD since `Browse.render` is
 arc):** F(release)=C the I10/I17 reveal centralization (the flash fix), pane-owning supersession (B), the rest of
 `planFor()`, recoverSession matrix (G), null-writes/listener (A). C is now next by dependency.
 
+**Stage 6f SCHEME-COMPLETE (2026-07-27) — build target `54a4d27`, build `2026-07-27.255`.** The FIRST structural
+slice toward the identified flash fix "never transform the real in-flow view." For in-flow→overlay transitions
+(source #browse/#home → an overlay) the OUTGOING is now an owned **app-ghost** instead of the transformed
+borrowed-real view — so the real #browse/#home is NEVER a mover and NEVER receives a swipe transform on those
+transitions. A one-line `constructionPlanFor` flip (js/swipe.js: `toKind==='home' ? 'real-source' : 'app-ghost'`
+after the overlay-source guard) routed through the shipped ghostApp machinery; **js/app.js UNTOUCHED** (Loki strike
+stayed valid, fingerprints unchanged). ⭐ HONESTY (recorded, not overclaimed): this CI-verifies ONLY the STRUCTURAL
+INVARIANT (real view carries no swipe transform on in-flow→overlay) — **it does NOT fix the headline browse→browse
+flash** (that's the INCOMING #browse transform, a disclosed T8-forked deferral) and the visual no-peek for the
+vertically-INSET overlays (options z25 / settings-subs z26) is **DEVICE-only** (topbar .86-opacity band can expose
+the stationary real view). Loki's observation: finalize now yanks a full-viewport composited GHOST in one frame —
+**the layer-teardown flash suspect is still in the room** (device question). The user chose this safe stepping-stone
+knowingly over going straight at the headline. Chain: Charpy r1→r2→r3 (three TEMPERs: scope/scrub completeness,
+no-peek geometry corrected to inset-band-device-only, transition-matrix predicate co-change) → **FORGE** → **Loki
+HELD_STONE** (35 members × both dirs × drag sweep, 2455 assertions, 0 fractures; baseline proves the instrument
+detects the pre-6f fracture) → Curie GENUINELY red-first (SIbrowse/SIhome red @HEAD because the real view IS
+transformed today) → **Brunel BUILD_GREEN** (app.js untouched, no stuck mutant, 731/730/0/1) → **Poirot SHIP**
+(verified by execution) → **Mendeleev ADEQUATE** first-pass (2 non-blocking sweep-hygiene observations → spawned as
+a follow-up task, NOT bolted on). Completion gate 6/6. **OWED device pass:** the T3 inset no-peek + the ghost-teardown
+flash differential + the actual headline flash (on your device — the only place the compositor flash is observable).
+**Next by dependency:** the incoming-#browse structural work + the reveal centralization = the actual browse→browse
+headline flash fix (the highest-risk, disclosed-fork piece).
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired
