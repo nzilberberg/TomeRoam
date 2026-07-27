@@ -11,15 +11,19 @@
 // production's branches — that circular oracle is exactly what this replaces (the old
 // two hand-kept copies a fingerprint could only prove EQUAL, never CORRECT).
 //
-// SCOPE — CONSTRUCTION ONLY (plan §7.4, phase-split). classifyTransition() normalizes a
-// transition into kinds + decorations; constructionPlanFor() says what start() must
-// BUILD: which representation the outgoing/incoming movers take, whether the destination
-// is rendered into the #browse host, and the Now Playing decoration. That is every field
-// start() consumes today and nothing more. The FINALIZATION half — commit/abort/scroll/
-// stackEffect/paneRemovalPolicy/reveal — is deliberately NOT here: nothing consumes it
-// until finalization centralizes in stage 6, and this project forbids dead fields (the
-// stage-3 review removed unreachable guards for exactly this reason). Stage 6 adds
-// finalizationPlanFor() and composes the rich §3.3 planFor() from both halves.
+// SCOPE — CONSTRUCTION, plus the first FINALIZATION decision (stage 6d). classifyTransition()
+// normalizes a transition into kinds + decorations; constructionPlanFor() says what start()
+// must BUILD: which representation the outgoing/incoming movers take, whether the
+// destination is rendered into the #browse host, and the Now Playing decoration — every
+// field start() consumes. finalizationPlanFor() (stage 6d) is the first declared field of
+// the rich §3.3 planFor(): `abortRender`, the abort/recovery re-render decision, retiring
+// the RUNTIME BYPRODUCT (a build-time DOM-identity check) buildConstruction used to compute
+// for the same decision through stage 6c. The REST of finalization —
+// commit/abort-scroll/stackEffect/paneRemovalPolicy/reveal — is
+// deliberately NOT here yet: nothing consumes it until its own slice lands, and this
+// project forbids dead fields (the stage-3 review removed unreachable guards for exactly
+// this reason). A later stage composes the unified §3.3 planFor() from every finalization
+// field once ≥2 justify the wrapper.
 //
 // PARITY. Every mapping below reproduces js/app.js start() (the branch conditions at
 // what was `fromOv`/`toOv`/`incomingBrowse`). classifyTransition is PURE (no DOM). The
@@ -142,6 +146,28 @@ const Swipe = (() => {
     // (Engineering Contract item 14: clone caller-owned arrays/objects before freezing).
     const decorations = Object.freeze((c.decorations || []).map((d) => Object.freeze({ ...d })));
     return Object.freeze({ outgoing, incoming, renderDestination, decorations });
+  }
+
+  // finalizationPlanFor — the declared finalization decision (plan §3.3, stage 6d). Pure,
+  // DOM-free, no stored flag: retires the RUNTIME BYPRODUCT (a build-time DOM-identity
+  // check) buildConstruction used to compute mid-build through stage 6c (EC §4.16 — no
+  // cause + separately-stored derived consequence). No default branch on EITHER kind — an
+  // unhandled classification THROWS, mirroring constructionPlanFor's own-contract guard.
+  //   abortRender   'rerender'   the sole same-browse-host transition (fromKind==='browse'
+  //                              && toKind==='browse') — the mid-drag render overwrote the
+  //                              shared #browse host, so an abort must re-render the
+  //                              source back into it
+  //                 'none'       every other transition — nothing was overwritten to
+  //                              restore
+  function finalizationPlanFor(c) {
+    if (KINDS.indexOf(c.fromKind) === -1) {
+      throw new Error('Swipe.finalizationPlanFor: unhandled source kind "' + c.fromKind + '"');
+    }
+    if (KINDS.indexOf(c.toKind) === -1) {
+      throw new Error('Swipe.finalizationPlanFor: unhandled destination kind "' + c.toKind + '"');
+    }
+    const abortRender = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'rerender' : 'none';
+    return Object.freeze({ abortRender });
   }
 
   // ── STAGE 5 (plan §3/§7) — the pane BUILDERS, private to the L1 seam ────────────────
@@ -276,8 +302,8 @@ const Swipe = (() => {
     const { ghostApp, snapshotHome, npPillClone } = paneBuilders(env);
     const mover = (element, ownership, slot) => ({ element, ownership, slot });
 
-    // Resolve the real source element at most once (for a borrowed-real outgoing mover
-    // and/or the clobber check). env.sourceEl selects overlay vs in-flow by sourceHost.
+    // Resolve the real source element at most once, for a borrowed-real outgoing mover.
+    // env.sourceEl selects overlay vs in-flow by sourceHost.
     let realSource, sourceResolved = false;
     const resolveSource = () => {
       if (!sourceResolved) { realSource = env.sourceEl(sourceHost, from.v); sourceResolved = true; }
@@ -297,7 +323,6 @@ const Swipe = (() => {
     }
 
     // ── INCOMING ──
-    let sourceWasClobbered = false;
     if (plan.incoming === 'home-snapshot') {
       const s = snapshotHome();
       incoming = mover(s.wrap, 'owned-pane', 'incoming');
@@ -305,9 +330,6 @@ const Swipe = (() => {
     } else if (plan.renderDestination === 'browse-host') {
       const hostEl = env.renderDestination(dest, destinationHost);   // renders dest into #browse
       incoming = mover(hostEl, 'borrowed-real', 'incoming');
-      // browse→browse: the mid-drag render overwrote the resolved source #browse, so an abort
-      // must re-render the source (plan §3, F6). True iff the real source IS the render host.
-      sourceWasClobbered = resolveSource() === hostEl;
     } else {                                                          // real-destination overlay
       incoming = mover(env.renderDestination(dest, destinationHost), 'borrowed-real', 'incoming');
     }
@@ -318,16 +340,20 @@ const Swipe = (() => {
       decoration = mover(npPillClone(), 'owned-decoration', deco.base);   // slot: outgoing | incoming
     }
 
-    // The FOUR-key Construction contract (plan §3, 2026-07-24 revision): `classification` is
+    // The THREE-key Construction contract (plan §3, stage 6d revision): `classification` is
     // derived and consumed above (host resolution, plan derivation) and is NOT returned; the
     // `plan` WRAPPER is dropped — of its fields only `decorations` has an L3 consumer (the
     // outgoing-NP `np-locked` unlock, app.js:474), so it is HOISTED to the top level and
     // PROJECTED to `{ kind, base }` (the `role` leaf stripped — no L3 consumer reads it, F2).
+    // The fourth field this used to carry (a RUNTIME-observed abort-re-render flag through
+    // stage 6c) is RETIRED — the abort re-render decision is now the declared
+    // `finalizationPlanFor(classification).abortRender`, computed at arm time in app.js and
+    // stored on the session (EC §4.16).
     const decorations = plan.decorations.map(({ kind, base }) => ({ kind, base }));
-    return { decorations, movers: { outgoing, incoming, decoration }, capture, sourceWasClobbered };
+    return { decorations, movers: { outgoing, incoming, decoration }, capture };
   }
 
-  return { classifyTransition, constructionPlanFor, buildConstruction, BROWSE_FAMILY };
+  return { classifyTransition, constructionPlanFor, buildConstruction, finalizationPlanFor, BROWSE_FAMILY };
 })();
 
 if (typeof window !== 'undefined') window.Swipe = Swipe;

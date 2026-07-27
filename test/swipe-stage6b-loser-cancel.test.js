@@ -50,7 +50,8 @@ const swipeLog = (h) => h.log.calls
   .filter((c) => c.name === 'debug' && c.args[0] === 'SWIPE').map((c) => c.args[1]);
 const settles = (h) => swipeLog(h).filter((m) => /^#\d+ (abort|commit) /.test(m));
 
-/** Authors over Books: a left-edge back-swipe is browse->browse, the clobbered pane case. */
+/** Authors over Books: a left-edge back-swipe is browse->browse, the same-browse-host
+ *  abort-re-render case (finalizationPlanFor.abortRender === 'rerender'). */
 async function onAuthorsOverBooks(h) {
   h.tap('.navbtn[data-nav="books"]');
   await settle(h);

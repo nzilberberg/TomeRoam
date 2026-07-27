@@ -21,13 +21,17 @@ const { readRoot, ROOT } = require('./dom-fixture.js');
 
 const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
 
-// The exact contract shapes from plan §3 (the 2026-07-24 §3 CONTRACT REVISION). Asserted by
+// The exact contract shapes from plan §3 (the stage-6d CONTRACT REVISION). Asserted by
 // sorted key set so a missing OR a dead/extra field both redden (§4.11 exact-key discipline).
-// The ratified return is FOUR live keys: `classification` is derived and consumed INTERNALLY
+// The ratified return is THREE live keys: `classification` is derived and consumed INTERNALLY
 // (never returned), and the `plan` WRAPPER is dropped — of its fields only `decorations` has an
 // L3 consumer, so it is HOISTED to the top level and PROJECTED to {kind, base} (the dead `role`
-// leaf stripped, F2). See PLAN-swipe-stage5.md §3, Poirot F1, Charpy r5 F1.
-const CONSTRUCTION_KEYS = ['capture', 'decorations', 'movers', 'sourceWasClobbered'];
+// leaf stripped, F2). See PLAN-swipe-stage5.md §3, Poirot F1, Charpy r5 F1. `sourceWasClobbered`
+// (a fourth, RUNTIME-observed field through stage 6c) is RETIRED by PLAN-swipe-stage6d.md §2/§9:
+// the abort re-render decision is now the declared `Swipe.finalizationPlanFor(classification)
+// .abortRender`, computed at arm time in app.js (EC §4.16 — no cause + separately-stored
+// derived consequence).
+const CONSTRUCTION_KEYS = ['capture', 'decorations', 'movers'];
 const MOVERS_KEYS = ['decoration', 'incoming', 'outgoing'];
 const MOVER_KEYS = ['element', 'ownership', 'slot'];
 // The returned decoration descriptor is projected to {kind, base}; the classification's `role`
@@ -119,14 +123,14 @@ test('buildConstruction returns the exact four-key Construction contract shape',
   const ctx = mkEnv();
   const c = build(desc('home'), desc('books'), ctx);
   assert.deepEqual(Object.keys(c).sort(), CONSTRUCTION_KEYS,
-    'Construction must carry EXACTLY its four fields {capture, decorations, movers, sourceWasClobbered} '
-    + '(plan §3, F1) — `classification` is derived+consumed internally and the `plan` wrapper is dropped');
+    'Construction must carry EXACTLY its three fields {capture, decorations, movers} '
+    + '(plan §3, F1; stage 6d retires the fourth, sourceWasClobbered) — `classification` is '
+    + 'derived+consumed internally and the `plan` wrapper is dropped');
   assert.deepEqual(Object.keys(c.movers).sort(), MOVERS_KEYS, 'movers must be {outgoing, incoming, decoration}');
   assert.ok(!('classification' in c),
     '`classification` must NOT be a return member — it is derived internally and consumed there (plan §3, F1)');
   assert.ok(!('plan' in c),
     'the `plan` wrapper must NOT be a return member — its one live field, decorations, is hoisted (plan §3, F1)');
-  assert.equal(typeof c.sourceWasClobbered, 'boolean', 'sourceWasClobbered is a boolean');
 });
 
 // ── F1/F2 — decorations HOISTED to the top level, PROJECTED to {kind, base} ──────────
@@ -215,26 +219,14 @@ test('copyAnimPhase syncs animation phase through the env Element, not a global 
   assert.equal(c.capture.animRes, 0, 'each clone animation is seeked to the source currentTime (residual 0)');
 });
 
-// ── F6 — sourceWasClobbered is true only when the render overwrites the source host ──
-test('sourceWasClobbered is true only when the destination render clobbers the source host', () => {
-  // browse->browse: source IS #browse and the browse-host render targets #browse → clobbered.
-  const clob = mkEnv({
-    sourceEl: (host, v, doc) => doc.getElementById('browse'),
-    renderDestination: (d, host, doc) => doc.getElementById('browse'),
-  });
-  const c1 = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), clob);
-  assert.equal(c1.sourceWasClobbered, true,
-    'a browse->browse whose source #browse is overwritten by the mid-drag render is clobbered');
-
-  // home->browse: source is #home (in-flow, a different node) → not clobbered.
-  const safe = mkEnv({
-    sourceEl: (host, v, doc) => doc.getElementById('home'),
-    renderDestination: (d, host, doc) => doc.getElementById('browse'),
-  });
-  const c2 = build(desc('home'), desc('books'), safe);
-  assert.equal(c2.sourceWasClobbered, false,
-    'a home->browse source (#home) is not the render target (#browse), so it is not clobbered');
-});
+// F6 (the recipe layer's abort-re-render byproduct) is RETIRED by PLAN-swipe-stage6d.md
+// §2/§9: `buildConstruction` no longer computes a same-browse-host DOM-identity check at
+// all — the abort re-render decision is now the declared, pure `Swipe.finalizationPlanFor
+// (classification).abortRender`, keyed on `fromKind`/`toKind` alone. Its intent (a
+// browse->browse abort re-renders the source; a home->browse abort does not) is folded
+// into cells FP (the oracle, test/swipe-stage6d.test.js) and AB (the real-DOM abort,
+// same file) — this recipe-layer test has no successor here because there is no longer a
+// recipe-layer byproduct to assert on.
 
 // ── F7a — outgoing captured BEFORE env.renderDestination is invoked ──────────────────
 test('the outgoing pane is mounted before env.renderDestination is ever called', () => {

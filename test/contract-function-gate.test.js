@@ -30,6 +30,13 @@ const CONTRACT = {
     keys: ['decorations', 'incoming', 'outgoing', 'renderDestination'],
     callerArray: 'decorations',   // must be CLONED, not frozen in place
   },
+  finalizationPlanFor: {
+    // Stage 6d (PLAN-swipe-stage6d.md §4b): a HAND-CONSTRUCTED classification, the sole
+    // same-browse-host case, so a direct call proves the contract independent of
+    // classifyTransition/constructionPlanFor.
+    input: () => ({ fromKind: 'browse', toKind: 'browse', decorations: [] }),
+    keys: ['abortRender'],
+  },
 };
 // Exports that are NOT contract-object factories, each with the reason it is exempt.
 const NON_CONTRACT = {

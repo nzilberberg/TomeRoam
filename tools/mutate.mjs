@@ -47,30 +47,33 @@ const DROP_SESSIONDONE_TO = '/* mutated: owner not ended on held reveal */';
 const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');";
 // stage 6a: re-anchored — the hard reset's pane-disposal pair (PLAN-swipe-stage6.md §6
 // step 2) is now two adjacent statements, not one compound line (the recovery render
-// that step 3 adds needs `d.clobbered`, so `render: false` can no longer be literal).
-// Removing BOTH is still required to strand the pane: applyScreen() also calls
+// that step 3 adds needs the abort-render decision, so `render: false` can no longer be
+// literal). Removing BOTH is still required to strand the pane: applyScreen() also calls
 // Nav.resetSwipeStyles() internally, so dropping only the explicit call leaves the
 // ghost disposed anyway.
 // Re-anchored stage 6c (PLAN-swipe-stage6c.md §3): the recovery now also admits a
 // pane-less SETTLING session (`d` null, `session` live), so the render/scroll reads
 // were widened from `d` to `cur = d || session`.
+// Re-anchored stage 6d (PLAN-swipe-stage6d.md §2/§9): the recovery reads the declared
+// `cur.finPlan.abortRender` (plus the `cur.live` build-ran conjunct) instead of the
+// retired `cur.clobbered` runtime byproduct.
 const HARDRESET_DISPOSE_FROM = [
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });',
+  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });",
 ].join('\n');
 const HARDRESET_DISPOSE_TO = '        /* mutated: no hard reset */';
 // stage 6a §9 VR — the two ordering defects the Loki strike measured against the real
 // js/browse.js + js/virtuallist.js (STRIKE-swipe-stage6-recover-before-arm-r2.md §3).
 const VR_HOLD_ORDER_FROM = [
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });',
+  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });",
   '        if (cur) window.scrollTo(0, cur.scroll0);',
   '        dropRowHold();',
 ].join('\n');
 const VR_HOLD_ORDER_TO = [
   '        dropRowHold();',
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });',
+  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });",
   '        if (cur) window.scrollTo(0, cur.scroll0);',
 ].join('\n');
 // Re-anchored stage 6c: `finishing = false;` (F2) now sits between dropRowHold() and
@@ -96,13 +99,13 @@ const VR_IDENTITY_ORDER_TO = [
 // calls renderScreen(), never Browse.render()), so the flag's value cannot leak into a
 // #browse render for that fixture regardless. NC's genuine proof is the scroll mutation
 // below, which reddens its scroll-restore clause directly.
-const RECOVERY_RENDER_LINE = '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });';
+const RECOVERY_RENDER_LINE = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });";
 const RECOVERY_RENDER_ALWAYS_FALSE = '        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined });';
 // stage 6a Poirot F1 (Claude/Poirot/f09cf9d-swipe-stage6-supersession.md) — the orphan
 // sub-case (d===null) must keep nav.js's default resetScroll so a home/options source
 // still scrolls to top. Forcing resetScroll:false back onto the orphan (the f09cf9d bug)
 // reds the OB-home cell in test/swipe-stage6.test.js.
-const F1_ORPHAN_RESETSCROLL_TO = '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: false });';
+const F1_ORPHAN_RESETSCROLL_TO = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: false });";
 
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
 const S5_GHOSTBG_FROM = [
@@ -396,10 +399,10 @@ const MUTATIONS = [
     file: 'js/swipe.js',
     from: '      const El = win && win.Element;',
     to:   "      const El = (typeof Element !== 'undefined') ? Element : (win && win.Element);" },
-  { name: 'swipe5 F6: sourceWasClobbered is never set, so an abort cannot re-render the source (-> clobber test)',
+  { name: 'swipe6d FP/AB: finalizationPlanFor forces abortRender to none regardless of classification (-> FP oracle + AB.clobber test)',
     file: 'js/swipe.js',
-    from: '      sourceWasClobbered = resolveSource() === hostEl;',
-    to:   '      sourceWasClobbered = false;' },
+    from: "    const abortRender = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'rerender' : 'none';",
+    to:   "    const abortRender = 'none';" },
   { name: 'swipe5 F7a: the destination render runs BEFORE the outgoing ghost is built (-> outgoing-before-render test)',
     file: 'js/swipe.js',
     from: S5_ORDER_FROM, to: S5_ORDER_TO },

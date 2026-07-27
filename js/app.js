@@ -387,10 +387,12 @@
         // Recover the superseded session PRE-STACK (stage 6a, PLAN-swipe-stage6.md §3/§6;
         // extended stage 6c to a pane-less SETTLING session, PLAN-swipe-stage6c.md §3)
         // before its resources are released: dispose the old pane / stray ghosts, restore
-        // the source screen (re-rendering it into #browse iff the superseded drag had
-        // clobbered the shared host — cur.clobbered, set by start() only for a live
-        // browse->browse mid-drag render), then restore the session-start document scroll
-        // (cur.scroll0). `cur` below reads whichever handle is live: `d` for a mid-drag
+        // the source screen (re-rendering it into #browse iff the build actually ran AND
+        // the transition is the declared same-browse-host abort — cur.live &&
+        // cur.finPlan.abortRender==='rerender', stage 6d's finalizationPlanFor, retiring
+        // the old runtime-observed byproduct this reader used to key on), then restore the
+        // session-start document scroll (cur.scroll0). `cur` below reads whichever handle
+        // is live: `d` for a mid-drag
         // supersession, else the pane-less settling `session` (same object `d` referenced
         // before end() nulled it — no new field). `resetScroll:false` is forced ONLY on a
         // live-recovery branch, so applyScreen does not stomp the explicit cur.scroll0
@@ -412,7 +414,7 @@
         // realized (the same ordering `finalize()` observes at its own hold release).
         const cur = d || session;
         resetSwipeStyles();
-        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });
+        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });
         if (cur) window.scrollTo(0, cur.scroll0);
         dropRowHold();
         finishing = false;
@@ -436,7 +438,8 @@
       else return;
       if (!dest) return;
       d = { id: ++sessionSeq, dir, from, dest, newNav, x0: x, y0: y, dx: 0, w: window.innerWidth, live: false, locked: false,
-            lastX: x, lastT: performance.now(), vx: 0, scroll0: window.scrollY || 0, movers: [], clobbered: false,
+            lastX: x, lastT: performance.now(), vx: 0, scroll0: window.scrollY || 0, movers: [],
+            finPlan: Swipe.finalizationPlanFor(Swipe.classifyTransition({ from, to: dest })),
             tgt: target };
       session = d;   // this gesture is now the owner (stage 3); id is observable now, gates callbacks in stage 6
       bindGesture(target);
@@ -463,7 +466,7 @@
     // scroll-neutral) or a fixed snapshot — so scroll cannot change during a swipe.
     //
     // start() is the L3 adapter (stage 5, PLAN-swipe-stage5.md): it owns the geometry
-    // (numeric base/width/direction), the session recording (capture/clobbered/movers),
+    // (numeric base/width/direction), the session recording (capture/finPlan/movers),
     // the row hold and the reveal snapshot, and the outgoing-NP np-locked unlock. The pane
     // BUILD — classify, clone/capture, real source resolution, the NP pill, and the
     // outgoing-before-render ordering — is Swipe.buildConstruction (L1). The destination
@@ -512,8 +515,6 @@
         d.animSync = (d.animSync || 0) + c.capture.animSync;
         d.animRes = c.capture.animRes;
       }
-      // The same-browse-host carrier the finalizer reads on an abort (plan §3, F6).
-      d.clobbered = c.sourceWasClobbered;
       // Outgoing-NP np-locked unlock stays app-side (plan §5): when NP is the SOURCE the
       // body unlocks so the real nav buttons show as the pill slides out. (The incoming-NP
       // unlock rides with env.renderDestination above.) `decorations` is hoisted to the
@@ -1156,7 +1157,7 @@
         // re-materializes its rows, whose art must reload). Reported 2026-07-19 as
         // "cover images flash on each aborted swipe return" — it became noticeable once
         // .178 made aborts actually complete on every swipe.
-        if (!commit && cur.clobbered) {
+        if (!commit && cur.finPlan.abortRender === 'rerender') {
           applyScreen(dest, { render: true, resetScroll: false, keepGhosts: true });
           mark('applied');
           window.scrollTo(0, cur.scroll0);
@@ -1180,9 +1181,10 @@
         reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'), cover);
         if (commit) applyScreen(dest, { render: false });   // dest already rendered live → reconcile only
         else {
-          // Aborted → restore the current screen (re-render only if its element was
-          // clobbered, i.e. browse→browse) + put back the exact starting scroll.
-          applyScreen(dest, { render: cur.clobbered, resetScroll: false });
+          // Aborted → restore the current screen (re-render only if the declared
+          // finalization decision is 'rerender', i.e. browse→browse) + put back the
+          // exact starting scroll.
+          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });
           window.scrollTo(0, cur.scroll0);
         }
         finishing = false;

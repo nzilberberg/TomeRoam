@@ -41,13 +41,17 @@ const VERIFIED = {
   // ARMED still finishes with NO navigation; the clear is ownership bookkeeping, not a
   // routing change. Pin moves, model §4 stands. Was 'f1d6b8391fa4ad57'.
   gestureEnd: '9a82592f5d21db7b',
-  // Re-verified 2026-07-20 for stage 3 (session owner). The region text changed —
-  // begin()'s hard reset gained `session = null`, the log gained `sid=`, and its
-  // comment was corrected — but the SEMANTICS the model mirrors did NOT: supersession
-  // is still reject-while-finishing, else hard-reset-and-arm (frozen model §5). So the
-  // parity claim stands and only the pin moves. Was 'a470962594518cb9' (pre-stage-3),
-  // then 'd455d0d197ea3af8' (before the comment fix).
-  supersession: 'c5ab2fae0fd03654',
+  // Re-verified 2026-07-27 for stage 6d: the recovery reader (app.js begin(), ~415) now
+  // reads the declared `cur.finPlan.abortRender` (plus the `cur.live` build-ran conjunct)
+  // instead of the retired `cur.clobbered` runtime byproduct, and the arm-time session
+  // literal computes `finPlan` in place of the old `clobbered: false` initializer — both
+  // inside this fingerprinted region. The SEMANTICS the model mirrors did NOT change:
+  // supersession is still reject-while-finishing, else hard-reset-and-arm, with the same
+  // render/scroll outcome on every reachable transition (PLAN-swipe-stage6d.md §3, byte-
+  // identical parity). So the parity claim stands and only the pin moves. Was
+  // 'a470962594518cb9' (pre-stage-3), then 'd455d0d197ea3af8' (before the comment fix),
+  // then 'c5ab2fae0fd03654' (pre-stage-6d).
+  supersession: '502467fc1286f5e1',
 };
 
 // Every line in js/app.js that appends to or rebinds navStack, as it stood when the

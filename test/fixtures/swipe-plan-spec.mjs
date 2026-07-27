@@ -37,11 +37,11 @@ export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options
 //
 // expectedFinalization carries FROZEN finalization DATA — currently just the abort
 // re-render rule ('rerender' iff the source's #browse host was overwritten mid-drag,
-// i.e. browse->browse). It is NOT consumed by production in stage 4 (finalizationPlanFor
-// lands in stage 6) and NOT compared against production yet; it is here so the rendered
-// frozen model keeps documenting abort behaviour without a second mirror. Its presence in
-// this fixture must NOT be read as "finalization is verified" — the stage-4 tests compare
-// production against expectedConstruction only.
+// i.e. browse->browse). Stage 6d builds js/swipe.js finalizationPlanFor() and turns this
+// data into a LIVE oracle: test/swipe-stage6d.test.js compares production
+// finalizationPlanFor(classification).abortRender against expectedFinalization.abortRender
+// for all 8 structural cases. The DATA is unchanged from stage 4 — only its consumption is
+// new.
 //
 // expectedHosts carries the FROZEN sourceHost/destinationHost the STAGE-5 classification must
 // project (PLAN-swipe-stage5.md §3, F1-r) — a hand-written independent oracle, NOT derived from

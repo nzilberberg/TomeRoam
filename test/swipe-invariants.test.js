@@ -373,9 +373,10 @@ test('supersession CONTROL — the mid-drag render really does put the destinati
   } finally { h.dispose(); }
 });
 
-// LIVE GUARD (Stage 6a, closed KR-swipe-source-rerender). The supersession pre-stack
-// recovery re-renders the SOURCE into the shared #browse (app.js begin():
-// applyScreen(currentDesc(), { render: d.clobbered }) inside the hold envelope), so the
+// LIVE GUARD (Stage 6a, closed KR-swipe-source-rerender; stage 6d re-derived the render
+// flag). The supersession pre-stack recovery re-renders the SOURCE into the shared
+// #browse (app.js begin(): applyScreen(currentDesc(), { render: cur.live &&
+// cur.finPlan.abortRender === 'rerender' }) inside the hold envelope), so the
 // host content matches the screen the stack + navbar return to — closing the wrong-page/
 // wrong-tap class .178 fixed. Before the build it failed MEASURED with
 // renders = ["books","authors","books"] (mid-drag put Books in, nothing put Authors back);

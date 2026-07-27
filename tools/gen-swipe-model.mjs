@@ -232,14 +232,17 @@ export const TERMINATION = [
     basis: 'parity', where: 'move(): releaseGesture(); d = null; return — before start()' },
   { reason: 'touch-cancel (dragging)', nav: 'settle decision', screen: 'from decision', scroll: 'commit/abort', pane: 'normal settle',
     basis: 'parity', where: 'touchcancel shares onEnd with touchend' },
-  { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: 'currentDesc(); rerender iff d.clobbered', scroll: 'restore d.scroll0 (live)', pane: 'dispose orphan',
+  { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: "currentDesc(); rerender iff finPlan.abortRender==='rerender'", scroll: 'restore d.scroll0 (live)', pane: 'dispose orphan',
     // basis stays 'parity' — the swipe-model gate requires every TERMINATION row to name
     // where its behavior is VERIFIED against current code, and this row does. But its
     // screen/scroll columns now carry the SR/SC repairs, which §10 (the gated §8A ledger)
     // classifies as NEW POLICY. policyRef marks that so the rendered basis is not read as
     // "not a policy change" (Poirot F2 / StandardsDocument §7 within-document consistency).
     basis: 'parity', policyRef: 'screen+scroll = SR/SC, NEW POLICY (§10)',
-    where: 'begin(): releaseGesture, resetSwipeStyles, applyScreen(currentDesc(),{render:d.clobbered, resetScroll:d?false:undefined}), scrollTo(d.scroll0), dropRowHold LAST, session/d=null LAST' },
+    // Stage 6d retired the runtime d.clobbered byproduct: the recovery reader now derives
+    // the render flag from the declared cur.finPlan.abortRender (plus the cur.live
+    // build-ran conjunct), computed at arm time from Swipe.finalizationPlanFor().
+    where: "begin(): releaseGesture, resetSwipeStyles, applyScreen(currentDesc(),{render:cur.live && cur.finPlan.abortRender==='rerender', resetScroll:d?false:undefined}), scrollTo(d.scroll0), dropRowHold LAST, session/d=null LAST" },
 ];
 
 /** §3.7 — recovery is keyed on PHASE, never on reason. ALL ROWS ARE NEW POLICY. */
@@ -409,8 +412,10 @@ export function render() {
   P('            landed the pre-stack recovery): releaseGesture; resetSwipeStyles');
   P('            (dispose the old pane / stray ghosts + clear inline styles); recover the');
   P('            source PRE-STACK while the Browse hold is STILL held —');
-  P('            applyScreen(currentDesc(), {render: d.clobbered, resetScroll:false})');
-  P('            re-renders the source into #browse iff the drag clobbered it, then');
+  P('            applyScreen(currentDesc(), {render: cur.live && cur.finPlan.abortRender===');
+  P('            \'rerender\', resetScroll:false}) re-renders the source into #browse iff the');
+  P('            declared same-browse-host abort decision says so (stage 6d\'s');
+  P('            finalizationPlanFor, retiring the old d.clobbered runtime byproduct), then');
   P('            window.scrollTo(0, d.scroll0) restores the start scroll; dropRowHold');
   P('            LAST (endHold then realizes the SUSPENDED source rows against the');
   P('            settled scroll, reusing them rather than rebuilding); session = null,');
@@ -431,7 +436,8 @@ export function render() {
   P('            no longer left at the DESTINATION\'s scroll (its mid-drag render had run');
   P('            positionOnEnter).');
   P('   [policy] (2) SOURCE CONTENT — IMPLEMENTED (stage 6a). The recovery re-renders the');
-  P('            source into #browse when the drag clobbered it (d.clobbered), so the host');
+  P('            source into #browse when the declared abort decision is \'rerender\' (stage');
+  P('            6d\'s finPlan.abortRender, retiring the old d.clobbered byproduct), so the host');
   P('            no longer keeps the DESTINATION\'s content while the stack and navbar say');
   P('            source. The .218 defect was renders = ["books","authors","books"] after');
   P('            Authors->Books is superseded — an I11 wrong-page/wrong-tap violation of');

@@ -106,11 +106,11 @@ test('OR — the source re-render precedes the successor arming: recovery restor
 });
 
 // ── NC (red-first) — a NON-clobber (overlay-source) supersession ─────────────────────
-// §9 NC. When the superseded live drag's SOURCE is an overlay (Options), #browse was
-// never clobbered by the source (d.clobbered === false), so the recovery must NOT
+// §9 NC. When the superseded live drag's SOURCE is an overlay (Options), the source never
+// overwrote #browse (the declared abortRender is 'none'), so the recovery must NOT
 // re-render #browse — but it must STILL restore the starting scroll. HEAD restores
-// neither, so the scroll half is red. Mutation (recovery re-renders ignoring d.clobbered)
-// → a stray #browse render; mutation (omit scrollTo) → no restore.
+// neither, so the scroll half is red. Mutation (recovery re-renders ignoring the declared
+// abort decision) → a stray #browse render; mutation (omit scrollTo) → no restore.
 test('NC — an overlay-source supersession issues NO spurious #browse re-render but still restores the scroll', async () => {
   const h = boot({ fakeTimers: true });
   try {
@@ -120,8 +120,8 @@ test('NC — an overlay-source supersession issues NO spurious #browse re-render
     await settle(h);
 
     // live back-swipe Options->Books: the overlay source moves as its real element, so
-    // #browse is NOT clobbered by the source (the destination render into #browse is a
-    // separate host, not the source's).
+    // #browse is NOT overwritten by the source (the destination render into #browse is a
+    // separate host, not the source's) — the declared abortRender is 'none'.
     h.touch.start(10, 300, h.$('options'));
     await realSleep(12);
     h.touch.move(120, 302);                 // live
@@ -133,9 +133,9 @@ test('NC — an overlay-source supersession issues NO spurious #browse re-render
     await settle(h);
 
     assert.equal(renders(h).length, rBefore,
-      'an overlay-source supersession must not re-render #browse — nothing clobbered the source');
+      'an overlay-source supersession must not re-render #browse — the declared abortRender is \'none\'');
     assert.ok(scrollCalls(h).length > sBefore,
-      'but a live supersession must still restore the scroll it started from (app.js: window.scrollTo(0, d.scroll0))');
+      'but a live supersession must still restore the scroll it started from (app.js: window.scrollTo(0, cur.scroll0))');
   } finally { h.dispose(); }
 });
 
@@ -265,10 +265,11 @@ test('PS — a superseded pre-stack recovery leaves the stack on the source: the
 // ── OB (green regression guard) — the ORPHAN-pane hard reset ─────────────────────────
 // §9 OB + I17(b). begin() also hard-resets when there is a leftover `.nav-ghost` but NO
 // live session (d === null) — an orphan pane. There is no session-start scroll to restore
-// and currentDesc() is authoritative, so the recovery must NOT read d.scroll0/d.clobbered
-// on this path (d is null). GREEN against HEAD; this pins that the recovery guards on the
-// live session. Mutation (recovery reads d.* unconditionally) → a throw or a spurious scroll
-// on the orphan path.
+// and currentDesc() is authoritative, so the recovery must NOT read cur.scroll0/cur.finPlan
+// on this path (cur is null — the render/scroll ternaries short-circuit before either
+// dereference). GREEN against HEAD; this pins that the recovery guards on the live session.
+// Mutation (recovery reads cur.* unconditionally) → a throw or a spurious scroll on the
+// orphan path.
 test('OB — an orphan-pane hard reset (no live session) disposes as hard-reset and attempts no session-scroll restore', async () => {
   const h = boot({ fakeTimers: true });
   try {
@@ -285,7 +286,7 @@ test('OB — an orphan-pane hard reset (no live session) disposes as hard-reset 
     // A left-edge touch → begin() sees the orphan ghost (d null) → hard reset. Do NOT drive
     // it live: isolate begin()'s orphan branch (no start(), no mid-drag render/scroll).
     assert.doesNotThrow(() => { h.touch.start(10, 300, addRow(h)); },
-      'the orphan hard reset must not throw (it must not read d.scroll0/d.clobbered on a null session)');
+      'the orphan hard reset must not throw (it must not read cur.scroll0/cur.finPlan on a null cur)');
     await settle(h);
 
     assert.ok(hardResets(h).length > hrBefore, 'fixture sanity: the orphan really tripped begin()\'s hard reset');
@@ -296,7 +297,8 @@ test('OB — an orphan-pane hard reset (no live session) disposes as hard-reset 
 
 // ── OB-home (regression, red-first for F1) — orphan hard-reset resets scroll on a home source ─
 // Poirot F1 (Claude/Poirot/f09cf9d-swipe-stage6-supersession.md): the recovery's shared
-// `applyScreen(currentDesc(), { render: d?d.clobbered:false, resetScroll: false })` forces
+// `applyScreen(currentDesc(), { render: cur?(cur.live && cur.finPlan.abortRender===
+// 'rerender'):false, resetScroll: false })` (stage 6d re-derived the render flag) forces
 // resetScroll:false onto the ORPHAN sub-case (d===null) too — not just the live-recovery
 // branch that needs it (so applyScreen won't stomp the explicit d.scroll0 restore). For an
 // orphan hard-reset whose currentDesc() is `home`, the PRE-6a code reset the document scroll
