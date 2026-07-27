@@ -928,3 +928,29 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   rest of the finalization plan (commit/abort-scroll/stackEffect/reveal + the unified `planFor()` wrapper),
   the host fields, the pane-lifecycle interface, pane-owning supersession, the `recoverSession` matrix, the
   I12 null-on-retire half, and `fadePanes`. Bench only; on-device verification owed.
+
+- Stage 6e (owner-driven owned-pane disposal) IMPLEMENTED and green — 2026-07-27. The F(dispose) half of the
+  pane-lifecycle interface (`PLAN-swipe-reveal.md` §3.4) lands for its one live consumer: a typed, session-owned
+  `disposeOwnedPanes(session, reason)` (js/app.js, near `releaseGesture`/`dropRowHold`) removes exactly the
+  session's `own==='owned-pane'` movers still attached, never a `borrowed-real` or `owned-decoration` mover (a
+  structural guarantee of the `own` filter, EC §4.4). At the `begin()`-recovery site, the owned branch
+  (`cur = d || session` truthy) calls `disposeOwnedPanes(cur, 'superseded')` and threads `keepGhosts:true` at
+  BOTH the explicit `resetSwipeStyles` call and the `applyScreen` opts, so the DOM-global `.nav-ghost` sweep no
+  longer duplicates the removal on that branch (closing the EC §4.3 "operate through whatever is global"
+  anti-pattern for the owned case). The ORPHAN branch (`cur` null) is unchanged — the full `resetSwipeStyles`
+  sweep still disposes a leftover ghost with no owning session. Behaviour-preserving EXTRACTION (byte-identical
+  parity on every reachable state — the owner-driven removal set equals the set the old sweep removed for the
+  owned case), no known-red, no PolicyLedger entry (EC §4.19). Dependency rationale: over the 6d-deferred set, F
+  (the pane-lifecycle interface) is the correct next root now that D (the declarative finalization decision) is
+  shipped; F splits into F(dispose) — this slice, off the flash-timing surface — and F(release), the paint-gated
+  half the reveal centralization (C) is expressed in; C depends on F(release) and stays deferred; the compositor
+  flash is promised by neither. Gates: Charpy FORGE (`Claude/Charpy/PLAN-swipe-stage6e-3e1b158.md`), Loki
+  HELD_STONE (`Claude/Loki/STRIKE-swipe-stage6e-r1.md`, two residuals: the borrowed-real-never-removed invariant
+  is tested (BR); the "every connected `.nav-ghost` is an owned-pane mover" invariant is unguarded and flagged
+  owed, not constructible at HEAD), Curie RED-first (`Claude/Curie/RED-swipe-stage6e.md`; NOOP/RSN red at HEAD,
+  DP/BR/HR/DEC/RGreveal parity + mutation-proven), Brunel BUILD_GREEN (`Claude/Brunel/swipe-stage6e-build.md`).
+  Ratified plan `Claude/Plans/PLAN-swipe-stage6e.md`. STILL DEFERRED to 7: F(release) (the paint-gated
+  `pane.release()` half, the flash core, = C); the SETTLING/REVEALING pane-owning supersession (B); the full
+  pane object; the remaining `dispose(reason)` enum members and the folded orphan/decoration path (G); a
+  production guard for the unguarded stranding invariant (Loki residual 2, routed to a plan amendment); the
+  finalization remainder. Bench only; on-device verification owed.

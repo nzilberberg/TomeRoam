@@ -215,6 +215,27 @@ Full sharded mutation-sweep is CI's post-push gate (local unsharded run exceeds 
 pane-owning supersession home↔browse/→home (B), rest of finalization (commit/scroll/stackEffect/reveal + unified
 planFor()), host fields, recoverSession matrix (G), null-writes/listener (A), fadePanes, the compositor flash.
 
+**Stage 6e SCHEME-COMPLETE (2026-07-27) — build target `1ebbf5d`.** The F(dispose) half — owner-driven typed
+emergency disposal replacing the DOM-global `.nav-ghost` sweep at the one owned-pane supersession site (EC §4.3).
+`disposeOwnedPanes(owner,reason)` (js/app.js) removes exactly the caller's `own==='owned-pane'` movers (parentNode
+guard, traces only on real disposal — Charpy F2); the begin()-recovery OWNED branch calls it + threads
+`keepGhosts:true` at BOTH sweep sites (explicit `resetSwipeStyles` :441 + `applyScreen` internal reset :442), the
+ORPHAN branch keeps the full sweep. Vitruvius CONFIRMED (not assumed) C depends on F — the reveal centralization
+is *expressed as* `pane.release()`/`dispose()`, so it can't precede the interface. **Off the flash surface**
+(RGreveal pins reveal timing untouched) — the low risk is the point in its favour as the next foundation. Chain:
+Charpy **FORGE** (first-pass, no TEMPER) → **Loki HELD_STONE** (12/12 probe, closed the mid-build-supersession
+fracture; named two residuals) → Curie red-first with the **NOOP anti-no-op cell** (spies `.nav-ghost` sweeps=0 on
+the owned branch — catches a build that threads keepGhosts at only one site; the DOM outcome alone can't, since no
+stray ghost is constructible) → **Brunel BUILD_GREEN** (heeded the 6d lesson — sweep run synchronously, no stuck
+mutant) → **Poirot SHIP** (verified by execution: dropped keepGhosts at each site, NOOP reddened both) →
+**Mendeleev BARE_CELLS** (the anti-no-op guard had no *registered* single-site mutant — EC §4.10) → Curie
+registered #72–76 (keepGhosts-drop ×2, RSN mistag/emit, HR orphan) → **Mendeleev ADEQUATE** (722/721/0/1).
+Completion gate 6/6. **Loki residual 2 OWED** (the unguarded "every `.nav-ghost` under a live session is an
+owned-pane mover" invariant — unconstructible at HEAD since `Browse.render` is async; a future sync-throwing
+`renderDestination` would reopen it → wants a guard/plan-amendment in a later slice). **Still deferred (the flash
+arc):** F(release)=C the I10/I17 reveal centralization (the flash fix), pane-owning supersession (B), the rest of
+`planFor()`, recoverSession matrix (G), null-writes/listener (A). C is now next by dependency.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired

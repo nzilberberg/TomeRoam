@@ -32,7 +32,9 @@ scroll at a time); supersession is ordered by `sessionSeq`. No cross-device orde
 **7. Resources acquired.** Touch listeners (on the start target); the settle
 `requestAnimationFrame`; settle/reveal timers; a `transitionend` listener; owned panes
 (ghost, home-snapshot); the NP pill clone (owned-decoration); borrowed real nodes
-(#home/#browse/overlay) with temporary transforms; a row hold.
+(#home/#browse/overlay) with temporary transforms; a row hold. **Stage 6e:** owned-pane
+disposal on a supersession is now a typed operation, `disposeOwnedPanes(session, reason)`
+(js/app.js), not a resource of its own.
 
 **8. Resource owner.** The gesture session (`d`/`cur`). Stage 3 stamped the session id;
 resource-handle ownership (settle rAF stored on the session, cancelled in finalize) landed at
@@ -64,7 +66,18 @@ paneRemovalPolicy); PANE-OWNING supersession incl. home↔browse and →home (B)
 (C, the flash core); the rest of the finalization plan (commit/abort-scroll/stackEffect/reveal + the unified
 `planFor()` wrapper); host fields `sourceHost`/`destinationHost`/`sameBrowseHost`; the `recoverSession` pre/post-stack
 matrix (G); the NULL-on-retire writes + `transitionListener` ownership (A); `fadePanes`; and the headline
-compositor flash.
+compositor flash. **Stage 6e (owner-driven owned-pane disposal, 2026-07-27):** the F(dispose) half of the
+pane-lifecycle interface lands for its one live consumer. `disposeOwnedPanes(session, reason)` (js/app.js,
+near `releaseGesture`/`dropRowHold`) removes exactly the session's `own==='owned-pane'` movers still
+attached — never a `borrowed-real` or `owned-decoration` mover (a structural guarantee of the `own` filter,
+not an enumerated exclusion). The `begin()`-recovery owned branch (`cur = d || session` truthy) calls
+`disposeOwnedPanes(cur,'superseded')` and threads `keepGhosts:true` at BOTH the explicit `resetSwipeStyles`
+call and the `applyScreen` opts, so the DOM-global `.nav-ghost` sweep (§4.3's "operate through whatever is
+global" anti-pattern) no longer duplicates the removal on that branch. The ORPHAN branch (`cur` null) is
+UNCHANGED — the full `resetSwipeStyles` sweep still disposes a leftover ghost with no owning session (§14).
+Behaviour-preserving EXTRACTION (byte-identical parity — the owner-driven removal set equals the set the old
+sweep removed for the owned case), no known-red. F(release) (the paint-gated `pane.release()` half, the flash
+core) and the SETTLING/REVEALING pane-owning supersession (B) remain deferred — see 23.
 
 **9. Ownership endpoint.** `sessionDone(cur)` / `endOwnership()`. ARMED end: after listeners
 released. Vertical abandon: after listeners + resources released. Commit/abort without a pane:
@@ -89,8 +102,20 @@ source into #browse; restore starting scroll. Both honor exactly-once finalize.
 §4.17). Do not restore a source beneath a stack that already names the destination.
 
 **14. Emergency disposal rules.** `begin()`'s hard reset disposes an ORPHAN pane (no owner)
-before arming. It must NOT dispose a pane owned by an active SETTLING/FINALIZING/REVEALING
-session (I17). Emergency disposal may bypass the paint barrier only for that named reason.
+before arming, via the DOM-global `resetSwipeStyles` sweep. A pane-owning DRAGGING supersession
+(the one live consumer today) is disposed instead through the typed, owner-driven
+`disposeOwnedPanes(session,'superseded')` (Stage 6e) — the same emergency-teardown obligation,
+now attributed to its owner rather than a DOM-global query. It must NOT dispose a pane owned by
+an active SETTLING/FINALIZING/REVEALING session (I17(a)) — unchanged, still gated by the 6c
+`finishing` check before the recovery block is reached. **Owed (Loki `STRIKE-swipe-stage6e-r1`
+residual 2, unguarded):** the invariant "every connected `.nav-ghost` under a live session is an
+owned-pane mover" holds today only because the one mid-build callback
+(`env.renderDestination`→`Browse.render`) is `async`, converting a sync-section throw into a
+rejected promise rather than a synchronous unwind. A future synchronous throw in that path (or a
+sync rewrite of `Browse.render`) would strand an opaque pane the owned branch's `keepGhosts:true`
+no longer self-heals. No production guard exists for this; it is not constructible at HEAD, so no
+red test could be authored for it (Curie, `RED-swipe-stage6e.md` §5). Routes to a plan amendment
+before the next `renderDestination` change.
 
 **15. Persistence model.** None — the gesture is entirely in-memory and per-process.
 
@@ -118,7 +143,12 @@ documented impossible-before-the-planner, not a production branch.
 **19. Mutation cases.** Registered in `tools/mutate.mjs` (swipe4 F1/F3/F4/F5/F6/F7/no-dead-
 fields/F-i/F-ii/§15/§4.11; stage-6d FP/AB — force `abortRender` to `'none'`; RC — drop the
 recovery reader's `cur.live` build-ran conjunct; BC-1a/BC-1b — `finalizationPlanFor` no longer
-throws on an unhandled `fromKind`/`toKind`), each mapped to the test it reddens; re-run by
+throws on an unhandled `fromKind`/`toKind`; stage-6e DP/attribution — `disposeOwnedPanes`'s own
+filter never matches, so it removes nothing; stage-6e BR — `disposeOwnedPanes` broadens to
+remove every mover regardless of `own`; stage-6e DEC — the `.np-pill-float` removal in
+`js/nav.js` is mistakenly guarded behind `keepGhosts` too; the pre-existing "begin() stops
+hard-resetting" mutation re-anchored to also gut the `disposeOwnedPanes` call, still covering
+DP/HR/BR's snapshot clause), each mapped to the test it reddens; re-run by
 `tools/mutation-sweep.mjs`, anchors gated by `test/mutation-anchors.test.js`.
 
 **20. Known-red behavior.** No swipe known-red todos remain. The two stage-2 NEW-POLICY todos —
@@ -131,17 +161,25 @@ headline aborted-swipe repaint/flash (memory `tomeroam-swipe-repaint-saga`).
 
 **21. Current policy-ledger references.** DecisionLog: the staged-review policy; construction-
 only planFor phase-split; three-layer oracle + mirror retirement; same-destination
-documented-impossible; the stage-6 cleanup debt — release-half done in 6b (settle/reveal timers session-owned + retired), pane-less-supersession + settle-phase identity guard done in 6c; **the finalization-decision extraction done in 6d — `sourceWasClobbered`/`d.clobbered` retired in favour of the declared frozen `finalizationPlanFor(classification).abortRender`, the FIRST finalization field of the rich §3.3 `planFor()`, behaviour-preserving (no PolicyLedger entry, EC §4.19);** the null-write/listener half + pane-owning supersession + the finalization remainder deferred to 7.
+documented-impossible; the stage-6 cleanup debt — release-half done in 6b (settle/reveal timers session-owned + retired), pane-less-supersession + settle-phase identity guard done in 6c; **the finalization-decision extraction done in 6d — `sourceWasClobbered`/`d.clobbered` retired in favour of the declared frozen `finalizationPlanFor(classification).abortRender`, the FIRST finalization field of the rich §3.3 `planFor()`, behaviour-preserving (no PolicyLedger entry, EC §4.19);** **the owner-driven owned-pane disposal done in 6e — `disposeOwnedPanes(session,'superseded')` replaces the DOM-global `.nav-ghost` sweep's owned-pane effect at the `begin()`-recovery site, behaviour-preserving (no PolicyLedger entry, EC §4.19);** the null-write/listener half + pane-owning supersession (release half) + the finalization remainder deferred to 7.
 
 **22. Explicitly out of scope.** Cross-device sync; the visual flash bug's root cause
 (separate open investigation); playback; the nav stacks themselves (Nav).
 
 **23. Conditions requiring revision.** Stage 5 (move the pane builders into swipe.js — done); stage 6
 finalization half: the `abortRender` field is DONE (Stage 6d — `finalizationPlanFor(classification)
-.abortRender`, the abort/recovery re-render decision, retiring `clobbered`/`sourceWasClobbered`). Still
-owed by later finalization slices: `commit` screen/scroll, `abort` scroll as a plan field, `stackEffect`,
-`reveal`/`paneRemovalPolicy`, the unified rich `planFor()` wrapper, and reintroducing `sourceHost`/
-`destinationHost`/`sameBrowseHost` with their consumers (the pane/lease/source-resolution slice) — none of
-those has a current consumer, so each returns in the commit that first reads it (§4.15). Also: any change to
-navTo's push/replace rule (the same-destination-impossible argument depends on it); adding a screen kind or a
-parameterized descriptor family.
+.abortRender`, the abort/recovery re-render decision, retiring `clobbered`/`sourceWasClobbered`). The
+pane-lifecycle interface's `dispose(reason)` half is DONE for its one live consumer (Stage 6e —
+`disposeOwnedPanes(session,'superseded')` on a pane-owning DRAGGING supersession). Still owed: the
+paint-gated `release()` half (the flash core, C); the SETTLING/REVEALING pane-owning supersession (B);
+the full pane OBJECT `{kind, element, source, pin, equivalence}` (dead members, no consumer); the
+remaining `dispose(reason)` enum members `{'lease-invalid','destination-gone','finalize-threw'}` (G) and
+routing the orphan `'hard-reset'`/decoration removal through the typed disposer; `paneRemovalPolicy` as a
+finalization-plan field; `commit` screen/scroll, `abort` scroll as a plan field, `stackEffect`,
+`reveal`, the unified rich `planFor()` wrapper, and reintroducing `sourceHost`/`destinationHost`/
+`sameBrowseHost` with their consumers (the pane/lease/source-resolution slice) — none of those has a
+current consumer, so each returns in the commit that first reads it (§4.15). A production guard for the
+unguarded stranding invariant named in §14 (Loki residual 2) is also owed, routed to a plan amendment.
+Also: any change to navTo's push/replace rule (the same-destination-impossible argument depends on it);
+adding a screen kind or a parameterized descriptor family; a synchronous rewrite of `Browse.render` or
+`env.renderDestination` (reopens §14's residual).

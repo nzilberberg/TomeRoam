@@ -489,6 +489,46 @@ const MUTATIONS = [
     file: 'js/nav.js',
     from: "    document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone",
     to:   "    if (!keepGhosts) document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // mutated: wrongly guarded" },
+  // ── Stage 6e Mendeleev-remediation (AUDIT-swipe-stage6e BARE_CELLS): close the Mutation-cases
+  // dimension (EC §4.10 — non-vacuity evidence must be RUNNABLE in tooling, not a one-time hand
+  // check). The NOOP.mechanism anti-no-op guard, the RSN reason-correctness/emit guard, and an
+  // HR orphan-specific mutant were unregistered. See Claude/Curie/RED-swipe-stage6e.md
+  // §"Mendeleev-remediation".
+  //
+  // B1 — the anti-no-op crux (Loki STRIKE-swipe-stage6e-r1 residual 1). The owned branch must
+  // suppress the DOM-global .nav-ghost sweep at BOTH sites (the explicit resetSwipeStyles AND
+  // applyScreen's internal one). Dropping keepGhosts at EITHER site alone lets that one sweep run;
+  // the owned pane is already gone via disposeOwnedPanes, so the DOM outcome is UNCHANGED and only
+  // NOOP.mechanism's sweep-count reddens (count 1) — which is exactly why a DOM-outcome cell (DP)
+  // cannot catch it and a mechanism cell must. Two one-site mutants, one per site.
+  { name: 'swipe6e NOOP-a: owned branch drops keepGhosts at the explicit resetSwipeStyles (app.js) -> the global .nav-ghost sweep runs (-> NOOP.mechanism)',
+    from: '        resetSwipeStyles(cur ? true : undefined);',
+    to:   '        resetSwipeStyles(undefined);' },
+  { name: 'swipe6e NOOP-b: owned branch drops keepGhosts in the applyScreen opts (app.js) -> applyScreen\'s internal sweep runs (-> NOOP.mechanism)',
+    from: "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
+    to:   "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });" },
+  // B2 — RSN reason correctness (plan §9 promised a mistag mutant that never landed). (a) the
+  // disposal reason TOKEN is wrong -> RSN's "superseded recorded" assertion reddens; (b) the trace
+  // fires UNCONDITIONALLY, ignoring the `disposed` flag (Charpy F2) -> a pane-LESS supersession
+  // then claims a disposal that never happened, reddening RSN's pane-less-no-trace clause.
+  { name: 'swipe6e RSN-mistag: the disposal reason token is wrong (-> RSN "superseded" recorded)',
+    from: "        if (cur) disposeOwnedPanes(cur, 'superseded');",
+    to:   "        if (cur) disposeOwnedPanes(cur, 'wrong-reason');" },
+  { name: 'swipe6e RSN-emit: the disposal trace fires unconditionally, ignoring the disposed flag (-> RSN pane-less-no-trace clause / Charpy F2)',
+    from: "      if (disposed && window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);",
+    to:   "      if (window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);" },
+  // N1 — HR orphan-specific. The orphan branch (cur null) is swept at BOTH sites; this two-part
+  // mutant forces keepGhosts on BOTH so a stray orphan is never disposed (suppressing only one
+  // leaves the other sweeping it). The owned branch is unchanged — keepGhosts is already true
+  // there — so this reddens ONLY the orphan cell HR (the coarse whole-block hard-reset mutant #13
+  // also reddens HR, but not orphan-specifically).
+  { name: 'swipe6e HR: the recovery keeps ghosts on the ORPHAN branch too (both sweep sites forced keepGhosts), stranding a stray orphan (-> HR test)',
+    from: '        resetSwipeStyles(cur ? true : undefined);',
+    to:   '        resetSwipeStyles(true);',
+    also: {
+      from: "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
+      to:   "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: true });",
+    } },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
