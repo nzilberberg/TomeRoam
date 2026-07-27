@@ -70,7 +70,7 @@ before this document is trusted again. Never update a pinned constant alone.
    home -> browse                    home() -> books()                       pane=yes abort=none     back=reachable
    overlay -> overlay                general() -> options()                  pane=no  abort=none     back=reachable
    overlay -> browse                 options() -> books()                    pane=no  abort=none     back=reachable
-   browse -> overlay                 books() -> nowplaying()                 pane=no  abort=none     back=reachable
+   browse -> overlay                 books() -> nowplaying()                 pane=yes abort=none     back=reachable
    nowplaying -> files (new-forward)  nowplaying() -> files(A)                pane=no  abort=none     back=reachable
    malformed payload                 authorBooks(—) -> books()               REJECTED source malformed-descriptor:authorBooks-without-author
    malformed payload                 books() -> files(—)                     REJECTED destination malformed-descriptor:files-without-book

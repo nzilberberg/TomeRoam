@@ -529,6 +529,28 @@ const MUTATIONS = [
       from: "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
       to:   "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: true });",
     } },
+  // ── SWIPE stage 6f: outgoing app-ghost for in-flow→overlay (PLAN-swipe-stage6f.md) ──
+  // The single production edit is the outgoing decision value in constructionPlanFor.
+  // Reverting it to the pre-6f rule (keyed off destination browse only, instead of
+  // "destination not home") re-opens the hole the five stage-6f red cells were authored
+  // against: in-flow->overlay again borrows the real #browse/#home as the outgoing mover.
+  { name: 'stage6f: constructionPlanFor outgoing reverts to the pre-6f rule, keyed off destination browse only (-> SIbrowse/SIhome/GHOST commit+abort/MODEL)',
+    file: 'js/swipe.js',
+    from: [
+      "    const outgoing = c.fromKind === 'overlay' ? 'real-source'",
+      "      : (c.toKind === 'home' ? 'real-source' : 'app-ghost');",
+    ].join('\n'),
+    to: [
+      "    const outgoing = c.fromKind === 'overlay' ? 'real-source'",
+      "      : (c.toKind === 'browse' ? 'app-ghost' : 'real-source');",
+    ].join('\n') },
+  // REVEAL's dedicated mutant (plan §9): route the browse→overlay ABORT reveal through
+  // the paint-gated hold instead of the plain dropPanes() path. Widening the abort-hold
+  // condition to fire on every abort (not just a browse->browse rerender) makes the
+  // browse→overlay abort hold its ghost past finalize awaiting a paint frame.
+  { name: 'stage6f REVEAL: the browse→overlay abort reveal is routed through the paint-gated hold instead of the plain no-hold path (-> REVEAL no-hold test)',
+    from: "        if (!commit && cur.finPlan.abortRender === 'rerender') {",
+    to:   "        if (!commit) {" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

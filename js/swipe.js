@@ -111,11 +111,12 @@ const Swipe = (() => {
 
   // constructionPlanFor — what start() must BUILD. Immutable. No default branch; an
   // unhandled classification THROWS (plan §3.3).
-  //   outgoing         'app-ghost'        freeze the source as a ghost (owned-pane) so
-  //                                        the incoming can render into the real #browse
+  //   outgoing         'app-ghost'        freeze the source as a ghost (owned-pane) —
+  //                                        an in-flow source (home/browse) going to any
+  //                                        non-home destination (browse or overlay), so
+  //                                        the real in-flow view is never a mover
   //                    'real-source'      move the real source element (borrowed-real):
-  //                                        an overlay, or an in-flow view when the
-  //                                        incoming does not need #browse
+  //                                        an overlay, or an in-flow view going to home
   //   incoming         'home-snapshot'    a static Home snapshot at top (owned-pane)
   //                    'real-destination' the real overlay element, or the real #browse
   //                                        with the destination rendered into it
@@ -132,8 +133,12 @@ const Swipe = (() => {
     if (KINDS.indexOf(c.fromKind) === -1) {
       throw new Error('Swipe.constructionPlanFor: unhandled source kind "' + c.fromKind + '"');
     }
+    // outgoing is an app-ghost iff the source is in-flow (not overlay) AND the
+    // destination is NOT home (stage 6f: widened from "destination is browse" to
+    // include in-flow->overlay, so the real in-flow view is never a mover on those
+    // transitions too; in-flow->home stays real-source, deferred, plan §10).
     const outgoing = c.fromKind === 'overlay' ? 'real-source'
-      : (c.toKind === 'browse' ? 'app-ghost' : 'real-source');
+      : (c.toKind === 'home' ? 'real-source' : 'app-ghost');
     let incoming, renderDestination;
     if (c.toKind === 'overlay') { incoming = 'real-destination'; renderDestination = 'none'; }
     else if (c.toKind === 'home') { incoming = 'home-snapshot'; renderDestination = 'none'; }

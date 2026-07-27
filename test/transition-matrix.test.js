@@ -80,9 +80,9 @@ test('the frozen spec builds a pane exactly when the GHOST/SNAPSHOT rules say', 
   const spec = await loadSpec();
   const wrong = [];
   for (const c of spec.STRUCTURAL_CASES) {
-    //   GHOST    iff source is not an overlay AND destination is browse
+    //   GHOST    iff source is not an overlay AND destination is NOT home
     //   SNAPSHOT iff destination is home
-    const expectGhost = c.from !== 'overlay' && c.to === 'browse';
+    const expectGhost = c.from !== 'overlay' && c.to !== 'home';
     const expectSnap = c.to === 'home';
     const ec = c.expectedConstruction;
     if ((ec.outgoing === 'app-ghost') !== expectGhost) wrong.push(`${c.from}->${c.to} ghost`);

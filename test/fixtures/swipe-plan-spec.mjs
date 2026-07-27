@@ -29,8 +29,8 @@
 export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options' };
 
 // The eight structural transitions (home->home is not a transition). Each expectation
-// was written against js/app.js start() as it stood at build .226 and mirrors it:
-//   outgoing 'app-ghost' iff the SOURCE is not an overlay AND the DESTINATION is browse
+// mirrors js/swipe.js constructionPlanFor() as of stage 6f:
+//   outgoing 'app-ghost' iff the SOURCE is not an overlay AND the DESTINATION is NOT home
 //   incoming 'home-snapshot' iff the DESTINATION is home
 //   renderDestination 'browse-host' iff the DESTINATION is browse
 //   decorations [] for every structural case (the NP pill is a MODIFIER, below)
@@ -52,10 +52,10 @@ export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options
 // is `{ todo }` until then. Its presence here must NOT be read as "the hosts are verified".
 export const STRUCTURAL_CASES = [
   { from: 'home',    to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
-  { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
+  { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
   { from: 'browse',  to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'home-snapshot',    renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'home' } },
   { from: 'browse',  to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'rerender' }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
-  { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
+  { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
   { from: 'overlay', to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'home-snapshot',    renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'home' } },
   { from: 'overlay', to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'browse-host' } },
   { from: 'overlay', to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'overlay' } },
@@ -178,7 +178,7 @@ export const MODIFIER_CASES = [
   {
     name: 'Now Playing as destination (browse->overlay) carries an incoming-based pill',
     input: { from: { v: 'books' }, to: { v: 'nowplaying' } },
-    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',
+    expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'none',
       decorations: [NP_DECORATION.destination] },
   },
   {

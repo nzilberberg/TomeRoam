@@ -13,14 +13,14 @@ CONSTRUCTION PLAN by kind (from the frozen spec; abort is frozen finalization da
   from     to        outgoing      incoming          render       pane   abort
   -------  --------  ------------  ----------------  -----------  -----  --------
   home     browse    app-ghost     real-destination  browse-host  yes    none
-  home     overlay   real-source   real-destination  none         no     none
+  home     overlay   app-ghost     real-destination  none         yes    none
   browse   home      real-source   home-snapshot     none         yes    none
   browse   browse    app-ghost     real-destination  browse-host  yes    rerender
-  browse   overlay   real-source   real-destination  none         no     none
+  browse   overlay   app-ghost     real-destination  none         yes    none
   overlay  home      real-source   home-snapshot     none         yes    none
   overlay  browse    real-source   real-destination  browse-host  no     none
   overlay  overlay   real-source   real-destination  none         no     none
 
-concrete pairs building a pane: 27 of 132
+concrete pairs building a pane: 62 of 132
 concrete pairs re-rendering on abort: 12
 concrete pairs carrying the NP pill: 22
