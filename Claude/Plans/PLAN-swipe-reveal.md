@@ -740,7 +740,7 @@ If the rewrite lands and the flash remains, it still succeeded.
       2026-07-22); the destination render dispatch and the Browse hold stay in
       app.js behind env.renderDestination until stages 6/7. Detail:
       Claude/Plans/PLAN-swipe-stage5.md.
-   6. Centralize finalization and reveal ordering (I10, I17). [SLICED: 6a supersession recovery done; 6b async-handle release-half done (settle/reveal timers session-owned + retired). The finalization/reveal centralization itself (I10/I17), finalizationPlanFor/sameBrowseHost/pane-lifecycle, and the I12 null-half remain deferred to 6c/7 — see PLAN-swipe-stage6b.md §11.]
+   6. Centralize finalization and reveal ordering (I10, I17). [SLICED: 6a supersession recovery done; 6b async-handle release-half done (settle/reveal timers session-owned + retired); 6c pane-LESS supersession + settle-phase cur===session identity guard done (overlay-involving set only). The finalization/reveal centralization itself (I10/I17), finalizationPlanFor/sameBrowseHost/pane-lifecycle, PANE-OWNING supersession (home↔browse, →home), and the I12 null-half remain deferred to 6d/7 — see PLAN-swipe-stage6c.md §11.]
    7. Replace Browse hold calls with the lease interface.
    8. All PREEXISTING regression tests remain unchanged and pass; every
       new invariant test is ACTIVE, mutation-verified and green. (Stage 2

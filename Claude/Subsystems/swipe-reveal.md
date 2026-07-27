@@ -41,7 +41,14 @@ double-`rAF` (a two-id handle that always names the currently-pending frame), an
 safety-net timer are now SESSION-OWNED handles retired at their phase resolver (finalize/drop), so no
 loser continuation leaks onto the scheduler queue. Still deferred to the I12 stage (its consumer): the
 NULL-on-retire writes, the `transitionend` listener's session-ownership/removal, and a per-handle-liveness
-observability surface (no testable/consumed surface exists until I12).
+observability surface (no testable/consumed surface exists until I12). **Stage 6c (pane-less supersession,
+2026-07-26):** begin()'s finishing gate is narrowed to its negative form so a live PANE-LESS session (the
+overlay-involving set {home→overlay, browse→overlay, overlay→overlay, overlay→browse}) is supersedable; a
+`cur === session` identity guard on the settle rAF and before finalize's try/finally makes a superseded
+session's stale settle-phase continuation no-op on the successor, and the recovery clears `finishing` on
+every exit (a never-arming tap no longer wedges). Still deferred to 6d/7: the NULL-on-retire writes, the
+`transitionend` listener ownership, PANE-OWNING supersession (home↔browse, →home), and the I10/I17 reveal
+centralization (the flash core).
 
 **9. Ownership endpoint.** `sessionDone(cur)` / `endOwnership()`. ARMED end: after listeners
 released. Vertical abandon: after listeners + resources released. Commit/abort without a pane:
@@ -101,7 +108,7 @@ headline aborted-swipe repaint/flash (memory `tomeroam-swipe-repaint-saga`).
 
 **21. Current policy-ledger references.** DecisionLog: the staged-review policy; construction-
 only planFor phase-split; three-layer oracle + mirror retirement; same-destination
-documented-impossible; the stage-6 cleanup debt release-half done in 6b (settle/reveal timers session-owned + retired), the null-write/listener half deferred to the I12 stage.
+documented-impossible; the stage-6 cleanup debt — release-half done in 6b (settle/reveal timers session-owned + retired), pane-less-supersession + settle-phase identity guard done in 6c; the null-write/listener half + pane-owning supersession deferred to 6d/7.
 
 **22. Explicitly out of scope.** Cross-device sync; the visual flash bug's root cause
 (separate open investigation); playback; the nav stacks themselves (Nav).

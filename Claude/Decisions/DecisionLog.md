@@ -877,3 +877,19 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   the inner paint frame in the half-fired timeout-drop interleaving (rAF stalled in a hidden tab), caught
   pre-build. Part of PLAN-swipe-reveal.md §7 step 6; the finalization centralization (I10/I17) + the rest of
   the seven deferred workstreams remain 6c/7.
+
+- Stage 6c (pane-less supersession + settle-phase identity guard) IMPLEMENTED and green — 2026-07-26. Under
+  the user's Option-A authorization (retire the `finishing` gate's ownership concern), begin()'s finishing
+  gate is narrowed to its negative form `if (finishing && !(session && paneLess(session))) return;` so a live
+  PANE-LESS session (the overlay-involving set {home→overlay, browse→overlay, overlay→overlay, overlay→browse}
+  per the frozen spec paneOf) is supersedable; a `cur === session` identity guard on the settle rAF and BEFORE
+  finalize's try/finally makes a superseded session's stale settle-phase continuation (settle rAF, 340ms
+  fallback, late transitionend) no-op on the successor; the recovery clears `finishing = false` on every exit
+  path (a superseding tap that never arms no longer wedges) and drops the session identity last. Gates: Charpy
+  FORGE (r4, after an escalation on I12-vacuity-under-the-standing-gate → Option-A A/B split, then r1/r2 TEMPER
+  on coverage vacuity + gate form, and a Loki KILL on a mis-enumerated pane-less DOMAIN → re-enumerate from the
+  frozen spec → FORGE), Loki HELD_STONE on the corrected domain (90 checks), Curie red-first (G1/G2/G3/W/
+  W(armed)/PG/G-chain, per-fixture paneOf assertion), Brunel green, Poirot PASS, Mendeleev ADEQUATE. Build
+  `2026-07-26.251` (bench; on-device owed). DEFERRED to 6d/7: PANE-OWNING supersession (home↔browse, →home —
+  the flash surface), the NULL-on-retire writes + transitionListener ownership (I12 consumer), finalizationPlanFor/
+  sameBrowseHost/pane-lifecycle, and the I10/I17 paint-gated reveal centralization (the headline flash bug).

@@ -180,6 +180,21 @@ owed**. **Deferred to 6c/7** (PLAN-swipe-stage6b.md §11): the I12 null-half (fi
 enforcement), finalizationPlanFor/`sameBrowseHost`/pane-lifecycle, and the **I10 reveal centralization** —
 the one that fixes the headline aborted-swipe flash bug.
 
+**Stage 6c SCHEME-COMPLETE (2026-07-26) — bench, not pushed.** Pane-LESS supersession + settle-phase identity
+guard (Option A, ownership half). begin()'s finishing gate narrowed to the negative form so a live pane-less
+session (overlay-involving set) is supersedable; `cur === session` guard on the settle rAF + before finalize's
+try/finally makes a superseded session's stale settle-phase continuation no-op on the successor; recovery
+clears `finishing` on every exit (never-arming tap no longer wedges). Ran under full automation with real
+teeth: an ESCALATION (I12 vacuous under the standing gate → user chose Option A → clean A/B split) → Charpy
+r1/r2 TEMPER (coverage vacuity, gate form) → **Loki KILL** (mis-enumerated pane-less DOMAIN — home↔browse is
+pane-OWNING per the frozen spec) → re-enumerate → Charpy r4 FORGE → **Loki HELD_STONE** (90 checks) → Curie
+red-first → Brunel green (one bench catch: a stuck-mutation artifact from an interrupted sweep, restored) →
+**Poirot PASS** → **Mendeleev ADEQUATE**. Completion gate 6/6 (caught + fixed a manifest glob). §10 scrub done
+(subsystem §8/§21, parent §7 step 6, app.js:722 false comment). Build `2026-07-26.251`; not pushed — on-device
+owed (guard-absorbed / resource-plane). **Deferred to 6d/7:** PANE-OWNING supersession (home↔browse, →home —
+the flash surface), null-writes/listener (I12), and the I10/I17 reveal centralization (headline flash bug).
+Review/audit seats ran on Opus 5.0 per the user's 5.0 directive.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired

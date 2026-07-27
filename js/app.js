@@ -719,7 +719,7 @@
         requestAnimationFrame(tick);
       };
       // Which kind of full-viewport pane this settle built, if any. The owned panes are the
-      // app-ghost (browse→browse) and the home snapshot (→home), both built by
+      // app-ghost (any non-overlay→browse) and the home snapshot (→home), both built by
       // Swipe.buildConstruction; every other transition slides REAL elements and covers
       // nothing. That is the correlation to test.
       const paneKindOf = () => {
