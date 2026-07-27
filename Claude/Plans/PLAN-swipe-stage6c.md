@@ -4,7 +4,29 @@ Type: plan
 
 <!-- vitruvius-gate {"plan_type":"feature","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":true,"persistence_migration":false,"lifecycle_ownership":true},"project_adapter":"tomeroam-js-dom","source_ranges":["js/app.js:351-352","js/app.js:551-553","js/app.js:1159-1182"],"callee_ranges":[],"affected_contracts":["test/swipe-invariants.test.js:588","test/swipe-invariants.test.js:623"],"staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Plans/PLAN-swipe-reveal.md"],"blocking_questions":["G1","G2","G3","W"]} -->
 
-Status: **DRAFT — for Charpy r2** (2026-07-26). Revised after Charpy r1 TEMPER
+Status: **DRAFT — for Charpy (r4, after a Loki KILL on the promise DOMAIN)** (2026-07-26). History: Charpy
+r1 TEMPER (F1/F2) → r2 fix → Charpy r2 TEMPER (F5, the negative gate) → r3 fix → a fresh blind Loki strike
+(`Claude/Loki/STRIKE-swipe-stage6c-stale-callback.md`, input `f604290`) KILLED the promise BY CONSTRUCTION
+on its DOMAIN (not its mechanism) → this r4.
+
+**Correction (2026-07-26, Loki KILL on the pane-less DOMAIN, executed against a scratch build of §3).** The
+mechanism (identity guard + `finishing` clear + negative gate) is SOUND and held on every stale continuation
+Loki constructed — but the plan MISCLASSIFIED which transitions are pane-less. The shipped classifier
+(`js/swipe.js constructionPlanFor`) and the project's FROZEN spec (`test/fixtures/swipe-plan-spec.mjs`
+`STRUCTURAL_CASES` + `paneOf`) make the outgoing an `app-ghost` OWNED-pane for any non-overlay source bound
+for browse (home→browse, browse→browse) and the incoming a `home-snapshot` OWNED-pane for any →home
+(browse→home, overlay→home). So the r3 draft's named "pane-less" flows (home↔browse, overlay→home) are
+PANE-OWNING; the TRUE pane-less set is **{dest is overlay} ∪ {overlay→browse}** only (home→overlay,
+browse→overlay, overlay→overlay, overlay→browse). Loki's Probe A (the r3 G1 fixture home→browse) had the
+negative gate REJECT the second touch — B never armed, G1/G2/G3 unsatisfiable and W unfalsifiable as
+ratified; Probe B/C on a genuinely pane-less fixture (options→books, i.e. overlay→browse) HELD (guard
+neutralized all three stale continuations, `noguard` stained B, `noclear` wedged). This r4 is a
+boundary/fixture re-enumeration, NOT a mechanism redesign: §2.1 corrected from the frozen spec, G1/G2/G3/W
+re-targeted onto genuinely pane-less transitions, and §1/§2/§10/§11 re-stated to record 6c's ACTUAL
+supersession window (overlay-involving transitions) — with home↔browse/→home (the dominant families,
+pane-owning) honestly deferred to 6d/7.
+
+Revised after Charpy r1 TEMPER
 (`Claude/Charpy/PLAN-swipe-stage6c-2026-07-26-r1.md`, input `90af572`, findings F1/F2 blocking + F3/F4
 folded). The A/B split is confirmed clean and safe; two load-bearing defects are fixed:
 - **F1 (honest shrink).** The settle-phase NULL-on-retire writes and the `transitionend` listener's
@@ -25,8 +47,11 @@ reachable and observable on the successor's real DOM — and land the identity g
 flash-sensitive paint-centralization (the pane-owning reveal path, deferred 6d/7 §11). Grounded against
 post-6b HEAD `js/app.js` (build `2026-07-26.250`): `begin()` (351-412), the `finishing` gate (352), the 6a
 recovery (361-390), the settle rAF (551-553), `finalize` (1159-1179), `settleTimer` (1182), `transitionend`
-(1181), `paneKindOf`/"every other transition slides REAL elements and covers nothing" (686-692), the mover
-reset that clears `transition` (712), `sessionDone` (242), `++sessionSeq` (407), the throw-wedge guard
+(1181), the FROZEN spec `test/fixtures/swipe-plan-spec.mjs` (`STRUCTURAL_CASES` + `paneOf`) and
+`js/swipe.js constructionPlanFor` as the AUTHORITY for which transitions own a pane (the app.js:686-692
+comment "app-ghost (browse→browse)" is itself WRONG against the classifier — corrected in §10, not relied
+on here), the mover reset that clears `transition` (712), `sessionDone` (242), `++sessionSeq` (407), the
+throw-wedge guard
 (`swipe-invariants.test.js:623-646`). Grounded against the real harness `test/app-harness.js`: `h.touch`
 drives a two-gesture interleave, `deferRaf`/`fakeTimers` expose the pending settle rAF / 340ms timer, and
 the observable channel is the SUCCESSOR's real DOM (borrowed-real mover transforms; `browse.render`/
@@ -85,7 +110,7 @@ half and the null-bookkeeping (whose reader stays unreachable — F1).
 
 | Record | What it says | Authority | This plan | On approval |
 |---|---|---|---|---|
-| User Option-A authorization (2026-07-26) | 6c MAY retire the `finishing` gate and land I12 (the `cur === session` reader; the null-writes; the `transitionListener` removal), the front edge of reveal-centralization. | Current explicit assignment (EC §2 precedence 1) | Lands the `cur === session` reader for the PANE-LESS window (the one non-vacuous piece — F1); the null-writes and `transitionListener` removal DEFER to 6d/7 (no reddening reader in this window — §11), and the pane-owning/paint half defers (§11) | — |
+| User Option-A authorization (2026-07-26) | 6c MAY retire the `finishing` gate and land I12 (the `cur === session` reader; the null-writes; the `transitionListener` removal), the front edge of reveal-centralization. | Current explicit assignment (EC §2 precedence 1) | Lands the `cur === session` reader for the true PANE-LESS window — the overlay-involving set `{home→overlay, browse→overlay, overlay→overlay, overlay→browse}` (§2.1, frozen-spec `paneOf`; the one non-vacuous piece — F1). HONEST SCOPE (Loki KILL): 6c does NOT buy supersession of home↔browse or →home — those are PANE-OWNING and DEFER to 6d/7 (§11). The null-writes and `transitionListener` removal also DEFER (no reddening reader in this window — F1/§11) | — |
 | `js/app.js` I12 rationale (219-234) | The `cur === session` guard is "UNREACHABLE BY CONSTRUCTION right now" and "becomes reachable, load-bearing and testable only once STAGE 6 retires the `finishing` gate in favour of the state machine." | In-code decision (precedence 3) | Realized for the pane-less half: narrowing the `finishing` gate lets a successor arm mid-settle, so the guard is reachable and testable | Rewrite the comment to current truth (§10) |
 | `DecisionLog.md` "Owed to stage 6" (2026-07-21) | NULL the stored session handles when cancelled OR fire, "so the session object describes LIVE ownership rather than stale numeric handles ... part of the stage-6 finalization-centralization work." | Active decision ledger | NOT discharged by 6c. The settle-phase null-writes have no reddening reader in the pane-less window (the identity guard subsumes them — F1); the whole debt (settle + reveal nulls) re-homes to 6d/7, where the held-reveal phase gives a `retired-while-cur===session` reader | Re-home the debt to 6d/7 (§10) — 6c does NOT close it |
 | `EngineeringContract.md` §4.6 | A stale continuation must verify "the owner remains valid ... a successor has not taken ownership" before acting; "Tests must deliberately deliver stale callbacks after supersession." | Core rule | The exact contract this slice satisfies via the `cur === session` (owner-still-valid / no-successor) check on the settle-phase callbacks; the tests deliver a stale callback after supersession (G1/G2/G3). The "resource not already retired" arm is the DEFERRED half (needs a retired-while-owner state — the held reveal — §11) | — |
@@ -107,32 +132,63 @@ testable mechanism (F1).
 Is there a SAFE ownership-only half that makes `cur === session` reachable (so the guard is non-vacuous)
 WITHOUT the flash-sensitive paint-centralization? **Yes, and the dividing line is the OWNED PANE.**
 
-**2.1 Two sub-regions of the finishing window.** A gesture's `settle()→finalize()→(held reveal)→drop()`
-window splits by whether the transition owns a full-viewport cover pane:
-- **Pane-LESS transitions** (home↔browse, browse↔overlay, overlay↔home, …) — "every other transition
-  slides REAL elements and covers nothing" (app.js:686-692). They own NO pane at any phase; they finalize
-  via `runFinalize`'s no-pane path (`revealPending` false, set true only by the held-reveal branches,
-  app.js:558-559) and never enter `holdGhostUntilPaintable`.
-- **Pane-OWNING transitions** (browse→browse ghost, →home snapshot) — own a pane from `start()` through
-  settle, finalize, and the held reveal until `drop()`.
+**2.1 Two sub-regions of the finishing window (derived from the FROZEN spec, corrected per Loki KILL).**
+A gesture's `settle()→finalize()→(held reveal)→drop()` window splits by whether the transition owns a
+full-viewport cover pane. The classification is NOT a comment in `app.js`; it is the shipped classifier
+`js/swipe.js constructionPlanFor` and the frozen oracle `test/fixtures/swipe-plan-spec.mjs`:
+`paneOf(c) = c.outgoing === 'app-ghost' || c.incoming === 'home-snapshot'`, with `outgoing === 'app-ghost'`
+iff source≠overlay ∧ dest=browse, and `incoming === 'home-snapshot'` iff dest=home. Applying `paneOf` to the
+eight `STRUCTURAL_CASES`:
+
+| transition | outgoing | incoming | paneOf | class |
+|---|---|---|---|---|
+| home → browse | app-ghost | real-destination | true | PANE-OWNING |
+| home → overlay | real-source | real-destination | false | **pane-less** |
+| browse → home | real-source | home-snapshot | true | PANE-OWNING |
+| browse → browse | app-ghost | real-destination | true | PANE-OWNING |
+| browse → overlay | real-source | real-destination | false | **pane-less** |
+| overlay → home | real-source | home-snapshot | true | PANE-OWNING |
+| overlay → browse | real-source | real-destination | false | **pane-less** |
+| overlay → overlay | real-source | real-destination | false | **pane-less** |
+
+- **Pane-LESS set = {dest is overlay} ∪ {overlay→browse}** = {home→overlay, browse→overlay, overlay→overlay,
+  overlay→browse}. These slide REAL borrowed elements only; they finalize via `runFinalize`'s no-pane path
+  (`revealPending` false, set true only by the held-reveal branches, app.js:558-559) and never enter
+  `holdGhostUntilPaintable`. (`overlay` is the `options`/`nowplaying` family; `browse` is `books`/
+  `authorBooks`/`files`.)
+- **Pane-OWNING set = {non-overlay→browse} ∪ {→home}** = {home→browse, browse→browse, browse→home,
+  overlay→home}. Each owns a pane (`app-ghost` or `home-snapshot`) from `start()` through settle, finalize,
+  and the held reveal until `drop()`. **This INCLUDES home↔browse (the dominant gesture family) and every
+  →home** — so those stay gated and defer to 6d/7 (§11); the r3 draft wrongly listed them pane-less
+  (Loki KILL).
 
 **2.2 Only the pane-OWNING region is flash-sensitive.** The flash saga (memory
 `tomeroam-swipe-repaint-saga`; `holdGhostUntilPaintable`) is entirely about a full-viewport pane held to
 cover the view UNTIL a paint frame lands, so the uncover is invisible. Disposing that pane early uncovers
 un-painted / rebuilding content — the flash. A pane-less transition has no such pane.
 
-**2.3 The split, precisely.** 6c makes **pane-LESS** settle/finalize sessions SUPERSEDABLE; **pane-OWNING**
-sessions stay GATED (rejected) in every phase and DEFER to 6d/7. Consequences:
+**2.3 The split, precisely — and 6c's ACTUAL delivered window (Loki KILL, honest re-statement).** 6c makes
+the **pane-LESS** set of §2.1 — {home→overlay, browse→overlay, overlay→overlay, overlay→browse}, i.e. the
+overlay-involving transitions — SUPERSEDABLE; **pane-OWNING** sessions ({home→browse, browse→browse,
+browse→home, overlay→home}) stay GATED (rejected) in every phase and DEFER to 6d/7. So the user-facing value
+6c buys is supersession of overlay↔(home/browse/overlay) gestures; **home↔browse and →home — the dominant
+gesture families — remain wedged-until-finalize in 6c** (deferred §11). This is smaller than the r3 draft
+implied; §1 must not overstate Option A's ownership half. What DOES land for the whole gesture set is the
+`cur === session` ownership MODEL and the negative gate, on which 6d/7 extends supersession to the
+pane-owning families. Consequences:
 - Superseding a pane-less session disposes NO pane (there is none) and touches NO reveal-PAINT code
   (`holdGhostUntilPaintable`, `drop`, the decode/paint/timeout gates, `fadePanes`, `watchFrames` — all
   unchanged). The flash-sensitive re-rasterization surface (an owned pane held to paint) is not touched.
-  Two honest caveats (F3, not "zero surface"): (a) superseding a pane-less settle interrupts an ACTIVE 0.2s
-  CSS `transition` (app.js:544-545) by clearing transforms — the mover reset MUST also clear the
-  `transition` property (the codebase's mover reset does, app.js:712) so a borrowed-real mover does not
-  animate to the reset value AFTER the successor armed; Brunel confirms `Nav.resetSwipeStyles` clears
-  `transition`. (b) Superseding a COMMITTING pane-less settle newly forces a source-restore (≈abort) that
-  can surface the KNOWN-OPEN aborted-swipe repaint (`tomeroam-swipe-repaint-saga`) in a window today rejected
-  — the known flash, not a new mechanism; parity-with-abort is the bar (§11).
+  One honest caveat (F3): superseding a pane-less settle interrupts an ACTIVE 0.2s CSS `transition`
+  (app.js:544-545) by clearing transforms — the mover reset MUST also clear the `transition` property (the
+  codebase's mover reset does, app.js:712) so a borrowed-real mover does not animate to the reset value
+  AFTER the successor armed; Brunel confirms `Nav.resetSwipeStyles` clears `transition`. The r3 draft's
+  second F3 caveat (a committing supersession surfacing the known browse-repaint) is NOT reachable in 6c's
+  domain and is withdrawn: `cur.clobbered` is set only by a browse→browse mid-drag render (6a), and
+  browse→browse is PANE-OWNING (deferred) — no pane-less transition clobbers `#browse`, so the recovery
+  runs `render:false` and no source re-render / repaint can occur (Loki §5: the caveat "was argued over
+  transitions that cannot reach the superseded-commit path it caveats"). That caveat re-homes to 6d/7 with
+  the pane-owning half.
 - The reachable stale callbacks are exactly the settle-phase ones (settle rAF, and the 340ms `settleTimer` /
   `transitionend` that call `finalize`). The reveal-phase handles (`revealFrames`, `revealTimer`) fire only
   inside the pane-owning held reveal, which stays gated → unreachable → deferred (§11).
@@ -281,8 +337,8 @@ null-bookkeeping.
 **Why parity at the user layer (honesty).** A guarded no-op changes nothing on the single-gesture path
 (no supersession, guard true, callback runs as today). It changes behaviour only on the SUPERSESSION path,
 where today the gate rejected the second gesture entirely — so the new observable is "the second gesture is
-now accepted and the first's stale callbacks cannot corrupt it," a correctness gain, plus the F3 caveats
-(§2.3).
+now accepted and the first's stale callbacks cannot corrupt it," a correctness gain (for the overlay-
+involving pane-less set only — §2.3), plus the F3 caveat (§2.3).
 
 ## 4b. Value-crossing ledger
 
@@ -366,8 +422,14 @@ the post-supersession `session`.** In `begin()`'s supersede path: (1) route the 
 into the recovery (predicate fix, F2); (2) release the old session (reset movers, restore source/scroll
 inside the hold), CLEAR `finishing = false`, identity-null LAST (the app.js:1132 invariant, unchanged);
 (3) set `session` to the successor when it arms. A subsequently-firing old callback reads `session` =
-successor (or null), so `cur !== session`. The guard's placement: BEFORE the effect (transform write in the
-rAF callback; `runFinalize` in `finalize`), and in `finalize` AFTER the `done` set so it cannot re-enter.
+successor (or null), so `cur !== session`. The guard's placement is LOAD-BEARING (Loki lesser-plane
+"finalize-guard-placement"): in `finalize` the `if (cur !== session) return;` MUST sit AFTER the `done` set
++ the two shipped cancels (1163/1168) and BEFORE the `try { runFinalize() } finally { dropRowHold();
+endOwnership() }` block (1174-1178). If it is placed instead INSIDE the try or at `runFinalize`'s top, a
+stale `finalize_A` would enter the `finally` and run `dropRowHold()` / `endOwnership()` against the MODULE
+`session` — dropping the SUCCESSOR's live row hold and ending its ownership. Guarding before the try makes a
+superseded `finalize` a total no-op (Brunel/Poirot watch-point; a mutation moving the guard into the try
+must redden a successor-row-hold assertion).
 
 **Liveness requirement (cell W) — `finishing` is cleared during the recovery, before any early return.** The
 recovery must set `finishing = false` on every path out of the supersession branch, so a superseding gesture
@@ -411,25 +473,33 @@ real `begin()`/`settle()`/`finalize()` through the app-harness (`test/app-harnes
 
 | id | Behavior proved | Fixture / transition | Mutation that must fail it | Layer |
 |---|---|---|---|---|
-| G1 | A stale settle rAF from a superseded pane-less session no-ops — it writes NO `translateX` onto the successor's borrowed-real movers | a pane-less (e.g. home→browse) live drag → release into settle with `deferRaf` (settle rAF pending); a 2nd touch supersedes and arms B; fire the old frame (`h.raf.frame()`); assert B's `#home`/`#browse` transforms are B's, unstained (the `:598-616` channel) | remove the `cur === session` guard on the settle rAF callback → the old frame writes a stale `translateX` on the successor's movers | wiring (successor DOM transforms) |
-| G2 | A 340ms `settleTimer` firing after supersession does NOT run `runFinalize` over the successor — no `applyScreen`/stack mutation for the old destination | a pane-less live drag → settle with `fakeTimers` (340ms pending, `done` false); supersede → arm B; advance past 340ms so the old `settleTimer` fires `finalize_A`; assert no `browse.render`/`applyScreen` for A's dest and B's nav stack intact | remove the `cur === session` guard on `finalize` → `finalize_A` runs `runFinalize_A`, calling `applyScreen`/mutating the stack over B (the wrong-page class) | wiring (successor log + nav) |
-| G3 | A late `transitionend` (the other `finalize` trigger) after supersession does NOT run `finalize_A` over the successor | a pane-less live drag → settle; supersede → arm B; dispatch `transitionend` on the old anchor (`cur.movers[0].el`, borrowed-real) firing the existing `{once}` listener; assert `finalize_A` performed no `applyScreen`/stack mutation over B | remove the `cur === session` guard on `finalize` → the late `transitionend` runs `finalize_A` over B | wiring (successor log + nav) |
-| W | A superseding tap that never arms leaves future swipes working — the recovery cleared `finishing` | a pane-less live drag → settle; a 2nd touch that supersedes but is a bare tap (touchstart+touchend, never crosses the lock, no `settle()`); then a fresh full pane-less swipe must engage (reach `settle`) | omit `finishing = false` in the supersession recovery → `finishing` stays true and `session` is null (recovery nulled it) → the NEGATIVE gate `if (finishing && !(session && paneLess(session)))` rejects the next swipe, which never engages (the wedge class of `swipe-invariants.test.js:623-646`). (Under a positive pane-owning gate this mutation would NOT wedge — the F5 vacuity this pins.) | wiring (subsequent-gesture engagement) |
+| G1 | A stale settle rAF from a superseded pane-less session no-ops — it writes NO `translateX` onto the successor's borrowed-real movers | a genuinely pane-less **overlay→browse** (options→books, `paneOf` false — Loki's working Probe B fixture) live drag → release into settle with `deferRaf` (settle rAF pending); a 2nd touch supersedes and arms B; fire the old frame (`h.raf.frame()`); assert B's `#options`/`#browse` transforms are B's, unstained (the `:598-616` channel) | remove the `cur === session` guard on the settle rAF callback → the old frame writes a stale `translateX` on the successor's movers (Loki `noguard`: `#options=translateX(1024px)` over B's drag) | wiring (successor DOM transforms) |
+| G2 | A 340ms `settleTimer` firing after supersession does NOT run `runFinalize` over the successor — no `applyScreen`/stack mutation for the old destination | a pane-less **overlay→browse** (options→books) live drag → settle with `fakeTimers` (340ms pending, `done` false); supersede → arm B; advance past 340ms so the old `settleTimer` fires `finalize_A`; assert no `browse.render`/`applyScreen` for A's dest and B's nav stack intact | remove the `cur === session` guard on `finalize` → `finalize_A` runs `runFinalize_A`, calling `applyScreen`/mutating the stack over B (the wrong-page class) | wiring (successor log + nav) |
+| G3 | A late `transitionend` (the other `finalize` trigger) after supersession does NOT run `finalize_A` over the successor | a pane-less **overlay→browse** (options→books) live drag → settle; supersede → arm B; dispatch `transitionend` on the old anchor (`cur.movers[0].el` = `#options`, borrowed-real) firing the existing `{once}` listener; assert `finalize_A` performed no `applyScreen`/stack mutation over B | remove the `cur === session` guard on `finalize` → the late `transitionend` runs `finalize_A` over B | wiring (successor log + nav) |
+| W | A superseding tap that never arms leaves future swipes working — the recovery cleared `finishing` | a pane-less **overlay→browse** (options→books) live drag → settle; a 2nd touch that supersedes but is a bare tap (touchstart+touchend, never crosses the lock, no `settle()`); then a fresh full pane-less **overlay→browse** swipe must engage (reach `settle`) — Loki's Probe C | omit `finishing = false` in the supersession recovery → `finishing` stays true and `session` is null (recovery nulled it) → the NEGATIVE gate `if (finishing && !(session && paneLess(session)))` rejects the next swipe, which never engages (the wedge class of `swipe-invariants.test.js:623-646`). (Under a positive pane-owning gate this mutation would NOT wedge — the F5 vacuity this pins.) | wiring (subsequent-gesture engagement) |
 | PG | A PANE-OWNING (ghost/snapshot) settling session is STILL rejected by `begin()` — supersession does NOT dispose its held pane (the deferral boundary) | a browse→browse (ghost) live drag under `opts.realBrowse` → release into settle so a real owned pane exists; a 2nd touch; assert `begin()` returns (no recovery/arm) and the ghost pane is not disposed (`ghosts`/pane count unchanged). NOTE for Curie (F4): confirm the ghost pane genuinely materializes under `opts.realBrowse` and that the mutation disposes it, else PG is vacuous | the narrowed gate wrongly supersedes a pane-owning session → its owned pane is disposed mid-settle (the deferred, flash-unsafe path) | wiring (pane count, `opts.realBrowse`) |
 | RG226 | The shipped `cancelAnimationFrame(cur.settleFrame)` still prevents a within-session stale transform after finalize (hidden-tab) | the .226 hidden-tab recipe (unchanged) | the slice drops the within-session settle-rAF cancel → the resumed rAF writes a stale transform | wiring (existing green) |
 | RG6b | The 6b loser-cancels (`settleTimer`/`revealFrames`/`revealTimer`) still leave the scheduler queue at their resolver (within-session) | the 6b DF/RR fixtures (unchanged) | the slice drops a within-session loser-cancel → the loser stays pending | wiring (existing green) |
 | RG6a | Stage 6a DRAGGING-supersession recovery (source re-render + scroll + kept rows) still holds | the 6a VR/SR/SC fixtures (unchanged) | the slice breaks the 6a recovery order | wiring (existing green) |
 | RGend | After a terminal resolver the session is null (endpoint parity) | a pane-less commit and abort | the guard/recovery ends ownership early or leaves the session non-null | wiring (existing green, `:588`) |
 
+**Fixture-vacuity note for Curie (F4, symmetric with PG — Loki lesser-plane "G-cells-missing-F4-note").**
+G1/G2/G3/W require the fixture transition to be GENUINELY pane-less per the frozen spec `paneOf`
+(`test/fixtures/swipe-plan-spec.mjs`) so the negative gate accepts the second touch and B actually arms. If
+a fixture is pane-OWNING (e.g. home→browse, browse→browse, →home), the gate REJECTS, B never arms, and the
+cell is UNSATISFIABLE (G) / unfalsifiable (W) — the exact Loki KILL. Curie MUST assert, per fixture, that
+`paneOf(constructionPlanFor(from,to))` is false before the supersession step. overlay→browse (options→books)
+and *→overlay are the safe choices; Loki's Probe B/C are working skeletons.
+
 **Machine-readable coverage (gate).** Each blocking question (G1/G2/G3/W) has a complete row; PG pins the
 deferral boundary; the RG* rows pin shipped parity.
 
 ```vitruvius-coverage
 # id | behavior | fixture | mutation | layer
-G1 | a stale settle rAF from a superseded pane-less session writes no translateX onto the successor borrowed-real movers | a pane-less home-to-browse live drag released into settle with deferRaf then a second touch supersedes and arms B then the old frame is fired and B movers inspected | remove the cur-equals-session guard on the settle rAF callback so the old frame stains the successor movers | wiring successor DOM transforms
-G2 | a 340ms settleTimer firing after supersession does not run runFinalize over the successor so no applyScreen or stack mutation for the old destination | a pane-less live drag settling with fakeTimers where a second touch supersedes and arms B then the clock advances past 340ms firing the old settleTimer | remove the cur-equals-session guard on finalize so finalize of the old session runs applyScreen and mutates the nav stack over B | wiring successor log and nav
-G3 | a late transitionend the other finalize trigger after supersession does not run finalize of the old session over the successor | a pane-less live drag settling where a second touch supersedes and arms B then transitionend is dispatched on the old anchor firing the existing once listener | remove the cur-equals-session guard on finalize so the late transitionend runs the old finalize over B | wiring successor log and nav
-W | a superseding tap that never arms leaves future swipes working because the recovery cleared finishing | a pane-less live drag settling then a second touch that supersedes but is a bare tap never crossing the lock then a fresh full pane-less swipe must reach settle | omit the finishing false clear in the supersession recovery so finishing stays true and begin rejects the next swipe which never engages | wiring subsequent-gesture engagement
+G1 | a stale settle rAF from a superseded pane-less session writes no translateX onto the successor borrowed-real movers | a genuinely pane-less overlay-to-browse options-to-books live drag paneOf false released into settle with deferRaf then a second touch supersedes and arms B then the old frame is fired and B movers inspected | remove the cur-equals-session guard on the settle rAF callback so the old frame stains the successor movers | wiring successor DOM transforms
+G2 | a 340ms settleTimer firing after supersession does not run runFinalize over the successor so no applyScreen or stack mutation for the old destination | a pane-less overlay-to-browse options-to-books live drag settling with fakeTimers where a second touch supersedes and arms B then the clock advances past 340ms firing the old settleTimer | remove the cur-equals-session guard on finalize so finalize of the old session runs applyScreen and mutates the nav stack over B | wiring successor log and nav
+G3 | a late transitionend the other finalize trigger after supersession does not run finalize of the old session over the successor | a pane-less overlay-to-browse options-to-books live drag settling where a second touch supersedes and arms B then transitionend is dispatched on the old anchor firing the existing once listener | remove the cur-equals-session guard on finalize so the late transitionend runs the old finalize over B | wiring successor log and nav
+W | a superseding tap that never arms leaves future swipes working because the recovery cleared finishing | a pane-less overlay-to-browse options-to-books live drag settling then a second touch that supersedes but is a bare tap never crossing the lock then a fresh full pane-less overlay-to-browse swipe must reach settle | omit the finishing false clear in the supersession recovery so finishing stays true and begin rejects the next swipe which never engages | wiring subsequent-gesture engagement
 PG | a pane-owning ghost settling session is still rejected by begin so supersession disposes no held pane | a browse-to-browse ghost live drag under realBrowse released into settle so a real owned pane exists then a second touch where begin must return and the ghost pane must not be disposed | the narrowed gate wrongly supersedes a pane-owning session disposing its held pane mid-settle | wiring pane count realBrowse
 RG226 | the shipped settle-rAF cancel still prevents a within-session stale transform after finalize | the hidden-tab recipe deferring the settle rAF then finalizing then resuming the rAF | the slice drops the within-session settle-rAF cancel so the resumed rAF writes a stale transform | wiring existing green
 RG6b | the 6b loser-cancels still leave the scheduler queue at their resolver | the 6b DF and RR fixtures | the slice drops a within-session loser-cancel so the loser stays pending | wiring existing green
@@ -446,23 +516,37 @@ a defining-record edit flagged for the maker/Zelda.
   now REACHABLE and LOAD-BEARING for the pane-less supersession window (6c); it remains deferred only for
   the pane-owning/held-reveal window (6d/7). The `finishing` gate is now NARROWED (pane-less supersedable),
   not blanket.
+- **`js/app.js` `paneKindOf` / classifier comment (686-692) — CORRECT the false comment (Loki lesser-plane
+  "app.js-686-comment-false").** The comment "app-ghost (browse→browse)" is WRONG against
+  `constructionPlanFor`: an `app-ghost` forms for ANY non-overlay source bound for browse (home→browse AND
+  browse→browse). The scrub must fix it to the classifier's actual rule (outgoing `app-ghost` iff
+  source≠overlay ∧ dest=browse; incoming `home-snapshot` iff dest=home) — do NOT inherit the flaw the r3
+  draft cited (it was the entry point for the domain misclassification).
 - **`Claude/Subsystems/swipe-reveal.md`** — §8: the settle-phase callbacks (settle rAF, `finalize`) now
   no-op via `cur === session` when superseded; the null-on-retire writes and the `transitionListener`
   session-ownership/removal remain owed to 6d/7 (their reader — retired-while-owner — is unreachable until
   the held reveal is supersedable). §13/§14: narrow "must NOT dispose a pane owned by an active
-  SETTLING/FINALIZING/REVEALING session" to a PANE-OWNING session, and record that supersession is now
-  DEFINED for the pane-less phase (EC §4.18). §11: add the cross-session stale-fire completions (settle rAF /
-  340ms / transitionend after supersession) as guarded by identity. §19: register the G1/G2/G3/W/PG
-  mutations mapped to their tests. §20/§21: note the I12 ownership half (identity guard) landed in 6c; §23:
-  annotate the stage-6 revision condition as sub-sliced (6c = pane-less supersession + identity guard;
-  6d/7 = pane-owning/reveal supersession + null-bookkeeping + `transitionListener` + paint centralization).
+  SETTLING/FINALIZING/REVEALING session" to a PANE-OWNING session, and record the TRUE supersession boundary
+  — supersession is DEFINED (6c) ONLY for the pane-LESS set `{home→overlay, browse→overlay, overlay→overlay,
+  overlay→browse}` (derived from the frozen-spec `paneOf`); the pane-OWNING set `{home→browse, browse→browse,
+  browse→home, overlay→home}` — INCLUDING home↔browse and every →home — stays gated/deferred (6d/7)
+  (EC §4.18). Do NOT write the r3 draft's false "home↔browse pane-less" membership. §11: add the
+  cross-session stale-fire completions (settle rAF / 340ms / transitionend after supersession) as guarded by
+  identity. §19: register the G1/G2/G3/W/PG mutations mapped to their tests. §20/§21: note the I12 ownership
+  half (identity guard) landed in 6c for the pane-less/overlay-involving set; §23: annotate the stage-6
+  revision condition as sub-sliced (6c = pane-less supersession + identity guard; 6d/7 = pane-owning
+  (home↔browse, →home) + reveal supersession + null-bookkeeping + `transitionListener` + paint
+  centralization).
 - **`Claude/Decisions/DecisionLog.md`** — the "Owed to stage 6" entry (2026-07-21) is NOT discharged by 6c
   (F1): re-home the WHOLE null-handle debt (settle + reveal) to 6d/7, noting the reader (a
   retired-while-`cur === session` state) exists only in the held reveal. AND append a dated Stage-6c
-  decision recording: the CLEAN A/B split (pane-less IN, pane-owning/paint DEFERRED); the identity guard as
+  decision recording: the TRUE pane-less/pane-owning boundary from the frozen-spec `paneOf` (6c's delivered
+  supersession window is the overlay-involving pane-less set; home↔browse and →home are pane-owning and
+  DEFERRED to 6d/7 — the Loki KILL correction of the r3 draft's misclassification); the identity guard as
   the sole non-vacuous mechanism (the null-writes shrunk out per Charpy r1 F1); the `finishing`-clear wedge
-  fix (F2); and the Option-A authorization. Reference this plan, the r1 casebook, the superseded escalation
-  (`e273d70`), and the r1 draft (`90af572`).
+  fix (F2) under the negative gate (F5); and the Option-A authorization with its honest scope (6c does NOT
+  buy home↔browse supersession). Reference this plan, the r1/r2 casebooks, the Loki strike, the superseded
+  escalation (`e273d70`), and the killed draft (`f604290`).
 - **`Claude/Plans/PLAN-swipe-reveal.md` §7 step 6** — annotate: the ownership half of the finalization
   centralization (the `cur === session` model for the pane-less window) landed in 6c; the reveal-ordering/
   paint half (I10/I17), the null-bookkeeping, `transitionListener` ownership, `finalizationPlanFor`,
@@ -493,22 +577,26 @@ Each deferral names the consumer that does not yet exist and the stage that intr
   guard/null is unreachable/vacuous today (§4.15). Land in 6d/7.
 
 **Deferred to 6d/7 (the pane-owning / paint-centralization half):**
-- **Supersession of PANE-OWNING sessions (ghost/snapshot) and the HELD-REVEAL-await-paint phase.**
-  Deferred: disposing a full-viewport cover pane on supersession — especially one held to cover the view
-  until a paint frame lands — is the flash-sensitive paint operation the reveal saga is about
-  (`holdGhostUntilPaintable`; memory `tomeroam-swipe-repaint-saga`). Its consumer is the paint-centralized
-  reveal (I10/I17). Cell PG pins that it stays gated.
+- **Supersession of the PANE-OWNING set `{home→browse, browse→browse, browse→home, overlay→home}` and the
+  HELD-REVEAL-await-paint phase.** This set INCLUDES home↔browse (the dominant gesture family) and every
+  →home — so in 6c those remain wedged-until-finalize; 6c does NOT buy their supersession (the honest
+  re-statement of Option A's ownership half, §2.3; Loki KILL). Deferred because disposing a full-viewport
+  cover pane on supersession — especially one held to cover the view until a paint frame lands — is the
+  flash-sensitive paint operation the reveal saga is about (`holdGhostUntilPaintable`; memory
+  `tomeroam-swipe-repaint-saga`). Its consumer is the paint-centralized reveal (I10/I17); 6d/7 extends
+  supersession to this set on the `cur === session` model 6c establishes. Cell PG pins that it stays gated.
 - **`finalizationPlanFor()` / rich `planFor()`; normalized `sameBrowseHost`; pane `release()`/
   `dispose(reason)`/`equivalence`; the full `recoverSession` reason/phase matrix; I10 paint-gated reveal
   centralization + I17.** Unchanged from the prior deferrals (6a/6b §11): their consumers are the
   restructured reveal/finalize path (6d/7); dead surface now.
 
-**Deferred, unchanged (independent) — with the F3 caveat:**
+**Deferred, unchanged (independent):**
 - **The headline aborted-swipe repaint/flash.** Untouched and independent (`PLAN-swipe-reveal.md` §6); this
-  slice adds no paint-gating and changes no reveal timing. F3 caveat: a pane-less COMMITTING supersession
-  newly forces a source-restore (≈abort) that can SURFACE this known-open repaint in a window today rejected
-  — the known flash, not a new mechanism; parity-with-abort is the bar. A build/device check should watch
-  for it on the committed pane-less supersession path.
+  slice adds no paint-gating and changes no reveal timing. The r3 draft's F3 caveat (a committing pane-less
+  supersession surfacing this repaint) is WITHDRAWN for 6c and re-homed to 6d/7: `cur.clobbered` is set only
+  by a browse→browse mid-drag render, browse→browse is PANE-OWNING (deferred), so no pane-less transition in
+  6c's domain clobbers `#browse` — the recovery runs `render:false` and cannot reach the repaint path
+  (Loki §5). The caveat becomes live only when 6d/7 makes browse→browse supersedable.
 - **The `fadePanes` per-pane removal `setTimeout`** (app.js:649) — a self-guarded owned-decoration cleanup;
   belongs with the pane-lifecycle abstraction (6d/7).
 
@@ -520,8 +608,12 @@ the ownership foundation the paint-centralization builds on (6d/7 makes the pane
 supersedable on the `cur === session` model this slice establishes, and adds the null-bookkeeping once a
 retired-while-owner state exists). It stops at the pane-less boundary so 6d/7 restructures the flash-sensitive
 reveal path on a clean, guarded ownership base. Handoff order: Charpy (temper) → Curie (red suite from §9;
-note F4 — confirm PG's ghost pane forms under `opts.realBrowse`) → Brunel (green; confirm `Nav.resetSwipeStyles`
-clears `transition`, F3) → Poirot (review) → Mendeleev (coverage audit) → Loki (strike the §4 load-bearing
-promise — that a settle-phase continuation firing after a successor takes ownership performs none of its
-effect; the misattribution/race axis of cells G1/G2/G3, provable on the successor's real DOM). Campaign
-definition-of-done: the `swipe-stage6` gates, with the 6c artifact-name reconciliation flagged in §10.
+F4 — assert `paneOf` is false for every G1/G2/G3/W fixture so B arms, and confirm PG's ghost pane forms
+under `opts.realBrowse`; overlay→browse (options→books) is the safe pane-less fixture, Loki Probe B/C are
+skeletons) → Brunel (green; confirm `Nav.resetSwipeStyles` clears `transition` (F3), and place the finalize
+identity guard BEFORE the `try/finally` — inside it drops the successor's row hold, §7) → Poirot (review) →
+Mendeleev (coverage audit) → Loki (re-strike the §4 load-bearing promise on the CORRECTED domain — that a
+settle-phase continuation firing after a successor takes ownership performs none of its effect; the
+misattribution/race axis of cells G1/G2/G3 on genuinely pane-less fixtures, provable on the successor's real
+DOM). Campaign definition-of-done: the `swipe-stage6` gates, with the 6c artifact-name reconciliation
+flagged in §10.
