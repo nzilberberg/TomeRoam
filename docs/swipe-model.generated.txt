@@ -14,7 +14,7 @@ before this document is trusted again. Never update a pinned constant alone.
   navTo stack rule      0e84abdf6d072586
   begin/nav-relation    ac356cd1a669c2a3
   end/state-routing     9a82592f5d21db7b
-  begin/supersession    502467fc1286f5e1
+  begin/supersession    99b3ddb8778bcb57
 
 1. REGISTRY — PARTLY DERIVED, PARTLY PINNED (say which, and mean it)
    12 screens, 132 ordered name pairs.
@@ -55,9 +55,9 @@ before this document is trusted again. Never update a pinned constant alone.
      js/app.js:140   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
      js/app.js:141   else navStack.push(desc);
      js/app.js:164   navStack.push({ v }); fwdStack.length = 0;
-     js/app.js:753   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
-     js/app.js:754   else navStack.push(fwdStack.pop());
-     js/app.js:1321  navStack = [{ v: 'home' }];
+     js/app.js:778   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:779   else navStack.push(fwdStack.pop());
+     js/app.js:1346  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------

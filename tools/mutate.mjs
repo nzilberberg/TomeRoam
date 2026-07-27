@@ -57,23 +57,31 @@ const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'left
 // Re-anchored stage 6d (PLAN-swipe-stage6d.md §2/§9): the recovery reads the declared
 // `cur.finPlan.abortRender` (plus the `cur.live` build-ran conjunct) instead of the
 // retired `cur.clobbered` runtime byproduct.
+// Re-anchored stage 6e (PLAN-swipe-stage6e.md §2/§4/§6): the owned-pane removal is now
+// the owner-driven disposeOwnedPanes(cur,'superseded') call ahead of resetSwipeStyles,
+// and both `resetSwipeStyles` and the `applyScreen` opts thread `keepGhosts:true` on the
+// owned branch. Gutting all three still strands the pane (neither remover runs), the
+// same defect this mutation has always proven — cell DP/HR/BR(snapshot clause).
 const HARDRESET_DISPOSE_FROM = [
-  '        resetSwipeStyles();',
-  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });",
+  "        if (cur) disposeOwnedPanes(cur, 'superseded');",
+  '        resetSwipeStyles(cur ? true : undefined);',
+  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
 ].join('\n');
 const HARDRESET_DISPOSE_TO = '        /* mutated: no hard reset */';
 // stage 6a §9 VR — the two ordering defects the Loki strike measured against the real
 // js/browse.js + js/virtuallist.js (STRIKE-swipe-stage6-recover-before-arm-r2.md §3).
 const VR_HOLD_ORDER_FROM = [
-  '        resetSwipeStyles();',
-  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });",
+  "        if (cur) disposeOwnedPanes(cur, 'superseded');",
+  '        resetSwipeStyles(cur ? true : undefined);',
+  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
   '        if (cur) window.scrollTo(0, cur.scroll0);',
   '        dropRowHold();',
 ].join('\n');
 const VR_HOLD_ORDER_TO = [
   '        dropRowHold();',
-  '        resetSwipeStyles();',
-  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });",
+  "        if (cur) disposeOwnedPanes(cur, 'superseded');",
+  '        resetSwipeStyles(cur ? true : undefined);',
+  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
   '        if (cur) window.scrollTo(0, cur.scroll0);',
 ].join('\n');
 // Re-anchored stage 6c: `finishing = false;` (F2) now sits between dropRowHold() and
@@ -99,13 +107,13 @@ const VR_IDENTITY_ORDER_TO = [
 // calls renderScreen(), never Browse.render()), so the flag's value cannot leak into a
 // #browse render for that fixture regardless. NC's genuine proof is the scroll mutation
 // below, which reddens its scroll-restore clause directly.
-const RECOVERY_RENDER_LINE = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });";
-const RECOVERY_RENDER_ALWAYS_FALSE = '        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined });';
+const RECOVERY_RENDER_LINE = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });";
+const RECOVERY_RENDER_ALWAYS_FALSE = "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });";
 // stage 6a Poirot F1 (Claude/Poirot/f09cf9d-swipe-stage6-supersession.md) — the orphan
 // sub-case (d===null) must keep nav.js's default resetScroll so a home/options source
 // still scrolls to top. Forcing resetScroll:false back onto the orphan (the f09cf9d bug)
 // reds the OB-home cell in test/swipe-stage6.test.js.
-const F1_ORPHAN_RESETSCROLL_TO = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: false });";
+const F1_ORPHAN_RESETSCROLL_TO = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: false, keepGhosts: cur ? true : undefined });";
 
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
 const S5_GHOSTBG_FROM = [
@@ -467,6 +475,20 @@ const MUTATIONS = [
   { name: 'swipe6d RC: recovery reader drops the cur.live build-ran conjunct (-> RC.armed test)',
     from: "render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false",
     to:   "render: cur ? (cur.finPlan.abortRender === 'rerender') : false" },
+  // ── SWIPE stage 6e: owner-driven disposeOwnedPanes(session, reason) (PLAN-swipe-stage6e.md) ─
+  // Curie authored the DP/BR/HR/DEC/RGreveal cells before disposeOwnedPanes existed, so their
+  // true built-code defenders (a broken filter INSIDE the new helper, and the nav.js decoration
+  // guard) could not be registered until the helper landed. Registered here per plan §9.
+  { name: 'swipe6e DP/attribution: disposeOwnedPanes\' own filter never matches, so it removes nothing (-> NOOP.attribution, DP.browse-browse, DP.browse-home)',
+    from: "        if (m.own === 'owned-pane' && m.el.parentNode) { m.el.remove(); disposed = true; }",
+    to:   '        if (false && m.el.parentNode) { m.el.remove(); disposed = true; }' },
+  { name: 'swipe6e BR: disposeOwnedPanes broadens to remove every mover regardless of own (-> BR borrowed-survives test)',
+    from: "        if (m.own === 'owned-pane' && m.el.parentNode) { m.el.remove(); disposed = true; }",
+    to:   '        if (m.el.parentNode) { m.el.remove(); disposed = true; }' },
+  { name: 'swipe6e DEC: the .np-pill-float decoration removal is mistakenly guarded behind keepGhosts too (-> DEC test)',
+    file: 'js/nav.js',
+    from: "    document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone",
+    to:   "    if (!keepGhosts) document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // mutated: wrongly guarded" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

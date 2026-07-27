@@ -347,6 +347,21 @@
       const t = session.hold; session.hold = 0;
       if (window.Browse && Browse.endHold) Browse.endHold(t);
     };
+    // Owner-driven emergency disposal (PLAN-swipe-stage6e.md §3/§4; EC §4.3/§4.4): removes
+    // exactly the `own`s movers this SESSION owns — `owned-pane` movers still attached —
+    // and never a `borrowed-real` or `owned-decoration` mover (the `own` filter is a
+    // structural guarantee, not an enumerated exclusion). Idempotent (the el.parentNode
+    // guard, matching dropPanes below). Takes its owner explicitly (never reads the module
+    // `session`/`d`), so it operates only on resources the caller already owns (§4.3). Feeds
+    // `reason` to the PBDebug SWIPE diagnostic ONLY when a pane is actually disposed, so a
+    // no-op call (a pane-less session) does not claim a disposal that never happened.
+    const disposeOwnedPanes = (owner, reason) => {
+      let disposed = false;
+      for (const m of owner.movers) {
+        if (m.own === 'owned-pane' && m.el.parentNode) { m.el.remove(); disposed = true; }
+      }
+      if (disposed && window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);
+    };
     const navPill = () => $('navbar').querySelector('.np-actions');
     // The Now Playing pill clone, the two capture recipes (ghostApp/snapshotHome) and their
     // helper cluster (ghostWrap/freezeArt/copyScroll/copyAnimPhase, GHOST_BG) moved into
@@ -385,11 +400,15 @@
           + (session ? ' sid=' + session.id : ''));
         releaseGesture();   // never leave a dead gesture's listeners on a stale node
         // Recover the superseded session PRE-STACK (stage 6a, PLAN-swipe-stage6.md §3/§6;
-        // extended stage 6c to a pane-less SETTLING session, PLAN-swipe-stage6c.md §3)
-        // before its resources are released: dispose the old pane / stray ghosts, restore
-        // the source screen (re-rendering it into #browse iff the build actually ran AND
-        // the transition is the declared same-browse-host abort — cur.live &&
-        // cur.finPlan.abortRender==='rerender', stage 6d's finalizationPlanFor, retiring
+        // extended stage 6c to a pane-less SETTLING session, PLAN-swipe-stage6c.md §3;
+        // stage 6e typed the owned-pane disposal, PLAN-swipe-stage6e.md §2/§3/§4) before
+        // its resources are released: dispose `cur`'s OWNED panes through the owner-driven
+        // disposeOwnedPanes(cur,'superseded') when a session owns them (EC §4.3 — replaces
+        // the DOM-global `.nav-ghost` sweep's owned-pane effect for this case), or sweep a
+        // stray ORPHAN ghost via the full resetSwipeStyles sweep when `cur` is null (I17(b),
+        // unchanged); restore the source screen (re-rendering it into #browse iff the build
+        // actually ran AND the transition is the declared same-browse-host abort — cur.live
+        // && cur.finPlan.abortRender==='rerender', stage 6d's finalizationPlanFor, retiring
         // the old runtime-observed byproduct this reader used to key on), then restore the
         // session-start document scroll (cur.scroll0). `cur` below reads whichever handle
         // is live: `d` for a mid-drag
@@ -413,8 +432,14 @@
         // nulling it any earlier would leak the hold and the source rows would never be
         // realized (the same ordering `finalize()` observes at its own hold release).
         const cur = d || session;
-        resetSwipeStyles();
-        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });
+        // `keepGhosts:true` on the owned branch suppresses the DOM-global `.nav-ghost`
+        // sweep at BOTH call sites — here AND inside applyScreen's own baseline reset
+        // (nav.js:120) — so the owned-pane removal is owner-driven, not duplicated (EC
+        // §4.16; Loki STRIKE-swipe-stage6e-r1 residual 2). The orphan branch (`cur` null)
+        // keeps the FULL sweep at both sites, unchanged.
+        if (cur) disposeOwnedPanes(cur, 'superseded');
+        resetSwipeStyles(cur ? true : undefined);
+        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });
         if (cur) window.scrollTo(0, cur.scroll0);
         dropRowHold();
         finishing = false;

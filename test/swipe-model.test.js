@@ -41,17 +41,19 @@ const VERIFIED = {
   // ARMED still finishes with NO navigation; the clear is ownership bookkeeping, not a
   // routing change. Pin moves, model §4 stands. Was 'f1d6b8391fa4ad57'.
   gestureEnd: '9a82592f5d21db7b',
-  // Re-verified 2026-07-27 for stage 6d: the recovery reader (app.js begin(), ~415) now
-  // reads the declared `cur.finPlan.abortRender` (plus the `cur.live` build-ran conjunct)
-  // instead of the retired `cur.clobbered` runtime byproduct, and the arm-time session
-  // literal computes `finPlan` in place of the old `clobbered: false` initializer — both
-  // inside this fingerprinted region. The SEMANTICS the model mirrors did NOT change:
-  // supersession is still reject-while-finishing, else hard-reset-and-arm, with the same
-  // render/scroll outcome on every reachable transition (PLAN-swipe-stage6d.md §3, byte-
-  // identical parity). So the parity claim stands and only the pin moves. Was
-  // 'a470962594518cb9' (pre-stage-3), then 'd455d0d197ea3af8' (before the comment fix),
-  // then 'c5ab2fae0fd03654' (pre-stage-6d).
-  supersession: '502467fc1286f5e1',
+  // Re-verified 2026-07-27 for stage 6e: the recovery reader (app.js begin(), ~415-442) now
+  // disposes `cur`'s OWNED panes through the owner-driven `disposeOwnedPanes(cur,'superseded')`
+  // (EC §4.3) ahead of `resetSwipeStyles`, and threads `keepGhosts:true` at BOTH the explicit
+  // `resetSwipeStyles` call and the `applyScreen` opts on the owned branch, so the DOM-global
+  // `.nav-ghost` sweep no longer duplicates the owner-driven removal (PLAN-swipe-stage6e.md
+  // §2/§3/§4/§6) — both inside this fingerprinted region. The SEMANTICS the model mirrors did
+  // NOT change: supersession is still reject-while-finishing, else hard-reset-and-arm, with the
+  // same render/scroll/pane-disposal outcome on every reachable transition (byte-identical
+  // parity — the owner-driven removal set equals the set the old sweep removed). So the parity
+  // claim stands and only the pin moves. Was 'a470962594518cb9' (pre-stage-3), then
+  // 'd455d0d197ea3af8' (before the comment fix), then 'c5ab2fae0fd03654' (pre-stage-6d), then
+  // '502467fc1286f5e1' (pre-stage-6e).
+  supersession: '99b3ddb8778bcb57',
 };
 
 // Every line in js/app.js that appends to or rebinds navStack, as it stood when the
