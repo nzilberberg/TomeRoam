@@ -178,6 +178,16 @@ Behavioural ownership, not function names.
   (`gen-swipe-model.mjs:44-61`: the `begin`/nav-relation/gesture-end/supersession app.js region hashes) are of
   UNTOUCHED app.js and MUST NOT change — this is NOT a fingerprint-pin update; only the rendered
   construction/pane rows regenerate. (Brunel build-step, EC §4.10, kept separate from behavioural sweeps.)
+- **`test/transition-matrix.test.js` — the spec self-consistency predicate (T1 residual — Charpy).** The
+  file's SECOND test (79-96, "the frozen spec builds a pane exactly when the GHOST/SNAPSHOT rules say")
+  hard-codes the OLD ghost rule at line 85: `const expectGhost = c.from !== 'overlay' && c.to === 'browse';`.
+  The spec flip makes `wrong` non-empty (home→overlay + browse→overlay diverge) so `assert.deepEqual(wrong,
+  [])` FAILS. Co-change in the SAME commit as the spec edit: line 85 → `const expectGhost = c.from !==
+  'overlay' && c.to !== 'home';`, and the doc-comment (line 83) → "GHOST iff source is not an overlay AND
+  destination is NOT home" (the `paneOf` check at line 90 auto-follows; no other change). Verified against
+  all 8 structural cases. Charpy confirmed this predicate is the ONLY other place in `test/`/`tools/`
+  encoding the old rule (every spec importer enumerated; the 6c/6d/descriptor-coverage-gate fixtures are
+  unaffected), so this completes the scrub.
 
 **Stays exactly as today (do NOT re-touch):**
 - **The transform-write/clear sites themselves (app.js:555/576/615/775).** UNCHANGED. They keep iterating
@@ -298,8 +308,9 @@ translucent topbar/navbar, **behind which the now-STATIONARY real in-flow view i
 — so the slice's opaque-over-own-rect requirement is an ENUMERATED precondition over **all seven overlay
 kinds**, and the slice BLOCKS if any fails: `options`, `nowplaying`, `general`, `playback`, `buffering`,
 `downloads`, `diagnostics`. **Evidence (verified at HEAD, css/app.css):** all seven paint `background:
-var(--page-bg)` — `#options` (:126), `#nowplaying` (:420), and the five subs `#general/#playback/#buffering/
-#downloads/#diagnostics` (:694) — an opaque page-colour fill over their own rect. So the precondition HOLDS
+var(--page-bg)` — `#options` (css/app.css:134), `#nowplaying` (:421), and the five subs
+`#general/#playback/#buffering/#downloads/#diagnostics` (:695) — an opaque page-colour fill over their own
+rect. So the precondition HOLDS
 today. It is re-verified before merge; any change to an overlay's background (or adding a new overlay kind)
 reopens it (subsystem §23 revision trigger).
 
@@ -416,6 +427,12 @@ a defining-record edit flagged for the maker/Zelda.
   (`gen-swipe-model.mjs:44-61` — `begin`/nav-relation/gesture-end/supersession hashes of UNTOUCHED app.js)
   must NOT change; a fingerprint change would falsely signal an app.js mirrored-region edit that did not
   happen.
+- **`test/transition-matrix.test.js` spec-consistency predicate (T1 residual — Charpy):** co-change in the
+  SAME commit as the spec edit — line 85 `const expectGhost = c.from !== 'overlay' && c.to === 'browse';` →
+  `c.from !== 'overlay' && c.to !== 'home';`, and the line-83 doc-comment to "GHOST iff source is not an
+  overlay AND destination is NOT home" (the second test at 79-96 otherwise fails `assert.deepEqual(wrong,
+  [])` on the flipped in-flow→overlay cases; `paneOf` check at line 90 auto-follows). Verified against all 8
+  structural cases; Charpy confirmed it is the ONLY remaining old-rule encoding in `test/`/`tools/`.
 - **`§8A NEW_POLICIES` ledger decision (T2 — Charpy): NO new entry.** The frozen model's `§8A NEW_POLICIES`
   set (`tools/gen-swipe-model.mjs:266`, asserted as EXACT data at `test/swipe-model.test.js:214`) records
   deliberate DEVIATIONS from observable parity — its three entries (`phase-aware-recovery`,
