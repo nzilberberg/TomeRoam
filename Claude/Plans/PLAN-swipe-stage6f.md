@@ -168,9 +168,16 @@ Behavioural ownership, not function names.
   the STRUCTURAL_CASES rule comment (:33) restated to "outgoing 'app-ghost' iff the SOURCE is in-flow AND
   the DESTINATION is NOT home." `paneOf` (:66) is a derivation and is NOT edited. (This is a defining-record
   edit staged for the maker via Curie's red-first pass, §9/§11 — not applied by this plan.)
-- **`docs/swipe-model.generated.txt` + the model fingerprint** — regenerated from the changed spec/branch in
-  the same commit (Brunel build-step; a source-text/fingerprint obligation kept separate from behavioural
-  sweeps, EC §4.10).
+- **BOTH generated inventory docs regenerated (T1/T2 — Charpy).** The spec edit changes the outgoing/pane
+  columns that BOTH generators render from `expectedConstruction`/`paneOf`, so both regenerate in the same
+  commit: `docs/transition-matrix.generated.txt` (`node tools/gen-transition-matrix.mjs`; byte-exact at
+  `test/transition-matrix.test.js:34`, renders the outgoing/pane columns + the pane-count summary — the
+  in-flow→overlay pairs move from no-pane to a pane) and `docs/swipe-model.generated.txt`
+  (`node tools/gen-swipe-model.mjs`; byte-exact at `test/swipe-model.test.js:78`; `gen-swipe-model.mjs:186-192`
+  reads `expectedConstruction.outgoing` + `paneOf`). The mirrored-region FINGERPRINTS in the model
+  (`gen-swipe-model.mjs:44-61`: the `begin`/nav-relation/gesture-end/supersession app.js region hashes) are of
+  UNTOUCHED app.js and MUST NOT change — this is NOT a fingerprint-pin update; only the rendered
+  construction/pane rows regenerate. (Brunel build-step, EC §4.10, kept separate from behavioural sweeps.)
 
 **Stays exactly as today (do NOT re-touch):**
 - **The transform-write/clear sites themselves (app.js:555/576/615/775).** UNCHANGED. They keep iterating
@@ -202,9 +209,12 @@ transforms (out of the invariant's scope).
 browse→nowplaying / home→nowplaying — the real in-flow source view (`#browse` when the source is a
 browse-family screen, `#home` when the source is home) is **never a mover and therefore never receives a
 swipe-written inline `transform`** at any phase (ARMED, DRAGGING, SETTLING, FINALIZING, after). The outgoing
-is an owned-pane app-ghost; the real in-flow view stays in flow at its natural position, untransformed,
-fully covered by the (outgoing-ghost ∪ incoming-overlay) tiling throughout the drag (§4), and is never
-promoted to (nor demoted from) a compositing layer by the swipe.
+is an owned-pane app-ghost; the real in-flow view stays in flow at its natural position, untransformed, and
+is never promoted to (nor demoted from) a compositing layer by the swipe. (During the drag the
+(outgoing-ghost ∪ incoming-overlay) tiling covers the overlay's own rect — full-viewport for `nowplaying`;
+for the vertically-inset overlay destinations the topbar/navbar bands are covered by the translucent
+topbar/navbar, a device-verified visual detail, §4/§9. The STRUCTURAL invariant — no swipe transform on the
+real view — holds regardless of coverage.)
 
 **Basis (U11).** This realizes the OUTGOING half of `PLAN-swipe-reveal.md` §7-step-6 / the saga structural
 fix for the in-flow→overlay family, and EC §4.3/§4.4 (the real view is not even borrowed as a mover — the
@@ -226,11 +236,13 @@ carries a swipe transform (or is visibly exposed while untransformed). Concretel
 2. **A back-route into the mover set** — a path (a mis-slotted decoration, a supersession-recovery re-arm,
    an NP-decoration edge) that lands the real in-flow element in `d.movers` for an in-flow→overlay gesture
    despite the plan value.
-3. **A tiling/coverage break** — a reachable in-flow→overlay drag geometry (or a non-opaque incoming
-   overlay) where the untransformed real view is momentarily EXPOSED rather than covered (the no-peek claim,
-   §4). This is the visual fracture; primarily a device/geometry concern (§9), but Loki may probe the
-   geometry invariant (`ghost.base===0` and `overlay.base===+w`, both width `w`) that the coverage claim
-   rests on.
+3. **A coverage break beyond what §4 discloses.** §4 already CONCEDES the topbar/navbar-band exposure for
+   the inset overlay destinations (T3, device-verified) and pins the T4 opaque-over-own-rect precondition
+   for all seven overlay kinds. So the residual visual fracture is a coverage break §4 does NOT disclose —
+   an overlay kind whose background is not `var(--page-bg)` (breaking T4) reaching the flip, or the
+   ghost/overlay horizontal-tiling geometry (`ghost.base===0`, `overlay.base===+w`, both width `w`) failing
+   so the rect itself is not covered. Primarily a device/geometry concern (§9); the STRUCTURAL fracture
+   (1)/(2) remains the CI-observable one.
 The primary, CI-observable fracture is (1)/(2): the real in-flow view carrying a transform. The load-bearing
 promise is single: *no code path lets the real in-flow view receive a swipe transform on an in-flow→overlay
 gesture.*
@@ -257,25 +269,42 @@ source `#home` is active (`#browse.hidden`). So the same recipe yields a faithfu
 ghost — the fidelity risk is identical to the shipped browse→browse outgoing ghost (T1/T2 already handled by
 the recipe). No new capture recipe is introduced.
 
-**Grounding — the tiling covers the real view (the no-peek claim).** During an in-flow→overlay drag the two
-movers are the outgoing ghost (base 0) and the incoming overlay (base +w = off, both width `w`). For drag
-offset `t ∈ [-w, 0]` they span `[t, t+2w]`, which always contains the viewport `[0, w]`. So the real in-flow
-view at `[0,w]` behind them is fully covered at every `t`. On COMMIT the overlay lands covering; on ABORT
-the overlay retreats and the outgoing ghost returns to base 0 covering, then `dropPanes()` removes the ghost
-to reveal the real in-flow view — which was **never re-rendered, re-decoded, scrolled, or transformed** (the
-overlay destination is `renderDestination:'none'` — nothing was written into `#browse`), so the reveal is of
-an already-painted, unchanged view.
+**Grounding — coverage is HORIZONTAL over the overlay's rect, and the reveal is of an unchanged view.**
+During an in-flow→overlay drag the two movers are the outgoing ghost (base 0) and the incoming overlay
+(base +w = off, both width `w`). For drag offset `t ∈ [-w, 0]` they span `[t, t+2w]` HORIZONTALLY, which
+always contains the viewport width `[0, w]`. The overlay is opaque over its own rect (T4 precondition
+below), so within that rect the stationary real view behind it is covered at every `t`. On COMMIT the
+overlay lands covering; on ABORT the overlay retreats and the outgoing ghost returns to base 0 covering,
+then `dropPanes()` removes the ghost to reveal the real in-flow view — which was **never re-rendered,
+re-decoded, scrolled, or transformed** (the overlay destination is `renderDestination:'none'` — nothing was
+written into `#browse`), so the reveal is of an already-painted, unchanged view. The reveal path is the
+plain no-hold `dropPanes` for both commit and abort.
 
-**⚠️ Load-bearing grounding item for the maker/Charpy (verify, do not assume — saga rule).** The no-peek
-claim additionally requires the incoming overlay to be **opaque** over the viewport region while it slides,
-because with this slice the untransformed real view sits BEHIND the overlay (today the outgoing real view
-was translated away, so the overlay never overlapped it). Options / nowplaying / settings sub-screens are
-full-screen modal panels and are near-certainly opaque, but this MUST be confirmed against `css/app.css`
-before the change lands; any overlay that is not opaque over the covered region is EXCLUDED from the slice.
-(This is a CSS-fact grounding item, device-visible; it is not a jsdom-assertable CI cell — §7/§9.)
+**⚠️ Corrected no-peek scope (T3 — Charpy; the earlier "full no-peek" claim was WRONG).** The tiling covers
+the overlay's RECT, not necessarily the whole viewport. `#nowplaying` is `position:fixed; inset:0; z-index:60`
+(full-viewport, above the topbar z30) — for it the coverage is total and no band is exposed. But `#options`
+(z25) and the five settings sub-screens (`#general`/`#playback`/`#buffering`/`#downloads`/`#diagnostics`,
+z26) are **vertically INSET** (`top: calc(var(--safe-top) + 51px)` — the bottom edge of the fixed `.topbar`;
+bottom above the transport). For those destinations the TOPBAR band (0–51px, `.topbar` z30
+`rgba(20,23,28,.86)` + `backdrop-filter: blur(14px)`) and the NAVBAR band (`.navbar` z40) are covered by the
+translucent topbar/navbar, **behind which the now-STATIONARY real in-flow view is partially visible
+(blurred)** — where today's transformed outgoing view was moving. The **STRUCTURAL invariant still holds**
+(the real view carries no transform regardless), and the difference is confined to what shows through the
+~86%-opaque blurred topbar/navbar bands. Whether that band difference is visible is **DEVICE-VERIFIED**
+(§9), NOT proven in CI — this plan does **NOT** claim full no-peek for the inset overlay destinations.
+
+**⚠️ CHECKED PRECONDITION (T4 — Charpy; an enumerated gate, not a per-overlay escape hatch).** A kind-level
+`constructionPlanFor` flip applies to ALL overlay destinations at once — it cannot exclude a single overlay
+— so the slice's opaque-over-own-rect requirement is an ENUMERATED precondition over **all seven overlay
+kinds**, and the slice BLOCKS if any fails: `options`, `nowplaying`, `general`, `playback`, `buffering`,
+`downloads`, `diagnostics`. **Evidence (verified at HEAD, css/app.css):** all seven paint `background:
+var(--page-bg)` — `#options` (:126), `#nowplaying` (:420), and the five subs `#general/#playback/#buffering/
+#downloads/#diagnostics` (:694) — an opaque page-colour fill over their own rect. So the precondition HOLDS
+today. It is re-verified before merge; any change to an overlay's background (or adding a new overlay kind)
+reopens it (subsystem §23 revision trigger).
 
 **Grounding — the `.alphaindex` strip is touched only BENEFICIALLY.** The A–Z strip is `position:fixed`;
-today a `transform` on `#browse` makes `#browse` its containing block and re-anchors it (T3). With this
+today a `transform` on `#browse` makes `#browse` its containing block and re-anchors it (saga trap T3). With this
 slice `#browse` is NOT transformed on in-flow→overlay, so it does NOT become the strip's containing block on
 those transitions — strictly better than today, and it does not break the strip. (The outgoing GHOST clone
 has its own re-anchored strip inside its fixed wrap, exactly as browse→browse already ships — no new issue.)
@@ -378,10 +407,28 @@ a defining-record edit flagged for the maker/Zelda.
   (home→overlay), 58 (browse→overlay), 181 (browse→nowplaying modifier); restate the STRUCTURAL_CASES rule
   comment (33). Independent-oracle edit, hand-written, reviewed (§4.14) — Curie authors it red-first before
   the production change.
-- **`docs/swipe-model.generated.txt` + `tools/gen-swipe-model.mjs` / `test/swipe-model.test.js` fingerprint**
-  — regenerate the model and update the fingerprint pin in the same commit (source-text/fingerprint gate,
-  kept separate from behavioural sweeps, EC §4.10). `test/swipe-transition.test.js` compares production vs
-  the updated spec.
+- **BOTH generated docs regenerated in the same commit (T1/T2 — Charpy):** `node tools/gen-transition-matrix.mjs`
+  → `docs/transition-matrix.generated.txt` (byte-exact `test/transition-matrix.test.js:34`; the
+  outgoing/pane columns + pane-count summary change as the in-flow→overlay pairs gain a pane) AND
+  `node tools/gen-swipe-model.mjs` → `docs/swipe-model.generated.txt` (byte-exact `test/swipe-model.test.js:78`;
+  its construction/pane rows change). `test/swipe-transition.test.js` compares production `constructionPlanFor`
+  vs the updated spec. **NOT a fingerprint-pin update:** the model's mirrored-region fingerprints
+  (`gen-swipe-model.mjs:44-61` — `begin`/nav-relation/gesture-end/supersession hashes of UNTOUCHED app.js)
+  must NOT change; a fingerprint change would falsely signal an app.js mirrored-region edit that did not
+  happen.
+- **`§8A NEW_POLICIES` ledger decision (T2 — Charpy): NO new entry.** The frozen model's `§8A NEW_POLICIES`
+  set (`tools/gen-swipe-model.mjs:266`, asserted as EXACT data at `test/swipe-model.test.js:214`) records
+  deliberate DEVIATIONS from observable parity — its three entries (`phase-aware-recovery`,
+  `supersession-restore-scroll`, `supersession-rerender-source`) are all recovery/supersession BEHAVIOURS
+  that differ from today's production. This slice is an INTENDED observable-parity, construction-REPRESENTATION
+  change (a faithful outgoing ghost replacing the transformed real view), not a behaviour deviation, so it is
+  NOT added to `NEW_POLICIES` and the exact-set assertion at `:214` stays green. Silent reversion is instead
+  guarded by the frozen `expectedConstruction` spec + the `swipe-transition` oracle (reverting
+  `constructionPlanFor` to `real-source` reddens `test/swipe-transition.test.js`) — the correct guard for
+  construction-data drift; `NEW_POLICIES` is not. **Residual, flagged:** if device verification (§9, the T3
+  topbar/navbar-band exposure for inset destinations) reveals a REAL visible deviation, the classification
+  becomes a policy decision at that point (fix it, exclude — noting T4 that a kind-level flip cannot exclude a
+  single overlay — or record it in `NEW_POLICIES`); it is not pre-blessed here.
 - **`tools/mutate.mjs`** — register the SIbrowse/SIhome/GHOST/REVEAL/DEC/MODEL mutations (revert the outgoing
   plan value; force real-source; suppress the ghost; introduce a hold; drop/mis-slot the decoration; desync
   the oracle), each mapped to the test it reddens; `test/mutation-anchors.test.js` resolves the anchors;
@@ -395,9 +442,12 @@ a defining-record edit flagged for the maker/Zelda.
 - **`Claude/Decisions/DecisionLog.md`** — append a dated Stage-6f decision: NEW POLICY (EC §4.19) — the
   in-flow→overlay outgoing representation changes from the transformed real in-flow view to an owned-pane
   app-ghost, so the real `#browse`/`#home` is never a mover and never transformed on those transitions; the
-  visual parity (faithful ghost, opaque-overlay tiling) is device-verified downstream, no known-red, no
-  PolicyLedger entry; the decomposition rationale (in-flow→overlay is the safe off-hold-surface outgoing
-  slice; browse→home and the T8-forked headline incoming are deferred). Reference this plan.
+  visual parity (faithful ghost over its opaque rect; the topbar/navbar-band exposure for inset destinations
+  is device-verified, T3) is device-verified downstream, no known-red, no PolicyLedger entry, and NO `§8A
+  NEW_POLICIES` entry (an intended-parity construction-representation change guarded by the frozen spec +
+  `swipe-transition` oracle, not the behaviour-deviation ledger); the decomposition rationale
+  (in-flow→overlay is the safe off-hold-surface outgoing slice; browse→home and the T8-forked headline
+  incoming are deferred). Reference this plan.
 - **`Claude/Plans/PLAN-swipe-reveal.md` §7 step 6** — extend the SLICED annotation: 6f opened the STRUCTURAL
   axis with the outgoing-in-flow-source app-ghost for in-flow→overlay (real in-flow view no longer
   transformed on those transitions); browse→home outgoing, the INCOMING real-`#browse` transform
@@ -412,13 +462,18 @@ a defining-record edit flagged for the maker/Zelda.
 - **🔴 DO NOT remove the `--page-bg` red test gradient** (`css/app.css`) — movement is confirmed device-only,
   downstream; not this stage (saga; standing user instruction).
 
-**DEVICE-VERIFICATION OBLIGATION (downstream, NOT a gate on this stage — deploy rule).** Two claims are
-device-only and cannot be asserted in CI: (a) the incoming overlay is opaque over the covered region so the
-untransformed real view never peeks mid-drag (§4 grounding item — also verify against `css/app.css` before
-merge); (b) whether the aborted in-flow→overlay swipe's visual behaviour is unchanged, and — as pure
-DIAGNOSTIC data, not a promise — whether removing the real-view transform on this family changes any flash
-the user observes there (a differential against the still-transformed browse→browse). These go on the
-standing shipped-unverified device pass; the stage is NOT gated on them (a push precedes any on-device test).
+**DEVICE-VERIFICATION OBLIGATION (downstream, NOT a gate on this stage — deploy rule).** Three claims are
+device-only and cannot be asserted in CI: (a) the T4 opaque-over-own-rect precondition — verified as holding
+at HEAD (§4, all seven overlays paint `var(--page-bg)`), re-confirmed against `css/app.css` before merge;
+(b) the T3 band-exposure — for the vertically-inset overlay destinations (`options` + the five settings
+subs) the now-STATIONARY untransformed real view is partially visible (blurred) through the ~86%-opaque
+topbar (z30) and navbar (z40) bands the overlay does not cover; whether that reads as a visible change vs
+today's moving outgoing view is device-verified (`nowplaying`, full-viewport z60, has no band exposure);
+(c) whether the aborted in-flow→overlay swipe's visual behaviour is unchanged, and — as pure DIAGNOSTIC
+data, not a promise — whether removing the real-view transform on this family changes any flash the user
+observes there (a differential against the still-transformed browse→browse). These go on the standing
+shipped-unverified device pass; the stage is NOT gated on them (a push precedes any on-device test). The
+STRUCTURAL invariant (no swipe transform on the real view) is CI-proven regardless of all three.
 
 ## 10. What this does NOT do (deferred, with reasons)
 
