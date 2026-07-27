@@ -93,7 +93,7 @@ half and the null-bookkeeping (whose reader stays unreachable — F1).
 | `EngineeringContract.md` §4.18 / subsystem §14 | "A successor may not dispose resources still owned by a valid active operation unless the policy explicitly defines supersession at that phase." "`begin()`'s hard reset ... must NOT dispose a pane owned by an active SETTLING/FINALIZING/REVEALING session (I17)." | Core rule + subsystem | Defines supersession for the pane-LESS settle/finalize phase only (no owned pane to dispose). A pane-OWNING session stays protected (cell PG); the reveal-await-paint disposal stays deferred | Narrow §14/I17 to "protects a PANE-OWNING settling/finalizing/revealing session" (§10) |
 | `PLAN-swipe-reveal.md` I12 / I18 / I20 | I12: every async callback captures `session.id` and no-ops when superseded. I20: a superseding gesture recovers the old session and fully releases it before the new arms; only the new session may thereafter mutate transforms/stacks/scroll/panes. | Invariants (strategic) | I12 realized (via identity, not id, equivalently) for the settle-phase callbacks; I20 extended — a superseded pane-less session's settle continuations can no longer mutate transforms/stack | — |
 | `PLAN-swipe-reveal.md` §7 step 6 | "Centralize finalization and reveal ordering (I10, I17)." | Plan-of-record (staging) | Delivers the ownership half (the `cur === session` model for the pane-less window); the reveal-ordering/paint half (I10/I17) stays 6d/7 | Annotate §7 step 6 as sub-sliced (§10) |
-| `js/app.js` `begin()` gate (352) + recovery (361-390) | `if (finishing) return;` blanket-rejects new gestures during settle→drop. The 6a recovery (`if (d || .nav-ghost)`) restores source/scroll inside the Browse hold — but only for a DRAGGING (`d` non-null) session or a leftover ghost, NOT a pane-less settling session (`d === null` at end(), app.js:531; no `.nav-ghost`). `finishing` is cleared only in the completion path (792/1151/1177). | Code under change | Narrow the gate (supersede a pane-LESS finishing session, still return for a pane-OWNING one); CORRECT the recovery-entry predicate to route the pane-less settling session in; CLEAR `finishing = false` in the recovery (F2); read `cur.clobbered`/`cur.scroll0` since `d === null` | — |
+| `js/app.js` `begin()` gate (352) + recovery (361-390) | `if (finishing) return;` blanket-rejects new gestures during settle→drop. The 6a recovery (`if (d || .nav-ghost)`) restores source/scroll inside the Browse hold — but only for a DRAGGING (`d` non-null) session or a leftover ghost, NOT a pane-less settling session (`d === null` at end(), app.js:531; no `.nav-ghost`). `finishing` is cleared only in the completion path (792/1151/1177). | Code under change | Narrow the gate to its NEGATIVE form `if (finishing && !(session && paneLess(session))) return;` (supersede ONLY a live pane-LESS session; return for a pane-OWNING one AND for a null session — so a stuck `finishing` wedges, F5); CORRECT the recovery-entry predicate to route the pane-less settling session in; CLEAR `finishing = false` in the recovery (F2); read `cur.clobbered`/`cur.scroll0` since `d === null` | — |
 | `js/app.js` `finalize`/`settle` rAF (551-553, 1159-1179) | The settle rAF writes transforms on borrowed-real movers; `finalize` (`done`-guarded) runs `runFinalize` (applyScreen + stack mutation); the 340ms `settleTimer` (1182) and `transitionend` (1181) both call `finalize`. `cancelAnimationFrame(cur.settleFrame)` (1163) and `clearTimeout(cur.settleTimer)` (1168) are shipped (.226/6b). | Code under change | Add the `cur === session` guard to the settle rAF callback and to `finalize` (before `runFinalize`, after the `done` set) so a stale fire after supersession no-ops. No handle nulling, no listener re-ownership (deferred) | — |
 | `test/app-harness.js` (241, 356-359, 245, 732-763, 796-834) | `cancelAnimationFrame`/`clearTimeout` REALLY splice the pending callback; `h.raf.frame()`/`clock.advance()` fire only what is still queued (so a test observes a stale fire only if it was NOT cancelled). `h.touch` drives the two-gesture interleave; `browse.render`/`window.scrollTo`/nav recorded; `PBSwipeSession` exposes `{id,dragging}`, "NO test-only exports" (29). | Verified test tooling (precedence 3) | The observable channel: the SUCCESSOR's real DOM/log after a stale callback fires — a guarded no-op leaves it intact; an unguarded fire corrupts it (G1/G2/G3). Because a cancelled callback cannot fire, the guard (not a cancel/null) is what the test exercises — confirming F1's identity-is-the-mechanism | — |
 
@@ -167,10 +167,18 @@ Behavioural ownership, not function names. All changes are in `js/app.js` `begin
 callback, and `settle()`'s inner `finalize`. No other function, module, or user-visible behaviour changes.
 
 **Changes:**
-- **`begin()` gate narrowed + recovery-entry predicate corrected (app.js:352, 361) (F2).** The blanket
-  `if (finishing) return;` becomes phase-aware: an in-flight finishing session that OWNS A PANE
-  (`session.movers.some(m => m.own === 'owned-pane')` — true for ghost/snapshot, and held-reveal implies it)
-  still returns (deferred, cell PG); a PANE-LESS finishing session falls through to be superseded. The
+- **`begin()` gate narrowed to its NEGATIVE form + recovery-entry predicate corrected (app.js:352, 361)
+  (F2/F5).** The blanket `if (finishing) return;` becomes phase-aware in its NEGATIVE form —
+  `if (finishing && !(session && paneLess(session))) return;`, where
+  `paneLess(s) = !s.movers.some(m => m.own === 'owned-pane')`. It REJECTS whenever `finishing` is true and
+  there is NOT a live PANE-LESS session to supersede — i.e. when `session` is null (INCLUDING a stuck
+  `finishing === true` left after a prior recovery nulled `session` last) OR the session OWNS A PANE
+  (ghost/snapshot; held-reveal implies it; deferred, cell PG). ONLY a pane-LESS live session falls through
+  to be superseded. The negative form is load-bearing for cell W (Charpy r2 F5): a stuck
+  `finishing === true`/`session === null` state must REJECT (wedge) so that omitting the `finishing = false`
+  clear reddens W. The POSITIVE form `if (finishing && paneOwning(session)) return;` would instead fall
+  through on `paneOwning(null) === false`, engaging despite the stuck flag — which would make the
+  `finishing = false` clear a DEAD write and W vacuous. The
   recovery block's entry predicate `if (d || document.querySelector('.nav-ghost'))` is broadened to also
   admit a pane-less finishing session — which has `d === null` (nulled at end(), app.js:531) and no
   `.nav-ghost` — e.g. `if (d || document.querySelector('.nav-ghost') || (finishing && session))`, so
@@ -235,10 +243,16 @@ continuations cannot mutate the successor:
    because the superseded session never finalized — no-ops, so it does NOT applyScreen or mutate the nav
    stack over the successor (cells G2, G3; EC §4.6).
 4. **`finishing` is cleared on supersession (liveness).** The recovery sets `finishing = false` so a
-   superseding gesture that never arms cannot wedge future swipes (cell W; F2).
-5. **Deferral boundary.** A PANE-OWNING session (ghost/snapshot) is NOT superseded — `begin()` still
-   returns while it is finishing — so no owned pane is disposed by supersession in this slice (cell PG;
-   EC §4.18 — this slice DEFINES supersession for the pane-less phase only).
+   superseding gesture that never arms cannot wedge future swipes (cell W; F2). This clear is load-bearing
+   ONLY under the NEGATIVE gate (item 5): because the gate rejects when `finishing` is true and there is no
+   live pane-less session, a stuck `finishing === true`/`session === null` state REJECTS, so omitting the
+   clear reddens W (F5).
+5. **Deferral boundary (the NEGATIVE gate).** `begin()` supersedes ONLY a live PANE-LESS session; it
+   REJECTS (`return`s) for every other `(finishing, session)` combination — a PANE-OWNING session
+   (ghost/snapshot; held-reveal implies it) so no owned pane is disposed by supersession in this slice
+   (cell PG; EC §4.18 — this slice DEFINES supersession for the pane-less phase only), AND a null `session`
+   (so a stuck `finishing === true` after a recovery nulled `session` still wedges rather than falling
+   through — the F5 fix). Gate: `if (finishing && !(session && paneLess(session))) return;`.
 6. **Endpoint (parity).** The successor's ownership begins only after the old session's recovery completes
    and its identity is nulled last (6a's order, unchanged); `session === null` after a terminal path stays
    as shipped (`test/swipe-invariants.test.js:588`).
@@ -357,7 +371,10 @@ rAF callback; `runFinalize` in `finalize`), and in `finalize` AFTER the `done` s
 
 **Liveness requirement (cell W) — `finishing` is cleared during the recovery, before any early return.** The
 recovery must set `finishing = false` on every path out of the supersession branch, so a superseding gesture
-that never arms leaves the gate open.
+that never arms leaves the gate open. This is VERIFIABLE only because the gate is the negative form (§3):
+a stuck `finishing === true` with `session === null` REJECTS, so omitting the clear wedges the next swipe
+(W reddens). Under a positive pane-owning check the stuck flag would fall through (`paneOwning(null)` is
+false) and W would be vacuous — the Charpy r2 F5 defect this pins.
 
 Incidental (not a new universal order): the `.226`/6b cancel positions in `finalize` are preserved; the 6a
 recovery order (render+scroll → `endHold` → identity-null) is reused unchanged, with `finishing = false`
@@ -397,7 +414,7 @@ real `begin()`/`settle()`/`finalize()` through the app-harness (`test/app-harnes
 | G1 | A stale settle rAF from a superseded pane-less session no-ops — it writes NO `translateX` onto the successor's borrowed-real movers | a pane-less (e.g. home→browse) live drag → release into settle with `deferRaf` (settle rAF pending); a 2nd touch supersedes and arms B; fire the old frame (`h.raf.frame()`); assert B's `#home`/`#browse` transforms are B's, unstained (the `:598-616` channel) | remove the `cur === session` guard on the settle rAF callback → the old frame writes a stale `translateX` on the successor's movers | wiring (successor DOM transforms) |
 | G2 | A 340ms `settleTimer` firing after supersession does NOT run `runFinalize` over the successor — no `applyScreen`/stack mutation for the old destination | a pane-less live drag → settle with `fakeTimers` (340ms pending, `done` false); supersede → arm B; advance past 340ms so the old `settleTimer` fires `finalize_A`; assert no `browse.render`/`applyScreen` for A's dest and B's nav stack intact | remove the `cur === session` guard on `finalize` → `finalize_A` runs `runFinalize_A`, calling `applyScreen`/mutating the stack over B (the wrong-page class) | wiring (successor log + nav) |
 | G3 | A late `transitionend` (the other `finalize` trigger) after supersession does NOT run `finalize_A` over the successor | a pane-less live drag → settle; supersede → arm B; dispatch `transitionend` on the old anchor (`cur.movers[0].el`, borrowed-real) firing the existing `{once}` listener; assert `finalize_A` performed no `applyScreen`/stack mutation over B | remove the `cur === session` guard on `finalize` → the late `transitionend` runs `finalize_A` over B | wiring (successor log + nav) |
-| W | A superseding tap that never arms leaves future swipes working — the recovery cleared `finishing` | a pane-less live drag → settle; a 2nd touch that supersedes but is a bare tap (touchstart+touchend, never crosses the lock, no `settle()`); then a fresh full pane-less swipe must engage (reach `settle`) | omit `finishing = false` in the supersession recovery → `finishing` stays true → `begin()` (app.js:352) rejects the next swipe, which never engages (the wedge class of `swipe-invariants.test.js:623-646`) | wiring (subsequent-gesture engagement) |
+| W | A superseding tap that never arms leaves future swipes working — the recovery cleared `finishing` | a pane-less live drag → settle; a 2nd touch that supersedes but is a bare tap (touchstart+touchend, never crosses the lock, no `settle()`); then a fresh full pane-less swipe must engage (reach `settle`) | omit `finishing = false` in the supersession recovery → `finishing` stays true and `session` is null (recovery nulled it) → the NEGATIVE gate `if (finishing && !(session && paneLess(session)))` rejects the next swipe, which never engages (the wedge class of `swipe-invariants.test.js:623-646`). (Under a positive pane-owning gate this mutation would NOT wedge — the F5 vacuity this pins.) | wiring (subsequent-gesture engagement) |
 | PG | A PANE-OWNING (ghost/snapshot) settling session is STILL rejected by `begin()` — supersession does NOT dispose its held pane (the deferral boundary) | a browse→browse (ghost) live drag under `opts.realBrowse` → release into settle so a real owned pane exists; a 2nd touch; assert `begin()` returns (no recovery/arm) and the ghost pane is not disposed (`ghosts`/pane count unchanged). NOTE for Curie (F4): confirm the ghost pane genuinely materializes under `opts.realBrowse` and that the mutation disposes it, else PG is vacuous | the narrowed gate wrongly supersedes a pane-owning session → its owned pane is disposed mid-settle (the deferred, flash-unsafe path) | wiring (pane count, `opts.realBrowse`) |
 | RG226 | The shipped `cancelAnimationFrame(cur.settleFrame)` still prevents a within-session stale transform after finalize (hidden-tab) | the .226 hidden-tab recipe (unchanged) | the slice drops the within-session settle-rAF cancel → the resumed rAF writes a stale transform | wiring (existing green) |
 | RG6b | The 6b loser-cancels (`settleTimer`/`revealFrames`/`revealTimer`) still leave the scheduler queue at their resolver (within-session) | the 6b DF/RR fixtures (unchanged) | the slice drops a within-session loser-cancel → the loser stays pending | wiring (existing green) |
