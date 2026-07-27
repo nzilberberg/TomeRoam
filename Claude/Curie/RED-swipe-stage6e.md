@@ -179,3 +179,53 @@ was left in the tree.
 - **To Mendeleev (audit):** the suite realizes §7's applicable cells; the one **owed** item (§5, the
   unguarded sync-throw stranding invariant) is a coverage gap that cannot be red-authored at HEAD and routes
   to a plan amendment / guard.
+
+---
+
+## 8. Mendeleev-remediation (post-build, HEAD 1ebbf5d → audit `AUDIT-swipe-stage6e` BARE_CELLS)
+
+The slice built and shipped (`disposeOwnedPanes` at `js/app.js`, Poirot SHIP); the suite is now GREEN
+(9/9). Mendeleev's coverage audit returned **BARE_CELLS** — behavioural coverage adequate and non-vacuous,
+but the **Mutation-cases dimension** (EC §4.10 — non-vacuity evidence must be RUNNABLE in tooling, not a
+one-time hand check) had registry gaps. This is a pure `tools/mutate.mjs` registration closure: **no
+production code touched** (`js/**` pristine), plan unedited, nothing committed.
+
+Brunel had already registered the built-code defenders `#69` (DP/attribution — the own-filter never
+matches), `#70` (BR — broaden to every mover), `#71` (DEC — guard `.np-pill-float` behind keepGhosts),
+which supersede §4's pre-build manual channel-proofs for those cells. The three remaining gaps are now
+closed with five mutants (`tools/mutate.mjs`, indices 72–76):
+
+| Idx | Mutant | Reddens | Why it was owed |
+|---|---|---|---|
+| 72 | `NOOP-a` — owned branch drops keepGhosts at the explicit `resetSwipeStyles` (`app.js:441`) | NOOP.mechanism (count 1) | the anti-no-op crux (Loki residual 1) had NO registered single-site mutant |
+| 73 | `NOOP-b` — owned branch drops keepGhosts in the `applyScreen` opts (`app.js:442`) | NOOP.mechanism (count 1) | the SECOND sweep site; either alone must redden |
+| 74 | `RSN-mistag` — the disposal reason token `'superseded'` → a wrong token | RSN ("superseded" recorded) | plan §9 promised a mistag mutant that never landed |
+| 75 | `RSN-emit` — the trace fires unconditionally, ignoring the `disposed` flag | RSN (pane-less-no-trace clause) | Charpy F2 / the plan's "emit only when a pane is disposed" was unguarded |
+| 76 | `HR` — the recovery forces keepGhosts on the ORPHAN branch too (both sweep sites) | HR | HR was caught only coarsely by the whole-block hard-reset mutant `#13` |
+
+**Why B1 (72/73) is the crux, and why it takes TWO one-site mutants.** The owned branch suppresses the
+DOM-global `.nav-ghost` sweep at BOTH sites — the explicit `resetSwipeStyles(cur ? true : undefined)` at
+:441 AND `applyScreen`'s internal `resetSwipeStyles(opts.keepGhosts)` at :442 → nav.js:120. Dropping
+keepGhosts at EITHER site lets that one sweep run; because `disposeOwnedPanes` already removed the owned
+pane one line earlier, the sweep finds nothing and the **DOM outcome is unchanged** — so DP (a DOM-outcome
+cell) stays green and only NOOP.mechanism's sweep-count reddens (count 1). This is exactly why the anti-no-op
+cell had to observe the mechanism, and why each site needs its own mutant: a single mutant covering only one
+site would leave a build that drops keepGhosts at the *other* site undefended.
+
+**N1 (76) is two-part** because the orphan branch (`cur` null) is swept at both sites; forcing keepGhosts
+on both strands a stray orphan (suppressing only one leaves the other sweeping it). The owned branch is
+unchanged (keepGhosts is already true there), so it reddens ONLY the orphan cell HR.
+
+**Verification (`node` at `C:\Users\nzilb\tools\node-dist\node.exe`; each mutant run SYNCHRONOUSLY by index,
+never backgrounded):**
+- Full suite `node --test test/*.test.js` → **721 pass / 0 fail** (green).
+- `test/mutation-anchors.test.js` → green (all five new `from` anchors match source, incl. the
+  template-literal `RSN-emit` line).
+- `node tools/mutation-sweep.mjs 72 73 74 75 76` → **swept 5: 0 uncaught, 0 unapplied, 0 stale** — every
+  new mutant is CAUGHT.
+- Right-test-right-reason (each applied alone, `test/swipe-stage6e.test.js` run, restored): 72 → only
+  NOOP.mechanism; 73 → only NOOP.mechanism; 74 → only RSN; 75 → RSN's pane-less clause (the mutated trace
+  shows `pane disposed reason=superseded sid=1` on a pane-LESS supersession — the exact Charpy-F2 defect);
+  76 → only HR.
+- `node tools/mutate.mjs --restore` after every run; **no `*.mutbak` remains**, `js/` is pristine, only
+  `tools/mutate.mjs` changed.
