@@ -2,12 +2,29 @@
 
 Type: plan
 
-<!-- vitruvius-gate {"plan_type":"refactor","patterns":{"boundary_relocation":true,"callee_replacement":false,"contract_shape":true,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":false},"project_adapter":"tomeroam-js-dom","source_ranges":["js/swipe.js:122-145","js/swipe.js:300-327","js/app.js:516-516","js/app.js:413-421","js/app.js:1145-1188"],"callee_ranges":[],"affected_contracts":["test/fixtures/swipe-plan-spec.mjs:40","test/swipe-transition.test.js:57","test/contract-function-gate.test.js:24"],"staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Plans/PLAN-swipe-reveal.md"],"blocking_questions":["FP","AB","CLB","RC"]} -->
+<!-- vitruvius-gate {"plan_type":"refactor","patterns":{"boundary_relocation":true,"callee_replacement":false,"contract_shape":true,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":false},"project_adapter":"tomeroam-js-dom","source_ranges":["js/swipe.js:122-145","js/swipe.js:300-327","js/app.js:516-516","js/app.js:413-421","js/app.js:1145-1188"],"callee_ranges":[],"affected_contracts":["test/fixtures/swipe-plan-spec.mjs:40","test/swipe-transition.test.js:57","test/contract-function-gate.test.js:24","test/swipe-construction.test.js:30"],"staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Plans/PLAN-swipe-reveal.md"],"blocking_questions":["FP","AB","CLB","RC"]} -->
 
-Status: **DRAFT — for Charpy** (2026-07-26). First Stage-6d slice, following shipped Stage 6a
-(supersession recovery), 6b (loser-cancel), 6c (pane-less supersession + settle-phase identity guard,
-build `ba1c59b`, Poirot SHIP / Mendeleev ADEQUATE / Loki HELD STONE). Sub-slice of
+Status: **DRAFT — for Charpy (r2, after r1 TEMPER)** (2026-07-26). First Stage-6d slice, following shipped
+Stage 6a (supersession recovery), 6b (loser-cancel), 6c (pane-less supersession + settle-phase identity
+guard, build `ba1c59b`, Poirot SHIP / Mendeleev ADEQUATE / Loki HELD STONE). Sub-slice of
 `PLAN-swipe-reveal.md` §7 step 6.
+
+**Revised after Charpy r1 TEMPER (target `00874b5`).** The slice choice, the D-before-F dependency claim,
+the equivalence promise, the fracture, and the Coverage-Model non-vacuity all verified sound and are
+UNCHANGED. Three corrections: **(F1, blocking)** §2/§9 now enumerate EVERY HEAD reference to
+`clobbered`/`sourceWasClobbered` with a per-site action (the exact-key Construction contract, the F6 test,
+five `mutate.mjs` anchors, the model mirror + fingerprint, and comment sites) — the r1 subset omitted
+gated tests whose reddening falsified the RG* "stays green" cells; the co-changes are now in-slice (§2
+"Co-changed in-slice", §9). **(F2, tighten)** the byproduct's branch location is corrected: it is
+initialized at swipe.js:300 and computed at :310 inside the INCOMING `renderDestination==='browse-host'`
+branch (reached by {home→browse, browse→browse, overlay→browse}), NOT the outgoing `app-ghost` branch —
+so the fracture names both computed-but-false cases (home→browse AND overlay→browse). **(planner-found,
+beyond r1)** a latent NON-parity neither r1 nor the TEMPER caught: the retired `clobbered` = `cur.live &&
+(browse→browse)`, so at the pre-build ARMED-supersession recovery reader (415) a pure `abortRender`
+substitution would flip an ARMED browse→browse from render-FALSE to a spurious `#browse` re-render. The
+recovery reader now carries the `cur.live` conjunct (byte-parity), `finPlan` is computed at ARM time so it
+is defined there, and cell RC pins all three boundary points. This keeps the FULL retirement and the
+load-bearing promise intact — it corrects WHERE the equivalence holds, honestly.
 
 **Slice chosen ON THE MERITS by dependency, NOT by symptom-appeal (planner directive).** The deferred
 set from 6c §11 splits into a dependency graph (§1a). Its two roots that depend on nothing else in the
@@ -26,9 +43,12 @@ declarative spine the rest of step 6 composes from.
 FROZEN `expectedFinalization: { abortRender }` per STRUCTURAL_CASE (lines 39–62), INERT since stage 4,
 explicitly "added as `expectedFinalization` when stage 6 builds `finalizationPlanFor()`" and NOT yet
 compared against production. Grounded against shipped HEAD (`ba1c59b`): `js/swipe.js`
-`constructionPlanFor` (122–145) and `buildConstruction` where `sourceWasClobbered = resolveSource() ===
-hostEl` is computed as a RUNTIME byproduct of the actual build (300–327, the flag set only inside the
-`app-ghost` outgoing branch); `js/app.js` `start()` storing `d.clobbered = c.sourceWasClobbered` (516);
+`constructionPlanFor` (122–145) and `buildConstruction` where `sourceWasClobbered` is computed as a
+RUNTIME byproduct of the actual build — initialized `false` at swipe.js:300 and computed
+`sourceWasClobbered = resolveSource() === hostEl` at swipe.js:310, inside the INCOMING
+`else if (plan.renderDestination === 'browse-host')` branch (305–310), reached by every browse-destination
+{home→browse, browse→browse, overlay→browse} and true only when the real source IS the `#browse` render
+host (browse→browse); `js/app.js` `start()` storing `d.clobbered = c.sourceWasClobbered` (516);
 the three `clobbered` READ sites — the 6c supersession recovery (415), the held browse→browse abort
 selector + render arg (1159–1160), and the no-pane abort render arg (1185); the settle-time stack
 mutation keyed on `cur.dir`/`cur.newNav` (751–753, which is NOT this slice — §11). Grounded against the
@@ -53,7 +73,7 @@ Machine-readable declaration above; project adapter `tomeroam-js-dom`. Reason fo
   `{ abortRender: 'rerender' | 'none' }` (EC §4.11, gated by `test/contract-function-gate.test.js`), and
   turns on the frozen `expectedFinalization` oracle. §4b-contract gives the structural schema.
 - **state_transfer: false** — no ownership boundary relocates. The gesture session still owns every
-  resource (subsystem §8); the finalization plan is an IMMUTABLE VALUE computed at `start()` and stored on
+  resource (subsystem §8); the finalization plan is an IMMUTABLE VALUE computed at arm time and stored on
   the session (`cur.finPlan`), not an owned resource with a lifecycle/cleanup. No value's OWNERSHIP crosses
   a seam.
 - **async_change: false** — no asynchronous surface, timing, or continuation changes. The settle rAF, the
@@ -94,7 +114,7 @@ whose consumer needs them (the pane/lease/source-resolution work), because `abor
 |---|---|---|---|---|
 | `PLAN-swipe-reveal.md` §3.3 | `planFor(classification)` returns `{ ..., commit, abort, ..., paneRemovalPolicy }`; "`clobbered` DOES NOT EXIST in the target vocabulary. Its only consequence is expressed directly: browse→browse abort `render:'rerender'`; everything else `render:'none'`." | Plan-of-record (strategic) | Realizes the abort half of `planFor` as `finalizationPlanFor(classification).abortRender` (`'rerender'` iff `fromKind==='browse' && toKind==='browse'`), and RETIRES `clobbered`/`sourceWasClobbered`. `commit`/`scroll`/`stackEffect`/`reveal`/`paneRemovalPolicy` DEFER to later slices with their consumers (§10) | Annotate §7 step 6 sub-sliced (§9) |
 | `test/fixtures/swipe-plan-spec.mjs` (39–62) | Carries FROZEN `expectedFinalization: { abortRender: 'rerender'\|'none' }` per STRUCTURAL_CASE ('rerender' only for browse→browse); "NOT consumed by production in stage 4 (`finalizationPlanFor` lands in stage 6) and NOT compared against production yet." | Independent oracle (verified tooling, EC §2 precedence 3) | Turns the frozen data ON: `test/swipe-transition.test.js` now compares production `finalizationPlanFor` against `expectedFinalization` across all 8 cases (§4.14 three-layer oracle; cell FP). The DATA is unchanged — only made live | Remove the "NOT consumed / absence must not be read as verified" caveat from the fixture header (§9) |
-| `js/swipe.js buildConstruction` (300–327) | `sourceWasClobbered = resolveSource() === hostEl`, set ONLY inside the `plan.outgoing === 'app-ghost'` branch — a RUNTIME byproduct of the actual build. `app-ghost` outgoing iff source≠overlay ∧ dest=browse ({home→browse, browse→browse}). | Code under change | RETIRED. The abort decision is no longer an observed build byproduct but a declared `finalizationPlanFor` decision from the classification kinds. This closes the fracture that `sourceWasClobbered` (runtime, keyed on the app-ghost path) could diverge from the intended static rule (sameBrowseHost) — see the Loki target, §3 | — |
+| `js/swipe.js buildConstruction` (300, 310) | `sourceWasClobbered` initialized `false` at :300, computed `resolveSource() === hostEl` at :310 inside the INCOMING `else if (plan.renderDestination === 'browse-host')` branch — a RUNTIME byproduct of the actual build. The compute runs for EVERY browse-destination {home→browse, browse→browse, overlay→browse}; the value is `true` only for browse→browse (source IS the `#browse` host). | Code under change | RETIRED. The abort decision is no longer an observed build byproduct but a declared `finalizationPlanFor` decision from the classification kinds. This closes the fracture that `sourceWasClobbered` (runtime, computed in the browse-host-render branch) could diverge from the intended static rule (sameBrowseHost = browse→browse only) — see the Loki target, §3 | — |
 | `js/app.js` `clobbered` set (516) + reads (415, 1159–1160, 1185) | `d.clobbered = c.sourceWasClobbered` (516); read at the 6c recovery render arg (415), the held browse→browse abort branch SELECTOR + render arg (1159–1160), and the no-pane abort render arg (1185). | Code under change | All read sites consume `cur.finPlan.abortRender === 'rerender'` instead; `clobbered` and `sourceWasClobbered` are DELETED (EC §4.16 — no cause + separately-stored derived consequence). Byte-identical behaviour (§3 parity; the retired byproduct equals the declared decision on every reachable transition) | — |
 | `EngineeringContract.md` §4.16 | "Do not store both a cause and a separately mutable derived consequence ... Derive convenience values at the use site." | Core rule | The exact rule this slice satisfies: `clobbered`/`sourceWasClobbered` was a stored derived consequence of the transition class; it is replaced by deriving `abortRender` from the classification. No `sameBrowseHost` FIELD is stored either (it too is derivable from `fromKind`/`toKind`) — the decision is derived at its one use site, `finalizationPlanFor` | — |
 | `EngineeringContract.md` §4.14 | Three independent layers: declarative spec → production → comparison; "generate expected output from production output" is forbidden. | Core rule | `finalizationPlanFor` is layer 2; the frozen `expectedFinalization` is layer 1 (hand-written, not generated); `swipe-transition.test.js` is layer 3 (cell FP). The generator `gen-transition-matrix.mjs` RENDERS the spec, never calls the planner (subsystem §17) — unchanged | — |
@@ -141,10 +161,15 @@ no defining record contradicts another (the §23 host-field note is a scoping de
 
 ## 2. Exact scope boundary
 
-Behavioural ownership, not function names. All changes are: a NEW pure function in `js/swipe.js`; the
-DELETION of the `sourceWasClobbered`/`clobbered` byproduct; and the redirection of three `clobbered` read
+Behavioural ownership, not function names. The runtime CHANGES are: a NEW pure function in `js/swipe.js`;
+the DELETION of the `sourceWasClobbered`/`clobbered` byproduct; and the redirection of the `clobbered` read
 sites in `js/app.js` to the declared decision. No reveal timing, no paint gate, no hold/drop control flow,
-no pane disposal, no async surface changes.
+no pane disposal, no async surface changes. Because `clobbered`/`sourceWasClobbered` is referenced across
+the test/tooling surface (the exact-key construction contract, five mutation anchors, the model mirror +
+fingerprint, and several comments), the retirement is only complete when EVERY HEAD reference is co-changed
+in the same commit — enumerated below (Charpy r1 F1). Omitting them reddens gated tests, which would
+falsify the RG* "existing suite stays green" cells; the behavioural suites stay green, the retirement-
+touched contract/anchor/fingerprint tests are UPDATED in-slice (§9 states each).
 
 **Changes:**
 - **`finalizationPlanFor(classification)` added to `js/swipe.js` (near `constructionPlanFor`, ~122–145).**
@@ -153,20 +178,64 @@ no pane disposal, no async surface changes.
   'browse'` (the sole same-browse-host transition), else `'none'`. No default branch — an unhandled kind
   THROWS, mirroring `constructionPlanFor`'s own-contract guard (§4-contract). Exported and included in the
   module's public surface alongside `classifyTransition`/`constructionPlanFor`.
-- **`sourceWasClobbered` retired from `js/swipe.js buildConstruction` (300–327), and `clobbered` retired
-  from `js/app.js` (set at 516).** The runtime byproduct and the stored session flag are DELETED (EC
-  §4.16). `start()` instead computes and stores the finalization plan once from the classification:
-  `d.finPlan = Swipe.finalizationPlanFor(classification)` (frozen), available before finalize (§6).
-- **The three `clobbered` read sites in `js/app.js` consume `cur.finPlan.abortRender === 'rerender'`:**
-  - the 6c supersession recovery render arg (415): `render: cur ? (cur.finPlan.abortRender === 'rerender') : false`;
-  - the held browse→browse abort branch SELECTOR (1159) and its render arg (1160):
-    `if (!commit && cur.finPlan.abortRender === 'rerender')` / `applyScreen(dest, { render: true, ... })`;
-  - the no-pane abort render arg (1185): `applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', ... })`.
+- **`sourceWasClobbered` retired from `js/swipe.js buildConstruction` (300, 310), and `clobbered` retired
+  from `js/app.js` (initialized at 439, set at 516).** The runtime byproduct and the stored session flag
+  are DELETED (EC §4.16). The finalization plan is computed and stored on the session AT ARM TIME (the
+  session literal, 439, replacing `clobbered: false`): `d.finPlan = Swipe.finalizationPlanFor(
+  Swipe.classifyTransition({ from, to: dest }))` (frozen). `from`/`dest` are already resolved at arm
+  (431/437), so `finPlan` is DEFINED for every non-null session — ARMED, DRAGGING, SETTLING alike — exactly
+  as `clobbered: false` was defined at arm (this is load-bearing: the 415 recovery reader can run for an
+  ARMED, not-yet-built session; §6).
+- **The `clobbered` read sites in `js/app.js` consume the declared decision, reproducing `clobbered`
+  byte-for-byte.** The retired `clobbered` equals `cur.live && (browse→browse)` — build ran (`d.live = true`
+  at 474 gates the 516 set) AND the transition re-renders on abort — so it decomposes as
+  `cur.live && cur.finPlan.abortRender === 'rerender'`:
+  - **the finalize abort sites (built by construction — `finalize` runs only post-settle-post-build, so
+    `cur.live` is always true there):** the held browse→browse abort branch SELECTOR (1159) and its render
+    arg (1160) → `if (!commit && cur.finPlan.abortRender === 'rerender')` / `applyScreen(dest, { render: true, ... })`;
+    the no-pane abort render arg (1185) → `applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', ... })`.
+  - **the 6c/6a supersession recovery reader (415), which ALSO serves a pre-build ARMED session:**
+    `render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false` — the `cur.live` conjunct
+    reproduces `clobbered`'s "build actually ran" half, so an ARMED browse→browse superseded before the 8px
+    lock still renders FALSE (byte-parity; without the conjunct it would wrongly re-render `#browse` — an
+    unnecessary flash-adjacent repaint). Cell RC pins BOTH the render-TRUE (built browse→browse mid-drag)
+    and render-FALSE (overlay→browse, and ARMED browse→browse) boundaries.
 - **The frozen oracle turned on.** `test/swipe-transition.test.js` compares production `finalizationPlanFor`
   against `expectedFinalization.abortRender` for every STRUCTURAL_CASE (cell FP), and the fixture header
   caveat ("NOT consumed / absence must not be read as verified") is removed (§9). The DATA is unchanged.
 
-**Stays exactly as today (parity — do NOT re-touch):**
+**Co-changed in-slice — the complete `clobbered`/`sourceWasClobbered` HEAD scrub (Charpy r1 F1; without
+these, gated tests go red):**
+- **`test/swipe-construction.test.js` — the exact-key Construction contract (30, 122, 129) drops
+  `sourceWasClobbered` (four keys → three: `{capture, decorations, movers}`); the F6 test (218–237,
+  asserting `sourceWasClobbered` per transition) is DELETED, its intent folded into cells FP+AB.** This is
+  an affected exact-key contract (declaration `affected_contracts`).
+- **`tools/mutate.mjs` — five anchors embed the retired lines and would stale `test/mutation-anchors.test.js`.**
+  Re-point the four recovery-line anchors (`HARDRESET_DISPOSE_FROM` 57–60, `VR_HOLD_ORDER_FROM/TO` 64–75,
+  `RECOVERY_RENDER_LINE` 99, `F1_ORPHAN_RESETSCROLL_TO` 105) from `render: cur ? cur.clobbered : false` to
+  the new `render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false` form (each anchor's
+  PURPOSE is unchanged — pane-strand, hold-order, SR render-false, orphan resetScroll — only the embedded
+  string moves). Re-point the swipe5 F6 anchor (399–402, `sourceWasClobbered = resolveSource() === hostEl` →
+  `false`) to a `finalizationPlanFor` mutation (force `abortRender: 'none'`), reddened now by FP+AB. Update
+  the anchor prose comments that mention `d.clobbered` (48–56, 92–97, 223).
+- **`tools/gen-swipe-model.mjs` (235, 242, 412, 413, 434) — the model mirror hard-codes `d.clobbered` prose;
+  and `test/swipe-model.test.js` FINGERPRINTS the changed `js/app.js`/`js/swipe.js` regions.** Update the
+  mirror rule to the `finPlan.abortRender` derivation, then RECONCILE + REGENERATE `docs/swipe-model.generated.txt`
+  and update the fingerprint pin — a build-step obligation Brunel runs in-slice (a source-text/fingerprint
+  gate, kept separate from behavioural sweeps — §4.10).
+- **Comment/message-only sites (behaviour parity; text update): `js/app.js:466`
+  (`capture/clobbered/movers`), `test/swipe-invariants.test.js:378`, `test/swipe-stage6.test.js`
+  (110, 112, 123, 136, 268, 288, 299 — the NC/orphan cells; behaviour is byte-parity because overlay-source
+  `abortRender` is `'none'` == the old `clobbered:false`, and the orphan null-guard now reads `finPlan`),
+  `test/swipe-stage6b-loser-cancel.test.js:53`.**
+
+**Out of scope for the scrub (Charpy r1 F3): `Claude/Loki/` archived strike casebooks that reference
+`d.clobbered`.** They are ARCHIVAL records of what was true when written (StandardsDocument §6 — a record
+is not current-truth code) and STAY unchanged. Unrelated generic `clobber` usages
+(`test/plexconn.test.js`, `test/shardstore.test.js`, `test/logic.test.js`, `test/app-integration.test.js`,
+`test/OFFLINE_CHECKLIST.md`) are a different word, not the swipe field — untouched.
+
+**Stays exactly as today (BEHAVIOURAL parity — do NOT re-touch):**
 - **The reveal choreography.** `holdGhostUntilPaintable`, the reveal double-rAF and 600ms paint/timeout
   gates, `revealPending`, `dropPanes`, `drop`, `fadePanes`, `watchFrames`, the decode/paint marks — ALL
   UNCHANGED. 6d changes only the applyScreen RENDER-FLAG DERIVATION and the abort branch SELECTOR VALUE
@@ -193,38 +262,56 @@ core); the `recoverSession` matrix (G); the null-bookkeeping + `transitionListen
 
 ## 3. The finalization-decision contract (invariant, not prescription)
 
-**Invariant (the load-bearing promise).** For every reachable transition, the finalize path's abort
-re-render is exactly what the pure declared decision says, and that equals the byte-for-byte behaviour the
-retired runtime byproduct produced:
+**Invariant (the load-bearing promise).** For every reachable transition, each abort/recovery re-render
+decision that read `clobbered` now reads the pure declared `finalizationPlanFor.abortRender` (the recovery
+reader additionally gated by `cur.live`), and the result equals the byte-for-byte behaviour the retired
+runtime byproduct produced:
 
 1. **The decision is declared, pure, and singular.** `finalizationPlanFor(classification).abortRender` is
    `'rerender'` iff the transition is browse→browse (both endpoints share the one `#browse` host), else
    `'none'`. It is a pure function of the classification kinds — no DOM, no build side effect, no stored
    flag (EC §4.16). The frozen `expectedFinalization` oracle proves it for all 8 structural cases (cell FP).
-2. **The finalize path consumes it.** Every abort render decision — the 6c recovery (415), the held
-   browse→browse abort selector+arg (1159–1160), the no-pane abort arg (1185) — reads
-   `cur.finPlan.abortRender === 'rerender'`. Driving a real abort, browse→browse re-renders `#browse`
+2. **The finalize path consumes it.** The finalize abort sites (the held browse→browse abort selector+arg
+   1159–1160, the no-pane abort arg 1185) read `cur.finPlan.abortRender === 'rerender'`. Because `finalize`
+   runs only post-settle-post-build, `cur.live` is always true there, so `abortRender==='rerender'` alone
+   equals the retired `clobbered` at those sites. Driving a real abort, browse→browse re-renders `#browse`
    (`Browse.render`, `render:true`); every other abort does NOT (`render:false`); scroll is restored to
    start (cell AB).
+2b. **The supersession recovery reader (415) reproduces `clobbered` in full — the build-ran conjunct.**
+   `clobbered` was set true only when build ran (`d.live = true` at 474 gates the 516 set) AND the source
+   `#browse` host was overwritten (browse→browse). So `clobbered ≡ cur.live && (browse→browse) ≡ cur.live
+   && cur.finPlan.abortRender === 'rerender'`. The 415 reader — which ALSO serves a pre-build ARMED session
+   (a second touch before the 8px lock) — reads `cur.live && cur.finPlan.abortRender === 'rerender'`, byte-
+   parity with `clobbered` at every reachable recovery state: an ARMED browse→browse (`live:false`) renders
+   FALSE (nothing was rendered into `#browse` to restore — dropping the `cur.live` conjunct would wrongly
+   re-render it, a flash-adjacent repaint); a DRAGGING/built browse→browse renders TRUE; an overlay→browse
+   renders FALSE. Cell RC pins all three boundary points; the mutation "drop `cur.live`" reddens the ARMED
+   case.
 3. **Parity with the retired byproduct (the fracture point — the Loki target).** The retired
-   `sourceWasClobbered` was `resolveSource() === hostEl`, computed ONLY inside the `app-ghost` outgoing
-   branch (source≠overlay ∧ dest=browse = {home→browse, browse→browse}). The load-bearing risk is a
-   transition where the OLD runtime byproduct and the NEW static decision DISAGREE. The one dangerous
-   case is **home→browse**: it takes the `app-ghost` path (so a naive `finalizationPlanFor` keyed on
-   `outgoing === 'app-ghost'` would wrongly say `'rerender'`), yet its source is `#home`, not the
-   `#browse` host, so `sourceWasClobbered` is FALSE and the abort must NOT re-render. `abortRender` MUST
-   therefore key on `fromKind==='browse' && toKind==='browse'` (sameBrowseHost), NEVER on
-   `outgoing==='app-ghost'`. Grounded: with that keying, all 8 cases match the retired byproduct exactly
-   (browse→browse: byproduct true, decision 'rerender'; home→browse: byproduct false, decision 'none';
-   every non-app-ghost case: byproduct never set/false, decision 'none'). Cell AB's mutation is exactly the
-   `app-ghost`-keyed error; the Loki strike attacks precisely whether any reachable state makes the
-   declared decision diverge from the observed clobber it replaces.
-4. **No duplicate source of truth.** `clobbered` and `sourceWasClobbered` are DELETED; the finalize path
-   reads only the declared decision (EC §4.16; cell CLB).
+   `sourceWasClobbered` was `resolveSource() === hostEl`, computed inside the INCOMING
+   `renderDestination === 'browse-host'` branch — which runs for EVERY browse-destination
+   {home→browse, browse→browse, overlay→browse}, and yields `true` ONLY for browse→browse (source IS the
+   `#browse` host). The load-bearing risk is a transition where the OLD runtime byproduct and the NEW
+   static decision DISAGREE. There are TWO computed-but-false cases the decision must not flip to
+   `'rerender'`: **home→browse** (source `#home` ≠ the `#browse` host) and **overlay→browse** (source an
+   overlay ≠ the `#browse` host). A naive `finalizationPlanFor` keyed on the compute-branch condition
+   `renderDestination === 'browse-host'` would wrongly say `'rerender'` for BOTH; one keyed on
+   `outgoing === 'app-ghost'` would wrongly say it for home→browse. `abortRender` MUST therefore key on
+   `fromKind === 'browse' && toKind === 'browse'` (sameBrowseHost), NEVER on the browse-host-render branch
+   nor on the app-ghost path. Grounded: with that keying, all 8 cases match the retired byproduct exactly
+   (browse→browse: byproduct true, decision 'rerender'; home→browse and overlay→browse: byproduct computed
+   false, decision 'none'; every non-browse-destination: byproduct never computed/false, decision 'none').
+   Cell AB's mutation keys `abortRender` on `renderDestination === 'browse-host'` (the compute branch),
+   reddening on BOTH home→browse and overlay→browse; the Loki strike attacks precisely whether any
+   reachable state makes the declared decision diverge from the observed clobber it replaces.
+4. **No duplicate source of truth.** `clobbered` and `sourceWasClobbered` are DELETED; every reader reads
+   the declared decision (the recovery additionally reading `cur.live`, an existing session field, to
+   reproduce the build-ran half) — EC §4.16; cell CLB.
 
-**Basis (U11).** Items 1–2 realize `PLAN-swipe-reveal.md` §3.3 (`clobbered` does not exist; abort
+**Basis (U11).** Items 1–2b realize `PLAN-swipe-reveal.md` §3.3 (`clobbered` does not exist; abort
 `render:'rerender'` iff browse→browse) and the frozen oracle. The rule is fixed and singular because
-exactly one predicate satisfies parity across all 8 cases: `fromKind==='browse' && toKind==='browse'`. The
+exactly one predicate satisfies parity across all 8 cases: `fromKind==='browse' && toKind==='browse'`
+(and, at the pre-build recovery reader, conjoined with `cur.live`). The
 LOCUS (a standalone `finalizationPlanFor` vs folding into `constructionPlanFor`) is a **recommendation** —
 a separate pure function is preferred because it is the seam later finalization fields extend into; the
 invariant is "the abort re-render equals the declared same-browse-host decision, byte-identical to the
@@ -250,7 +337,7 @@ finPlan.abortRender decision read at the 6c supersession recovery | string | in 
 ```
 
 Notes: both rows are `in` — the finalize/recovery site reads the declared decision (produced by
-`finalizationPlanFor` at `start()` and stored on the session) and compares to `'rerender'`. The single
+`finalizationPlanFor` at arm time and stored on the session) and compares to `'rerender'`. The single
 owner is `finalizationPlanFor`. No value is produced in a stage later than consumed (all S6d). No stored
 `clobbered`/`sourceWasClobbered`/`sameBrowseHost` field is rowed — each is retired or derived at the use
 site (§4.16).
@@ -274,8 +361,9 @@ finalizationPlanFor(classification: { fromKind, toKind, decorations })
 ```
 
 The composed rich `planFor()` wrapper (parent §3.3, uniting construction + finalization + pane-removal) is
-DEFERRED until ≥2 finalization fields justify it (§10); 6d stores `cur.finPlan = finalizationPlanFor(c)`
-alongside the existing construction plan, both immutable.
+DEFERRED until ≥2 finalization fields justify it (§10); 6d stores `cur.finPlan = finalizationPlanFor(c)` at
+ARM time (the session literal), immutable, so it is defined for every non-null session including a pre-build
+ARMED one (§6).
 
 ## 5. Runtime-dependency policy
 
@@ -283,31 +371,36 @@ alongside the existing construction plan, both immutable.
 `document`/`window`/`Element`/`getComputedStyle`, no closure constant, no module-load DOM access. It is a
 pure function that keeps `js/swipe.js` DOM-free at module load (the same posture as `classifyTransition`/
 `constructionPlanFor`; the require()-no-DOM gate stays green). The `js/app.js` consumer introduces NO new
-ambient read: it reads `cur.finPlan.abortRender`, computed at `start()` from the classification the session
-already holds, replacing a read of `cur.clobbered` that was itself session state. The deleted
-`sourceWasClobbered` REMOVES an ambient dependency (`resolveSource() === hostEl` compared a live DOM
-element during the build) — the new decision needs no DOM at all. No value is lazily cached; the plan is
-computed once per gesture at `start()` and frozen.
+ambient read: it reads `cur.finPlan.abortRender` (and, at the recovery, the existing `cur.live` field),
+computed at ARM time from `Swipe.classifyTransition({ from, to: dest })` — a pure call over descriptors the
+session already resolved (431/437) — replacing reads of `cur.clobbered` that were themselves session state.
+Calling `classifyTransition` at arm is new only in TIMING (it already runs in `buildConstruction`); it
+touches no ambient global. The deleted `sourceWasClobbered` REMOVES an ambient dependency
+(`resolveSource() === hostEl` compared a live DOM element during the build) — the new decision needs no DOM
+at all. No value is lazily cached; `finPlan` is computed once per gesture at arm and frozen.
 
 ## 6. Ordering contract
 
-**Correctness requirement (cells AB/RC) — the finalization plan is available before finalize/recovery
-reads it.** `finalizationPlanFor(classification)` is called at `start()` (where `constructionPlanFor`
-already runs) and stored frozen as `cur.finPlan`, BEFORE the gesture can settle or be superseded. So every
-consumer — the settle→finalize abort branch and the 6c `begin()` supersession recovery — reads a plan that
-already exists (U5 reachability). A consumer reading `cur.finPlan` before `start()` stored it would be a
-producer-after-consumer defect; the fixed order forecloses it.
+**Correctness requirement (cells AB/RC) — the finalization plan is available before ANY reader.**
+`cur.finPlan` is computed and frozen at ARM time (the session literal, replacing `clobbered: false`),
+BEFORE the gesture can drag, settle, or be superseded. This is LOAD-BEARING for the recovery reader (415):
+a second touch can supersede a not-yet-built ARMED session, and that reader dereferences `cur.finPlan` —
+so `finPlan` must exist at arm, exactly as `clobbered: false` did. A design that computed `finPlan` at
+`start()`/build instead would leave it `undefined` for an ARMED-superseded session and the reader would
+throw (a regression on a reachable path). Every consumer — the finalize abort branch and the `begin()`
+supersession recovery — therefore reads a plan that already exists (U5 reachability).
 
 Incidental (not a new universal order): within `runFinalize`, the abort branch SELECTOR (1159) reads
 `cur.finPlan.abortRender` at the same point it read `cur.clobbered`; the render args (415/1160/1185) are
-substituted in place. The reveal-hold ordering (`revealPending` → `holdGhostUntilPaintable` → `drop`) and
-the 6b/6c cancel/guard positions are PRESERVED unchanged — 6d moves no finalize ordering.
+substituted in place (415 gains the `cur.live` conjunct — §2/§3 item 2b). The reveal-hold ordering
+(`revealPending` → `holdGhostUntilPaintable` → `drop`) and the 6b/6c cancel/guard positions are PRESERVED
+unchanged — 6d moves no finalize ordering.
 
 ## 7. Coverage Model (Mendeleev catalog)
 
 | Dimension | Applicable? | What the suite must prove / why N/A |
 |---|---|---|
-| Lifecycle / phases | Yes (parity) | The finalization plan is created at `start()` and read at settle→finalize / recovery; the reveal-hold phase sequence is UNCHANGED (cells FP, AB, RC; RGheld). |
+| Lifecycle / phases | Yes (parity) | The finalization plan is created at arm time (defined for ARMED sessions too) and read at settle→finalize / recovery; the reveal-hold phase sequence is UNCHANGED (cells FP, AB, RC; RGheld). |
 | Identities | N/A | No identifier is created, changed, or reinterpreted; `d.id`/`sessionSeq` unchanged. |
 | Ordering | Yes | `finPlan` is stored before any consumer reads it (§6); the abort branch selector reads the declared decision at the same point (cells AB, RC). |
 | Resources: acquired / owner / endpoint | N/A | No resource lifecycle changes; `finPlan` is an immutable value, not an owned resource; the ownership endpoint is unchanged. |
@@ -319,7 +412,7 @@ the 6b/6c cancel/guard positions are PRESERVED unchanged — 6d moves no finaliz
 | Persistence | N/A | The gesture and its plan are in-memory, per-process (subsystem §15). |
 | External side effects | Yes | The abort `Browse.render`/`applyScreen`/`window.scrollTo` outcome is driven by the declared decision — browse→browse re-renders `#browse`, others do not (cell AB). |
 | Invariants | Yes | I11 (visible screen agrees with outcome) preserved — the abort screen/render is byte-identical; the §3.3 "clobbered does not exist" target is realized for the abort re-render (FP, AB, CLB). |
-| Mutation cases | Yes | Each cell in §8 names a misattribution/wrong-derivation mutation observable on a real channel (key `abortRender` on `app-ghost` so home→browse wrongly re-renders; flip the oracle; reintroduce a `clobbered` read). |
+| Mutation cases | Yes | Each cell in §8 names a misattribution/wrong-derivation mutation observable on a real channel (key `abortRender` on `renderDestination==='browse-host'` so home→browse AND overlay→browse wrongly re-render; flip the oracle; reintroduce a `clobbered` read; leave a stale anchor). |
 | Known-red | N/A | Behaviour-preserving extraction; no known-red introduced; PolicyLedger unchanged (§4.19). |
 | Composition | Yes | The declared decision composes with the shipped finalize/reveal choreography (unchanged — RGheld), the 6c recovery (RC), and is the seam the deferred commit/scroll/stackEffect/reveal fields and the pane-removal policy extend into (§10). |
 | Contract claims (exact schema) | Yes | `finalizationPlanFor` returns the exact-key deep-frozen `{ abortRender }` with a closed enum, gated by `test/contract-function-gate.test.js` (§4b; FP). |
@@ -335,10 +428,10 @@ DOM; CLB is a labeled source-contract sweep (§4.10 — behavioural vs source-te
 
 | id | Behavior proved | Fixture / transition | Mutation that must fail it | Layer |
 |---|---|---|---|---|
-| FP | production `finalizationPlanFor(classification).abortRender` equals the frozen `expectedFinalization.abortRender` for all 8 STRUCTURAL_CASES ('rerender' only for browse→browse) | the frozen `swipe-plan-spec.mjs` STRUCTURAL_CASES compared in `swipe-transition.test.js` (three-layer oracle) | key `abortRender` on `outgoing==='app-ghost'` (so home→browse becomes 'rerender'), or flip any case → production diverges from the hand-written frozen spec | oracle (spec vs production) |
-| AB | driving a real ABORT, browse→browse RE-RENDERS `#browse` (`Browse.render`, `render:true`) and every other abort does NOT (`render:false`); scroll restored to start; driven by `finPlan.abortRender`, not `clobbered` | app-harness `h.touch` live drag → release below threshold (abort) on browse→browse (books→books) AND on home→browse AND overlay→browse; observe `Browse.render`/`applyScreen` render flag on the real `#browse` + `window.scrollTo` | key `abortRender` on `outgoing==='app-ghost'` → the home→browse abort wrongly re-renders `#browse` (the fracture point, §3); OR revert a read site to a (removed) `clobbered` → wrong/undefined render | wiring (real DOM: `Browse.render`, `applyScreen`, `scrollTo`) |
-| CLB | `cur.clobbered` and `sourceWasClobbered` no longer exist; the finalize/recovery paths read `cur.finPlan.abortRender` | a source-contract sweep asserting the identifiers `clobbered`/`sourceWasClobbered` are absent from `js/app.js`/`js/swipe.js` and the finalize sites reference `finPlan.abortRender` | reintroduce a `clobbered`/`sourceWasClobbered` read (a second source of truth) → the source-text gate reddens (labeled source-text, NOT behavioural — §4.10) | source-contract (SOURCE_TEXT gate) |
-| RC | the 6c pane-less supersession recovery reads the declared decision and behaves identically — a superseded pane-less/overlay session still restores its source with `render:false` + scroll | the shipped 6c G1/G2/W overlay→browse (options→books) supersession fixtures, re-run with `clobbered` retired | the retirement changes the recovery render flag for the pane-less set (e.g. keys on `app-ghost`, which never fires for overlay→browse anyway, or leaves a stale `clobbered` read) → the 6c supersession fixture reddens | wiring (6c recovery real DOM) |
+| FP | production `finalizationPlanFor(classification).abortRender` equals the frozen `expectedFinalization.abortRender` for all 8 STRUCTURAL_CASES ('rerender' only for browse→browse) | the frozen `swipe-plan-spec.mjs` STRUCTURAL_CASES compared in `swipe-transition.test.js` (three-layer oracle) | key `abortRender` on `renderDestination==='browse-host'` (so home→browse AND overlay→browse become 'rerender'), or flip any case → production diverges from the hand-written frozen spec | oracle (spec vs production) |
+| AB | driving a real ABORT, browse→browse RE-RENDERS `#browse` (`Browse.render`, `render:true`) and every other abort does NOT (`render:false`); scroll restored to start; driven by `finPlan.abortRender`, not `clobbered` | app-harness `h.touch` live drag → release below threshold (abort) on browse→browse (books→books) AND on home→browse AND overlay→browse (the two computed-but-false cases) | key `abortRender` on `renderDestination==='browse-host'` (the byproduct's compute branch) → BOTH the home→browse and overlay→browse aborts wrongly re-render `#browse` (the fracture point, §3); OR revert a read site to a (removed) `clobbered` → wrong/undefined render | wiring (real DOM: `Browse.render`, `applyScreen`, `scrollTo`) |
+| CLB | `cur.clobbered` and `sourceWasClobbered` no longer exist anywhere in HEAD (production + the co-changed contract/anchors); the Construction exact-key contract is `{capture, decorations, movers}` (three keys) and the finalize/recovery paths + the five mutation anchors reference `finPlan.abortRender` | a source-contract sweep asserting the identifiers are absent from `js/app.js`/`js/swipe.js`; `test/swipe-construction.test.js` CONSTRUCTION_KEYS has three keys; `test/mutation-anchors.test.js` resolves every re-pointed anchor | reintroduce a `clobbered`/`sourceWasClobbered` read, or leave `sourceWasClobbered` in the contract, or leave a stale anchor → the source-text/anchor gate reddens (labeled source-text, NOT behavioural — §4.10) | source-contract (SOURCE_TEXT + anchor gate) |
+| RC | the supersession recovery reader (415) reproduces `clobbered` at all THREE reachable boundary points via `cur.live && abortRender==='rerender'`: render-TRUE for a DRAGGING/built browse→browse mid-drag; render-FALSE for an overlay→browse (abortRender 'none'); render-FALSE for an ARMED, not-yet-built browse→browse (`cur.live` false) | (true) the shipped 6a browse→browse (Authors-over-Books) dragging-supersession VR/SR fixtures; (false-overlay) the shipped 6c overlay→browse (options→books) supersession fixtures; (false-armed) a browse→browse armed then superseded before the 8px lock — all re-run with `clobbered` retired | drop the `cur.live` conjunct → the ARMED browse→browse recovery wrongly re-renders `#browse`; OR key on the wrong predicate so the built browse→browse stops re-rendering / the overlay one starts; OR leave a stale `clobbered` read | wiring (recovery real DOM, three boundaries) |
 | RGabort | the shipped abort suite stays green — browse→browse re-render + scroll restore; overlay→browse and others no re-render | the existing abort fixtures (unchanged) | any behaviour change in the abort render/scroll outcome | wiring (existing green) |
 | RGheld | the held-reveal choreography is UNTOUCHED — commit→home and browse→browse-abort still hold the pane and drop at the same paint/timeout gate; reveal TIMING unchanged (the flash surface is not touched) | the existing held-reveal fixtures (commit→home, abort browse→browse) | any change to the reveal hold/drop timing, the double-rAF/600ms gates, or `dropPanes` → the held-reveal timing regression reddens | wiring (existing green — flash-surface pin) |
 | RGcommit | commit finalization (destination screen + scroll) is unchanged; only the abort render flag moved | the existing commit fixtures (commit→home, commit→browse, commit→overlay) | the slice alters a commit decision | wiring (existing green) |
@@ -348,10 +441,10 @@ rows pin shipped parity.
 
 ```vitruvius-coverage
 # id | behavior | fixture | mutation | layer
-FP | production finalizationPlanFor abortRender equals the frozen expectedFinalization abortRender for all eight structural cases rerender only for browse to browse | the frozen swipe-plan-spec STRUCTURAL_CASES compared against production in swipe-transition test as the three layer oracle | key abortRender on outgoing equals app-ghost so home to browse becomes rerender or flip any case so production diverges from the hand written frozen spec | oracle spec versus production
-AB | driving a real abort browse to browse re-renders the browse host with render true and every other abort does not with render false and scroll is restored to start driven by finPlan abortRender not clobbered | app harness h touch live drag released below threshold to abort on browse to browse and on home to browse and on overlay to browse observing the Browse render flag on the real browse element and window scrollTo | key abortRender on outgoing equals app-ghost so the home to browse abort wrongly re-renders the browse host or revert a read site to a removed clobbered giving a wrong render | wiring real DOM Browse render applyScreen scrollTo
-CLB | cur clobbered and sourceWasClobbered no longer exist and the finalize and recovery paths read cur finPlan abortRender | a source contract sweep asserting the identifiers clobbered and sourceWasClobbered are absent and the finalize sites reference finPlan abortRender | reintroduce a clobbered or sourceWasClobbered read as a second source of truth so the source text gate reddens labeled source text not behavioural | source contract SOURCE_TEXT gate
-RC | the 6c pane-less supersession recovery reads the declared decision and behaves identically restoring the source with render false and scroll for the overlay involving set | the shipped 6c overlay to browse options to books supersession fixtures re-run with clobbered retired | the retirement changes the recovery render flag for the pane-less set or leaves a stale clobbered read so the 6c supersession fixture reddens | wiring 6c recovery real DOM
+FP | production finalizationPlanFor abortRender equals the frozen expectedFinalization abortRender for all eight structural cases rerender only for browse to browse | the frozen swipe-plan-spec STRUCTURAL_CASES compared against production in swipe-transition test as the three layer oracle | key abortRender on renderDestination equals browse-host so home to browse and overlay to browse become rerender or flip any case so production diverges from the hand written frozen spec | oracle spec versus production
+AB | driving a real abort browse to browse re-renders the browse host with render true and every other abort does not with render false and scroll is restored to start driven by finPlan abortRender not clobbered | app harness h touch live drag released below threshold to abort on browse to browse and on home to browse and on overlay to browse the two computed but false cases observing the Browse render flag on the real browse element and window scrollTo | key abortRender on renderDestination equals browse-host the byproduct compute branch so both the home to browse and overlay to browse aborts wrongly re-render the browse host or revert a read site to a removed clobbered giving a wrong render | wiring real DOM Browse render applyScreen scrollTo
+CLB | cur clobbered and sourceWasClobbered no longer exist anywhere in HEAD and the Construction exact-key contract is three keys and the finalize and recovery paths and the five mutation anchors reference finPlan abortRender | a source contract sweep asserting the identifiers are absent and swipe-construction CONSTRUCTION_KEYS has three keys and mutation-anchors resolves every re-pointed anchor | reintroduce a clobbered or sourceWasClobbered read or leave sourceWasClobbered in the contract or leave a stale anchor so the source text or anchor gate reddens labeled source text not behavioural | source contract SOURCE_TEXT and anchor gate
+RC | the supersession recovery reader at 415 reproduces clobbered at all three boundary points via cur live and abortRender rerender render true for a dragging built browse to browse and render false for an overlay to browse and render false for an armed not yet built browse to browse | the shipped 6a browse to browse dragging supersession VR and SR fixtures and the shipped 6c overlay to browse supersession fixtures and a browse to browse armed then superseded before the lock all re-run with clobbered retired | drop the cur live conjunct so the armed browse to browse wrongly re-renders the browse host or key on the wrong predicate so the built browse to browse stops re-rendering or leave a stale clobbered read | wiring recovery real DOM three boundaries
 RGabort | the shipped abort suite stays green browse to browse re-render plus scroll restore and overlay to browse no re-render | the existing abort fixtures unchanged | any behaviour change in the abort render or scroll outcome | wiring existing green
 RGheld | the held reveal choreography is untouched commit to home and abort browse to browse still hold the pane and drop at the same gate with reveal timing unchanged | the existing held reveal fixtures commit to home and abort browse to browse | any change to the reveal hold or drop timing the double rAF or 600ms gates or dropPanes | wiring existing green flash surface pin
 RGcommit | commit finalization destination screen and scroll is unchanged only the abort render flag moved | the existing commit fixtures commit to home commit to browse commit to overlay | the slice alters a commit decision | wiring existing green
@@ -362,9 +455,13 @@ RGcommit | commit finalization destination screen and scroll is unchanged only t
 Scrub obligations when this ships (StandardsDocument §6.6; EC §4.22/§7). NOT applied by this plan — each
 is a defining-record edit flagged for the maker/Zelda.
 
-- **`js/app.js`** — delete the `clobbered` field (initialized at 439, set at 516) and its read/comment references (391, 415, 1159, 1185);
-  the finalize/recovery sites read `cur.finPlan.abortRender`. Rewrite the 6c recovery comment (391) that
-  explains `cur.clobbered` to describe the declared decision.
+- **`js/app.js`** — replace `clobbered: false` in the session literal (439) with the arm-time compute
+  `finPlan: Swipe.finalizationPlanFor(Swipe.classifyTransition({ from, to: dest }))`; delete the `d.clobbered
+  = c.sourceWasClobbered` set (516). Redirect the readers: the finalize abort sites (1159 selector, 1160,
+  1185) → `cur.finPlan.abortRender === 'rerender'`; the supersession recovery reader (415) → `cur.live &&
+  cur.finPlan.abortRender === 'rerender'` (the `cur.live` conjunct reproduces `clobbered`'s build-ran half —
+  §3 item 2b). Rewrite the 6c recovery comment (391) and the session-recording comment (466) that mention
+  `clobbered` to describe the declared decision.
 - **`js/swipe.js`** — delete `sourceWasClobbered` from `buildConstruction` (300–327) and its return
   member; add `finalizationPlanFor` with its contract doc-comment; export it in the public surface.
   Update the module header (14–25) that names `finalizationPlanFor()`/`planFor()` as the deferred half —
@@ -376,6 +473,27 @@ is a defining-record edit flagged for the maker/Zelda.
   `abortRender` values) is unchanged. `expectedHosts` stays inert (its consumer is deferred — below).
 - **`test/swipe-transition.test.js`** — the per-case comparison now asserts production `finalizationPlanFor`
   against `expectedFinalization.abortRender` (was construction-only). Register the FP/AB/CLB/RC mutations.
+- **`test/swipe-construction.test.js`** — drop `sourceWasClobbered` from `CONSTRUCTION_KEYS` (30) and the
+  exact-key/typeof assertions (122, 129): the Construction contract becomes `{capture, decorations, movers}`.
+  DELETE the F6 test (218–237); its intent (browse→browse clobbers, home→browse does not) is folded into
+  cells FP+AB.
+- **`tools/mutate.mjs`** — re-point the four recovery-line anchors (`HARDRESET_DISPOSE_FROM` 57–60,
+  `VR_HOLD_ORDER_FROM/TO` 64–75, `RECOVERY_RENDER_LINE` 99, `F1_ORPHAN_RESETSCROLL_TO` 105) to the new
+  `render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false` form (purpose unchanged); re-point the
+  swipe5 F6 anchor (399–402) from the deleted `sourceWasClobbered = resolveSource() === hostEl` to a
+  `finalizationPlanFor` mutation (force `abortRender: 'none'`), reddened by FP+AB; update the `d.clobbered`
+  prose comments (48–56, 92–97, 223). `test/mutation-anchors.test.js` then resolves every anchor (cell CLB).
+- **`tools/gen-swipe-model.mjs` + `test/swipe-model.test.js`** — update the model-mirror rule that
+  hard-codes `d.clobbered` (235, 242, 412, 413, 434) to the `finPlan.abortRender` derivation, then
+  RECONCILE + REGENERATE `docs/swipe-model.generated.txt` and update the source-fingerprint pin over the
+  changed `js/app.js`/`js/swipe.js` regions. Build-step obligation for Brunel; a source-text/fingerprint
+  gate kept separate from behavioural sweeps (§4.10).
+- **Comment/message-only sites (behaviour parity; text update):** `js/app.js:466`, `test/swipe-invariants.test.js:378`,
+  `test/swipe-stage6.test.js` (110, 112, 123, 136, 268, 288, 299), `test/swipe-stage6b-loser-cancel.test.js:53`.
+- **OUT OF SCOPE (Charpy r1 F3):** `Claude/Loki/` archived strike casebooks referencing `d.clobbered` are
+  ARCHIVAL records (StandardsDocument §6) and STAY. Unrelated generic `clobber` usages
+  (`test/plexconn.test.js`, `test/shardstore.test.js`, `test/logic.test.js`, `test/app-integration.test.js`,
+  `test/OFFLINE_CHECKLIST.md`) are a different word, not the swipe field — untouched.
 - **`Claude/Subsystems/swipe-reveal.md`** — §17: `finalizationPlanFor` now composes the abort decision of
   the rich `planFor()`; the oracle covers construction AND the abort re-render. §8/§18: `clobbered`/
   `sourceWasClobbered` retired; abort re-render is a declared decision. §19: register FP/AB/CLB/RC. §23:
@@ -391,8 +509,7 @@ is a defining-record edit flagged for the maker/Zelda.
   declarative finalization decision (`finalizationPlanFor.abortRender`, `clobbered` retired); the reveal
   centralization (I10/I17), the rest of the finalization plan, pane lifecycle, pane-owning supersession,
   the `recoverSession` matrix and the null-half remain deferred. Point to `PLAN-swipe-stage6d.md`.
-- **`docs/swipe-model.generated.txt`** — regenerate (the generator RENDERS `expectedFinalization`; a code
-  change bumps the build number — PWA deploy rule).
+- **Build number** — a code change bumps the build number (PWA deploy rule).
 - **Engineering Contract §4.22 reviewable-stage naming** — ships as "Stage 6d", so the deferred remainder
   stays visible and the stage is not called complete on a partial delivery.
 - **Campaign definition** — `Claude/Campaigns/swipe-stage6d.json` already exists (permissive Poirot glob
@@ -447,11 +564,16 @@ scaffolding), Stage 6a/6b/6c (the finalize/recovery paths it reads), and the fro
 declarative-finalization FOUNDATION the rest of step 6 composes from: F (pane lifecycle) enforces the
 pane-removal policy this plan's seam will later declare; C (reveal centralization) and G (recoverSession)
 build on the finalization plan; A (null-bookkeeping) lands last, once B/C make the held reveal supersedable.
-Handoff order: Charpy (temper) → Curie (red suite from §8 — the FP oracle turn-on, and AB across
-browse→browse / home→browse / overlay→browse to catch the `app-ghost`-keying fracture) → Brunel (green;
-compute `cur.finPlan` at `start()` before any consumer, delete `clobbered`/`sourceWasClobbered`, redirect
-the three read sites, do NOT touch reveal timing) → Poirot (review) → Mendeleev (coverage audit) → Loki
+Handoff order: Charpy (temper) → Curie (red suite from §8 — the FP oracle turn-on; AB across
+browse→browse / home→browse / overlay→browse to catch the `renderDestination==='browse-host'`-keying
+fracture on BOTH computed-but-false cases; RC's BOTH boundaries — the 6a browse→browse dragging-supersession
+render-TRUE and the 6c overlay→browse render-FALSE) → Brunel (green; compute `cur.finPlan` at ARM time (the session
+literal) before any consumer, add the `cur.live` conjunct at the 415 recovery reader, delete
+`clobbered`/`sourceWasClobbered`, redirect the read sites, do NOT touch reveal
+timing, AND complete the co-change scrub in the SAME commit — the construction exact-key contract, the five
+re-pointed `mutate.mjs` anchors, and the model-mirror + fingerprint regeneration (§2/§9) — else the
+construction/anchor/fingerprint gates go red) → Poirot (review) → Mendeleev (coverage audit) → Loki
 (strike the §3 load-bearing promise on the CORRECTED domain — that the declared `abortRender` never
-diverges from the retired runtime `clobbered` byproduct it replaces; the home→browse `app-ghost`-yet-not-
-sameBrowseHost fracture, provable on the real aborted `#browse`). Campaign definition-of-done:
-`Claude/Campaigns/swipe-stage6d.json`.
+diverges from the retired runtime `sourceWasClobbered` byproduct it replaces; the home→browse and
+overlay→browse browse-host-render-yet-not-sameBrowseHost fracture, provable on the real aborted `#browse`).
+Campaign definition-of-done: `Claude/Campaigns/swipe-stage6d.json`.
