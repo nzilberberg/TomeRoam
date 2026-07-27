@@ -4,10 +4,15 @@ Type: plan
 
 <!-- vitruvius-gate {"plan_type":"refactor","patterns":{"boundary_relocation":true,"callee_replacement":false,"contract_shape":true,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":false},"project_adapter":"tomeroam-js-dom","source_ranges":["js/swipe.js:122-145","js/swipe.js:300-327","js/app.js:516-516","js/app.js:413-421","js/app.js:1145-1188"],"callee_ranges":[],"affected_contracts":["test/fixtures/swipe-plan-spec.mjs:40","test/swipe-transition.test.js:57","test/contract-function-gate.test.js:24","test/swipe-construction.test.js:30"],"staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Decisions/DecisionLog.md","Claude/Plans/PLAN-swipe-reveal.md"],"blocking_questions":["FP","AB","CLB","RC"]} -->
 
-Status: **DRAFT — for Charpy (r2, after r1 TEMPER)** (2026-07-26). First Stage-6d slice, following shipped
-Stage 6a (supersession recovery), 6b (loser-cancel), 6c (pane-less supersession + settle-phase identity
-guard, build `ba1c59b`, Poirot SHIP / Mendeleev ADEQUATE / Loki HELD STONE). Sub-slice of
-`PLAN-swipe-reveal.md` §7 step 6.
+Status: **SHIPPED** (2026-07-27, build target `9027daf`). Charpy FORGE (`d3571bf`) / Loki HELD_STONE /
+Curie RED_SUITE_READY (+ BC-1 remediation) / Brunel BUILD_GREEN / Poirot SHIP / Mendeleev ADEQUATE;
+completion gate COMPLETE. First Stage-6d slice, following shipped Stage 6a (supersession recovery), 6b
+(loser-cancel), 6c (pane-less supersession + settle-phase identity guard, build `ba1c59b`). Sub-slice of
+`PLAN-swipe-reveal.md` §7 step 6. NOTE: the machine `source_ranges` in the vitruvius-gate comment above
+are the PRE-BUILD declaration (authored against `ba1c59b`); post-ship the `js/app.js:516` slot no longer
+holds the retired `d.clobbered = c.sourceWasClobbered` set (that set was deleted by this slice) but the
+unrelated Stage-5 `d.animRes` capture — the ranges are historical and are NOT re-reconciled, as that would
+re-open ratification on a shipped stage for no behavioural reason.
 
 **Revised after Charpy r1 TEMPER (target `00874b5`).** The slice choice, the D-before-F dependency claim,
 the equivalence promise, the fracture, and the Coverage-Model non-vacuity all verified sound and are
@@ -116,7 +121,7 @@ whose consumer needs them (the pane/lease/source-resolution work), because `abor
 | `test/fixtures/swipe-plan-spec.mjs` (39–62) | Carries FROZEN `expectedFinalization: { abortRender: 'rerender'\|'none' }` per STRUCTURAL_CASE ('rerender' only for browse→browse); "NOT consumed by production in stage 4 (`finalizationPlanFor` lands in stage 6) and NOT compared against production yet." | Independent oracle (verified tooling, EC §2 precedence 3) | Turns the frozen data ON: `test/swipe-transition.test.js` now compares production `finalizationPlanFor` against `expectedFinalization` across all 8 cases (§4.14 three-layer oracle; cell FP). The DATA is unchanged — only made live | Remove the "NOT consumed / absence must not be read as verified" caveat from the fixture header (§9) |
 | `js/swipe.js buildConstruction` (300, 310) | `sourceWasClobbered` initialized `false` at :300, computed `resolveSource() === hostEl` at :310 inside the INCOMING `else if (plan.renderDestination === 'browse-host')` branch — a RUNTIME byproduct of the actual build. The compute runs for EVERY browse-destination {home→browse, browse→browse, overlay→browse}; the value is `true` only for browse→browse (source IS the `#browse` host). | Code under change | RETIRED. The abort decision is no longer an observed build byproduct but a declared `finalizationPlanFor` decision from the classification kinds. This closes the fracture that `sourceWasClobbered` (runtime, computed in the browse-host-render branch) could diverge from the intended static rule (sameBrowseHost = browse→browse only) — see the Loki target, §3 | — |
 | `js/app.js` `clobbered` set (516) + reads (415, 1159–1160, 1185) | `d.clobbered = c.sourceWasClobbered` (516); read at the 6c recovery render arg (415), the held browse→browse abort branch SELECTOR + render arg (1159–1160), and the no-pane abort render arg (1185). | Code under change | All read sites consume `cur.finPlan.abortRender === 'rerender'` instead; `clobbered` and `sourceWasClobbered` are DELETED (EC §4.16 — no cause + separately-stored derived consequence). Byte-identical behaviour (§3 parity; the retired byproduct equals the declared decision on every reachable transition) | — |
-| `EngineeringContract.md` §4.16 | "Do not store both a cause and a separately mutable derived consequence ... Derive convenience values at the use site." | Core rule | The exact rule this slice satisfies: `clobbered`/`sourceWasClobbered` was a stored derived consequence of the transition class; it is replaced by deriving `abortRender` from the classification. No `sameBrowseHost` FIELD is stored either (it too is derivable from `fromKind`/`toKind`) — the decision is derived at its one use site, `finalizationPlanFor` | — |
+| `EngineeringContract.md` §4.16 | "Do not store both a cause and a separately mutable derived consequence ... Derive convenience values at the use site." | Core rule | The exact rule this slice satisfies: `clobbered`/`sourceWasClobbered` was a stored, separately-MUTABLE derived consequence of the transition class; it is replaced by a store-at-arm FROZEN snapshot `cur.finPlan = finalizationPlanFor(classification)`, read at three sites (Charpy advisory correction: not re-derived at each use site — computed once at arm and read thrice). No `sameBrowseHost` FIELD is stored either (it too is derivable from `fromKind`/`toKind`). This is §4.16-compliant precisely because the frozen atomic snapshot cannot drift from its cause, unlike the mutable `clobbered` it replaces — a deep-frozen value read is not a second, separately-mutable source of truth | — |
 | `EngineeringContract.md` §4.14 | Three independent layers: declarative spec → production → comparison; "generate expected output from production output" is forbidden. | Core rule | `finalizationPlanFor` is layer 2; the frozen `expectedFinalization` is layer 1 (hand-written, not generated); `swipe-transition.test.js` is layer 3 (cell FP). The generator `gen-transition-matrix.mjs` RENDERS the spec, never calls the planner (subsystem §17) — unchanged | — |
 | `EngineeringContract.md` §4.15 | "Do not introduce a field until the same implementation slice contains a real production consumer and a test proving that consumer uses it." | Core rule | `abortRender` has a current-slice consumer (the finalize/recovery render decision) and a test proving consumption (cell AB). No host field (`sourceHost`/`destinationHost`/`sameBrowseHost`) is emitted — no consumer for them in this slice (§10) | — |
 | `EngineeringContract.md` §4.19 | Classify every change as extraction / known-red / new policy / migration / cleanup. | Core rule | Behaviour-preserving EXTRACTION (parity): the abort render behaviour is byte-identical; only its DERIVATION relocates from runtime byproduct to declared decision. No known-red, no new policy, no PolicyLedger entry added | — |
@@ -375,7 +380,14 @@ ambient read: it reads `cur.finPlan.abortRender` (and, at the recovery, the exis
 computed at ARM time from `Swipe.classifyTransition({ from, to: dest })` — a pure call over descriptors the
 session already resolved (431/437) — replacing reads of `cur.clobbered` that were themselves session state.
 Calling `classifyTransition` at arm is new only in TIMING (it already runs in `buildConstruction`); it
-touches no ambient global. The deleted `sourceWasClobbered` REMOVES an ambient dependency
+touches no ambient global. **Charpy advisory (§5, non-blocking):** computing the classification at ARM time
+moves `classifyTransition`'s I16 well-formedness throw-site EARLIER than build-time (a malformed
+parameterized descriptor now throws at arm rather than at first horizontal move). This changes only WHEN the
+throw would occur, not WHETHER: the `from`/`dest` value-space fed at arm is identical to the value-space
+`buildConstruction` fed at build (the same resolved descriptors, 431/437), so no reachable navigation newly
+throws — production never constructs a malformed descriptor, and the earlier throw-site is exercised only by
+the direct well-formedness test (§4.3/I16), exactly as the build-time site was. The deleted `sourceWasClobbered`
+REMOVES an ambient dependency
 (`resolveSource() === hostEl` compared a live DOM element during the build) — the new decision needs no DOM
 at all. No value is lazily cached; `finPlan` is computed once per gesture at arm and frozen.
 
@@ -577,3 +589,11 @@ construction/anchor/fingerprint gates go red) → Poirot (review) → Mendeleev 
 diverges from the retired runtime `sourceWasClobbered` byproduct it replaces; the home→browse and
 overlay→browse browse-host-render-yet-not-sameBrowseHost fracture, provable on the real aborted `#browse`).
 Campaign definition-of-done: `Claude/Campaigns/swipe-stage6d.json`.
+
+**Outcome (2026-07-27) — SHIPPED through every gate:** Charpy FORGE (after r1 TEMPER), Loki HELD_STONE,
+Curie RED + BC-1, Brunel BUILD_GREEN, Poirot SHIP, Mendeleev ADEQUATE, completion gate COMPLETE. Mendeleev's
+audit closed the coverage/tooling loop: BC-1 added the `finalizationPlanFor` throw-guard test with mutants
+`swipe6d BC-1a`/`BC-1b` (the unhandled-`fromKind`/`toKind` guards no longer throw), and the `swipe6d RC`
+mutant (drop the recovery reader's `cur.live` build-ran conjunct) pins the ARMED browse→browse byte-parity
+boundary — all registered in `tools/mutate.mjs` and swept post-push. (The full sharded mutation-sweep is CI's
+post-push gate, CI-verified post-push, not run locally.)

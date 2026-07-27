@@ -48,7 +48,23 @@ overlay-involving set {home→overlay, browse→overlay, overlay→overlay, over
 session's stale settle-phase continuation no-op on the successor, and the recovery clears `finishing` on
 every exit (a never-arming tap no longer wedges). Still deferred to 6d/7: the NULL-on-retire writes, the
 `transitionend` listener ownership, PANE-OWNING supersession (home↔browse, →home), and the I10/I17 reveal
-centralization (the flash core).
+centralization (the flash core). **Stage 6d (finalization decision declared, 2026-07-27):** the abort/recovery
+re-render decision is now a DECLARED arm-time frozen field, not a runtime build byproduct. `Swipe.finalizationPlanFor(
+classification)` (js/swipe.js) is a pure, deep-frozen, throws-on-unhandled-kind function whose `abortRender` is
+`'rerender'` iff `fromKind==='browse' && toKind==='browse'`, else `'none'`; it is computed at ARM time from the
+resolved descriptors and stored on the session as `cur.finPlan` (js/app.js:442). The runtime byproduct
+`sourceWasClobbered` (js/swipe.js `buildConstruction`) and its stored session flag `d.clobbered` are RETIRED
+(EC §4.16 — no cause + separately-stored derived consequence); the three read sites now consume the declared
+decision — the two finalize abort sites (app.js:1160/1187) as `cur.finPlan.abortRender === 'rerender'`, and the
+begin() supersession recovery reader (app.js:417) as `cur.live && cur.finPlan.abortRender === 'rerender'` (the
+`cur.live` conjunct reproduces `clobbered`'s build-ran half, so an ARMED browse→browse superseded before the 8px
+lock still renders FALSE — byte-parity). Behaviour-preserving extraction (parity), no new policy. Still deferred to
+7 (unchanged plus the finalization remainder): the pane-lifecycle interface (F, release/dispose/equivalence +
+paneRemovalPolicy); PANE-OWNING supersession incl. home↔browse and →home (B); the I10/I17 reveal centralization
+(C, the flash core); the rest of the finalization plan (commit/abort-scroll/stackEffect/reveal + the unified
+`planFor()` wrapper); host fields `sourceHost`/`destinationHost`/`sameBrowseHost`; the `recoverSession` pre/post-stack
+matrix (G); the NULL-on-retire writes + `transitionListener` ownership (A); `fadePanes`; and the headline
+compositor flash.
 
 **9. Ownership endpoint.** `sessionDone(cur)` / `endOwnership()`. ARMED end: after listeners
 released. Vertical abandon: after listeners + resources released. Commit/abort without a pane:
@@ -85,17 +101,24 @@ session (I17). Emergency disposal may bypass the paint barrier only for that nam
 declarative expectations) → `js/swipe.js` (production decision) → `test/swipe-transition.test.js`
 compares them; `tools/gen-transition-matrix.mjs` RENDERS the spec (it must NOT call the
 production planner — enforced by convention + the spec-import structure; §4.14). The app.js
-branch-fingerprint mirror is RETIRED.
+branch-fingerprint mirror is RETIRED. Stage 6d turned the frozen `expectedFinalization: { abortRender }`
+data (per STRUCTURAL_CASE, inert since stage 4) ON: `swipe-transition.test.js` now compares production
+`finalizationPlanFor().abortRender` against the frozen spec across all 8 cases, so the three-layer oracle
+covers the abort re-render decision as well as construction.
 
 **18. Invariants.** classifyTransition emits ONLY current-slice fields `{fromKind,toKind,
-decorations}` (no dead §3.3 host fields until a consumer lands — §4.15); its output and the
-construction plan are DEEP-frozen and independently immutable (§4.11); every descriptor
-scenario yields a plan or is rejected with a named reason (I16/§4.3, all seven §15 cases
-covered); no default branch (unhandled kind THROWS); same-destination (bare same-v) is
+decorations}` (no dead §3.3 host fields until a consumer lands — §4.15); its output, the
+construction plan, and the finalization plan `finalizationPlanFor().abortRender` are DEEP-frozen
+(`Object.freeze`) and independently immutable (§4.11); every descriptor scenario yields a plan or
+is rejected with a named reason (I16/§4.3, all seven §15 cases covered); no default branch
+(unhandled kind THROWS — `finalizationPlanFor` throws on an unhandled `fromKind` OR `toKind`,
+mirroring `constructionPlanFor`'s own-contract guard); same-destination (bare same-v) is
 documented impossible-before-the-planner, not a production branch.
 
 **19. Mutation cases.** Registered in `tools/mutate.mjs` (swipe4 F1/F3/F4/F5/F6/F7/no-dead-
-fields/F-i/F-ii/§15/§4.11), each mapped to the test it reddens; re-run by
+fields/F-i/F-ii/§15/§4.11; stage-6d FP/AB — force `abortRender` to `'none'`; RC — drop the
+recovery reader's `cur.live` build-ran conjunct; BC-1a/BC-1b — `finalizationPlanFor` no longer
+throws on an unhandled `fromKind`/`toKind`), each mapped to the test it reddens; re-run by
 `tools/mutation-sweep.mjs`, anchors gated by `test/mutation-anchors.test.js`.
 
 **20. Known-red behavior.** No swipe known-red todos remain. The two stage-2 NEW-POLICY todos —
@@ -108,13 +131,17 @@ headline aborted-swipe repaint/flash (memory `tomeroam-swipe-repaint-saga`).
 
 **21. Current policy-ledger references.** DecisionLog: the staged-review policy; construction-
 only planFor phase-split; three-layer oracle + mirror retirement; same-destination
-documented-impossible; the stage-6 cleanup debt — release-half done in 6b (settle/reveal timers session-owned + retired), pane-less-supersession + settle-phase identity guard done in 6c; the null-write/listener half + pane-owning supersession deferred to 6d/7.
+documented-impossible; the stage-6 cleanup debt — release-half done in 6b (settle/reveal timers session-owned + retired), pane-less-supersession + settle-phase identity guard done in 6c; **the finalization-decision extraction done in 6d — `sourceWasClobbered`/`d.clobbered` retired in favour of the declared frozen `finalizationPlanFor(classification).abortRender`, the FIRST finalization field of the rich §3.3 `planFor()`, behaviour-preserving (no PolicyLedger entry, EC §4.19);** the null-write/listener half + pane-owning supersession + the finalization remainder deferred to 7.
 
 **22. Explicitly out of scope.** Cross-device sync; the visual flash bug's root cause
 (separate open investigation); playback; the nav stacks themselves (Nav).
 
-**23. Conditions requiring revision.** Stage 5 (move the pane builders into swipe.js); stage 6
-(finalization half — commit/abort/scroll/stackEffect + reintroducing sourceHost/destinationHost/
-sameBrowseHost with their consumers); any change to navTo's push/replace rule (the same-
-destination-impossible argument depends on it); adding a screen kind or a parameterized
-descriptor family.
+**23. Conditions requiring revision.** Stage 5 (move the pane builders into swipe.js — done); stage 6
+finalization half: the `abortRender` field is DONE (Stage 6d — `finalizationPlanFor(classification)
+.abortRender`, the abort/recovery re-render decision, retiring `clobbered`/`sourceWasClobbered`). Still
+owed by later finalization slices: `commit` screen/scroll, `abort` scroll as a plan field, `stackEffect`,
+`reveal`/`paneRemovalPolicy`, the unified rich `planFor()` wrapper, and reintroducing `sourceHost`/
+`destinationHost`/`sameBrowseHost` with their consumers (the pane/lease/source-resolution slice) — none of
+those has a current consumer, so each returns in the commit that first reads it (§4.15). Also: any change to
+navTo's push/replace rule (the same-destination-impossible argument depends on it); adding a screen kind or a
+parameterized descriptor family.

@@ -6,6 +6,7 @@ Plan: `Claude/Plans/PLAN-swipe-stage6d.md` (FORGE'd by Charpy, HELD_STONE by Lok
 Grounded against shipped HEAD (Stage 6c baseline).
 New test file: `test/swipe-stage6d.test.js` (7 tests).
 Handoff: → Brunel (green) and Mendeleev (audit). Not committed (per assignment).
+Verdict: **RED_SUITE_READY** (initial suite + BC-1 remediation; Mendeleev re-audit ADEQUATE).
 
 ## 1. What this slice is (why most cells are parity)
 
@@ -148,3 +149,48 @@ so it does not hide Brunel's build.
 None. Every applicable §7/§8 cell is realized with a red test or a referenced regression guard. The
 Coverage Model was sufficient to author every assertion; no cell was too vague to bind to a real
 observable channel.
+
+## 8. BC-1 remediation (2026-07-27, post-Mendeleev audit at HEAD 9027daf)
+
+Mendeleev's audit of the shipped Stage 6d suite returned BARE_CELLS with one gap: the new
+`finalizationPlanFor` unhandled-kind throw guards (`js/swipe.js` finalizationPlanFor, the two
+`KINDS.indexOf(...) === -1` blocks) were untested — making BOTH guards inert left the whole swipe
+suite green (37/37). The sibling `constructionPlanFor` guards have both an `assert.throws` pair and a
+registered mutant (`swipe4 F6`); the mirrored 6d guard shipped neither. Production code is CORRECT and
+UNCHANGED — this is a pure coverage/tooling closure. No `js/**` was touched.
+
+### New test (1)
+- `test/swipe-transition.test.js` — `finalizationPlanFor throws on an unhandled source kind and on an
+  unhandled destination kind`. Two `assert.throws` (fromKind, toKind), mirroring the constructionPlanFor
+  sibling immediately above it (same file, same convention). PASSES at HEAD (the guards exist).
+
+### New registered mutants (3), `tools/mutate.mjs`
+Anchored on the UNIQUE throw line, not the bare `if (KINDS.indexOf(c.fromKind) === -1) {` — that
+statement is byte-identical to constructionPlanFor's own guard, so a bare-line anchor would mutate the
+wrong function (first-match `replace`). Each `void 0`'s the guard body (same shape as `swipe4 F3`), so
+an unhandled kind falls through to the abortRender ternary and silently answers `'none'`.
+
+| idx | mutant | reddens |
+|---|---|---|
+| 66 | `swipe6d BC-1a` — finalizationPlanFor no longer throws on an unhandled fromKind (`js/swipe.js`) | the new throw test |
+| 67 | `swipe6d BC-1b` — finalizationPlanFor no longer throws on an unhandled toKind (`js/swipe.js`) | the new throw test |
+| 68 | `swipe6d RC` — recovery reader drops the `cur.live` build-ran conjunct (`js/app.js:417`) | `RC.armed` (committed) |
+
+Mutant 68 closes the §4.10 tooling loop for the RC.armed cell: the test already caught the dropped
+`cur.live`, but no registered mutant recorded it. Dropping `cur.live &&` makes an ARMED (pre-lock,
+never-built) browse→browse recovery read `finPlan.abortRender` directly (`'rerender'`) and wrongly
+re-render `#browse`; a DRAGGING/overlay supersession is unchanged (`cur.live` true / `abortRender`
+`'none'`), so only RC.armed reddens.
+
+### Verification (executed, restored)
+- Full suite: `node --test test/*.test.js` → **713 tests, 712 pass, 0 fail, 1 skip** (device-only KEEPER).
+- `test/mutation-anchors.test.js` green — all three new anchors match the source.
+- Per-index sweep (synchronous, not backgrounded): `node tools/mutation-sweep.mjs 66 67 68` →
+  ```
+  #66  caught (1 failing) — swipe6d BC-1a: finalizationPlanFor no longer throws on an unhandled fromKind
+  #67  caught (1 failing) — swipe6d BC-1b: finalizationPlanFor no longer throws on an unhandled toKind
+  #68  caught (1 failing) — swipe6d RC: recovery reader drops the cur.live build-ran conjunct
+  swept 3: 0 uncaught, 0 unapplied, 0 stale flags
+  ```
+- `node tools/mutate.mjs --restore` → no `js/*.mutbak` / `test/*.mutbak` remain; `git status js/` clean
+  (no production code touched). Working-tree changes: `test/swipe-transition.test.js`, `tools/mutate.mjs`.

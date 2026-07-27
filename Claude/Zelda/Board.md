@@ -195,6 +195,26 @@ owed (guard-absorbed / resource-plane). **Deferred to 6d/7:** PANE-OWNING supers
 the flash surface), null-writes/listener (I12), and the I10/I17 reveal centralization (headline flash bug).
 Review/audit seats ran on Opus 5.0 per the user's 5.0 directive.
 
+**Stage 6d SCHEME-COMPLETE (2026-07-27) — build target `9027daf`.** Slice chosen ON THE MERITS by dependency
+(D-before-F), NOT aimed at the flash to placate: retired the runtime `clobbered`/`sourceWasClobbered`
+byproduct (a build-time DOM-identity check stored on the session) for a pure, deep-frozen, throws-on-unhandled-kind
+`Swipe.finalizationPlanFor(c).abortRender` — the first declared field of the rich §3.3 `planFor()`, computed at
+ARM time as `cur.finPlan`. Byte-parity extraction (EC §4.19, no PolicyLedger entry); three read sites redirected,
+the begin() recovery reader carrying a `cur.live` conjunct that preserves ARMED-supersession parity (a planner-found
+non-parity beyond Charpy's TEMPER). Ran under full automation: Charpy r1 TEMPER (scope/scrub completeness) → r2
+**FORGE** (`d3571bf`) → **Loki HELD_STONE** (132 reachable pairs executed, 0 divergence; grounded that the old
+byproduct is a DOM-identity check that coincides with the kind-formula because `appViewEl` maps every non-home name
+to `#browse`) → Curie red-first → **Brunel BUILD_GREEN** (two bench catches: Brunel's backgrounded mutation-sweeps
+left a stuck mutant + a live racing sweep — both killed/restored by Zelda; suite 711/0/1) → **Poirot SHIP** (verified
+by execution — stripping `cur.live` reddens RC.armed) → **Mendeleev BARE_CELLS** (the finalizationPlanFor throw
+guards were untested — both inert left the suite green) → Curie BC-1 remediation (throw test + mutants #66/#67/#68)
+→ **Mendeleev ADEQUATE** (713/712/0/1). Completion gate 6/6 (caught a missing Curie verdict token — fixed). §10
+scrub done (subsystem §8/§11/§17/§18/§19/§23, parent §7 step 6, DecisionLog, the two folded Charpy plan advisories).
+Full sharded mutation-sweep is CI's post-push gate (local unsharded run exceeds the window). **Deferred to 7+
+(unchanged):** pane lifecycle + paneRemovalPolicy (F), I10/I17 reveal centralization / the flash core (C),
+pane-owning supersession home↔browse/→home (B), rest of finalization (commit/scroll/stackEffect/reveal + unified
+planFor()), host fields, recoverSession matrix (G), null-writes/listener (A), fadePanes, the compositor flash.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired

@@ -443,6 +443,30 @@ const MUTATIONS = [
       from: '      const c = Swipe.buildConstruction(d.from, d.dest, env);',
       to:   '      const c = Swipe.buildConstruction(d.from, d.dest, env);\n      takeRowHold();',
     } },
+  // ── SWIPE stage 6d BC-1 (Mendeleev AUDIT-swipe-stage6d): the finalizationPlanFor
+  // unhandled-kind guards shipped without a mutant, so making them inert left the suite
+  // green. Anchored on the UNIQUE throw line (the bare `if (KINDS.indexOf(c.fromKind) === -1)`
+  // is shared with constructionPlanFor's own guard, so it would mutate the wrong function).
+  // Each makes its guard body a no-op, so an unhandled kind falls through to the abortRender
+  // ternary and silently answers 'none' instead of throwing → reddens the new throw test in
+  // test/swipe-transition.test.js. Same `void 0` shape as swipe4 F3.
+  { name: 'swipe6d BC-1a: finalizationPlanFor no longer throws on an unhandled fromKind (-> finalizationPlanFor unhandled-kind test)',
+    file: 'js/swipe.js',
+    from: `      throw new Error('Swipe.finalizationPlanFor: unhandled source kind "' + c.fromKind + '"');`,
+    to:   '      void 0; // mutated: fromKind guard inert' },
+  { name: 'swipe6d BC-1b: finalizationPlanFor no longer throws on an unhandled toKind (-> finalizationPlanFor unhandled-kind test)',
+    file: 'js/swipe.js',
+    from: `      throw new Error('Swipe.finalizationPlanFor: unhandled destination kind "' + c.toKind + '"');`,
+    to:   '      void 0; // mutated: toKind guard inert' },
+  // The RC.armed §4.10 tooling loop: the committed RC.armed test catches dropping the
+  // `cur.live` build-ran conjunct from the recovery reader (js/app.js), but there was no
+  // REGISTERED mutant for it. Dropping `cur.live &&` makes an ARMED (pre-lock, never-built)
+  // browse→browse recovery read finPlan.abortRender directly ('rerender'), so it wrongly
+  // re-renders #browse → reddens RC.armed (a DRAGGING/overlay supersession is unchanged:
+  // cur.live is true / abortRender is 'none' there).
+  { name: 'swipe6d RC: recovery reader drops the cur.live build-ran conjunct (-> RC.armed test)',
+    from: "render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false",
+    to:   "render: cur ? (cur.finPlan.abortRender === 'rerender') : false" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

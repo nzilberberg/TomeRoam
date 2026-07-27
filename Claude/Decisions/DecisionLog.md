@@ -893,3 +893,38 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   `2026-07-26.251` (bench; on-device owed). DEFERRED to 6d/7: PANE-OWNING supersession (home↔browse, →home —
   the flash surface), the NULL-on-retire writes + transitionListener ownership (I12 consumer), finalizationPlanFor/
   sameBrowseHost/pane-lifecycle, and the I10/I17 paint-gated reveal centralization (the headline flash bug).
+
+- Stage 6d (finalization decision extraction) IMPLEMENTED and green — 2026-07-27. The abort/recovery
+  re-render decision moves from a RUNTIME build byproduct to a PURE DECLARED field: `Swipe.finalizationPlanFor(
+  classification)` (js/swipe.js:162) returns a deep-frozen exact-key `{ abortRender }` — `'rerender'` iff
+  `fromKind==='browse' && toKind==='browse'`, else `'none'` — throwing on an unhandled `fromKind` OR `toKind`
+  (its own-contract guard, mirroring `constructionPlanFor`). It is the FIRST declared finalization field of the
+  rich §3.3 `planFor()`, computed at ARM time from the resolved descriptors and stored on the session as
+  `cur.finPlan` (js/app.js:442). The runtime byproduct `sourceWasClobbered` (js/swipe.js `buildConstruction`)
+  and its stored session flag `d.clobbered` are RETIRED — a cause plus a separately-stored derived consequence
+  (EC §4.16). `buildConstruction`'s return narrows from four keys to THREE (`{decorations, movers, capture}`).
+  The three read sites consume the declared decision: the two finalize abort sites (app.js:1160/1187) read
+  `cur.finPlan.abortRender === 'rerender'`; the begin() supersession recovery reader (app.js:417) reads
+  `cur.live && cur.finPlan.abortRender === 'rerender'`. The `cur.live` conjunct is the load-bearing correctness
+  point — the retired `clobbered` equalled `cur.live && (browse-to-browse)` (build actually ran AND the source
+  `#browse` host was overwritten), so an ARMED browse-to-browse superseded before the 8px lock must render
+  FALSE; dropping the conjunct would spuriously re-render `#browse` (a flash-adjacent repaint). Computing
+  `finPlan` at ARM time (not at build) is what makes it defined for a pre-build ARMED session the recovery
+  reader can run on. Behaviour-preserving EXTRACTION (byte-parity on every reachable transition), no known-red,
+  no PolicyLedger entry (EC §4.19). The frozen `expectedFinalization: { abortRender }` oracle (inert since
+  stage 4) is turned ON — `swipe-transition.test.js` now compares production `finalizationPlanFor().abortRender`
+  against the hand-written frozen spec across all 8 structural cases (three-layer oracle, EC §4.14). Slice
+  chosen on the dependency merits, not symptom-appeal: over the 6c-deferred set, D (the declarative finalization
+  decision) and F (the pane-lifecycle interface) are the two roots, and D precedes F because the pane-removal
+  POLICY F enforces is itself a field of D's plan (building F first would hand-code a policy D re-declares —
+  EC §4.16); D is also the lower-risk root and lands entirely off the flash-timing surface. Co-changes landed
+  in the same commit (the `clobbered`/`sourceWasClobbered` HEAD scrub): the Construction exact-key contract
+  4-to-3 keys + its F6 test folded into cells FP+AB, five `mutate.mjs` anchors re-pointed + new mutants
+  (FP/AB, RC, BC-1a/1b), the `gen-swipe-model` mirror + regenerated fingerprint, and comment/message sites.
+  Gates: Charpy FORGE (after r1 TEMPER — enumerate every HEAD `clobbered` reference; the planner-found
+  `cur.live`-conjunct non-parity), Loki HELD_STONE, Curie RED + BC-1, Brunel BUILD_GREEN, Poirot SHIP,
+  Mendeleev ADEQUATE; completion gate COMPLETE. Ratified plan `Claude/Plans/PLAN-swipe-stage6d.md`. STILL
+  DEFERRED to 7 (each behind its absent consumer): the I10/I17 reveal centralization (the flash core), the
+  rest of the finalization plan (commit/abort-scroll/stackEffect/reveal + the unified `planFor()` wrapper),
+  the host fields, the pane-lifecycle interface, pane-owning supersession, the `recoverSession` matrix, the
+  I12 null-on-retire half, and `fadePanes`. Bench only; on-device verification owed.
