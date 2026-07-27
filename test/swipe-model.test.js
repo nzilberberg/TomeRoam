@@ -47,7 +47,7 @@ const VERIFIED = {
   // is still reject-while-finishing, else hard-reset-and-arm (frozen model §5). So the
   // parity claim stands and only the pin moves. Was 'a470962594518cb9' (pre-stage-3),
   // then 'd455d0d197ea3af8' (before the comment fix).
-  supersession: 'd39534854e3cc348',
+  supersession: 'c5ab2fae0fd03654',
 };
 
 // Every line in js/app.js that appends to or rebinds navStack, as it stood when the

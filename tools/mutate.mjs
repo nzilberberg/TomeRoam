@@ -51,27 +51,34 @@ const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'left
 // Removing BOTH is still required to strand the pane: applyScreen() also calls
 // Nav.resetSwipeStyles() internally, so dropping only the explicit call leaves the
 // ghost disposed anyway.
+// Re-anchored stage 6c (PLAN-swipe-stage6c.md §3): the recovery now also admits a
+// pane-less SETTLING session (`d` null, `session` live), so the render/scroll reads
+// were widened from `d` to `cur = d || session`.
 const HARDRESET_DISPOSE_FROM = [
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });',
+  '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });',
 ].join('\n');
 const HARDRESET_DISPOSE_TO = '        /* mutated: no hard reset */';
 // stage 6a §9 VR — the two ordering defects the Loki strike measured against the real
 // js/browse.js + js/virtuallist.js (STRIKE-swipe-stage6-recover-before-arm-r2.md §3).
 const VR_HOLD_ORDER_FROM = [
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });',
-  '        if (d) window.scrollTo(0, d.scroll0);',
+  '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });',
+  '        if (cur) window.scrollTo(0, cur.scroll0);',
   '        dropRowHold();',
 ].join('\n');
 const VR_HOLD_ORDER_TO = [
   '        dropRowHold();',
   '        resetSwipeStyles();',
-  '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });',
-  '        if (d) window.scrollTo(0, d.scroll0);',
+  '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });',
+  '        if (cur) window.scrollTo(0, cur.scroll0);',
 ].join('\n');
+// Re-anchored stage 6c: `finishing = false;` (F2) now sits between dropRowHold() and
+// the identity-null pair — still required to run AFTER dropRowHold (which reads
+// session.hold) and BEFORE session/d are nulled.
 const VR_IDENTITY_ORDER_FROM = [
   '        dropRowHold();',
+  '        finishing = false;',
   '        session = null;',
   '        d = null;',
 ].join('\n');
@@ -79,6 +86,7 @@ const VR_IDENTITY_ORDER_TO = [
   '        session = null;',
   '        d = null;',
   '        dropRowHold();',
+  '        finishing = false;',
 ].join('\n');
 // stage 6a §9 SR — force the recovery to skip the source re-render even when the drag
 // DID clobber #browse. NB: the opposite direction (force-render TRUE when NOT clobbered,
@@ -88,13 +96,13 @@ const VR_IDENTITY_ORDER_TO = [
 // calls renderScreen(), never Browse.render()), so the flag's value cannot leak into a
 // #browse render for that fixture regardless. NC's genuine proof is the scroll mutation
 // below, which reddens its scroll-restore clause directly.
-const RECOVERY_RENDER_LINE = '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });';
-const RECOVERY_RENDER_ALWAYS_FALSE = '        applyScreen(currentDesc(), { render: false, resetScroll: d ? false : undefined });';
+const RECOVERY_RENDER_LINE = '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });';
+const RECOVERY_RENDER_ALWAYS_FALSE = '        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined });';
 // stage 6a Poirot F1 (Claude/Poirot/f09cf9d-swipe-stage6-supersession.md) — the orphan
 // sub-case (d===null) must keep nav.js's default resetScroll so a home/options source
 // still scrolls to top. Forcing resetScroll:false back onto the orphan (the f09cf9d bug)
 // reds the OB-home cell in test/swipe-stage6.test.js.
-const F1_ORPHAN_RESETSCROLL_TO = '        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: false });';
+const F1_ORPHAN_RESETSCROLL_TO = '        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: false });';
 
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
 const S5_GHOSTBG_FROM = [
@@ -215,10 +223,33 @@ const MUTATIONS = [
   { name: 'stage6a: recovery never re-renders a clobbered source (-> SR known-red test)',
     from: RECOVERY_RENDER_LINE, to: RECOVERY_RENDER_ALWAYS_FALSE },
   { name: 'stage6a: recovery stops restoring the session-start scroll (-> SC known-red test, NC scroll clause)',
-    from: '        if (d) window.scrollTo(0, d.scroll0);',
+    from: '        if (cur) window.scrollTo(0, cur.scroll0);',
     to: '        /* mutated: no scroll restore */' },
   { name: 'stage6a F1: orphan sub-case forces resetScroll:false, dropping home scroll-to-top (-> OB-home test)',
     from: RECOVERY_RENDER_LINE, to: F1_ORPHAN_RESETSCROLL_TO },
+  // ── SWIPE stage 6c: pane-less supersession ownership guard (PLAN-swipe-stage6c.md) ─
+  { name: 'stage6c W: the supersession recovery omits the finishing=false clear (-> W/W(armed) wedge test)',
+    from: [
+      '        dropRowHold();',
+      '        finishing = false;',
+      '        session = null;',
+    ].join('\n'),
+    to: [
+      '        dropRowHold();',
+      '        session = null;',
+    ].join('\n') },
+  { name: 'stage6c G1: the settle-rAF cur===session guard is removed (-> G1/G-chain stale-transform test)',
+    from: [
+      "        if (cur !== session) return;",
+      "        for (const m of cur.movers) m.el.style.transform = 'translateX(' + (m.base === 0 ? outTo : inTo) + 'px)';",
+    ].join('\n'),
+    to: "        for (const m of cur.movers) m.el.style.transform = 'translateX(' + (m.base === 0 ? outTo : inTo) + 'px)';" },
+  { name: 'stage6c G2/G3: the finalize cur===session guard is removed (-> G2/G3/G-chain stale-finalize test)',
+    from: [
+      '        if (cur !== session) return;',
+      '        // Order matters: dropRowHold reads session.hold, so it must run BEFORE',
+    ].join('\n'),
+    to: '        // Order matters: dropRowHold reads session.hold, so it must run BEFORE' },
   { name: 'swipe: supersession stops releasing the old target listeners (-> I20 stale-callback test)',
     from: "releaseGesture();   // never leave a dead gesture's listeners on a stale node",
     to: '/* mutated: listeners left bound */' },

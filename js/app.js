@@ -216,22 +216,22 @@
     // captured `cur` IS this same object. A new gesture REPLACES `session`; a
     // superseding hard reset nulls it before re-arming.
     //
-    // ⚠️ STAGE 3 IS THE OWNER + IDENTITY, NOT ENFORCEMENT. The plan's "every async
-    // callback captures session.id and no-ops when superseded" (§3.2, I12) is
-    // DELIBERATELY NOT added here, and the reason is measured, not lazy: today
-    // `finishing` already rejects every new gesture for the entire settle→finalize
-    // window (begin()'s first line), and it is set false only INSIDE the completion
-    // path — so a new session cannot exist until the old one's finalize has already
-    // run. The post-finishing deferred timers (fadePanes, the 600ms backstop,
-    // watchFrames) are each scoped by their captured locals (the `dropped` flag,
-    // `el.parentNode`). So a `cur === session` guard on those callbacks is
-    // UNREACHABLE BY CONSTRUCTION right now, and guarding runFinalize's top would risk
-    // skipping its own `finishing = false` cleanup. That guard becomes reachable,
-    // load-bearing and testable only once STAGE 6 retires the `finishing` gate in
-    // favour of the state machine — so it lands there, with the test that can fail.
-    // What IS delivered and tested now: identity is observable — the hard-reset log and
-    // the `#N` finalize line both carry `sid=`, so a superseded gesture is tied to its
-    // id and two sequential gestures show distinct ids.
+    // ⚠️ STAGE 3 laid the OWNER + IDENTITY; STAGE 6c adds the first slice of
+    // ENFORCEMENT. The plan's "every async callback captures session.id and no-ops
+    // when superseded" (§3.2, I12) is now REACHABLE and LOAD-BEARING for the
+    // PANE-LESS supersession window: begin()'s `finishing` gate (below) is narrowed
+    // from a blanket reject to admit ONLY a live pane-less session, so a successor
+    // CAN arm mid-settle, and the settle rAF / `finalize` (settle(), below) each
+    // check `cur === session` before acting. It remains UNREACHABLE BY CONSTRUCTION
+    // — and so still deferred — for the PANE-OWNING/held-reveal window (ghost/
+    // snapshot; cell PG): `begin()` still rejects any new gesture there, so no
+    // successor can arm and no stale continuation can fire while one is superseded.
+    // That half, the reveal-phase handles' guards, and the null-on-retire
+    // bookkeeping land with the paint-centralization restructure (6d/7,
+    // PLAN-swipe-stage6c.md §11). Identity has been observable since stage 3
+    // regardless: the hard-reset log and the `#N` finalize line both carry `sid=`,
+    // so a superseded gesture is tied to its id and two sequential gestures show
+    // distinct ids.
     let session = null, sessionSeq = 0;
     // Relinquish ownership: clear `session` iff it is still the given session, so a
     // completed gesture's endpoint can never null a NEWER gesture that has since armed.
@@ -243,6 +243,12 @@
     // Observable owner state, for tests asserting no session survives an exit (and for
     // device diagnostics). Pure read of the real var — not a parallel implementation.
     if (typeof window !== 'undefined') window.PBSwipeSession = () => (session ? { id: session.id, dragging: !!d } : null);
+    // A session is PANE-LESS when it owns no full-viewport cover pane (Stage 6c,
+    // PLAN-swipe-stage6c.md §2.1/§3 — the classification is derived from the same
+    // `own` tags Swipe.buildConstruction assigns each mover, not a duplicated
+    // classifier). Only a live pane-less session may be superseded by begin(); a
+    // pane-owning one (ghost/snapshot) stays gated (cell PG, deferred to 6d/7).
+    const paneLess = (s) => !s.movers.some((m) => m.own === 'owned-pane');
     // Snapshot of the browse page the gesture STARTED on, taken before the mid-drag
     // render touches anything. Compared at reveal, it is the one measurement that
     // separates "the page was rebuilt" from "the page was preserved and is still
@@ -349,7 +355,17 @@
     // Construction it returns; the destination render dispatch stays here in env.renderDestination.
 
     function begin(x, y, target) {
-      if (finishing) return;   // settle animation running — ignore new gestures until it lands
+      // Stage 6c narrowed gate (PLAN-swipe-stage6c.md §3/§4/§7, NEGATIVE form). Reject
+      // whenever `finishing` is true and there is NOT a live PANE-LESS session to
+      // supersede: a null `session` (a stuck `finishing` left after a prior recovery
+      // already nulled it) rejects, AND a PANE-OWNING session (ghost/snapshot;
+      // held-reveal implies it — cell PG) rejects, so this slice defines supersession
+      // for the pane-less phase only. Only a live pane-less session falls through to
+      // be recovered/superseded below. The negative form (rather than
+      // `finishing && paneOwning(session)`) is load-bearing: a positive check would
+      // fall through on `paneOwning(null) === false` and let a stuck `finishing` wedge
+      // silently instead of rejecting.
+      if (finishing && !(session && paneLess(session))) return;
       // Leftover from an INTERRUPTED gesture (a 2nd touch mid-swipe, a missed
       // touchend, etc.) → hard-reset to known-good before starting fresh. This is
       // what stops corruption from accumulating over many swipes.
@@ -358,33 +374,48 @@
       // without this a swipe started during the fade would trip the hard reset below
       // and re-introduce the wrong-page/wrong-tap failure .178 fixed. Clear them first.
       document.querySelectorAll('.nav-ghost.spent').forEach((n) => n.remove());
-      if (d || document.querySelector('.nav-ghost')) {
+      // The recovery entry predicate admits a THIRD case beyond the stage-6a pair
+      // (`d` mid-drag; an orphan `.nav-ghost`): a live PANE-LESS session still
+      // settling/finalizing (`finishing && session` — reachable only because the gate
+      // above already rejected every other `(finishing, session)` combination, so
+      // `session` here is always pane-less). It has `d === null` (nulled at end()) and
+      // no `.nav-ghost` (it owns no pane), so it needs this explicit admission.
+      if (d || document.querySelector('.nav-ghost') || (finishing && session)) {
         if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset'
           + (session ? ' sid=' + session.id : ''));
         releaseGesture();   // never leave a dead gesture's listeners on a stale node
-        // Recover the superseded session PRE-STACK (stage 6a, PLAN-swipe-stage6.md §3/§6)
+        // Recover the superseded session PRE-STACK (stage 6a, PLAN-swipe-stage6.md §3/§6;
+        // extended stage 6c to a pane-less SETTLING session, PLAN-swipe-stage6c.md §3)
         // before its resources are released: dispose the old pane / stray ghosts, restore
         // the source screen (re-rendering it into #browse iff the superseded drag had
-        // clobbered the shared host — d.clobbered, set by start() only for a live
+        // clobbered the shared host — cur.clobbered, set by start() only for a live
         // browse->browse mid-drag render), then restore the session-start document scroll
-        // (d.scroll0). `resetScroll:false` is forced ONLY on the live-recovery branch, so
-        // applyScreen does not stomp the explicit d.scroll0 restore below; the ORPHAN-pane
-        // path (`d` null — a leftover ghost with no live session, I17(b)) passes
-        // `resetScroll:undefined` and keeps nav.js's default (resetScroll:true), so a home
-        // or options/sub source still resets to top exactly as the pre-6a hard reset did
-        // (parity; Poirot F1). The orphan has no session-start state, so the render flag is
-        // `false` and no d.scroll0 restore runs. The Browse hold is released ONLY AFTER this
-        // render+scroll (releasing it first would deactivate a suspended virtualized source
-        // and dematerialize its kept rows before the render could reuse them — Loki strike,
-        // STRIKE-swipe-stage6-recover-before-arm), and the superseded session's IDENTITY is
-        // dropped LAST of all: releaseGesture() and dropRowHold() both READ `session`
-        // (dropRowHold no-ops on a null session), so nulling it any earlier would leak the
-        // hold and the source rows would never be realized (the same ordering `finalize()`
-        // observes at its own hold release).
+        // (cur.scroll0). `cur` below reads whichever handle is live: `d` for a mid-drag
+        // supersession, else the pane-less settling `session` (same object `d` referenced
+        // before end() nulled it — no new field). `resetScroll:false` is forced ONLY on a
+        // live-recovery branch, so applyScreen does not stomp the explicit cur.scroll0
+        // restore below; the ORPHAN-pane path (`cur` null — a leftover ghost with no live
+        // session, I17(b)) passes `resetScroll:undefined` and keeps nav.js's default
+        // (resetScroll:true), so a home or options/sub source still resets to top exactly
+        // as the pre-6a hard reset did (parity; Poirot F1). The orphan has no
+        // session-start state, so the render flag is `false` and no cur.scroll0 restore
+        // runs. The Browse hold is released ONLY AFTER this render+scroll (releasing it
+        // first would deactivate a suspended virtualized source and dematerialize its kept
+        // rows before the render could reuse them — Loki strike,
+        // STRIKE-swipe-stage6-recover-before-arm). `finishing` is cleared here too (Stage
+        // 6c F2): nothing else clears it for a superseded pane-less session (its own
+        // finalize never runs), so leaving it set would wedge every future swipe the
+        // moment the superseding touch failed to arm (cell W) — cleared BEFORE the
+        // superseded session's IDENTITY is dropped LAST of all: releaseGesture() and
+        // dropRowHold() both READ `session` (dropRowHold no-ops on a null session), so
+        // nulling it any earlier would leak the hold and the source rows would never be
+        // realized (the same ordering `finalize()` observes at its own hold release).
+        const cur = d || session;
         resetSwipeStyles();
-        applyScreen(currentDesc(), { render: d ? d.clobbered : false, resetScroll: d ? false : undefined });
-        if (d) window.scrollTo(0, d.scroll0);
+        applyScreen(currentDesc(), { render: cur ? cur.clobbered : false, resetScroll: cur ? false : undefined });
+        if (cur) window.scrollTo(0, cur.scroll0);
         dropRowHold();
+        finishing = false;
         session = null;
         d = null;
       }
@@ -549,6 +580,12 @@
       // the transforms — writing a stale translateX onto the real Home/Browse/overlay
       // (borrowed-real movers). Stored on the session and cancelled in finalize.
       cur.settleFrame = requestAnimationFrame(() => {
+        // Stage 6c ownership-identity guard (PLAN-swipe-stage6c.md §3/§4/§7): a
+        // successor may have superseded this pane-less session and taken over
+        // `session` (begin()'s narrowed gate) while this frame was pending. A stale
+        // fire then no-ops instead of writing a transform onto the successor's
+        // borrowed-real movers.
+        if (cur !== session) return;
         for (const m of cur.movers) m.el.style.transform = 'translateX(' + (m.base === 0 ? outTo : inTo) + 'px)';
       });
       let done = false;
@@ -1166,6 +1203,16 @@
         // (Stage 6b, PLAN-swipe-stage6b.md §2/§3). When the fallback itself won, this
         // clears an already-fired id — a harmless no-op.
         clearTimeout(cur.settleTimer);
+        // Stage 6c ownership-identity guard (PLAN-swipe-stage6c.md §3/§4/§7): a
+        // successor may have superseded this pane-less session (begin()'s narrowed
+        // gate) before this settleTimer/transitionend fired. `done` above does not
+        // catch this — this session never finalized, so `done` was false until the
+        // line above set it just now. Guarding HERE — after the `done` set and the two
+        // cancels, BEFORE the try/finally — makes a stale finalize a total no-op.
+        // Placed inside the try/finally instead, a stale finalize would enter the
+        // `finally` and run dropRowHold()/endOwnership() against the MODULE `session`
+        // — dropping the SUCCESSOR's row hold and ending ITS ownership.
+        if (cur !== session) return;
         // Order matters: dropRowHold reads session.hold, so it must run BEFORE
         // endOwnership clears the session. `finishing` is restored ONLY on a throw
         // (review of .223, finding 2): the no-pane path already cleared it in
