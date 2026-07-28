@@ -54,15 +54,16 @@ test('the hub itself hides every sub-screen', () => {
   for (const s of Nav.SETTINGS_SUBS) assert.equal(hidden(s), true, s + ' should be hidden on the hub');
 });
 
-test('leaving for Home releases every settings overlay and restores the tall document', () => {
+test('leaving for Home releases every settings overlay and un-parks Home', () => {
   Nav.applyScreen({ v: 'downloads' });
   Nav.applyScreen({ v: 'home' });
   assert.equal(hidden('options'), true, 'the hub must not linger over Home');
   for (const s of Nav.SETTINGS_SUBS) assert.equal(hidden(s), true);
   assert.equal($('home').classList.contains('parked'), false);
-  // home-tall gives the document real height so the fixed navbar seats at the true
-  // bottom — the iOS-26 fixed-layer rule.
-  assert.ok(document.body.classList.contains('home-tall'));
+  // Stage 6i (PLAN-swipe-noswap-home.md) RETIRES the home-scoped `home-tall` toggle:
+  // active #home becomes a position:fixed own-scroll view, and the fixed navbar seats off
+  // the RETAINED css:73 `.app` runway (a device-owed seating check, R1(b)) — there is no
+  // longer a `body.home-tall` class for this layer to assert.
 });
 
 test('Now Playing leaves the settings overlays as they were (for the back-reveal)', () => {
@@ -77,7 +78,7 @@ test('browse parks Home (painted, not display:none — covers stay decoded)', ()
   Nav.applyScreen({ v: 'books' });
   assert.equal(hidden('browse'), false);
   assert.ok($('home').classList.contains('parked'));
-  assert.equal(document.body.classList.contains('home-tall'), false);
+  // (the home-scoped `home-tall` toggle is retired in Stage 6i — no body class to assert here)
 });
 
 test('applyScreen renders the destination, and render:false reconciles visibility only', () => {
