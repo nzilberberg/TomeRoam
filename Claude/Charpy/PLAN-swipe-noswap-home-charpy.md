@@ -536,4 +536,64 @@ not close Loki's device jump, and the GHOSTSCROLL cell is jsdom-vacuous for it. 
 home carry the offset — class-keyed overflow or a content-translate — plus a device-owed L5 fidelity gate),
 the plan is FORGE-ready. No other finding re-opens.
 
-VERDICT: TEMPER
+*(This TEMPER verdict was for HEAD `e727840`. Vitruvius fixed F10 (HEAD `3d2b7b3`, scope held to F10). The
+F10-confirmation pass below SUPERSEDES it.)*
+
+---
+
+## F10-confirmation pass — tempered plan HEAD `3d2b7b3` (2026-07-28)
+
+Scope: F10 only (the L5 mechanism + the GHOSTSCROLL/R1(d) honesty split). F1–F9, the seam sweep, and §2/§12
+are not re-opened. **Both F10 fixes are landed, correct, and internally consistent — verified against
+`ghostApp` (swipe.js:249-266). Verdict: FORGE.**
+
+### F10.1 (mechanism) — CONFIRMED: content-translate closes Loki's counterexample
+
+§9 L5 now reproduces home's offset by the SAME whole-clone content-translate the in-flow ghost already uses —
+`clone.style.transform = translateY(-offset)` (swipe.js:258) — changing ONLY the offset SOURCE
+(`window.scrollY` → `#home.scrollTop` when the source is home). Verified against source: `ghostApp` clones
+`.app`, strips ALL ids (swipe.js:252) so the clone's home loses its id-keyed `overflow-y` and lays out its
+FULL content from the top (not a scroll box); `translateY(-500)` shifts that full tree up 500px and
+`ghostWrap`'s `overflow:hidden` (swipe.js:243) clips it to the viewport → the ghost shows home-at-500 → zero
+jump at the real→ghost swap. This is precisely my F10.1 option (b), and the id-strip that BROKE the `scrollTop`
+mechanism is exactly what MAKES content-translate valid. The plan states the scroll-container independence
+explicitly ("the id-stripped clone holds the full home content laid out from the top … the offset is carried
+by the whole-clone transform, not by clone `scrollTop`"), specifies the source-kind resolution (home →
+`#home.scrollTop`; browse → `window.scrollY`; both into the one `translateY`), labels the earlier
+"vertical-analog-of-`copyScroll`" draft WRONG with the class-keyed-vs-id-keyed reason, and carries no residual
+"whole-clone translateY is wrong / shows blank" claim (grep-confirmed). Mechanism-level: closes the KILL.
+
+### F10.2 (honesty) — CONFIRMED: GHOSTSCROLL demoted to the source-branch gate; R1(d) owns the visible jump
+
+GHOSTSCROLL (§10 row 221) now asserts only the CI-checkable SOURCE branch — the captured offset
+(`capture.ghostY` / the clone `translateY`) equals `#home.scrollTop` (500), not `window.scrollY` (0) — and
+reddens on the `window.scrollY`-source mutation. `capture.ghostY` is a real value `buildConstruction` returns
+(swipe.js:265), so the cell is well-formed and CI-observable, and it proves the code reads the right source and
+nothing more. A new device gate **R1(d)** (§11 line 229) owns the on-screen zero-jump (scrolled `home→books`
+and `home→overlay`, no jump at swap AND at abort uncover), explicitly stating "the Loki KILL is NOT closed at
+CI — the on-screen zero-jump is device-owed." Every mention is correctly scoped — the dimension rows (204/205),
+R2 (230: "honestly PARTIAL … the Loki KILL is not called closed at CI"), and the Curie handoff (286: "do NOT
+write a CI cell asserting the on-screen jump — vacuously green"). No residual text claims CI closes the jump.
+Six CI cells consistent across the dimension rows, the `blocking_questions` declaration, and the Curie handoff.
+The project's "vacuously-green harness" scar is now correctly avoided by construction.
+
+### Not disturbed
+
+The F10 fix is scoped to §9 L5, §10 GHOSTSCROLL, §11 R1(d), the two dimension rows, and the Curie handoff.
+F1–F9 (css:73 retained, two-hypothesis flash framing, no-hold abort) and the PolicyLedger entry are untouched.
+
+## Verdict — FINAL: FORGE
+
+The plan is sound and internally consistent. The `→home` construction edit (three enum values, frozen-spec
+validated), the fixed own-scroll `#home` slide-and-leave, the complete seam-swept home-scroll re-homing
+including the L5 content-translate ghost fidelity, the constraint-E dissolution (ledgered), the A2 seating
+(retained css:73 runway), and the honest CI/device split (six CI cells; R1(a) flash, R1(b) bars, R1(c)
+nested-scroll, R1(d) L5 zero-jump device-owed) all hold. Build it. The Loki KILL is repaired at the mechanism
+level and its CI gate no longer overclaims — a fresh Loki re-strike now lands against a plan whose home-source
+ghost reproduces the real scroll.
+
+Next: Loki re-strike (fresh); then Curie builds the six-cell suite from §10 (PolicyLedger test names filled so
+`policy-ledger-gate` passes) and Brunel builds. The four device gates R1(a/b/c/d) remain device-owed downstream
+as the plan states.
+
+VERDICT: FORGE
