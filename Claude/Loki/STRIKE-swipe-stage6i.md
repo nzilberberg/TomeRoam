@@ -210,3 +210,161 @@ console.log('swipe.js scrollTop reads:',
   seat is read-only on what it strikes).
 
 VERDICT: KILL
+
+---
+
+# RE-STRIKE — Stage 6i plan repaired + re-FORGE'd (HEAD 41d0f15), 2026-07-28
+
+Re-commissioned after the first KILL was repaired. The L5 fix (source-aware ghost
+offset via `translateY(-#home.scrollTop)`, GHOSTSCROLL CI gate + R1(d) device gate) is
+in the plan; I did NOT re-prosecute that closed window. Blind pre-build still. Fresh
+fracture found and executed.
+
+## 1. The promise (verbatim, repaired plan)
+
+- §3 "Abort (browse→home)": "**No re-decode of `#browse` covers on the return rests on
+  the browse-page PARK mechanism** (Loki note #3): during the swipe `#browse`'s page node
+  is PARKED — off-viewport but STILL PAINTED (`.browsepage.parked`, css:83-96) ... it
+  restores with no re-decode."
+- §11 R4: "Aborted `browse→home` re-parks `#home` + restores `#browse` **without
+  re-decoding covers** ... so it restores with no re-decode — no hold branch needed (F7)."
+
+This is a claim the plan ASSERTS (not one it concedes to device, unlike R1(a)/R1(d)): the
+`browse→home` abort keeps `#browse`'s covers warm via `.browsepage.parked`.
+
+Restated as testable behavior: on the `browse→home` path, `#browse`'s page carries
+`.browsepage.parked` (painted), so an abort un-covers warm covers with no re-decode.
+
+## 2. The plane chosen, and why
+
+The repair elevated my earlier lesser note #3 into a LOAD-BEARING claim — the proud
+sentence names its own fracture. The plan flips `browse→home` OUTGOING `real-source`→
+`app-ghost` (§4, one of the three enum changes, extending 6f's "the real in-flow view is
+never a mover"). That flip is the plane: TODAY the real `#browse` IS the warm-keeping
+mechanism (it is the borrowed-real outgoing mover, slid by transform, never hidden —
+`browse.js:142-145` and `158-159` say so verbatim: "swiping back to Home moves the real
+`#browse` by transform, so showPage never runs ... never hides it"). The flip removes
+`#browse` from the mover set, and the plan's own home-host un-park (modeled on
+`showAppView(home)`, app.js:482: `$('browse').classList.add('hidden')`) display:none's the
+`#browse` container. The plan's cited replacement — `.browsepage.parked` — is set ONLY
+inside `showPage()` (browse.js:294), which `browse→home` never calls.
+
+## 3. The instrument (reproducible)
+
+Scratch probe `loki-6i-restrike.js` (full text §7), node v22 against HEAD `41d0f15`,
+driving the REAL `Swipe.buildConstruction` over the real `index.html` in jsdom in the
+browse-active state (signed in, `#browse` shown holding a `.browsepage > img[src]` warm
+cover, `#home` parked). Four executed probes:
+- **A** — HEAD `browse→home`: `buildConstruction` → the outgoing mover element.
+- **B** — the app-ghost path for a browse source, driven via the REAL HEAD `browse→overlay`
+  (outgoing `app-ghost`, the same value the plan assigns `browse→home`).
+- **C** — the plan's `browse→home` end-state: apply the home-host un-park exactly as the
+  plan models it (`#home` un-park + `#browse.classList.add('hidden')`), then inspect.
+- **D** — source scan for every `.browsepage` `.parked` SET site.
+
+## 4. Observed result (executed 2026-07-28)
+
+```
+A. outgoing.element === real #browse : true      | ownership: borrowed-real | #browse hidden? false
+   → TODAY covers warm because #browse is a live transformed mover (NOT .browsepage.parked)
+B. outgoing.ownership: owned-pane | is .nav-ghost: true | === real #browse: false
+   → app-ghost outgoing ⇒ the real #browse is NOT a mover
+C. #browse display:none (.hidden): true | any .browsepage parked (painted): false
+   → display:none subtree, NO painted park
+D. browsepage .parked SET sites: 294 (all inside showPage) ; browse.js:144/159 say
+   showPage never runs / #browse never hidden on browse→home
+```
+
+Every prediction of the fracture stands; the promise's prediction (`.browsepage.parked`
+painted on this path) is dead. `.browsepage.parked` is never set on `browse→home` (only
+`showPage()` sets it, and it is not called), AND the home-host un-park display:none's the
+`#browse` container. Nothing keeps `#browse`'s covers warm.
+
+## 5. What it falsifies, and blast radius
+
+Falsified: §3's abort paragraph ("`#browse`'s page node is PARKED — STILL PAINTED
+(`.browsepage.parked`)") and §11 R4 ("restores `#browse` without re-decoding covers"). The
+mechanism the plan names does not engage on this path, and the plan's two stated
+mechanisms CONFLICT: "`#browse` leaves document flow (its ghost covers it)" (a display:none
+per the home-host model) versus "`#browse`'s page node PARKED — still PAINTED" (needs
+`showPage`, not called; and a painted park cannot survive a display:none'd container).
+
+Blast radius:
+- **A regression on the PRIMARY on-camera path.** TODAY `browse→home` abort is cover-clean
+  precisely because `#browse` is a transformed real mover (never display:none'd). The
+  outgoing `real-source`→`app-ghost` flip removes that, and nothing replaces it → the
+  abort re-decodes every `#browse` cover on the return: the exact "cover images flash on
+  each aborted swipe return" the `.178/.179/.198` saga fought (browse.js:286 documents iOS
+  dropping decoded bitmaps of a display:none subtree). It is now reintroduced on
+  `browse→home`, the plan's own headline path.
+- **No net.** Unlike R1(a)/R1(d), the plan does not device-gate this abort — it asserts
+  cleanliness. A builder following §3 believes `.browsepage.parked` handles it; it does
+  not. The regression ships.
+- **Honest caveat (why this is still a KILL, not an R1(d)-class concession):** the *visible*
+  cover-drop is a device/paint behavior jsdom cannot render. But the plan's claim is
+  STRUCTURAL and mechanistic ("PARKED — still PAINTED via `.browsepage.parked`"), and that
+  structure is executably FALSE here — the class is never applied and the container is
+  hidden. The plan asserts a mechanism that provably does not run; that is a falsified plan
+  claim, not a device-owed unknown.
+
+Repair owner: Vitruvius. Sections: §3 (Abort paragraph) and §11 R4 — the abort
+cover-warmth for `browse→home` is not provided by `.browsepage.parked`. Two coherent
+repairs: **(a)** keep `browse→home` OUTGOING at `real-source` (revert that one enum flip),
+so `#browse` stays a warm transformed mover — this trades away 6f's "the real in-flow view
+is never a mover" goal for `browse→home` and must be reconciled with §4/§12; or **(b)**
+explicitly WIRE a painted park of the `#browse` page for `browse→home` (park the page
+painted UNDER the ghost — do NOT display:none the `#browse` container in the home-host
+un-park), and add a DEVICE gate (a new R1(e)) for `browse→home` abort cover-warmth, since
+the visible result is device-class. Also scrub §5's effect-table line "`#browse` leaves
+document flow (its ghost covers it)" against whichever repair lands.
+
+## 6. Reconciliation (read after the strike)
+
+The flaw entered in the REPAIR's reasoning, not the deriver's. My first KILL's lesser note
+#3 flagged that the abort decode-cleanliness "rests on the browse-page park mechanism, not
+the plan's stated reason." The repair took that pointer and ASSERTED the park mechanism as
+the guarantee — without tracing that `.browsepage.parked` is a `showPage()`-only effect and
+`browse→home` never calls `showPage()` (a fact `browse.js` states in two comment blocks it
+did not consult). The elevation converted a hedge into a false guarantee. Durable lesson
+candidate (route via Zelda): when a plan cites an EXISTING mechanism as a guarantee ("rests
+on X"), trace X to the exact line that produces its effect and confirm that line is on the
+path — a mechanism named is not a mechanism invoked.
+
+## 7. The re-strike probe (verbatim, re-runnable)
+
+Full text kept at `loki-6i-restrike.js` (session scratch). Core: build the browse-active
+real-index DOM; (A) `buildConstruction({v:'books'},{v:'home'})` → assert
+`movers.outgoing.element === #browse`, ownership `borrowed-real`, `#browse` not `.hidden`;
+(B) `buildConstruction({v:'books'},{v:'options'})` (real HEAD app-ghost path) → assert
+`movers.outgoing.ownership === 'owned-pane'`, element is a `.nav-ghost`, not `#browse`;
+(C) apply `#home` un-park + `#browse.classList.add('hidden')` → assert `#browse` `.hidden`
+and NO `.browsepage` carries `.parked`; (D) scan `browse.js` → the only `.parked` SET is
+line 294 inside `showPage`.
+
+## Re-strike handoff
+
+- **Source artifact:** this casebook; target `Claude/Plans/PLAN-swipe-noswap-home.md`
+  (Stage 6i, HEAD 41d0f15).
+- **Verdict / status:** KILL — executed counterexample, §3 Abort / §11 R4.
+- **Fracture:** the `browse→home` OUTGOING `real-source`→`app-ghost` flip removes the actual
+  cover-warm mechanism (`#browse` as a live transformed mover) for `browse→home`, and the
+  plan's cited replacement (`.browsepage.parked` painted-park) provably does not engage on
+  this path (`showPage` not called; home-host display:none's `#browse`) → the abort-return
+  cover flash returns on the primary on-camera path.
+- **Next owner:** Vitruvius — repair §3 / §11 R4 (and §5 effect line) by either reverting
+  the `browse→home` outgoing flip or wiring an explicit painted `#browse` park + a device
+  gate; then Charpy re-temper.
+- **Residual doubts named (held, un-prosecuted, one line each):**
+  - `overlay→home` flips pane-OWNING→pane-LESS under the overturn (executed: the mover map
+    yields no `owned-pane`), so `begin()`'s settle-phase supersession gate (app.js:383)
+    newly ADMITS it — §7's "No new supersession interleaving is added" is imprecise; harmless
+    only because reachability constrains `overlay→home` to options-over-home, where the
+    non-re-parked `#home` is the correct additive-base state.
+  - N1 "benign abort `scroll0` restore" HELD: the abort/supersession paths pass
+    `resetScroll:false` (verified in nav.js applyScreen:117/127 + app.js:1255/416), so the
+    home-entry reset does not fire and `#home.scrollTop` persists — benign as claimed.
+  - The L5 content-translate refix HELD at the model level (GHOSTSCROLL source-branch is a
+    real, mutation-reddenable cell); the on-screen fidelity is honestly device-owed (R1(d)).
+- **Records updated:** this casebook appended + committed; no other record touched.
+
+VERDICT: KILL
