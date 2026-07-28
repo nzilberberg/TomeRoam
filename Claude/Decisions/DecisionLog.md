@@ -1026,3 +1026,39 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   the commit books→home flash (the home-SNAPSHOT pane teardown — still flashes WITH the `.256` probe, so NOT
   the un-park demote; its own controlled experiment owed); the incoming-`#browse` headline flash
   (browse→browse, home→browse — T8-forked reveal-centralization).
+
+- Stage 6h (gate the commit→home reveal cover-drop on a real scroll-settle signal — the DEVICE-PENDING fix
+  for the commit books→home flash, flash A) IMPLEMENTED and shipped — 2026-07-28. NEW POLICY (EC §4.19,
+  async-gate on the reveal cover-drop): `holdGhostUntilPaintable` (js/app.js) gains a third async gate
+  `settled` in its drop predicate (`decoded && painted && settled`); on a commit→home reveal with a LARGE
+  outgoing scroll clamp (`cur.scroll0 > SETTLE_SCROLL_MIN`, `SETTLE_SCROLL_MIN = 0.5·window.innerHeight`)
+  `settled` starts false and is flipped by a real `window` `scrollend` (primary, principled) or a bounded
+  `SETTLE_MS = 100ms` backstop; the pre-existing 600ms DIRECT `drop('timeout')` remains the never-strand
+  guarantee, and the two new session-owned handles (`cur.revealScrollEnd` listener-remover,
+  `cur.revealSettleTimer`) are retired at the same single `drop()`. Home-scoped via a `{ scrollSettle: … }`
+  flag at the ONE commit→home call site (app.js:1175); the abort→browse call passes no opts, so `settled`
+  defaults true and its reveal is byte-unchanged. The gate is CONDITIONAL on the outgoing clamp (Loki
+  regression fix): a small/top reveal (`cur.scroll0 ≤ SETTLE_SCROLL_MIN`) keeps the pre-6h ~40ms fast path
+  with no listener/timer. CAUSE (Linnaeus `Claude/Linnaeus/PROBE-scroll-clamp-reveal.md` + the device repro):
+  flash A is an iOS compositor scroll-collapse snap — `applyScreen(home)` collapses tall `#browse` → short
+  `#home` and clamps scroll under the cover while the compositor is still scroll-snapping when the
+  main-thread double-`rAF` gate drops the cover; the double-`rAF` is structurally blind to compositor work.
+  Confirmed scroll-DEPENDENT on device (flashes only scrolled down, clean from the top), which RULES OUT the
+  earlier snapshot-content-fidelity suspect. `scrollend` chosen over a scrollY-stability poll (the main
+  thread reads scroll settled — `preDrop=1/900` — immediately, so a poll would be a no-op dressed as a gate).
+  CLASSIFICATION is CONDITIONAL and stated honestly: principled IF `scrollend` fires on the instant
+  programmatic scroll, else a bounded heuristic hold — a `via=`/`settle=` drop-log stamp makes which-path-fired
+  device-observable (`via=scrollend` = the principled primary fired; `via=settle` = the backstop released it,
+  `scrollend` never came; `via=timeout` = the never-paints strand path). EFFICACY is DEVICE-ONLY (the user's
+  scroll-down repro): the CI guarantee is the MECHANISM + never-strand + bounded `window`-listener set only —
+  NOT that the flash is gone; the stage is NOT "confirmed fixed" until the device repro is clean AND the log
+  shows the intended `via`. The three Home flashes remain DISTINCT ROOTS: A = this scroll-clamp compositor
+  snap (device-pending fix); B abort home→books = the `#home` un-park layer demote (mitigated by Stage 6g's
+  permanent `#home` compositing layer, device-owed); C abort books→books headline = the incoming
+  real-`#browse` transform (T8-forked, deferred). DEFERRED tuning levers, named not built: `SETTLE_MS`-down
+  if `via=settle` dominates and the hold is perceptible; a post-`scrollend` N-frame hold if `scrollend`
+  fires before the compositor re-tile finishes (§3 Risk 2). No known-red; NO PolicyLedger entry (the suite is
+  GREEN on the shipped form). Gates: Charpy FORGE, Loki HELD_STONE (1022 interleavings — the lifecycle
+  promise holds and TRANSFERS to the built code, Poirot-verified the three structural properties, so no
+  re-strike), Curie RED, Brunel BUILD_GREEN, Poirot SHIP, Mendeleev ADEQUATE; completion gate COMPLETE.
+  Ratified plan `Claude/Plans/PLAN-swipe-stage6h.md`; build target `11fc190`.

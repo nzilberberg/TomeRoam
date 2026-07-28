@@ -289,6 +289,38 @@ gap that let #79 reach the audit). **DEFERRED (distinct causes):** commit books�
 (its own controlled experiment); incoming-#browse headline (browse→browse, home→browse — T8-forked reveal centralization).
 **OWED device pass:** confirm the shipped translateZ(0) keeps the abort flash gone + navbar/text clean.
 
+**⚠️ 6g CORRECTED ON DEVICE (2026-07-28) — translateZ REVERTED to will-change (`.258`).** The shipped `.257` translateZ(0)
+FLASHED on device (constant) where the `.256` will-change was clean → the "spec-identical, ship the non-droppable form"
+argument was FALSIFIED on real iOS (memory `device-only-fix-ship-tested-form`). git-reverted the 6g code to the `.256`
+will-change form (`.258`, HEAD cc1908e; removed the translateZ PROMO test/mutants). Then the user's sharper read: `will-change`
+only makes flash **B (abort home→books)** RARE, not gone — a rarity false-positive; the bug was always there. B stays
+`.258`-mitigated (rare), NOT fixed.
+
+**⭐⭐⭐ SCROLL-CLUE BREAKTHROUGH + Stage 6h SCHEME-COMPLETE (2026-07-28) — build target `11fc190`, build bump on push.**
+The user's decisive device clue: **commit books→home flashes ONLY when the list is scrolled DOWN; at the top it's clean** —
+a RELIABLE on-command repro (the oracle the saga lacked; matches ENV TRAP #4). Linnaeus grounded flash **A (commit books→home)**
+as an iOS COMPOSITOR SCROLL-SNAP, NOT a layer demote: `applyScreen(home)` collapses the document (tall #browse 14676→short
+#home 900) + clamps scroll (~11481→1) under the cover, and the main-thread double-`rAF` cover-drop fires while the compositor
+is still scroll-snapping → the re-raster shows. (This RETIRES the earlier "snapshot-teardown" guess; scroll-dependence ruled
+out content-fidelity too.) **FIX (6h): `holdGhostUntilPaintable` gains a `settled` gate — the commit→home cover waits for a
+`window` `scrollend` (primary) or a `SETTLE_MS`=100ms backstop before dropping, then the existing 600ms DIRECT net is the
+never-strand backstop. CONDITIONAL on `cur.scroll0 > SETTLE_SCROLL_MIN` (0.5·innerHeight) — the common NOT-scrolled reveal
+keeps its ~40ms fast path (Loki-flagged regression fix); user corrected that scrolled-down is the COMMON case, so SETTLE_MS is
+MINIMAL (~100ms band, NOT 250ms).** A `via=`/`settle=` FLASH-log stamp records which path fired. abort→browse byte-unchanged.
+Chain: Charpy r1 TEMPER (vacuous STRAND/OWN cells + scrollend-existence honesty)→r2 FORGE→r3 FORGE (after Loki-regression
+conditional + minimal SETTLE_MS) → **Loki HELD_STONE** (1022 exhaustive interleavings — never-strand/exactly-once/no-leak;
+Poirot verified the 3 structural properties transfer to the built code) → Curie red-first (7 cells + the `h.setScrollY` harness
+affordance) → **Brunel BUILD_GREEN** (SETTLE_MS=100 avoids the 60/340/500/600 collisions; sweep 79-85 all caught) → **Poirot
+SHIP** → **Mendeleev ADEQUATE** (0 bare cells; superset-mutant concern cleared). Completion gate 6/6. ⭐ HONESTY: CI verifies
+only the MECHANISM (7 cells); the FLASH is DEVICE-only. **NOT "confirmed fixed" until the user's scroll-down repro is clean AND
+the `via=` log shows the intended path** — "principled IF scrollend fires (via=scrollend); else a bounded heuristic SETTLE_MS
+hold (via=settle → tune SETTLE_MS toward the snap floor)." **THREE DISTINCT ROOTS:** A commit→home = scroll-snap (this, device-
+pending); B abort home→books = #home un-park demote (`.258`-mitigated, rare); C abort books→books = incoming #browse transform
+(T8-forked headline, deferred). **DEFERRED tuning levers:** SETTLE_MS-down (if via=settle + perceptible); post-scrollend N-frame
+hold (if scrollend fires before the re-tile). ⚠️ PROCESS this session: two premature "confirmed fixed" claims + a "bank it and
+stop" recommendation — all wrong (memories `device-only-fix-ship-tested-form`, `no-unsolicited-stopping-offers`); the win came
+from the user's reproducible clue + Linnaeus grounding, not my theories.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired

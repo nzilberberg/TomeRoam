@@ -20,7 +20,11 @@ in-flight drag. After the stack mutates at commit, the stack wins (see 13).
 **4. State machine / lifecycle phases.** ARMED (edge grabbed, not yet past the lock) →
 DRAGGING (`live`, panes built) → SETTLING (released, animating) → FINALIZING (applyScreen +
 stack mutation) → REVEALING (held pane awaiting paint) → done. Gesture-ending inputs route by
-STATE, not by input (I19).
+STATE, not by input (I19). **Stage 6h (2026-07-28):** on a commit→home REVEALING with a
+large outgoing scroll clamp, the held-pane cover-drop gains an OPTIONAL third async gate and
+waits for a scroll-settle signal before REVEALING→done, so the drop is deferred past the
+compositor's under-cover scroll-collapse snap (§7/§10/§18). Every other reveal (abort→browse,
+small/top commit→home) is unchanged.
 
 **5. Identities and guarantees.** `d.id = ++sessionSeq` — a per-gesture monotonic id, unique
 for the process lifetime, used to detect supersession. Not persisted; not cross-device. A
@@ -51,7 +55,17 @@ The layer's owner is the stylesheet (not app code), its endpoint is `#home`'s li
 the parked↔un-parked cycle), so removing `.parked` at a reveal cannot demote it. A real `translateZ(0)` is
 chosen over the droppable `will-change` hint so the compositor cannot reclaim it under memory pressure. This
 is the ONE scoped exception to the "no promotion on the real in-flow views" invariant (§18); `#browse` stays
-un-promoted. js/app.js is comment-only.
+un-promoted. js/app.js is comment-only. **Stage 6h (commit→home scroll-settle gate, 2026-07-28,
+build target 11fc190):** the commit→home held reveal acquires TWO more session-owned resources,
+but ONLY on a large outgoing scroll clamp (`cur.scroll0 > SETTLE_SCROLL_MIN`, where
+`SETTLE_SCROLL_MIN = 0.5·window.innerHeight`): a `window` `scrollend` listener (its remover held on
+`cur.revealScrollEnd`; the `window` object is BORROWED, the listener registration is the owned
+resource layered on it — EC §4.4) and a bounded settle-timeout `cur.revealSettleTimer`
+(`SETTLE_MS = 100ms`). Both are created inside `holdGhostUntilPaintable` (js/app.js) only when its
+new `opts.scrollSettle` argument is set, and retired in `drop()` alongside the existing
+`revealFrames`/`revealTimer`. The abort→browse reveal passes no `opts`, so it acquires neither and
+is byte-unchanged; the small/top commit→home passes `scrollSettle:false`, so it too takes the
+pre-6h path.
 
 **8. Resource owner.** The gesture session (`d`/`cur`). Stage 3 stamped the session id;
 resource-handle ownership (settle rAF stored on the session, cancelled in finalize) landed at
@@ -94,7 +108,14 @@ global" anti-pattern) no longer duplicates the removal on that branch. The ORPHA
 UNCHANGED — the full `resetSwipeStyles` sweep still disposes a leftover ghost with no owning session (§14).
 Behaviour-preserving EXTRACTION (byte-identical parity — the owner-driven removal set equals the set the old
 sweep removed for the owned case), no known-red. F(release) (the paint-gated `pane.release()` half, the flash
-core) and the SETTLING/REVEALING pane-owning supersession (B) remain deferred — see 23.
+core) and the SETTLING/REVEALING pane-owning supersession (B) remain deferred — see 23. **Stage 6h
+(2026-07-28):** the two commit→home settle-gate handles (`cur.revealScrollEnd`,
+`cur.revealSettleTimer`) follow the SAME single-endpoint discipline as the 6b reveal handles —
+retired exactly once in the `dropped`-guarded `drop()`, never on a parallel supersession path.
+`drop()`'s `removeEventListener` is what keeps the `window` `scrollend`-listener set BOUNDED across
+gestures; omitting it does NOT mis-drop (a leaked listener reaching a finished session hits a
+`dropped`-guarded / `cur !== session` no-op), but accumulates listeners on `window` without bound —
+so the cell OWN spies the removal call directly rather than asserting "no second drop".
 
 **9. Ownership endpoint.** `sessionDone(cur)` / `endOwnership()`. ARMED end: after listeners
 released. Vertical abandon: after listeners + resources released. Commit/abort without a pane:
@@ -103,12 +124,23 @@ mean live ownership — do not retain a completed session for logging (§4.5).
 
 **10. Asynchronous operations.** The settle rAF; the settle/reveal timers; the transitionend
 listener; the paint-gated pane release (I10). All can fire after the gesture that scheduled
-them was superseded or finalized.
+them was superseded or finalized. **Stage 6h (2026-07-28):** the commit→home cover-drop composes
+FIVE async producers over one `dropped`-guarded consumer — the decode microtask, the double-`rAF`,
+the new `window` `scrollend`, the new `SETTLE_MS` settle-timeout, and the pre-existing 600ms net.
+The gate predicate is `decoded && painted && settled`, and `settled` starts `false` only on a
+large-clamp commit→home. The 600ms `cur.revealTimer` still calls `drop('timeout')` DIRECTLY
+(bypassing the gate), so the cover can never strand even if `scrollend` never fires and the
+settle-timeout is defeated — the never-strand backstop.
 
 **11. Possible stale completions.** A settle rAF firing after finalize (fixed `.226`: cancel
 on session). A transitionend or timeout firing after the other already finalized (must
 finalize exactly once). A superseded session's listener firing on a detached start target
 (the harness reproduces detached-target dispatch deliberately — do NOT re-target to document).
+**Stage 6h (2026-07-28):** a `scrollend` or settle-timeout firing after `drop()` reaches a removed
+listener / a `dropped`-guarded no-op. Under supersession the superseded session's `scrollend`
+listener stays on `window` until that session's own `drop()` fires (at latest its 600ms net) — a
+BOUNDED transient double-listener (at most one per concurrently-pending reveal), NOT the unbounded
+accumulation a missing removal would cause.
 
 **12. Normal completion behavior.** Commit: mutate the stack, applyScreen the destination,
 release panes after the paint barrier. Abort: restore the source; browse→browse re-renders the
@@ -158,7 +190,15 @@ oracle, `test/home-layer-invariant.test.js` — it reads the TEXT of `css/app.cs
 stylesheet transform) and asserts the base `#home` rule carries a persistent layer-promoting transform and
 that no `{#home, #home.parked}` cascade resolution lands `#home` on `none` (cell PROMO). It is a source-text
 gate (in `SOURCE_TEXT_GATES`, `tools/mutation-sweep.mjs`), NOT a runtime-compositing proof — the flash itself
-is device-only.
+is device-only. **Stage 6h (2026-07-28):** the commit→home scroll-settle gate MECHANISM is
+harness-observable — `test/swipe-stage6h.test.js` drives the real commit→home and abort→browse held
+reveals under `boot({fakeTimers:true, deferRaf:true})`, delivers a synthetic `scrollend` via
+`h.window.dispatchEvent(new h.window.Event('scrollend'))`, and reads the cover pane's DOM presence
+plus the `h.clock`/`h.raf` handles across seven cells (GATE/BACKSTOP/STRAND/ONCE/SCOPE/OWN/FASTPATH).
+A new harness scroll affordance sets a pre-gesture `window.scrollY` so `cur.scroll0` can exceed
+`SETTLE_SCROLL_MIN` (the harness otherwise pins it at 0). The commit books→home FLASH ITSELF is NOT
+CI-observable — it is off-main-thread compositor work — and is verified only by the user's device
+scroll-down repro plus the drop `via=`/`settle=` log stamp.
 
 **18. Invariants.** classifyTransition emits ONLY current-slice fields `{fromKind,toKind,
 decorations}` (no dead §3.3 host fields until a consumer lands — §4.15); its output, the
@@ -187,7 +227,16 @@ navigation animation — it composites `#home` throughout the slide and reverts 
 `animationend` (nav.js), so it is not a reveal demote. This scopes an EXPLICIT exception into the "no
 promotion on the real in-flow views" invariant for `#home` ONLY (NEW POLICY, EC §4.19); `#browse` stays
 governed by the un-promoted invariant. The guarantee is STRUCTURAL (source-text, §17); the flash is
-device-only (§22).
+device-only (§22). **Stage 6h (2026-07-28)** adds the commit→home scroll-settle invariant: on a
+large outgoing clamp (`cur.scroll0 > SETTLE_SCROLL_MIN`) the held cover is removed EXACTLY ONCE and
+NEVER before a scroll-settle signal (a `window` `scrollend`, the bounded `SETTLE_MS` timeout, or the
+600ms direct net) has had its chance to fire after the under-cover `scrollTo(0,1)` collapse; the
+cover ALWAYS eventually drops (never-strand via the 600ms DIRECT drop); every session-owned reveal
+handle is retired at that one drop; and the abort→browse reveal is byte-unchanged (its `opts` absent
+→ `settled` defaults `true` → gate reduces to `decoded && painted`). Two bounds hold `SETTLE_MS`:
+`< 600` (fires before the never-strand net) and `≥ the snap floor` (or it releases mid-snap and
+still flashes) — both device-tuned. This is NEW POLICY (EC §4.19, an async-gate on the reveal
+cover-drop); the guarantee is the MECHANISM — the flash going clean is device-only (§22).
 
 **19. Mutation cases.** Registered in `tools/mutate.mjs` (swipe4 F1/F3/F4/F5/F6/F7/no-dead-
 fields/F-i/F-ii/§15/§4.11; stage-6d FP/AB — force `abortRender` to `'none'`; RC — drop the
@@ -241,7 +290,20 @@ books→home flash is the home-SNAPSHOT pane teardown (a DIFFERENT cause — it 
 `#home` promotion probe live, so it is not the un-park demote; its own controlled experiment owed), and the
 incoming-`#browse` headline flash (browse→browse, home→browse) is the T8-forked incoming-transform work.
 Neither is fixed by 6g. The eliminated demote is CI-proven only as the STRUCTURAL invariant (§17/§18); that
-it WAS the abort flash rests on the device A/B, not the suite.
+it WAS the abort flash rests on the device A/B, not the suite. **Stage 6h (2026-07-28):** the commit
+books→home flash (flash A) is now GROUNDED (Linnaeus, `Claude/Linnaeus/PROBE-scroll-clamp-reveal.md`)
+as an iOS COMPOSITOR scroll-collapse snap: `applyScreen(home)` collapses the document (tall `#browse`
+→ short `#home`) and clamps scroll under the cover, and the compositor is still scroll-snapping when
+the main-thread double-`rAF` paint gate drops the cover. The device scroll-dependence oracle (flashes
+only when the list is scrolled DOWN, clean from the top) confirms this and RULES OUT the earlier
+snapshot-content-fidelity suspect (a clone/real mismatch would flash at any scroll position). This
+SUPERSEDES the 6g note above that described the same flash as the 'home-SNAPSHOT pane teardown'.
+Stage 6h ships a DEVICE-PENDING mechanism fix — the conditional scroll-settle cover-gate
+(§7/§10/§18) — NOT a confirmed flash fix: efficacy waits on the device repro being clean AND the
+`via=`/`settle=` log showing the intended path. The THREE Home flashes stay DISTINCT ROOTS: A commit
+books→home = this scroll-clamp compositor snap (device-pending fix); B abort home→books = the `#home`
+un-park layer demote (mitigated by Stage 6g's permanent `#home` compositing layer, device-owed); C
+abort books→books headline = the incoming real-`#browse` transform (T8-forked, deferred).
 
 **23. Conditions requiring revision.** Stage 5 (move the pane builders into swipe.js — done); stage 6
 finalization half: the `abortRender` field is DONE (Stage 6d — `finalizationPlanFor(classification)
@@ -284,3 +346,12 @@ droppable-hint reclaim path). The source-text invariant is verified by `test/hom
 (cell PROMO), and 6g added the GENERAL source-text-mutation verification mechanism to `tools/mutation-sweep.mjs`
 (`caughtBy` + `gateTestsFor()`) — see §19. DEVICE-owed: the shipped `translateZ(0)` form's navbar-safety and
 active-home text quality (plan §9b). `#browse` remains un-promoted; its INCOMING/headline flash is still open.
+**Stage 6h (2026-07-28)** conditions that REVISE the commit→home scroll-settle gate: whether iOS
+emits `scrollend` on an INSTANT programmatic `scrollTo(0,1)` (if it does not, the gate degrades to
+the `SETTLE_MS` heuristic hold — read off the device `via=`/`settle=` log); whether `scrollend`
+fires late enough to cover the compositor re-tile (if not, the deferred lever is a post-`scrollend`
+N-frame hold, honestly a heuristic); and tuning `SETTLE_MS` DOWN toward the snap floor if `via=settle`
+dominates and the ~100ms hold is perceptible on the common scrolled-back-to-Home path. `SETTLE_SCROLL_MIN
+= 0.5·window.innerHeight` is a LOOSE device-tuned threshold captured once at closure definition — it can
+go STALE after a viewport rotation (Poirot watch); acceptable for a fuzzy engagement boundary whose only
+hard requirement is that `cur.scroll0 ≈ 0` takes the fast path. Details: `Claude/Plans/PLAN-swipe-stage6h.md`.
