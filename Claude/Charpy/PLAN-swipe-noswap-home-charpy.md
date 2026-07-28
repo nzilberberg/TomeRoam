@@ -275,6 +275,10 @@ the `browse→home` outgoing mutation to the SNAPSHOTGONE cell.
   fidelity fix. Closed only when the ghost clone's home is an ACTUAL scroll container (or the offset is applied
   to the home content), so `#home.scrollTop` reproduction is not a no-op after `ghostApp` strips ids; plus a
   DEVICE-owed fidelity check (the zero-jump is a paint the jsdom GHOSTSCROLL cell cannot observe). See F10.
+- **F11** (Loki KILL #2 repair residual) — no runtime surface, but an internal ownership contradiction: two
+  spots (§6 FAILURE line 152, §10 Emergency-disposal dimension line 201) still describe disposing an owned
+  outgoing ghost on the `→home` failure path, which option (a) removed. Verified against §6 RELEASE (line 150)
+  and §12 paneKindOf (line 249): `→home` has NO owned pane. See F11.
 
 ## Prediction — where it breaks in execution if built as written
 
@@ -596,4 +600,95 @@ Next: Loki re-strike (fresh); then Curie builds the six-cell suite from §10 (Po
 `policy-ledger-gate` passes) and Brunel builds. The four device gates R1(a/b/c/d) remain device-owed downstream
 as the plan states.
 
-VERDICT: FORGE
+*(FORGE above was for HEAD `3d2b7b3`. Loki KILL #2 then found the `browse→home` outgoing app-ghost flip
+removed the live never-hidden `#browse` that keeps covers warm; Vitruvius repaired it by reverting the flip to
+`real-source` — option (a) — at HEAD `940f368`. The repair re-verify below SUPERSEDES the FORGE.)*
+
+---
+
+## Loki KILL #2 repair re-verify — tempered plan HEAD `940f368` (2026-07-28)
+
+Scope: the KILL #2 repair (revert the `browse→home` outgoing flip to `real-source`) + §7 precision. F1–F10, N1,
+L5, and the seam sweep are not re-opened unless the repair disturbed them (it did not). **Verdict: TEMPER — one
+Structural finding (F11), an ownership contradiction in the `→home` emergency-disposal / failure-recovery
+prose.** Everything the repair set out to fix is confirmed sound; the residual is two unswept references to the
+removed owned outgoing pane.
+
+### The crux — is HEAD's `browse→home` outgoing ALREADY `real-source`? (CONFIRMED — "no new risk" holds)
+
+I checked HEAD directly rather than trusting the claim. `js/swipe.js:140-141`:
+`const outgoing = c.fromKind === 'overlay' ? 'real-source' : (c.toKind === 'home' ? 'real-source' : 'app-ghost')`.
+For `browse→home` (`fromKind='browse'`, `toKind='home'`), `c.toKind === 'home'` is TRUE → **outgoing =
+`real-source` at HEAD.** So reverting the earlier `real-source`→`app-ghost` flip restores HEAD behavior on the
+outgoing side: the `#browse` abort transform-demote is UNCHANGED from today (not newly introduced), and
+`browse→home` abort is not in the subsystem A/B/C flash list. The "unchanged-from-HEAD → no new risk" claim is
+**TRUE.** The repair removes a risk the prior plan version had ADDED (an owned outgoing ghost), returning to the
+HEAD baseline plus the incoming-only `→home` change.
+
+### Cover-warmth grounding — CONFIRMED corrected
+
+Verified against source: `browse.js:142-159` explicitly documents the live-never-hidden mechanism — "a page
+that is never hidden during the gesture (swiping back to Home moves the real #browse by transform, so showPage
+never runs) stays active." `browse.js:294`'s `.parked` toggle is inside the showPage/hold-teardown page-cache
+loop that `browse→home` never engages. §3 (line 98) and §11 R4 (line 231) now ground cover-warmth on the live
+never-`display:none`'d `#browse` mover and correctly demote the earlier `.browsepage.parked` citation to a
+`showPage()`-only effect the transition never hits. Accurate.
+
+### R1(e), the shrink, and §7 precision — CONFIRMED
+
+- **R1(e) (line 232)** is conceded as a device gate (cover-warmth + no `#browse` demote-flash), NOT asserted
+  clean — correct per the F10.2 concede-don't-assert discipline; grounded as behavior-preserving vs HEAD.
+- **The change shrank correctly:** §4 contract block down to 2 rows (`→home` INCOMING only, line 117-121); the
+  F8 outgoing mutation retired (§12 line 246); SNAPSHOTGONE (§10 line 215) rewritten to assert the outgoing is
+  the REAL borrowed-real `#browse` (not a ghost) with a single incoming mutation; `paneKindOf` mislabel moot —
+  `→home` returns `'none'` (§12 line 249); 6f's `browse→home` outgoing goal deferred to flash C with the
+  `.alphaindex` blocker (§12 line 252).
+- **§7 precision (line 157)** replaces "no new supersession interleaving" with the precise statement — both
+  `→home` transitions flip pane-owning→pane-LESS, `begin()`'s 6c settle gate newly admits them, harmless via
+  the existing pane-less recovery + the brief non-held finalize, `overlay→home` pinned to options-over-home.
+  Accurate.
+
+### F11 — Structural (defect) — the `→home` failure/emergency-disposal prose still disposes an "outgoing ghost via the owned-pane path," contradicting the option-(a) borrowed-real outgoing (EC §4.4)
+
+The outgoing-flip revert was swept through §2/§3/§4/§5/§7/§11/§12 but not through the recovery bullets. Two
+spots still describe an owned outgoing pane on the `→home` path:
+
+1. **§6 FAILURE (line 152):** "If the fixed `#home` fails to un-park (a thrown `home-host` render), **the
+   outgoing ghost is disposed by the existing `disposeOwnedPanes(session,'superseded')` / orphan sweep**
+   (subsystem §14) and the source is restored."
+2. **§10 Emergency-disposal dimension (line 201):** "A thrown `home-host` render **disposes the outgoing ghost
+   via the existing owned-pane path** (subsystem §14); no new path."
+
+Both contradict §6 RELEASE (line 150: "the `→home` OUTGOING is BORROWED-REAL … NOT an owned pane … so `→home`
+has NO owned pane to `dropPanes`") and §12 paneKindOf (line 249: "`→home` has NO owned pane — both movers are
+borrowed-real"). `home-host` runs ONLY on `→home`, and under option (a) a `→home` transition has ZERO owned
+panes: incoming = borrowed-real `#home`, outgoing = borrowed-real `#browse` (or overlay). So on a `home-host`
+throw, `disposeOwnedPanes` finds nothing; the correct recovery is to CLEAR the borrowed-real transforms +
+re-park `#home` + RESTORE the borrowed-real source (`#browse`/overlay) — never DISPOSE it. Describing the
+outgoing (a borrowed-real `#browse`) as "disposed via the owned-pane path" is (a) a dangling reference to the
+reverted app-ghost flip, (b) an internal contradiction with line 150/249 about `→home` ownership, and (c) read
+literally, the exact EC §4.4 borrowed-vs-owned hazard — a broad owned-pane cleanup verb pointed at a borrowed
+real node that must be restored, not destroyed. Fix (two-spot, no design change): restate both so the `→home`
+failure/emergency path clears + restores the borrowed-real outgoing (phase-aware, EC §4.17), and
+`disposeOwnedPanes` is a no-op on `→home` (no owned pane), consistent with line 150/249. The recovery INVARIANT
+(source restored, phase-aware) is already stated in line 152, so the build is not endangered — but the
+ownership description must be corrected so a builder does not point an owned-pane disposal at the borrowed-real
+`#browse`.
+
+### Not disturbed by the repair
+
+F1–F10, N1, L5/GHOSTSCROLL (still the `home→browse` FROM-home ghost, untouched by the `browse→home` revert),
+the seam sweep, and the PolicyLedger entry are all intact. The repair touched §2/§3/§4/§5/§6/§7/§10/§11/§12 and
+regressed none of the held findings — F11 is the one place the sweep stopped short.
+
+## Verdict — re-verify: TEMPER (F11 only)
+
+The KILL #2 repair is substantively correct: reverting the outgoing flip to `real-source` is behavior-preserving
+vs HEAD (independently confirmed — HEAD is already `real-source`), it restores the live-never-hidden `#browse`
+cover-warmth (browse.js:142-159), it concedes R1(e) as device-owed rather than asserting it, and it shrinks the
+change (2-row contract, retired F8 mutation, moot paneKindOf, deferred 6f goal) coherently. The one residual is
+F11: two recovery-prose spots still dispose an owned outgoing pane that option (a) removed, contradicting §6
+RELEASE and risking the EC §4.4 borrowed-vs-owned hazard. On F11's two-spot correction (no design change), the
+plan is FORGE-ready and nothing else re-opens.
+
+VERDICT: TEMPER
