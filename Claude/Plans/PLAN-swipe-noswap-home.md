@@ -21,7 +21,7 @@ Status: **PLAN_READY (re-filed after Charpy TEMPER, findings F1–F8 folded in) 
 5. Observable-effect ownership — the retired home-snapshot + `→home` hold callees, re-assigned
 6. Lifecycle / ownership / resource — the home scroll-container, the mover ownership, the deleted hold resources
 7. Async / concurrency — the deleted `→home` scroll-settle gate; `abort→browse` byte-unchanged
-8. Navbar-seating rework — retire the runway (A1) with the bounded decoupled-spacer fallback (A2); sizing + device gate
+8. Navbar-seating rework — A2 (retain the tall-document runway) is PRIMARY; the former "viewport-anchored" A1 is dropped as contra-record; sizing + device gate
 9. Document-scroll consumer re-homing (Linnaeus D2 — the four live consumers)
 10. Coverage Model (Mendeleev catalog) + the coverage/mutation matrix
 11. Risk registry (the three device R1 gates + the rest)
@@ -41,7 +41,7 @@ Machine-readable declaration above; project adapter `tomeroam-js-dom`. Reason fo
 
 ## 1. Defining records and authority
 
-**Verdict: D1–D3 are DERIVED; the user recalibration SANCTIONS retiring the navbar-seating hack and NARROWS escalation to genuinely unbounded churn; the fixed-`#home` navbar risk is BOUNDED (A2 fallback), so it AGREES with PLAN_READY; plan-of-record §2.1 (constraint E) is authoritative and the design dissolves E by construction; two subordinate records are STALE (scrubbed on approval); no unresolved GAP blocks the build — the residuals are DEVICE gates (R1 a/b/c), not missing source facts.** Precedence (EC §2): (1) the corrected+recalibrated assignment; (2) plan-of-record §2.1/§2.4; (3) verified HEAD `.261` source; (4) Linnaeus D1–D3; (5) the subsystem contract.
+**Verdict: D1–D3 are DERIVED; the user recalibration SANCTIONS retiring the navbar-seating hack and NARROWS escalation to genuinely unbounded churn; the fixed-`#home` navbar risk is BOUNDED (A2 primary — retain the css:73 tall-document runway, the recorded iOS-26 seating fix), so it AGREES with PLAN_READY; plan-of-record §2.1 (constraint E) is authoritative and the design dissolves E by construction; two subordinate records are STALE (scrubbed on approval); no unresolved GAP blocks the build — the residuals are DEVICE gates (R1 a/b/c), not missing source facts.** Precedence (EC §2): (1) the corrected+recalibrated assignment; (2) plan-of-record §2.1/§2.4; (3) verified HEAD `.261` source; (4) Linnaeus D1–D3; (5) the subsystem contract.
 
 | Record | What it says | Authority | This plan | On approval |
 |---|---|---|---|---|
@@ -65,7 +65,7 @@ Behavioural ownership, not line numbers.
 - `#home`'s vertical scroll — from the shared document scroll to an own `overflow-y:auto` scroller sized to dynamic content (§3, §6).
 - The `→home` reveal choreography — from a home-SNAPSHOT cover un-parked-at-commit + held, to the REAL fixed `#home` slid at drag start and left (§3, §5).
 - The four Linnaeus-D2 document-scroll consumers on the home path — re-homed to `#home.scrollTop` (§9).
-- The navbar-seating basis — from the document-height runway to a viewport-anchored seating, with the A2 fallback (§8).
+- The navbar-seating basis — the home-scoped, redundant seating parts only (the `home-tall` toggle + home-entry `scrollTo`); the tall-document runway (css:73) that seats the fixed bars is RETAINED and remains the primary seating (§8, A2).
 
 **STAYS (do not re-touch):**
 - The frozen swipe model APIs and the three-layer oracle (only the `→home` construction VALUES + the two spec rows change — §4).
@@ -75,11 +75,11 @@ Behavioural ownership, not line numbers.
 
 **SPLIT across the seam:** the `→home` construction (incoming `home-snapshot`→real fixed `#home`; `browse→home` outgoing `real-source`→app-ghost).
 
-**DEFERRED (§12):** the `→browse`/`→overlay` "keep-painted / never-transform-the-real-view" extension (blocker: `#browse` fixed-strip ban); the A1 seating cleanup can ship in the same slice or a follow-on (§8); flash B (abort home→books) and flash C (browse→browse incoming transform, T8-forked) are untouched.
+**DEFERRED (§12):** the `→browse`/`→overlay` "keep-painted / never-transform-the-real-view" extension (blocker: `#browse` fixed-strip ban); flash B (abort home→books) and flash C (browse→browse incoming transform, T8-forked) are untouched. (No A1 seating cleanup is deferred — A1 is dropped as contra-record, §8.)
 
 ## 3. The design — fixed own-scroll `#home` slide-and-leave
 
-**One line:** active `#home` never leaves `position:fixed`. Parked `#home` is already `position:fixed; transform: translateX(-101vw)` (css:103-107). Active `#home` becomes `position:fixed` too — a viewport-anchored `overflow-y:auto` own-scroll box (sized to dynamic content, correction 1) inset between the fixed bars — and the transition into home slides the real fixed `#home` from its off-screen `translateX` to `translateX(0)` and LEAVES it.
+**One line:** active `#home` never leaves `position:fixed`. Parked `#home` is already `position:fixed; transform: translateX(-101vw)` (css:103-107). Active `#home` becomes `position:fixed` too — an `overflow-y:auto` own-scroll box (sized to dynamic content, correction 1) sitting INSIDE the retained tall-document runway that seats the fixed bars (§8, A2) — and the transition into home slides the real fixed `#home` from its off-screen `translateX` to `translateX(0)` and LEAVES it.
 
 **The flash has TWO competing underived hypotheses; the design provably removes ONE (F3).** Linnaeus carries two [UD] hypotheses for the camera-confirmed carousel raster-from-empty, NEITHER confirmed: **(i)** the `#browse`-leaving-flow document collapse REPOSITIONS the carousel scroll-boxes to a new viewport y and their layers re-raster (`PROBE-home-carousel` §5, marked [UD]); **(ii)** clearing `#home`'s parked `translateX(-101vw)` on its `will-change:transform` layer forces the descendant carousel scroll-layers to re-raster from empty (`PROBE-swap-necessity` §5/§6 item 1, marked [UD]). This design targets both surfaces but PROVABLY removes only (i):
 - **No home-snapshot.** Constraint E (two in-flow views cannot coexist, §2.1) DISSOLVES: a fixed `#home` is not an in-flow view sharing the document scroll, so it coexists with the in-flow `#browse` directly — exactly as parked `#home` already coexists with active `#browse` today.
@@ -155,7 +155,7 @@ document collapse and scroll clamp on →home | eliminated-by-fixed-home | — |
 ## 7. Async / concurrency — the deleted `→home` scroll-settle gate; `abort→browse` unchanged
 
 - **Temporal / ordering.** The `→home` cover-drop's temporal gate is REMOVED: `→home` no longer waits on `decoded && painted && settled`; it finalizes synchronously (mover transform cleared, ghost dropped off-screen, `applyScreen` reconciles). The ORDERING that stays: the outgoing app-ghost is built and `#browse` taken out-of-flow BEFORE the real `#home` is slid (buildConstruction builds outgoing before `renderDestination`, F7a) — asserted so `#home` is never a snapshot and the real `#home` is the incoming mover.
-- **Cancel / supersede / abort.** A superseding gesture during the (now brief, non-held) `→home` finalize is handled by the existing `begin()` narrowed-gate + `cur === session` identity guards (subsystem §8/§11) — unchanged. An ABORT of `browse→home` re-parks `#home` and restores `#browse` via the existing `abort→browse` reveal (phase-aware recovery, §6 FAILURE, R4). No new supersession interleaving is added; the `→home` path LOSES the 5-producer hold race entirely.
+- **Cancel / supersede / abort.** A superseding gesture during the (now brief, non-held) `→home` finalize is handled by the existing `begin()` narrowed-gate + `cur === session` identity guards (subsystem §8/§11) — unchanged. An ABORT of `browse→home` re-parks `#home` and restores `#browse` via the NO-HOLD `abortRender:'none'` finalize path (app.js:1238-1257 — `#browse`'s page node persists, nothing was rendered into it), NOT a hold branch (F7; phase-aware recovery, §6 FAILURE, R4). No new supersession interleaving is added; the `→home` path LOSES the 5-producer hold race entirely.
 - **Fail / error / reject.** No promise rejects and no listener throws on the `→home` path (the `scrollend` listener + settle-timeout that could is deleted). `abort→browse` keeps its decode microtask + double-`rAF` + 600ms net exactly as pre-6h.
 - **Concurrency / race / parallel.** Single-threaded event loop. The `abort→browse` held reveal is BYTE-UNCHANGED: it passes no `scrollSettle`, so with the `settled` gate removed it reduces to `decoded && painted`; no `→home` async surface remains to race (asserted by the SCOPE cell).
 
@@ -222,7 +222,7 @@ SCROLLBAR | the custom scroll indicator recognises the fixed own-scroll #home as
 - **R1(c) — nested vertical-`#home` / horizontal-carousel momentum coherence** (and, under A2, the phantom document double-scroll). Device-only. Source shows no code assumes the carousels' scroll parent is the document (Linnaeus D3). Mitigation for A2's double-scroll: `overscroll-behavior: contain` on `#home`.
 - **R2 — a missed D2 consumer regresses home scrolling/pull/indicator.** Mitigation: §9 re-homes all four Linnaeus-D2 live consumers; the PTR and SCROLLBAR cells guard two of them; L3 is the seating device gate; L4 is deleted for `→home`.
 - **R3 — the §2.1 overturn is NEW POLICY.** Mitigation: reconcile §2.1/§2.4 + subsystem + model; ledger the overturn dated (EC §4.19).
-- **R4 — aborted-swipe snap-back on the real view.** Aborted `browse→home` re-parks `#home` + restores `#browse` without re-decoding covers. Mitigation: reuse the `abort→browse` hold or keep `#browse` painted-off-flow; the ABORT cell asserts both sides (I7).
+- **R4 — aborted-swipe snap-back on the real view.** Aborted `browse→home` re-parks `#home` + restores `#browse` without re-decoding covers, via the NO-HOLD `abortRender:'none'` finalize path (app.js:1238-1257): `#browse`'s page node persists and nothing was rendered into it (`renderDestination` is `home-host`, not `browse-host`), so it restores with no re-decode — no hold branch needed (F7). The ABORT cell asserts both sides (I7).
 - **R5 — `overlay→home` band exposure** (inset overlay outgoing over a tall `#browse` base). Mitigation: the 6f enumerated-opaque-overlay precondition; device-confirm; `browse→home` (full-cover outgoing ghost) is the primary target and is unaffected.
 
 **Do NOT call the flash fixed without R1(a) clean on the repro AND R1(b) bars stable AND R1(c) scroll coherent — all device, all downstream of Charpy.**
@@ -263,8 +263,8 @@ SCROLLBAR | the custom scroll indicator recognises the fixed own-scroll #home as
 **Coverage note (F8):** `overlay→home` has NO integration cell — its construction values are covered by frozen spec row 59 + the descriptor-coverage gate (spec-level), which is acceptable for a construction-value change; the integration cells (SNAPSHOTGONE/ABORT) drive `browse→home` (the on-camera path). State this explicitly so the coverage claim is not read as integration-level for `overlay→home`.
 
 **Source artifact:** this plan (`Claude/Plans/PLAN-swipe-noswap-home.md`), Stage 6i.
-**Verdict / status:** PLAN_READY. Fixed own-scroll `#home` slide-and-leave eliminates the reflow the camera pins the flash to; the sanctioned navbar-seating rework is BOUNDED (A1 preferred, A2 stable-by-construction fallback); the residuals are the three device R1 gates, not missing source facts.
-**Decisions made:** the `→home` snapshot is forced by constraint E (commission premise corrected); the design dissolves E by making `#home` fixed own-scroll; the runway is retired (A1) with a bounded fallback (A2); the subtractive/preserved lists and the `→browse`/`→overlay` deferral (blocker: `#browse` fixed-strip ban) are recorded.
+**Verdict / status:** PLAN_READY. Fixed own-scroll `#home` slide-and-leave provably removes flash hypothesis (i) (the reflow-reposition); the surviving hypothesis (ii) (the parked→`translateX(0)` transform-clear) is the device gate R1(a) and the flash is not called fixed until it is clean. The navbar-seating rework is BOUNDED and A2 is PRIMARY (retain the css:73 tall-document runway — the recorded iOS-26 seating fix; `#home` fixed own-scroll inside it); the residuals are the three device R1 gates, not missing source facts.
+**Decisions made:** the `→home` snapshot is forced by constraint E (commission premise corrected); the design dissolves E by making `#home` fixed own-scroll; the tall-document runway (css:73) is RETAINED as the primary seating (A2 — the recorded iOS-26 fix), and ONLY the home-scoped, redundant parts (css:81 + the `home-tall` toggle nav.js:81 + the home-entry `scrollTo(0,1)` nav.js:127) are retired — the former viewport-anchored A1 is DROPPED as contra-record; the subtractive/preserved lists and the `→browse`/`→overlay` deferral (blocker: `#browse` fixed-strip ban) are recorded.
 **Open questions / who each waits on:** R1(a) carousel-blank, R1(b) bar stability, R1(c) nested-scroll — all DEVICE, downstream of Charpy + the build.
 **Next owner:** Charpy (the plan reviewer) to temper; then Brunel (the builder); then Curie (the test author) against the Coverage Model; the device gates are Loki/device downstream.
 **Required evidence / gates:** the five CI mechanism cells (SNAPSHOTGONE/SCOPE/ABORT/PTR/SCROLLBAR) green; the flash is not called fixed without R1(a)+R1(b)+R1(c) on device.
