@@ -268,6 +268,10 @@ read as integration-level for `overlay→home`.
 F4 and F8 are tightenings landing in the same revision; F4 is a headline-count alignment (no test), F8 adds
 the `browse→home` outgoing mutation to the SNAPSHOTGONE cell.
 
+- **F9** (re-verify residual) — no runtime surface: a within-document scrub of five stale pre-temper spots
+  (§2 line 68, §2 line 78, §7 line 158, §13 lines 266-267) so no section still asserts A1-preferred /
+  runway-retired / abort-via-hold. Verified by re-reading each spot against the corrected §8/§12/§3.
+
 ## Prediction — where it breaks in execution if built as written
 
 1. **The builder follows the §12 sizing list and retires `css:73`.** Home seating is device-checked under
@@ -304,5 +308,86 @@ the `browse→home` outgoing mutation to the SNAPSHOTGONE cell.
   mutation; the flash NOT called fixed without R1(a)+R1(b)+R1(c) on device; the §2.1 overturn entered in
   `Claude/Decisions/PolicyLedger.mjs` (policy-ledger-gate) with a stable ID + enforcing test.
 - **Records updated:** this casebook filed; board/decision-log update routed to Zelda on the dispatcher's side.
+
+---
+
+## Re-verify pass — tempered plan HEAD `2809df5` (2026-07-28)
+
+Vitruvius tempered the plan against F1–F8. I re-verified each resolution against the tempered plan AND
+against HEAD `.261` source (I did not re-open any HELD axis; the temper touched only the seating rework, the
+flash framing, coverage, and records). **The SUBSTANCE of all eight findings landed** in the authoritative
+spec sections. **One residual blocks FORGE: an incomplete within-document scrub (F9) — the same D5
+sweep-the-class failure my original review named** — leaving pre-temper text that contradicts the corrected
+sections. Verdict of the re-verify: **TEMPER (single mechanical residual, F9).** No design change is owed; a
+five-spot scrub then FORGE.
+
+### Per-finding re-verify result
+
+- **F1 — CONFIRMED.** `css:73` (base `.app` min-height) is retained everywhere load-bearing: §1 record row
+  (line 49), §8 ("css:73 STAYS"), §9 L3 (now cites css:81 only), §12 ("css:73 … is NOT retired (F1)"), and
+  the machine-readable `source_ranges` (css/app.css:81-81 + 103-118, css:73 correctly excluded). Home-scoped
+  retirement is limited to css:81 + `home-tall` toggle (nav.js:81) + home-entry `scrollTo` (nav.js:127).
+- **F2 — CONFIRMED IN SUBSTANCE; residual in the recap (see F9).** §8 drops the former "viewport-anchored, no
+  tall document" A1 as contra-record and makes A2 (retain the css:73 tall-document runway; `#home` fixed
+  own-scroll inside it) the PRIMARY seating; §1 row and §13-sequencing agree. BUT the coordinator's explicit
+  acceptance test ("no residual text treats A1 as preferred") is literally failed at §13 line 266 ("A1
+  preferred, A2 stable-by-construction fallback") and line 267 ("the runway is retired (A1)"), plus §2 lines
+  68/78. Folded into F9.
+- **F3 — CONFIRMED.** Two competing [UD] hypotheses stated in the title, the status headline (line 14), and §3
+  (lines 84-88); the design "provably removes only (i)"; hypothesis (ii) (the parked→`translateX(0)`
+  transform-clear) survives and IS R1(a) (line 220), with the wrapper-slide as the named in-scope mitigation;
+  "flash is NOT claimed fixed until R1(a) device-clean." No unqualified "eliminates the flash" survives in an
+  authoritative section (§13 line 266 scopes it to "eliminates the reflow", swept under F9 anyway).
+- **F4 — CONFIRMED.** Three `→home` enum-value changes counted in §1 row 53, the §4 `vitruvius-contract`
+  block, and §13 step 1.
+- **F5 — CONFIRMED.** `source_ranges` extended with css/app.css:81, js/nav.js:127, js/app.js:1210-1219,
+  js/app.js:775 (and css:73 correctly NOT added).
+- **F6 — CONFIRMED.** §11 R1(b) (line 221) extends the device observation to NP-over-home and
+  Options-over-home seating (nav.js:80), across scroll + rotation.
+- **F7 — CONFIRMED IN §3; residual sibling in §7 (see F9).** §3 Abort (line 98) is corrected to the no-hold
+  path (app.js:1238-1257, `abortRender:'none'`, explicitly NOT the rerender-hold branch). But §7 line 158
+  still reads "restores `#browse` via the existing `abort→browse` reveal" — the exact phrasing F7 flagged,
+  un-swept — and §11 R4 (line 225) still says "reuse the `abort→browse` hold." Folded into F9.
+- **F8 — CONFIRMED.** SNAPSHOTGONE (§10 row 211) now carries BOTH mutations (re-introduce `home-snapshot`
+  incoming; keep `browse→home` outgoing `real-source` → no app-ghost built) and asserts the outgoing is an
+  owned-pane app-ghost; §13 line 263 states `overlay→home` is spec-level-only covered (row 59 +
+  descriptor-coverage gate).
+- **PolicyLedger — CONFIRMED.** §12 (lines 243-257) specifies `PL-swipe-6i-home-fixed-ownscroll` with all
+  §1.C fields, `knownRed:false`, and the §2.1/§2.4 prose amendment; `staged_records` includes
+  `Claude/Decisions/PolicyLedger.mjs`. The `tests` names are placeholders Curie fills (they must exist for
+  `test/policy-ledger-gate.test.js` — correctly flagged as a build obligation).
+
+### F9 — Structural (defect) — Incomplete within-document scrub: pre-temper A1-preferred / runway-retired / abort-via-hold text survives, contradicting the corrected sections
+
+The F1/F2/F7 corrections landed in the authoritative sections (§8, §12, §3, §1, source_ranges) but were not
+swept through the secondary and recap surfaces (StandardsDocument §7 within-document scrub; Charpy D5
+sweep-the-class). Five stale spots now contradict the corrected plan:
+
+1. **§2 MOVES (line 68):** "The navbar-seating basis — from the document-height runway to a viewport-anchored
+   seating, with the A2 fallback (§8)." — Contradicts §8: A2 RETAINS the document-height runway (it is not
+   "viewport-anchored") and is PRIMARY, not a fallback. Restate as: seating stays on the retained css:73
+   tall-document runway; only the redundant home-scoped css:81/`home-tall`/`scrollTo` are retired.
+2. **§2 DEFERRED (line 78):** "the A1 seating cleanup can ship in the same slice or a follow-on (§8)." — A1 is
+   dropped (§8). Remove or restate.
+3. **§7 (line 158):** "An ABORT of `browse→home` … restores `#browse` via the existing `abort→browse` reveal"
+   — the exact phrasing F7 corrected in §3; sweep it to the no-hold `abortRender:'none'` path. (§11 R4 line
+   225 "reuse the `abort→browse` hold" is the same sibling — align it.)
+4. **§13 handoff (line 266):** "the sanctioned navbar-seating rework is BOUNDED (A1 preferred, A2
+   stable-by-construction fallback)" — literally treats A1 as preferred (the F2 acceptance test). Restate to
+   A2-primary, A1-dropped.
+5. **§13 handoff "Decisions made" (line 267):** "the runway is retired (A1) with a bounded fallback (A2)" —
+   a RECORDS surface stating the OPPOSITE of the actual decision (the runway/css:73 is RETAINED; A2 is
+   primary). Correct it: `#home` becomes fixed own-scroll INSIDE the retained css:73 runway; only the
+   home-scoped redundant seating parts are retired.
+
+Not fatal and not a design change: the build surface (§8/§12/§13-sequencing and the `source_ranges`, which
+correctly exclude css:73) is unambiguous, so a builder reading the spec builds correctly. But an internal
+contradiction in the plan's own "Decisions made" field and a literal "A1 preferred" in the handoff must be
+resolved per StandardsDocument §7 (a contradiction is resolved, never both-kept), and the coordinator set
+"no residual text treats A1 as preferred" as an explicit F2 acceptance criterion. Sweep the five spots; then
+FORGE.
+
+**Re-verify verdict: TEMPER — F9 only.** All other findings CONFIRMED resolved. On the F9 scrub landing (a
+five-spot edit, no design or spec change), this plan is FORGE-ready.
 
 VERDICT: TEMPER
