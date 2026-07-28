@@ -992,3 +992,37 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   takes the home-reveal HOLD path); the INCOMING real-`#browse` transform (browse→browse headline
   [T8-forked], home→browse, overlay→browse); workstream C (I10/I17 paint-gated reveal centralization, the
   flash core); and the borrowed-real OVERLAY transforms (out of the invariant's scope).
+
+- Stage 6g (`#home` permanent compositing layer — the reveal-side fix for the home→books ABORT flash)
+  IMPLEMENTED and shipped — 2026-07-27. `css/app.css` gains an unconditional stylesheet rule
+  `#home { transform: translateZ(0); }`, making `#home` a PERMANENT compositing layer so that removing
+  `.parked` at a swipe reveal can never demote it — the demote was the home→books ABORT flash (the `#home`
+  un-park dropped its layer → iOS re-raster). NEW POLICY (EC §4.19): this is a scoped exception to the
+  standing "no promotion on the real in-flow views" invariant, for `#home` ONLY; `#browse` stays
+  un-promoted (its incoming/headline transform flash deferred). `translateZ(0)` is chosen over
+  `will-change: transform` because a dropped hint would reintroduce the flash intermittently under memory
+  pressure (a real transform is not reclaimable); PERMANENT is chosen over reveal-scoped because releasing
+  the promotion while `#home` is the visible active view would itself be a demote of a visible view. The
+  guarantee is REVEAL-SCOPED and STRUCTURAL: no un-park/reveal transition leaves `#home` on `transform:
+  none` (the base rule holds across the `{#home, #home.parked}` cascade); a `nav-in` slide animation
+  (`navTo`/`goBack`) still resolves `#home` to `none` at its end frame, but that is an accounted-benign
+  NON-reveal path that composites during the slide and reverts to `translateZ(0)` at `animationend`. `js/app.js`
+  is COMMENT-ONLY (Loki's HELD_STONE precondition holds). The device A/B (build `.256`, controlled
+  single-variable) device-confirmed the fix for the `will-change` PROBE form; the shipped `translateZ(0)`
+  form is EXPECTED navbar-safe by the same containing-block/stacking argument but its own device
+  confirmation is still OWED (plan §9b) — the abort flash clean, no navbar pop, and active-home text
+  quality go on the standing shipped-unverified device pass, NOT a gate on this stage. No known-red; NO
+  PolicyLedger entry — the invariant is asserted GREEN by a new SOURCE-TEXT gate
+  (`test/home-layer-invariant.test.js`, reading `css/app.css`; jsdom cannot compute a stylesheet transform),
+  not held red. Also added: a GENERAL source-text-mutation verification mechanism in `tools/mutation-sweep.mjs`
+  — a `caughtBy` marker on a mutation plus a `gateTestsFor()` helper runs the named source-text gate DIRECTLY
+  against the mutated source and counts its reddening as the catch, closing the recurring §4.10 gap where a
+  source-text mutant filed in the behavioural sweep read false-UNCAUGHT → CI-red (any future source-text
+  mutant names its own gate the same way). Gates: Charpy FORGE, Loki HELD_STONE, Curie RED, Brunel
+  BUILD_GREEN + apply-fix, Poirot FINDINGS→SHIP (apply-review closes F1 Critical — the source-text sweep
+  mechanization — and F2 the navbar-comment honesty; `Claude/Poirot/POIROT-swipe-stage6g-apply.md`),
+  Mendeleev BARE_CELLS→ADEQUATE; campaign completion gate COMPLETE. Ratified plan
+  `Claude/Plans/PLAN-swipe-stage6g.md`; build target HEAD `ea49dc2`. STILL OPEN (deferred, distinct causes):
+  the commit books→home flash (the home-SNAPSHOT pane teardown — still flashes WITH the `.256` probe, so NOT
+  the un-park demote; its own controlled experiment owed); the incoming-`#browse` headline flash
+  (browse→browse, home→browse — T8-forked reveal-centralization).

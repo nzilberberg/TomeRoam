@@ -42,7 +42,16 @@ browse→nowplaying/home→nowplaying) the OUTGOING is now an owned-pane app-gho
 untransformed, never removed — and the new outgoing ghost is disposed once per exit through the
 existing owned-pane paths (`dropPanes` on the plain no-hold finalize; `disposeOwnedPanes(session,
 'superseded')` on supersession, stage 6e; the orphan sweep). One-line decision-value flip in
-`constructionPlanFor` (js/swipe.js); js/app.js UNTOUCHED.
+`constructionPlanFor` (js/swipe.js); js/app.js UNTOUCHED. **Stage 6g (`#home` permanent compositing layer,
+2026-07-27):** `#home`'s browser compositing layer is now a PERMANENT resource, not a per-park one. An
+unconditional stylesheet rule `#home { transform: translateZ(0); }` (css/app.css) holds the layer open for
+`#home`'s whole lifetime; the more-specific `#home.parked { transform: translateX(-101vw) }` re-expresses the
+same layer off-screen while parked, and the mid-drag inline mover transform re-expresses it during a drag.
+The layer's owner is the stylesheet (not app code), its endpoint is `#home`'s lifetime (never released across
+the parked↔un-parked cycle), so removing `.parked` at a reveal cannot demote it. A real `translateZ(0)` is
+chosen over the droppable `will-change` hint so the compositor cannot reclaim it under memory pressure. This
+is the ONE scoped exception to the "no promotion on the real in-flow views" invariant (§18); `#browse` stays
+un-promoted. js/app.js is comment-only.
 
 **8. Resource owner.** The gesture session (`d`/`cur`). Stage 3 stamped the session id;
 resource-handle ownership (settle rAF stored on the session, cancelled in finalize) landed at
@@ -144,7 +153,12 @@ browse→nowplaying modifier) flipped from `real-source` to `app-ghost` in `swip
 generated inventories (`docs/transition-matrix.generated.txt`, `docs/swipe-model.generated.txt`)
 regenerated (the in-flow→overlay pairs move from no-pane to a pane; the concrete pane count rose
 27→62). The app.js mirrored-region fingerprints in the model are UNCHANGED, which proves app.js was
-not touched.
+not touched. **Stage 6g (2026-07-27):** the `#home` permanent-promotion invariant (§18) has a SOURCE-TEXT
+oracle, `test/home-layer-invariant.test.js` — it reads the TEXT of `css/app.css` (jsdom cannot compute a
+stylesheet transform) and asserts the base `#home` rule carries a persistent layer-promoting transform and
+that no `{#home, #home.parked}` cascade resolution lands `#home` on `none` (cell PROMO). It is a source-text
+gate (in `SOURCE_TEXT_GATES`, `tools/mutation-sweep.mjs`), NOT a runtime-compositing proof — the flash itself
+is device-only.
 
 **18. Invariants.** classifyTransition emits ONLY current-slice fields `{fromKind,toKind,
 decorations}` (no dead §3.3 host fields until a consumer lands — §4.15); its output, the
@@ -161,7 +175,19 @@ outgoing is an owned-pane app-ghost and the real view stays in flow, untransform
 or demoted from a compositing layer by the swipe. This is the OUTGOING half of the §7-step-6
 structural fix for the in-flow→overlay family ONLY — the INCOMING real-`#browse` transform
 (browse→browse headline, home→browse, overlay→browse) and the browse→home outgoing transform are
-still open (§22/§23).
+still open (§22/§23). **Stage 6g (2026-07-27)** adds the REVEAL-SCOPED structural invariant for `#home`:
+no un-park / reveal transition — any transition that removes `.parked` from `#home` to make it the active
+view — leaves `#home` on `transform: none`. The unconditional base `translateZ(0)` holds across the parked↔
+un-parked cascade (the more-specific `#home.parked` transform wins while parked; the base rule applies the
+instant `.parked` is removed; a mid-drag inline mover transform clears to `''`→ the stylesheet on reset), so
+removing `.parked` at a reveal produces no demote frame. The invariant is SCOPED to the reveal cascade and is
+NOT "non-`none` in every state": a `nav-in` slide animation (`navTo`/`goBack` → `slideInView`) resolves
+`#home`'s transform to `none` at the animation's END frame, but that is an accounted-benign NON-reveal
+navigation animation — it composites `#home` throughout the slide and reverts to `translateZ(0)` at
+`animationend` (nav.js), so it is not a reveal demote. This scopes an EXPLICIT exception into the "no
+promotion on the real in-flow views" invariant for `#home` ONLY (NEW POLICY, EC §4.19); `#browse` stays
+governed by the un-promoted invariant. The guarantee is STRUCTURAL (source-text, §17); the flash is
+device-only (§22).
 
 **19. Mutation cases.** Registered in `tools/mutate.mjs` (swipe4 F1/F3/F4/F5/F6/F7/no-dead-
 fields/F-i/F-ii/§15/§4.11; stage-6d FP/AB — force `abortRender` to `'none'`; RC — drop the
@@ -172,7 +198,16 @@ remove every mover regardless of `own`; stage-6e DEC — the `.np-pill-float` re
 `js/nav.js` is mistakenly guarded behind `keepGhosts` too; the pre-existing "begin() stops
 hard-resetting" mutation re-anchored to also gut the `disposeOwnedPanes` call, still covering
 DP/HR/BR's snapshot clause), each mapped to the test it reddens; re-run by
-`tools/mutation-sweep.mjs`, anchors gated by `test/mutation-anchors.test.js`.
+`tools/mutation-sweep.mjs`, anchors gated by `test/mutation-anchors.test.js`. **Stage 6g (2026-07-27)** adds
+two: PROMO — neutralise the base `#home` transform in `css/app.css` (`translateZ(0)`→`none`), a SOURCE-TEXT
+mutation reddening the `home-layer-invariant.test.js` gate; and REVEAL — make `js/nav.js` `setView` park
+`#home` unconditionally so the reveal never un-parks it, reddening the REVEAL integration test. PROMO carries
+a `caughtBy: 'home-layer-invariant.test.js'` marker (its catcher is excluded from the behavioural set, so
+under the general run it would read UNCAUGHT — jsdom cannot observe a CSS change); the sweep's new
+`gateTestsFor()` helper runs the named gate DIRECTLY against the mutated source and counts its reddening as
+the catch. This is the GENERAL source-text-mutation verification path (any future source-text mutant names
+its own gate the same way), closing the recurring §4.10 gap where a source-text mutant read false-UNCAUGHT →
+CI-red.
 
 **20. Known-red behavior.** No swipe known-red todos remain. The two stage-2 NEW-POLICY todos —
 I20 (superseding a live drag restores the starting scroll) and I11/I20 (superseding a live
@@ -196,7 +231,17 @@ real-in-flow-view transform on in-flow→overlay transitions (a structural step 
 but does NOT fix the compositor flash. The flash is compositor-level and invisible to CI/local
 instrumentation; its confirmation is device-only and downstream; and the ghost-teardown/layer-demotion
 suspect remains open on device — finalize yanks a full-viewport composited ghost in one frame (Loki
-observation). Structural-green (no swipe transform on the real view) is not a flash fix.
+observation). Structural-green (no swipe transform on the real view) is not a flash fix. **Stage 6g note
+(2026-07-27):** one flash CAUSE is now addressed — the home→books ABORT flash was the `#home` un-park DEMOTE
+(removing `.parked` dropped `#home`'s compositing layer → iOS re-raster). Keeping `#home` a permanent layer
+(§7/§18) eliminates that demote. This is DEVICE-CONFIRMED for the `will-change` probe form (build `.256`
+controlled A/B); the SHIPPED `translateZ(0)` form is expected navbar-safe by the same argument but its device
+confirmation is still OWED (plan §9b). The other felt Home flashes REMAIN, distinct causes: the commit
+books→home flash is the home-SNAPSHOT pane teardown (a DIFFERENT cause — it still flashes WITH the `.256`
+`#home` promotion probe live, so it is not the un-park demote; its own controlled experiment owed), and the
+incoming-`#browse` headline flash (browse→browse, home→browse) is the T8-forked incoming-transform work.
+Neither is fixed by 6g. The eliminated demote is CI-proven only as the STRUCTURAL invariant (§17/§18); that
+it WAS the abort flash rests on the device A/B, not the suite.
 
 **23. Conditions requiring revision.** Stage 5 (move the pane builders into swipe.js — done); stage 6
 finalization half: the `abortRender` field is DONE (Stage 6d — `finalizationPlanFor(classification)
@@ -228,3 +273,14 @@ now-stationary untransformed real view; `nowplaying` (full-viewport z60) has no 
 owed on this axis: the browse→home OUTGOING transform (its commit takes the home-reveal HOLD path);
 the INCOMING real-`#browse` transform (browse→browse headline [T8-forked], home→browse,
 overlay→browse); and workstream C (I10/I17 paint-gated reveal centralization, the flash core).
+**Stage 6g (2026-07-27)** makes `#home` a permanent compositing layer via `#home { transform: translateZ(0) }`
+(§7/§18). Conditions that REOPEN the `#home` reveal invariant: any change to `#home`'s background or promotion
+(a rule setting `#home` transform to `none`, e.g. a future `!important none` or a more-specific un-parked
+rule, breaks the cascade — the PROMO source gate detects it); a new `position:fixed` descendant OF `#home`
+that must resolve against the viewport (a permanent transform makes `#home` its containing block — today
+benign only because the navbar/`#player`/`#nowplaying` live OUTSIDE `.app`, and `.alphaindex` lives in
+`#browse`, not `#home`); switching the promotion from `translateZ(0)` back to `will-change` (reintroduces the
+droppable-hint reclaim path). The source-text invariant is verified by `test/home-layer-invariant.test.js`
+(cell PROMO), and 6g added the GENERAL source-text-mutation verification mechanism to `tools/mutation-sweep.mjs`
+(`caughtBy` + `gateTestsFor()`) — see §19. DEVICE-owed: the shipped `translateZ(0)` form's navbar-safety and
+active-home text quality (plan §9b). `#browse` remains un-promoted; its INCOMING/headline flash is still open.

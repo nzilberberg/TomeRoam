@@ -259,6 +259,36 @@ flash differential + the actual headline flash (on your device — the only plac
 **Next by dependency:** the incoming-#browse structural work + the reveal centralization = the actual browse→browse
 headline flash fix (the highest-risk, disclosed-fork piece).
 
+**⭐ MECHANISM CONFIRMED ON DEVICE (2026-07-27, build `.256` A/B).** A controlled one-variable device test settled the
+20-hour-open flash mechanism: adding `will-change:transform` to `#home` (so removing `.parked` doesn't demote its
+layer) made the **home→books ABORT flash CLEAN** while the **complete books→home flash still flashed** — proving the
+flash is a REAL compositing layer being DEMOTED and uncovered before iOS re-rasterises, NOT the covering pane's
+teardown (the clean `books→options` abort tears down a full-viewport ghost too). See memory `tomeroam-swipe-repaint-saga`
+top section. The Linnaeus derivation probe (`Claude/Linnaeus/PROBE-swipe-reveal-teardown.md`) mapped it: A(commit
+books→home)=home-SNAPSHOT pane teardown uncovering the demoting view; B(abort home→books)=the #home un-park demote;
+C(headline books→books)=incoming #browse transform-demote.
+
+**Stage 6g SCHEME-COMPLETE (2026-07-27) — build target `5cc0f14`+apply `ea49dc2`, build `2026-07-27.256`→(bump on push).**
+The device-confirmed reveal fix for flash **B**: `css/app.css:116 #home { transform: translateZ(0) }` — an unconditional
+stylesheet rule making #home a PERMANENT compositing layer, so removing `.parked` at a reveal never demotes it →
+eliminates the home→books ABORT flash. `translateZ(0)` over `will-change` (non-droppable, no intermittent flash return);
+stylesheet not inline (existing tests assert inline #home styles); js/app.js **COMMENT-ONLY** (Loki HELD_STONE holds).
+NEW POLICY (EC §4.19) reversing "no promotion on real in-flow views", SCOPED to #home. Promise reveal-scoped (nav-in
+slide animation = accounted-benign non-reveal path). ⭐ HONESTY: CI proves only the STRUCTURAL invariant; the flash is
+DEVICE-only — the abort flash device-confirmed for the `will-change` form, the shipped `translateZ(0)` navbar/text safety
+DEVICE-OWED (§9b, expected-identical by spec). Chain: Charpy r1 TEMPER→r2 FORGE (narrowed an over-broad promise; nav-in
+handed to blind Loki as accounted-benign) → **Loki HELD_STONE** (struck the carve-out seam: no swipe reaches slideInView)
+→ Curie red-first (PROMO) → Brunel BUILD_GREEN → **Poirot FINDINGS (do-not-ship)** + **Mendeleev BARE_CELLS** — BOTH
+independently caught a Critical: PROMO's source-text mutant #79 read UNCAUGHT → CI shard 7 would go red (the recurring
+§4.10 mechanization gap, 3rd time) → Brunel apply: a GENERAL source-text-mutation verification mechanism
+(`gateTestsFor()` + `caughtBy` marker runs the named gate against the mutated source, requires RED; no benignAlone) →
+**Poirot SHIP / Mendeleev ADEQUATE** on sequential re-review. Completion gate 6/6. ⚠️ PROCESS: Poirot+Mendeleev were
+wrongly run CONCURRENTLY (shared-tree race + wasted-audit-if-reject) — corrected, now sequential Poirot-first (memory
+`no-concurrent-tree-mutating-agents`); and Zelda's build verification now ALWAYS runs `mutation-sweep <new idx>` (the
+gap that let #79 reach the audit). **DEFERRED (distinct causes):** commit books→home = the home-SNAPSHOT pane teardown
+(its own controlled experiment); incoming-#browse headline (browse→browse, home→browse — T8-forked reveal centralization).
+**OWED device pass:** confirm the shipped translateZ(0) keeps the abort flash gone + navbar/text clean.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired

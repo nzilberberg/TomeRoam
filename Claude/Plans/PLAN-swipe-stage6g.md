@@ -73,7 +73,7 @@ Behavioural ownership, not line numbers.
   its own compositing layer so that removing `.parked` at the reveal cannot demote it (the home→books abort
   flash); a real `translateZ(0)` (not the droppable `will-change` hint) so the layer is never reclaimed under
   memory pressure; device-confirmed navbar-safe (`.256` A/B). Net CSS effect: `#home`'s computed `transform`
-  is a persistent non-`none` value at all times — `translateX(-101vw)` while parked (the more-specific
+  is a persistent non-`none` value across the static `#home` cascade — `translateX(-101vw)` while parked (the more-specific
   `#home.parked` rule wins), `translateZ(0)` when un-parked (the base rule) — so there is no reveal path on
   which it becomes `none`.
 
@@ -387,3 +387,35 @@ invariant gate, wired into SOURCE_TEXT_GATES; REVEAL the real home→books-abort
 path — home→books abort snap-back or any applyScreen(home) — where `#home`'s effective transform resolves to
 `none`, i.e., a demote frame the unconditional base rule fails to prevent). Campaign definition-of-done:
 `Claude/Campaigns/swipe-stage6g.json`. Device-verify (§9) is downstream on the shipped-unverified pass.
+
+## Outcome (SHIPPED — 2026-07-27)
+
+SHIPPED through all six gates: Charpy FORGE, Loki HELD_STONE, Curie RED, Brunel BUILD_GREEN + apply-fix,
+Poirot FINDINGS→SHIP, Mendeleev BARE_CELLS→ADEQUATE; the campaign completion gate is COMPLETE. Build target
+is HEAD (`ea49dc2`). The shipped form is the production `css/app.css` `#home { transform: translateZ(0); }`
+base rule (the diagnostic `.256` `will-change` probe is REPLACED, not left alongside); `js/app.js` is
+comment-only, so Loki's HELD_STONE precondition holds.
+
+Poirot findings applied (apply-review `Claude/Poirot/POIROT-swipe-stage6g-apply.md`, verdict SHIP):
+- **F1 (Critical) — closed.** The source-text mutation (#79, `css/app.css` base `#home` transform) read
+  UNCAUGHT in the CI sweep because its only catcher — the source-text gate `home-layer-invariant.test.js` —
+  is excluded from the behavioural set and no behavioural test observes a CSS change. Brunel added a GENERAL
+  mechanism: a `caughtBy` marker on the mutation plus a `gateTestsFor()` helper in `tools/mutation-sweep.mjs`
+  runs the named gate directly against the mutated source and counts its reddening as the catch. Verified
+  non-vacuous (green at baseline, red only under the mutation) and general (branches on the property, no
+  `#79` special-case; no `benignAlone`). This closes the recurring §4.10 gap for source-text gates.
+- **F2 (Observation) — applied.** The `css/app.css` + `js/app.js` navbar comments now state honestly that the
+  `.256` device A/B confirmed navbar-safety for the `will-change` PROBE form, and the shipped `translateZ(0)`
+  form is EXPECTED navbar-safe by the same containing-block/stacking argument (§4) but its own device
+  confirmation is still OWED (§9b). No residual overclaim.
+
+DEVICE-CONFIRMATION STILL OWED (§9b, standing shipped-unverified pass): the abort flash was device-confirmed
+CLEAN for the `will-change` probe form only; the shipped `translateZ(0)` form's device pass — (a) the
+home→books ABORT flash clean, (b) no navbar pop, (c) active-home text quality — is owed and is NOT a gate on
+this stage. The CI-proven guarantee is STRUCTURAL only (§3/§8): `#home` carries a non-`none` layer-promoting
+transform across the reveal cascade; the flash itself is off-main-thread and invisible to the harness.
+
+DEFERRED, distinct causes, still open (not fixed by this slice): the commit books→home flash (the
+home-SNAPSHOT pane teardown — a DIFFERENT cause, still flashes WITH the `.256` probe, its own controlled
+experiment owed); the incoming-`#browse` headline flash (browse→browse + home→browse, T8-forked
+reveal-centralization). See §10.
