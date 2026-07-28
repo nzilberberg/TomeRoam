@@ -551,6 +551,32 @@ const MUTATIONS = [
   { name: 'stage6f REVEAL: the browse→overlay abort reveal is routed through the paint-gated hold instead of the plain no-hold path (-> REVEAL no-hold test)',
     from: "        if (!commit && cur.finPlan.abortRender === 'rerender') {",
     to:   "        if (!commit) {" },
+  // ── SWIPE stage 6h: commit→home scroll-settle cover-drop gate (PLAN-swipe-stage6h.md §8) ─
+  { name: 'stage6h GATE: the commit→home call omits engaging the settle gate (-> GATE cover-persists-past-paint assertion)',
+    from: "          holdGhostUntilPaintable($('home'), cover, { scrollSettle: cur.scroll0 > SETTLE_SCROLL_MIN });",
+    to:   "          holdGhostUntilPaintable($('home'), cover, { scrollSettle: false });" },
+  { name: 'stage6h BACKSTOP: the SETTLE_MS settle-timeout is never created (-> BACKSTOP via=settle assertion)',
+    from: [
+      '            cur.revealSettleTimer = setTimeout(() => {',
+      "              settled = true; cover.settleVia = 'settle'; gate('settle');",
+      '            }, SETTLE_MS);',
+    ].join('\n'),
+    to: '' },
+  { name: 'stage6h STRAND: the 600ms never-strand net is routed through gate() instead of calling drop() directly (-> STRAND never-paints removed-at-600ms assertion)',
+    from: "          cur.revealTimer = setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever",
+    to:   "          cur.revealTimer = setTimeout(() => gate('timeout'), 600);   // safety net — never keep the cover pane forever" },
+  { name: 'stage6h ONCE: drop() omits cancelling the settle-timeout loser (-> ONCE settle-timeout-retired-at-drop assertion)',
+    from: '            clearTimeout(cur.revealSettleTimer);',
+    to:   '            /* mutated: settle-timeout not retired */' },
+  { name: 'stage6h SCOPE: the abort→browse call is given the settle-gate flag it must never carry (-> SCOPE no-settle-machinery assertion)',
+    from: "          holdGhostUntilPaintable($('browse'), cover);",
+    to:   "          holdGhostUntilPaintable($('browse'), cover, { scrollSettle: true });" },
+  { name: 'stage6h OWN: drop() omits removing the scrollend listener (-> OWN removeEventListener-spy assertion)',
+    from: '            if (cur.revealScrollEnd) cur.revealScrollEnd();',
+    to:   '            /* mutated: scrollend listener not removed */' },
+  { name: 'stage6h FASTPATH: the commit→home call forces the settle gate unconditionally, ignoring cur.scroll0 (-> FASTPATH no-timer-at-scroll0 assertion)',
+    from: "          holdGhostUntilPaintable($('home'), cover, { scrollSettle: cur.scroll0 > SETTLE_SCROLL_MIN });",
+    to:   "          holdGhostUntilPaintable($('home'), cover, { scrollSettle: true });" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

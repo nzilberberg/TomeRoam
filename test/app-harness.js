@@ -265,6 +265,17 @@ function boot(opts = {}) {
   // WHETHER a restore was issued, never WHICH coordinate it restored to.
   window.scrollTo = (x, y) => { log.calls.push({ name: 'window.scrollTo', args: [x, y] }); };
   global.scrollTo = window.scrollTo;
+  // ⭐ Stage 6h — a SETTABLE pre-gesture document scroll. jsdom pins window.scrollY at 0,
+  // so `cur.scroll0` (app.js: `scroll0: window.scrollY || 0`, captured at gesture start)
+  // is ALWAYS 0 in a test. The commit→home settle gate engages CONDITIONALLY on
+  // `cur.scroll0 > SETTLE_SCROLL_MIN`, so with scrollY pinned at 0 the gate could NEVER
+  // engage and every gate-engaged cell would silently fall to the fast path and go
+  // vacuous. Define a writable scrollY (DEFAULT 0, so every existing test is
+  // byte-unaffected) that a test sets via h.setScrollY(n) BEFORE starting the gesture.
+  // Mirrors how deferRaf and the scrollTo recorder were added for earlier swipe stages.
+  let scrollYVal = 0;
+  Object.defineProperty(window, 'scrollY', { get: () => scrollYVal, configurable: true });
+  Object.defineProperty(window, 'pageYOffset', { get: () => scrollYVal, configurable: true });
   global.history = window.history;         // app.js uses the bare `history` global
   global.location = window.location;
   // Media Session: CAPTURE the handlers instead of discarding them. app.js registers
@@ -761,6 +772,13 @@ function boot(opts = {}) {
         target: () => target,
       };
     })(),
+    /**
+     * Set the pre-gesture document scroll (`window.scrollY`). app.js captures it into
+     * `cur.scroll0` at gesture start; the commit→home settle gate engages only when
+     * `cur.scroll0 > SETTLE_SCROLL_MIN`. Call BEFORE h.touch.start so the gesture reads
+     * it. Default is 0 (a top / small-scroll reveal → the pre-6h fast path).
+     */
+    setScrollY(n) { scrollYVal = Number(n) || 0; },
     /** Drive a background/foreground transition through the real listener. */
     setHidden(v) {
       hidden = !!v;

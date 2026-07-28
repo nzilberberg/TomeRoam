@@ -806,10 +806,31 @@
         //            the second AFTER it. Not a fixed delay — no frame count is assumed.
         // `via=` names whichever gate settled LAST, so the next device report says
         // plainly whether the hold became real and whether that was enough.
-        const holdGhostUntilPaintable = (rootEl, cover) => {
+        // ⭐ Stage 6h — the commit→home cover drop also waits for a real scroll-settle
+        // signal on a large outgoing clamp, so the iOS compositor's under-cover
+        // scroll-collapse snap (nav.js scrollTo(0,1), applied synchronously above) has
+        // had its chance to finish before the cover lifts — the double-rAF paint gate
+        // is main-thread-only and structurally blind to that compositor work
+        // (Claude/Linnaeus/PROBE-scroll-clamp-reveal.md; PLAN-swipe-stage6h.md §2/§4).
+        // SETTLE_SCROLL_MIN gates ENGAGEMENT (read against cur.scroll0, app.js:466):
+        // only a large outgoing scroll — the actual flash condition — arms the gate, so
+        // the common top/small-scroll reveal keeps its pre-6h ~40ms path (cell FASTPATH).
+        // SETTLE_MS is the bounded backstop for when scrollend never fires on an instant
+        // programmatic scroll (older iOS, or nothing pending) — kept the minimal
+        // snap-covering value because it lands on the COMMON (scrolled) path whenever
+        // scrollend is absent, and kept distinct from the reveal's own 60/340/500/600ms
+        // delays so it stays identifiable in a pending-timer dump (cell BACKSTOP/ONCE).
+        const SETTLE_SCROLL_MIN = 0.5 * window.innerHeight;
+        const SETTLE_MS = 100;
+        const holdGhostUntilPaintable = (rootEl, cover, opts = {}) => {
           const t0 = performance.now();
           const covers = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src'));
           let dropped = false, decoded = false, painted = false;
+          // `settled` starts true (a no-op third gate) for every caller EXCEPT the
+          // commit→home reveal with a large outgoing clamp (opts.scrollSettle set) —
+          // this default is the whole home-scoping mechanism (PLAN §2): the abort→browse
+          // call passes no opts, so its gate reduces to exactly the pre-6h condition.
+          let settled = !opts.scrollSettle;
           const drop = (why) => {
             if (dropped) return; dropped = true;
             // The reveal gates are session-owned resources, not fire-and-forget (Stage
@@ -820,6 +841,12 @@
             // frame whether the outer has fired yet or not.
             cancelAnimationFrame(cur.revealFrames);
             clearTimeout(cur.revealTimer);
+            // Stage 6h: retire the two settle-gate handles the same way — a no-op when
+            // opts.scrollSettle was never set (cur.revealScrollEnd is unset and
+            // clearTimeout(undefined) is a spec no-op). This is what keeps the window
+            // scrollend-listener set BOUNDED across gestures (PLAN §3/§5, cell OWN).
+            if (cur.revealScrollEnd) cur.revealScrollEnd();
+            clearTimeout(cur.revealSettleTimer);
             // Stamp the exact moment the view stops being covered BEFORE removing the
             // pane, so the reveal watcher can split what churned while hidden from what
             // churned in front of the user. That split is the whole question.
@@ -855,9 +882,9 @@
             finishing = false;
             sessionDone(cur);   // the held pane is released → this session's owner ends (terminal for held paths)
             if (window.PBDebug) PBDebug.log('FLASH', `hold ${Math.round(cover.dropAt - t0)}ms `
-              + `covers=${covers.length} via=${why} fade=${FADE_MS}ms`);
+              + `covers=${covers.length} via=${why} settle=${cover.settleVia || 'n/a'} fade=${FADE_MS}ms`);
           };
-          const gate = (why) => { if (decoded && painted) drop(why); };
+          const gate = (why) => { if (decoded && painted && settled) drop(why); };
           Promise.all(covers.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve())))
             .then(() => { decoded = true; gate('decode'); });
           // rAF does not fire in a hidden tab (a known trap here) — the safety net below
@@ -873,6 +900,19 @@
             cur.revealFrames = requestAnimationFrame(() => { painted = true; gate('paint'); });
           });
           cur.revealTimer = setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever
+          // Stage 6h — the settle gate itself, armed only when opts.scrollSettle is set
+          // (PLAN §2/§5). `scrollend` is the primary, principled signal: it rides the
+          // scroll/compositor timeline the double-rAF paint gate cannot see. SETTLE_MS
+          // is the bounded backstop for when scrollend never fires (PLAN §3 Risk 1).
+          // Both handles are cur-owned and retired above, inside drop().
+          if (opts.scrollSettle) {
+            const onSettle = () => { settled = true; cover.settleVia = 'scrollend'; gate('scrollend'); };
+            window.addEventListener('scrollend', onSettle);
+            cur.revealScrollEnd = () => window.removeEventListener('scrollend', onSettle);
+            cur.revealSettleTimer = setTimeout(() => {
+              settled = true; cover.settleVia = 'settle'; gate('settle');
+            }, SETTLE_MS);
+          }
         };
         // FLASH DIAGNOSTIC (.180). The reported "cover images flicker on every aborted
         // swipe return" already had one evidence-free fix (.179) that did not land, so
@@ -1172,7 +1212,10 @@
           applyScreen(dest, { render: false, keepGhosts: true });
           reportReveal('commit→home', $('home'), cover);
           revealPending = true;   // the ghost still owns the view; drop() ends the session
-          holdGhostUntilPaintable($('home'), cover);
+          // Stage 6h: engage the scroll-settle gate ONLY when the outgoing scroll was
+          // large enough to trigger the compositor snap (PLAN §2, Loki regression fix);
+          // a small/top outgoing scroll keeps the pre-6h fast path (cell FASTPATH).
+          holdGhostUntilPaintable($('home'), cover, { scrollSettle: cur.scroll0 > SETTLE_SCROLL_MIN });
           return;
         }
         // ABORTING a browse→browse swipe is the SAME reveal, and had the ordering

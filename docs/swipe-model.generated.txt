@@ -57,7 +57,7 @@ before this document is trusted again. Never update a pinned constant alone.
      js/app.js:164   navStack.push({ v }); fwdStack.length = 0;
      js/app.js:778   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
      js/app.js:779   else navStack.push(fwdStack.pop());
-     js/app.js:1346  navStack = [{ v: 'home' }];
+     js/app.js:1389  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------
