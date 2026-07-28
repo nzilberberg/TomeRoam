@@ -691,4 +691,53 @@ F11: two recovery-prose spots still dispose an owned outgoing pane that option (
 RELEASE and risking the EC §4.4 borrowed-vs-owned hazard. On F11's two-spot correction (no design change), the
 plan is FORGE-ready and nothing else re-opens.
 
-VERDICT: TEMPER
+*(This TEMPER was for HEAD `940f368`. Vitruvius fixed F11 (HEAD `fe0d080`, within-doc scrub of the recovery
+bullets). The F11-confirmation pass below SUPERSEDES it.)*
+
+---
+
+## F11-confirmation pass — tempered plan HEAD `fe0d080` (2026-07-28)
+
+Scope: F11 only. F1–F10, N1, L5, the seam sweep, R1(e), and the KILL #2 repair are settled and not re-opened.
+**Both named spots are corrected and my independent sweep found no third straggler. Verdict: FORGE.**
+
+### The two named spots — CORRECTED
+
+- **§6 FAILURE (line 152):** now "recovery RESTORES the source and starting scroll (phase-aware, EC §4.17). On
+  `→home` there is NO owned pane to dispose — both movers are borrowed-real … `disposeOwnedPanes(session,
+  'superseded')` is a NO-OP on `→home`, and the borrowed-real `#browse` is CLEARED+RESTORED, never removed (EC
+  §4.4 borrowed-vs-owned)." Exactly the fix; now consistent with §6 RELEASE (line 150).
+- **§10 Emergency-disposal dimension (line 201):** now "A thrown `home-host` render RESTORES the borrowed-real
+  source (`#browse`/overlay) — `→home` has NO owned pane, so `disposeOwnedPanes` is a no-op (EC §4.4
+  borrowed-vs-owned); the phase-aware recovery invariant is unchanged; no new path."
+
+### Independent straggler sweep — NONE found
+
+I grepped the plan myself for `dispose` / `owned pane` / `outgoing ghost` / `dropPanes` / `paneKind` /
+`browse→home … ghost|owned|dispose`, and read every hit rather than trusting the reported count. Every
+`→home`-ownership statement now says the same thing — incoming-only construction change, both movers
+borrowed-real, NO owned pane, borrowed-real outgoing cleared+restored (never disposed): lines 130 ("no outgoing
+ghost on `browse→home` … not dropped as a ghost"), 150 (RELEASE, "NOT an owned pane … NO owned pane to
+`dropPanes`"), 152 (corrected), 157 ("both `→home` transitions … no longer build an owned pane"), 201
+(corrected), 208 (Composition, "the real `#browse` mover for `browse→home`"), 246 (PRESERVED, "the outgoing is
+verified as the real `#browse` mover"), 249 (paneKindOf, "`→home` has NO owned pane → returns `'none'`"). The
+"app-ghost outgoing" mentions (lines 67, 90-neg, 179, 208, 229, 286) are all correctly scoped to the FROM-home
+ghost (`home→browse`/`home→overlay`) — a different, unchanged transition that legitimately owns an app-ghost —
+or are negations for `browse→home`. **No spot describes `→home` (`browse→home`/`overlay→home`) as owning or
+disposing an outgoing pane.** The internal contradiction F11 named is resolved with no new one introduced.
+
+## Verdict — FINAL: FORGE
+
+The plan is sound and internally consistent. Across four Charpy passes and two Loki KILLs it now holds on every
+axis: the `→home` construction edit (incoming-only, three→two enum rows, frozen-spec validated), the fixed
+own-scroll `#home` slide-and-leave (two real movers under option (a), no snapshot, no ghost), the complete
+seam-swept home-scroll re-homing including the L5 content-translate ghost fidelity, the constraint-E dissolution
+(ledgered), the A2 seating (retained css:73 runway), the phase-aware borrowed-real recovery (no owned pane on
+`→home`, EC §4.4), and the honest CI/device split (six CI cells; R1(a) flash, R1(b) bars, R1(c) nested-scroll,
+R1(d) L5 zero-jump, R1(e) `browse→home` abort cover-warmth/demote — all device-owed). Build it.
+
+Next: Loki's 3rd re-strike (fresh); then Curie builds the six-cell suite from §10 (PolicyLedger test names
+filled so `policy-ledger-gate` passes) and Brunel builds. The five device gates R1(a/b/c/d/e) remain
+device-owed downstream as the plan states.
+
+VERDICT: FORGE
