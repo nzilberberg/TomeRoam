@@ -390,4 +390,47 @@ FORGE.
 **Re-verify verdict: TEMPER — F9 only.** All other findings CONFIRMED resolved. On the F9 scrub landing (a
 five-spot edit, no design or spec change), this plan is FORGE-ready.
 
-VERDICT: TEMPER
+---
+
+## F9-confirmation pass — tempered plan HEAD `e1c78ad` (2026-07-28)
+
+Vitruvius swept F9 (the five flagged spots plus three siblings it found in the full pass: the index/§8 title,
+the §3 "one line" viewport-anchored term, and the §1 verdict "(A2 fallback)"). I verified by GREPPING the
+plan for the three stale-claim classes — not by re-reading the old line numbers (they shifted) — and reading
+the full context of every hit:
+
+- **(a) A1 / viewport-anchored seating treated as preferred — NONE survive.** `A1 preferred`, `preferred, A2`,
+  `A2 stable-by-construction fallback`, `to a viewport-anchored seating` return zero hits. Every A1 mention now
+  reads "DROPPED as contra-record" / "not re-framed as 'preferred'" (§8 title, §8 body line 166, §2 MOVES line
+  68, §2 DEFERRED line 78 "No A1 seating cleanup is deferred", §1 verdict, §13 status line 266 "A2 is
+  PRIMARY").
+- **(b) runway / css:73 said to be retired — NONE survive.** `runway is retired (A1)`, `retired (A1)` return
+  zero. Every css:73 reference reads "RETAINED" as the primary seating (§1 row 49, §8 F1 line 168, §9 L3 line
+  181, §12, §13 sequencing line 261, §13 "Decisions made" line 267). The only "retired" text is the
+  home-scoped css:81 + `home-tall` toggle + home-entry `scrollTo`, and the SNAPSHOT-iff-home *rule* — both
+  correct.
+- **(c) browse→home abort via a HOLD path — NONE survive.** The two F7 siblings are corrected: §7 line 158 and
+  §11 R4 line 225 both now read "the NO-HOLD `abortRender:'none'` finalize path (app.js:1238-1257) … NOT a hold
+  branch (F7)." The one remaining "abort→browse hold" (§10 Composition, line 204) is the legitimately
+  PRESERVED browse→browse abort hold, not a browse→home claim — correct.
+- **Bonus (F3 residual class):** `eliminates the flash` returns zero; the flash is everywhere scoped to
+  "provably removes hypothesis (i) … not called fixed until R1(a) is device-clean."
+
+No design, spec, or build-surface change accompanied the scrub (I confirmed the `source_ranges` still exclude
+css:73 and the §8/§12 seating spec is unchanged in substance). **F9 is RESOLVED.** All of F1–F8 and the
+PolicyLedger were CONFIRMED on the prior pass and are not re-opened.
+
+## Verdict — FINAL: FORGE
+
+The plan is sound and internally consistent: the fixed own-scroll `#home` slide-and-leave mechanism, the
+`→home` construction edit (three enum values, validated by the frozen spec), the delete-scope (verified
+`→home`-only), the constraint-E dissolution (ledgered as `PL-swipe-6i-home-fixed-ownscroll`), the A2 seating
+(retain the recorded css:73 tall-document runway; `#home` fixed inside it), and the honest device-gating of
+the surviving flash hypothesis (R1(a)) all hold. Build it. The three device gates R1(a) carousel-blank, R1(b)
+bar stability (incl. NP/Options-over-home), R1(c) nested-scroll remain device-owed downstream, exactly as
+the plan states.
+
+Next: Curie builds the suite from §10 (SNAPSHOTGONE/SCOPE/ABORT/PTR/SCROLLBAR + the PolicyLedger test names
+filled so `test/policy-ledger-gate.test.js` passes); Brunel builds from the approved plan.
+
+VERDICT: FORGE
