@@ -120,19 +120,7 @@ const SOURCE_TEXT_GATES = {
   'mutation-anchors.test.js': 'asserts every mutation anchor still matches the source; a mutation removes the text it targets, so this fails for EVERY mutation',
   'swipe-model.test.js': 'fingerprints js/app.js regions (end, begin, navTo, nav-relation); a mutation inside one changes the hash by construction',
   'transition-matrix.test.js': 'fingerprints the js/app.js transition-branch region, same reason',
-  'home-layer-invariant.test.js': 'reads the TEXT of css/app.css (PLAN-swipe-stage6g.md cell PROMO); a mutation to that text would fail it by construction, so it is excluded from the GENERAL behavioural run. Its own mutation (#79, tools/mutate.mjs) is verified by the caughtBy mechanism below instead, which runs this gate directly for that one mutation and counts its reddening as the catch',
 };
-
-// A SOURCE-TEXT-ONLY mutation (one whose only catcher is a gate excluded above) names that
-// gate as `caughtBy` on its tools/mutate.mjs entry. The general behavioural run cannot see
-// it (no behavioural test observes a source-text-only channel — e.g. jsdom has no CSS
-// layout), so the sweep instead runs the NAMED gate directly and counts ITS failure as the
-// catch. This is the general, positive verification path EC §4.10 requires for a
-// source-text mutation — never a `benignAlone` marker, which would assert the mutation is
-// survivable when it is not; it is caught, just not by the general run.
-function gateTestsFor(mutation) {
-  return mutation.caughtBy ? [path.join('test', mutation.caughtBy)] : behaviourTests();
-}
 
 function behaviourTests() {
   const dir = path.join(ROOT, 'test');
@@ -196,14 +184,11 @@ try {
       restore();
       continue;
     }
-    // THE WHOLE SUITE minus the SOURCE-TEXT GATES — unless this mutation names its own
-    // gate via `caughtBy` (a source-text-only mutation whose sole catcher IS an excluded
-    // gate), in which case that named gate runs directly instead. This used to name eight
-    // files, and the moment mutations were added for a NEW test file the sweep reported
-    // five genuinely-defended guards as UNCAUGHT — it was not running the tests that
-    // defend them. Same hand-maintained-inventory trap as everywhere else in this repo.
-    const gateFile = MUTATIONS[i].caughtBy;
-    const res = run(['--test', ...gateTestsFor(MUTATIONS[i])]);
+    // THE WHOLE SUITE minus the SOURCE-TEXT GATES. This used to name eight files, and
+    // the moment mutations were added for a NEW test file the sweep reported five
+    // genuinely-defended guards as UNCAUGHT — it was not running the tests that defend
+    // them. Same hand-maintained-inventory trap as everywhere else in this repo.
+    const res = run(['--test', ...behaviourTests()]);
     // `# TODO` lines are KNOWN-RED tests, expected to fail — they are not evidence that
     // a mutation was caught, and counting them would make every mutation look caught.
     const failures = (res.stdout.match(/^not ok .*$/gm) || [])
@@ -215,14 +200,14 @@ try {
       console.log(`#${i}  benign alone (expected: ${benign}) — ${MUTATIONS[i].name}`);
     } else if (failures === 0) {
       uncaught.push(`#${i} ${MUTATIONS[i].name}`);
-      console.log(`#${i}  UNCAUGHT  <-- no test fails${gateFile ? ` (ran ${gateFile})` : ''}  — ${MUTATIONS[i].name}`);
+      console.log(`#${i}  UNCAUGHT  <-- no test fails  — ${MUTATIONS[i].name}`);
     } else if (benign) {
       // The excuse outlived what it excused: something now catches this, so the flag
       // is hiding real coverage and must go. Same shape as a stale allowlist entry.
       staleBenign.push(`#${i} ${MUTATIONS[i].name}`);
       console.log(`#${i}  caught (${failures}) but flagged benignAlone — STALE FLAG`);
     } else {
-      console.log(`#${i}  caught (${failures} failing)${gateFile ? ` via source-text gate ${gateFile}` : ''} — ${MUTATIONS[i].name}`);
+      console.log(`#${i}  caught (${failures} failing) — ${MUTATIONS[i].name}`);
     }
   }
 } finally {

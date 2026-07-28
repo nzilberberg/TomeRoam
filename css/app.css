@@ -106,17 +106,16 @@ body.home-tall .app { min-height: calc(100% + 12vh); }
   transform: translateX(-101vw);   /* fully off-screen (own layer keeps it painted) */
   overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;
 }
-/* #home is a PERMANENT compositing layer: an unconditional real transform (not the
-   droppable `will-change` hint) so removing `.parked` at a reveal can never demote
-   it — the demote was the home→books ABORT flash (device-confirmed, build .256
-   controlled A/B; PLAN-swipe-stage6g.md). translateZ(0) over will-change because a
-   dropped hint would reintroduce the flash intermittently under memory pressure;
-   permanent over reveal-scoped because releasing the promotion while #home is the
-   visible active view would itself demote it. The .256 A/B device-confirmed
-   navbar-safety for the `will-change` probe form; the shipped `translateZ(0)` form
-   is EXPECTED navbar-safe by the same containing-block/stacking argument (plan §4),
-   but device-confirmation of this shipped form is still owed (plan §9b). */
-#home { transform: translateZ(0); }
+/* Keep #home a STABLE compositing layer so removing `.parked` at a reveal does NOT
+   demote it — the demote is the home→books ABORT flash. FORM = `will-change: transform`:
+   the .256 device A/B validated THIS form (abort flash clean). Build .257 (stage 6g)
+   tried `transform: translateZ(0)` instead, on a spec argument that it's an equivalent-
+   but-non-droppable layer — and it FLASHED on device (2026-07-27 log; the "spec-identical"
+   argument was falsified on real iOS). Reverted to the device-clean form here. Efficacy is
+   DEVICE-verified, not spec-guaranteed (will-change is a droppable hint; if it proves
+   intermittent, simple layer-promotion isn't enough). Coverage for this form is deferred
+   until the device re-confirms it. Saga: memory tomeroam-swipe-repaint-saga. */
+#home { will-change: transform; }
 
 /* Page-carousel transitions. The incoming view slides in from the side that matches
    the direction (forward = from the right, back = from the left). `.app` clips the
