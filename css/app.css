@@ -106,6 +106,13 @@ body.home-tall .app { min-height: calc(100% + 12vh); }
   transform: translateX(-101vw);   /* fully off-screen (own layer keeps it painted) */
   overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;
 }
+/* ⚠️ DIAGNOSTIC PROBE — build .256, REVERT after the device test (do NOT keep).
+   Keeps #home a STABLE compositing layer so removing `.parked` at the reveal does
+   NOT demote it → tests the reveal-teardown flash hypothesis (saga refinement
+   2026-07-27, Claude/Linnaeus/PROBE-swipe-reveal-teardown.md). If the commit
+   books→home and abort home→books flashes vanish, the #home un-park demote is the
+   cause. Watch the fixed navbar for a "pop" (app.js:552/364). Remove once measured. */
+#home { will-change: transform; }
 
 /* Page-carousel transitions. The incoming view slides in from the side that matches
    the direction (forward = from the right, back = from the left). `.app` clips the
