@@ -820,19 +820,8 @@
         // snap-covering value because it lands on the COMMON (scrolled) path whenever
         // scrollend is absent, and kept distinct from the reveal's own 60/340/500/600ms
         // delays so it stays identifiable in a pending-timer dump (cell BACKSTOP/ONCE).
-        // ⭐ Stage 6h DIAGNOSTIC ROUND (device build .259, 2026-07-28): the gate engaged
-        // exactly as designed (`via=paint settle=scrollend`) and STILL flashed — scrollend
-        // fires before the iOS compositor finishes the under-cover re-tile (PLAN §10's
-        // named fallback, Risk 2 realized). SETTLE_HOLD_MS holds the cover an EXTRA fixed
-        // duration PAST scrollend before dropping, to test whether more hold is sufficient.
-        // This is a DIAGNOSTIC value — deliberately GENEROUS (not tuned) so the round
-        // answers "does hold help at all" cleanly; once the device confirms it does, tune
-        // it DOWN to the minimal imperceptible duration that still hides the re-tile. It
-        // does not touch the SETTLE_MS backstop path (device log shows scrollend fires, so
-        // that path is not the one under test here).
         const SETTLE_SCROLL_MIN = 0.5 * window.innerHeight;
         const SETTLE_MS = 100;
-        const SETTLE_HOLD_MS = 280;   // DIAGNOSTIC — generous; see comment above
         const holdGhostUntilPaintable = (rootEl, cover, opts = {}) => {
           const t0 = performance.now();
           const covers = Array.from(rootEl.querySelectorAll('img')).filter((i) => i.getAttribute('src'));
@@ -852,16 +841,12 @@
             // frame whether the outer has fired yet or not.
             cancelAnimationFrame(cur.revealFrames);
             clearTimeout(cur.revealTimer);
-            // Stage 6h: retire the three settle-gate handles the same way — a no-op when
+            // Stage 6h: retire the two settle-gate handles the same way — a no-op when
             // opts.scrollSettle was never set (cur.revealScrollEnd is unset and
             // clearTimeout(undefined) is a spec no-op). This is what keeps the window
             // scrollend-listener set BOUNDED across gestures (PLAN §3/§5, cell OWN).
             if (cur.revealScrollEnd) cur.revealScrollEnd();
             clearTimeout(cur.revealSettleTimer);
-            // Stage 6h hold-diagnostic: retire the post-scrollend SETTLE_HOLD_MS timer the
-            // same way — session-owned, cleared here whether it fired, is still pending, or
-            // was never armed (no scrollend yet, or opts.scrollSettle unset).
-            clearTimeout(cur.revealScrollHoldTimer);
             // Stamp the exact moment the view stops being covered BEFORE removing the
             // pane, so the reveal watcher can split what churned while hidden from what
             // churned in front of the user. That split is the whole question.
@@ -919,23 +904,9 @@
           // (PLAN §2/§5). `scrollend` is the primary, principled signal: it rides the
           // scroll/compositor timeline the double-rAF paint gate cannot see. SETTLE_MS
           // is the bounded backstop for when scrollend never fires (PLAN §3 Risk 1).
-          // SETTLE_HOLD_MS (diagnostic) extends past a real scrollend before dropping.
-          // All three handles are cur-owned and retired above, inside drop().
+          // Both handles are cur-owned and retired above, inside drop().
           if (opts.scrollSettle) {
-            // Stage 6h hold-diagnostic: a real scrollend no longer drops the cover
-            // immediately. It first cancels the SETTLE_MS backstop (a real settle signal
-            // arrived, so the backstop's job is moot — left pending it would otherwise
-            // fire at SETTLE_MS=100ms, before SETTLE_HOLD_MS=280ms elapses, and drop the
-            // cover early through the exact path this round is testing), then arms its own
-            // SETTLE_HOLD_MS timer that flips `settled` only after the extra hold. A
-            // repeated scrollend re-arms the hold rather than racing a stale one.
-            const onSettle = () => {
-              clearTimeout(cur.revealSettleTimer);
-              clearTimeout(cur.revealScrollHoldTimer);
-              cur.revealScrollHoldTimer = setTimeout(() => {
-                settled = true; cover.settleVia = 'scrollend+hold'; gate('scrollend+hold');
-              }, SETTLE_HOLD_MS);
-            };
+            const onSettle = () => { settled = true; cover.settleVia = 'scrollend'; gate('scrollend'); };
             window.addEventListener('scrollend', onSettle);
             cur.revealScrollEnd = () => window.removeEventListener('scrollend', onSettle);
             cur.revealSettleTimer = setTimeout(() => {
