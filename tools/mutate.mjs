@@ -554,13 +554,17 @@ const MUTATIONS = [
   // ── SWIPE/REVEAL stage 6g: #home permanent compositing layer (PLAN-swipe-stage6g.md) ──
   // PROMO is a SOURCE-TEXT mutation (EC §4.10): it targets css/app.css, so under the
   // behavioural sweep's normal run it would fail BY CONSTRUCTION (the mutation changed the
-  // very text the gate reads) — counting that as "caught" would be a FALSE CAUGHT. It is
-  // caught instead by the source-text gate itself, test/home-layer-invariant.test.js, which
-  // is excluded from the sweep's behavioural run via SOURCE_TEXT_GATES
-  // (tools/mutation-sweep.mjs). Neutralising the base #home transform must redden
-  // PROMO.base and PROMO.cascade.
+  // very text the gate reads) — counting that as "caught" would be a FALSE CAUGHT. Its
+  // catcher, test/home-layer-invariant.test.js, is a source-text gate and is therefore
+  // excluded from the sweep's general behavioural run via SOURCE_TEXT_GATES
+  // (tools/mutation-sweep.mjs). `caughtBy` names that gate so the sweep runs it DIRECTLY for
+  // this mutation instead of the general behavioural set, and counts ITS reddening as the
+  // catch — the general, positive verification path for a source-text mutation (any future
+  // one names its own gate the same way; see the `caughtBy` handling in mutation-sweep.mjs).
+  // Neutralising the base #home transform must redden PROMO.base and PROMO.cascade.
   { name: 'stage6g PROMO [SOURCE_TEXT]: the base #home rule loses its layer-promoting transform (-> PROMO.base/PROMO.cascade source-text gate)',
     file: 'css/app.css',
+    caughtBy: 'home-layer-invariant.test.js',
     from: '#home { transform: translateZ(0); }',
     to:   '#home { transform: none; }' },
   // REVEAL: the effective un-park on a swipe reveal is js/nav.js setView (line 57), NOT

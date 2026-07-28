@@ -112,7 +112,10 @@ body.home-tall .app { min-height: calc(100% + 12vh); }
    controlled A/B; PLAN-swipe-stage6g.md). translateZ(0) over will-change because a
    dropped hint would reintroduce the flash intermittently under memory pressure;
    permanent over reveal-scoped because releasing the promotion while #home is the
-   visible active view would itself demote it. Device-confirmed navbar-safe. */
+   visible active view would itself demote it. The .256 A/B device-confirmed
+   navbar-safety for the `will-change` probe form; the shipped `translateZ(0)` form
+   is EXPECTED navbar-safe by the same containing-block/stacking argument (plan §4),
+   but device-confirmation of this shipped form is still owed (plan §9b). */
 #home { transform: translateZ(0); }
 
 /* Page-carousel transitions. The incoming view slides in from the side that matches

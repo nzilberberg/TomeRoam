@@ -553,10 +553,13 @@
       // real in-flow view (#home/#browse) — promoting one to a layer at swipe start
       // can nudge the iOS fixed navbar (a "pop"); the mover transform alone is
       // enough. #home is the ONE scoped exception: css/app.css now promotes it
-      // PERMANENTLY (a stylesheet `transform: translateZ(0)`, device-confirmed
-      // navbar-safe, PLAN-swipe-stage6g.md), so it is already promoted before this
-      // ever runs — this loop is not what promotes it and does not need to. #browse
-      // remains un-promoted; this invariant still governs #browse.
+      // PERMANENTLY (a stylesheet `transform: translateZ(0)`, PLAN-swipe-stage6g.md),
+      // so it is already promoted before this ever runs — this loop is not what
+      // promotes it and does not need to. The .256 device A/B confirmed navbar-safety
+      // for the `will-change` probe form; the shipped translateZ(0) form is EXPECTED
+      // navbar-safe (same containing-block/stacking argument) but its own device
+      // confirmation is still owed (plan §9b). #browse remains un-promoted; this
+      // invariant still governs #browse.
       for (const m of d.movers) if (m.base) m.el.style.transform = 'translateX(' + m.base + 'px)';
     }
 
