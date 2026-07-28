@@ -271,6 +271,10 @@ the `browse→home` outgoing mutation to the SNAPSHOTGONE cell.
 - **F9** (re-verify residual) — no runtime surface: a within-document scrub of five stale pre-temper spots
   (§2 line 68, §2 line 78, §7 line 158, §13 lines 266-267) so no section still asserts A1-preferred /
   runway-retired / abort-via-hold. Verified by re-reading each spot against the corrected §8/§12/§3.
+- **F10** (L5 repair) — has a runtime surface, jsdom-vacuous at the gate: the outgoing-ghost home-scroll
+  fidelity fix. Closed only when the ghost clone's home is an ACTUAL scroll container (or the offset is applied
+  to the home content), so `#home.scrollTop` reproduction is not a no-op after `ghostApp` strips ids; plus a
+  DEVICE-owed fidelity check (the zero-jump is a paint the jsdom GHOSTSCROLL cell cannot observe). See F10.
 
 ## Prediction — where it breaks in execution if built as written
 
@@ -433,4 +437,103 @@ the plan states.
 Next: Curie builds the suite from §10 (SNAPSHOTGONE/SCOPE/ABORT/PTR/SCROLLBAR + the PolicyLedger test names
 filled so `test/policy-ledger-gate.test.js` passes); Brunel builds from the approved plan.
 
-VERDICT: FORGE
+*(FORGE above was for HEAD `e1c78ad`. A Loki KILL then found a seam-laundered home-scroll consumer; Vitruvius
+repaired it (HEAD `e727840`). The repair re-verify below SUPERSEDES the FORGE.)*
+
+---
+
+## L5 repair re-verify — tempered plan HEAD `e727840` (2026-07-28)
+
+Scope: the Loki-KILL repair only (the outgoing-ghost home-scroll consumer + the §9 seam-aware re-sweep + the
+§10 GHOSTSCROLL cell + the §1/§2/§12 notes). F1–F9 + PolicyLedger were confirmed on the FORGE pass and are
+re-checked only for disturbance. **Verdict of this pass: TEMPER — one Structural finding (F10) on the repair
+mechanism.** The seam-completeness (the thing that failed twice) is CLEAN; the fix's INVARIANT is right; but
+the prescribed MECHANISM does not close Loki's device counterexample as written, and its CI gate cannot see
+that it fails.
+
+### Independent seam-completeness — no seventh consumer (CONFIRMED CLEAN)
+
+I grepped the full scroll-source seam myself (`scrollY` / `scrollTop` / `pageYOffset` / `scrollingElement` /
+`scrollTo` / `scrollend` / `env.scrollY` across `js/`), did not trust the count, and classified every hit:
+
+- **Home-vertical-scroll consumers (the sweep's set):** L1 pull-to-refresh (app.js:1340,1347), L2 scrollbar
+  (scrollbar.js:51-52), L3 navbar-seat (nav.js:81,127; css:81), L4 reveal machinery (app.js:466,443,1231,
+  1256,1173; app.js:909-911 scrollend), L5 outgoing-ghost offset (swipe.js:257 ← app.js:509 `env.scrollY`),
+  N1 abort `scroll0` restore (app.js:466→443/1231/1256), C1 carousel `scrollLeft` (horizontal, survives). All
+  seven accounted for.
+- **The injected-seam class (what the KILL exposed) has exactly ONE member:** `env.scrollY` (app.js:509) →
+  `ghostApp` (swipe.js:257). It feeds no other home path (`snapshotHome` reads no scroll and is deleted; the
+  NP-pill clone reads none). The other injected metrics seam, `virtuallist.metrics.scrollY` (virtuallist.js:
+  164), is inside the BROWSE virtual controller (browse.js:640) and `onDocScroll` early-returns unless Browse
+  is visible (virtuallist.js:145) — no-op on home. **No seventh home-vertical-scroll consumer exists.** The
+  §9 sweep is complete on the seam.
+
+### L5 closes Loki's counterexample? — NOT AS WRITTEN (F10)
+
+The INVARIANT in §9 L5 is correct (the outgoing ghost of a scrolled home must reproduce home's own vertical
+offset → zero jump). The GHOSTSCROLL mutation (revert to `window.scrollY` for a home source) does redden the
+BRANCH-level assertion. But the prescribed mechanism does not close the DEVICE counterexample — see F10.
+
+### F10 — Structural (defect) — the prescribed L5 mechanism is a device no-op after `ghostApp` strips ids, and its CI gate is jsdom-vacuous for the device jump
+
+Two coupled defects on the repaired path:
+
+1. **The clone's home is not a scroll container, so `clone-home.scrollTop = 500` does not offset it on device.**
+   §9 L5 prescribes reproducing home's offset by "setting the CLONE's home element's `scrollTop` (a vertical
+   analog of `copyScroll`)." But `copyScroll` works for carousels precisely because `.carousel`'s
+   `overflow-x:auto` is **class-keyed** (css:327) and survives the clone. Home's own-scroll geometry is
+   **id-keyed**: §3 (line 82) and §6 (line 148) put `position:fixed; overflow-y:auto` on the base `#home` rule,
+   and `ghostApp` strips ALL ids on the clone (`clone.querySelectorAll('[id]').forEach(n =>
+   n.removeAttribute('id'))`, swipe.js:252). So the cloned home loses `overflow-y:auto` → it is not a scroll
+   container → setting its `scrollTop` is inert → the ghost renders home at TOP while the real home is at 500 →
+   the exact jump Loki killed SURVIVES. The vertical analog of `copyScroll` breaks at the one property that
+   makes `copyScroll` valid. Fix (invariant + precondition): either give the active home fixed-own-scroll
+   geometry a **class** the clone retains (so `overflow-y` survives the id-strip and `scrollTop` takes), OR
+   reproduce the offset by translating the home CONTENT within the clone (`translateY(-#home.scrollTop)` on the
+   home inner wrapper, not the whole clone). State the invariant; require the clone's home to actually carry
+   the offset.
+
+2. **GHOSTSCROLL is jsdom-vacuous for the device artifact.** jsdom performs no layout and stores `scrollTop`
+   as a plain number regardless of `overflow`, so a test asserting `clone-home.scrollTop === 500` passes even
+   when the clone is not a scroll container — i.e. the cell is GREEN for the device-broken mechanism of (1).
+   Loki's counterexample is a VISIBLE jump (a paint), and the jsdom cell cannot observe a paint. Promoting it
+   to "the Loki counterexample … permanently gated" (§9 L5, §10 row) overclaims: the cell protects the
+   source-aware BRANCH (home vs browse) and reddens on the window.scrollY mutation — keep it for that — but the
+   on-screen zero-jump is DEVICE-owed, the same class as R1(a)/R1(b). Add a device-owed L5 fidelity gate (the
+   ghost of a scrolled home shows home-at-offset on the real screen) and stop claiming the KILL is fully closed
+   at CI. (This is the project's recurring "vacuously-green harness" scar — a jsdom-green cell over a
+   device-only behaviour.)
+
+Not fatal and not a seam-completeness miss: the invariant and the seam sweep are right, and both fixes are
+buildable. But as written the repair does not close the device KILL and its gate can't see the failure — so it
+must be tightened before Loki re-strikes (Loki's counterexample is device-visible; a jsdom-green GHOSTSCROLL
+would let the same jump through).
+
+### Other repair items — spot-checked, not blocking
+
+- **§2 STAYS / §12 PRESERVED opened no wider than needed:** only the ghost's vertical scroll-source read
+  (swipe.js:257) is opened; `ghostApp`/`copyScroll`/`copyAnimPhase`/`ghostWrap` otherwise preserved. Confirmed
+  the do-not-touch is not widened (the id-strip line 252 and the clone assembly are untouched — which is
+  exactly why F10 bites: the fix must live in the scroll-source read + the geometry keying, not by touching the
+  strip).
+- **N1 abort `scroll0` restore benign for a home source:** correct — `#home.scrollTop` persists element-locally
+  across the gesture, and `window.scrollTo(0,0)` is inert on the retained runway. No re-home needed.
+- **Lesser notes** (`paneKindOf` →home ghost label, abort decode-cleanliness reason css:83-96): non-blocking
+  diagnostic/records corrections; not re-audited in depth.
+
+### Prior findings (F1 through F9) + PolicyLedger — NOT disturbed by the repair
+
+Re-checked the repair's blast radius: §3 still carries the two-hypothesis flash framing (F3, line 82/88); §8
+L3/§12 still retain css:73 (F1, line 186); the abort is still the no-hold `abortRender:'none'` path (F7); the
+PolicyLedger entry is unchanged. The repair touched §9/§10/§1/§2/§12 only and did not regress the FORGE'd
+findings.
+
+## Verdict — re-verify: TEMPER (F10 only)
+
+The repair fixes the right thing (the seam-laundered home-scroll consumer) with the right invariant and a
+complete seam sweep — but the prescribed mechanism (`scrollTop` on an id-stripped, non-scrolling clone) does
+not close Loki's device jump, and the GHOSTSCROLL cell is jsdom-vacuous for it. On F10's fix (make the clone's
+home carry the offset — class-keyed overflow or a content-translate — plus a device-owed L5 fidelity gate),
+the plan is FORGE-ready. No other finding re-opens.
+
+VERDICT: TEMPER
