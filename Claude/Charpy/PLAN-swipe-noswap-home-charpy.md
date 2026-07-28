@@ -1,0 +1,308 @@
+# Charpy review — PLAN-swipe-noswap-home (Stage 6i)
+
+Type: plan-review
+
+<!-- charpy-gate {"review_type":"plan-review","patterns":{"defining_records":true,"boundary_relocation":false,"callee_replacement":true,"contract_shape":true},"project_adapter":"tomeroam-js-dom","source_ranges":["css/app.css:73-118","js/nav.js:81-81","js/nav.js:127-127","js/app.js:1210-1219","js/app.js:1332-1358"],"callee_ranges":["js/swipe.js:270-282","js/app.js:825-916"]} -->
+
+Reviewed: `Claude/Plans/PLAN-swipe-noswap-home.md` (Vitruvius, PLAN_READY). Ground truth read in full:
+the three Linnaeus probes (`PROBE-home-carousel-layers`, `PROBE-swap-necessity`, `PROBE-home-scroll-surface`,
+all 2026-07-28), plan-of-record `PLAN-swipe-reveal.md` §2.1–§2.4, `EngineeringContract.md`, and HEAD `.261`
+source (`js/swipe.js` `constructionPlanFor`/`paneBuilders`, `js/app.js` hold/choreography/pull-to-refresh,
+`js/nav.js` `setView`/`applyScreen`, `js/scrollbar.js`, `css/app.css:56-118,610-629`).
+
+## Applicability
+
+- **defining_records: true** — the plan reconciles the user recalibration, plan-of-record §2.1/§2.4
+  (constraint E), Linnaeus D1–D3, the frozen `constructionPlanFor` interface + spec oracle, and the
+  subsystem contract. Reconciled in `## Defining records`.
+- **boundary_relocation: false** — I concur with the plan: no runtime value's ownership crosses a NEW
+  module seam. The construction decision stays in `js/swipe.js`, the choreography in `js/app.js`. No
+  ledger required by this pattern.
+- **callee_replacement: true** — the plan replaces two callees (`snapshotHome`, swipe.js:270-282; the
+  `→home` branch of `holdGhostUntilPaintable`, app.js:825-916) with the real fixed `#home` slide. Their
+  observable channels are traced in `## Callee behaviour`.
+- **contract_shape: true** — `constructionPlanFor`'s emitted enum domain for `→home` changes
+  (`home-snapshot` leaves `incoming`; `home-host` enters `renderDestination`; `browse→home` outgoing
+  `real-source`→`app-ghost`). The exact-key/enum gate is `test/contract-function-gate.test.js`; the
+  independent oracle is `test/fixtures/swipe-plan-spec.mjs` rows 56/59.
+- **project_adapter: tomeroam-js-dom.**
+  - `snapshotHome` (callee swipe.js:270-282) observable classList tokens: `.classList.remove('hidden','parked')`
+    on the clone (swipe.js:272) — RETIRED (no clone built; the real `#home` un-parked via `home-host` is the
+    incoming mover). `copyScroll` carousel `scrollLeft` (swipe.js:279) — RETIRED (real `#home` keeps its own).
+  - `holdGhostUntilPaintable` (callee app.js:825-916) has NO `document.body.classList` mutation in range;
+    its observable channels are `img.decode()` on src-bearing covers (827/888), the double-`rAF` paint gate
+    (899-901), the 600ms safety timer (902), and — for `→home` ONLY — the `scrollend` listener + `SETTLE_MS`
+    timer (908-915). The `→home` scroll-settle channel is deleted; the `abort→browse` decode+paint channel is
+    preserved (verified below).
+  - body-class mutation in the seating range: `document.body.classList.toggle('home-tall', …)` (nav.js:81) —
+    RETIRED under A1 / KEPT as a bare spacer under A2 (see F1/F2).
+  - `d.<field>` session writes in the pull-to-refresh range (app.js:1332-1358): none; the L1 re-home moves
+    the at-top signal from ambient `window.scrollY` (app.js:1340,1347) to `#home.scrollTop`, not a session field.
+
+## Verdict
+
+**TEMPER.** The central mechanism is sound and buildable: making active `#home` a `position:fixed`
+own-scroll view genuinely removes the tall-`#browse`→short-`#home` document-collapse reposition of the
+carousels (mechanism i), and the delete-list (`snapshotHome`, the `→home` scroll-settle gate) is correctly
+scoped — I verified `opts.scrollSettle` is set at exactly one site (app.js:1218, commit→home) and
+`snapshotHome`'s only live consumer is the `home-snapshot` incoming branch (swipe.js:331), so both deletions
+are `→home`-only and `abort→browse` is left intact. No fatal crack: the flash claim is honestly device-gated
+and the architecture has independent, user-sanctioned value.
+
+But three load-bearing weaknesses must be fixed before the build, all in the navbar-seating rework and the
+flash-elimination framing:
+
+1. **F1** — retiring `css:73` (the base `.app` min-height) is a silent regression on short BROWSE pages, a
+   path the plan declares untouched. `css:73` is the generalized runway, not a home-scoped rule.
+2. **F2** — A1's "viewport-anchored seating" inverts the recorded device truth (iOS-26 seats the fixed bar
+   ONLY on a tall document); framed as "preferred/expected stable," it is the configuration the record says
+   fails, and with `css:73` retained (required by F1) A1 collapses into A2 anyway.
+3. **F3** — the flash cause is one of TWO unconfirmed hypotheses; the design eliminates only one, the other
+   (the parked→`translateX(0)` transform-clear on `#home`'s own layer) survives the design and IS R1(a).
+   §3's "eliminates the flash / the underived re-raster trigger" overstates the probes and contradicts R1(a).
+
+F4–F8 are tightenings. None is fatal; all are fixable by Vitruvius without redesign.
+
+## Defining records
+
+**AGREE on the mechanism and the delete-scope; GAP on the seating rework's true blast radius; the
+flash-elimination framing over-reads the DERIVED records.**
+
+- **User recalibration (2026-07-28)** — sanctions retiring the navbar hack; hard requirement = the fixed bar
+  stays stable; escalate only for unbounded churn. AGREES with a bounded seating rework. The plan honors the
+  hard requirement ONLY via A2 (F2); A1 as written risks violating it (F1/F2).
+- **Correction 1 (home height is DYNAMIC)** — `#dlSection` conditional Downloads carousel (index.html:55-58);
+  content can exceed the viewport. The plan treats active `#home` as a real `overflow-y:auto` scroller sized
+  to dynamic content (§3/§6). AGREE — no place in the plan assumes viewport-sized/short home. Confirmed.
+- **Plan-of-record §2.1/§2.4 + constraint E** — two in-flow views sharing the document scroll cannot coexist,
+  which FORCES the snapshot. The design dissolves E by making `#home` fixed-own-scroll (not in-flow). AGREE
+  the dissolution is coherent; it is NEW POLICY overturning §2.1 for `#home` (R3, ledgered). Correctly classified.
+- **`constructionPlanFor` (swipe.js:140-146) + spec rows 56/59** — verified against source. The plan's enum
+  changes are accurate in §4. The headline's "ONE decision edited" undercounts §4's three value changes (F4).
+- **CSS seating record (css:56-81) — the GAP.** css:63-73 states plainly that the base `.app { min-height:
+  calc(100%+12vh) }` (css:73) is the GENERALIZED runway covering "the OTHER short in-flow views too (a 1-book
+  author, an empty/short list)"; `body.home-tall .app` (css:81) is redundant with it and is the sole
+  home-scoped part. The plan's §8/§12 treat "css:73/81" as one home-path unit and retire both under A1. This
+  is a material GAP: css:73 governs short browse pages the plan claims are untouched (F1).
+- **CSS seating record (css:63-66) — the CONFLICT with A1.** "iOS 26 only seats a `position:fixed; bottom:0`
+  bar correctly when the document is genuinely scrollable — a viewport-sized document displaces the fixed nav
+  bar ~5-10px UP (the black-band saga)." A1's viewport-anchored-without-a-runway seating is the displacing
+  configuration on record. The plan frames A1 as preferred/expected-stable, inverting the record (F2).
+
+Authority precedence (EC §2): the recalibration + plan-of-record govern shape; the verified css:56-81
+seating record governs the seating-mechanism claims and is where A1/A2 must be reconciled; the frozen
+interface governs the construction edit; Linnaeus D2 governs re-homing completeness (confirmed complete via
+independent grep for `home-tall`/`scrollSettle`).
+
+## Callee behaviour (callee_replacement)
+
+- **`snapshotHome` (swipe.js:270-282)** — builds a detached `#home` clone in a fixed `ghostWrap`, strips id,
+  removes `hidden`/`parked` on the clone (272), `freezeArt` (273), mounts in `.app`/`#library` shell, then
+  `copyScroll` copies each carousel `scrollLeft` (279) and `copyAnimPhase` seeks clone animations (280).
+  REPLACED by the real fixed `#home` un-parked via `home-host`. Every observable effect is re-assigned in the
+  plan's §5 effects block; I concur the re-assignment is complete: the clone's class-strip → real `#home`'s
+  `.parked` removal at drag start; `copyScroll` → real `#home` keeps its own element-local `scrollLeft`
+  (parity with nav.js:123-126 no-restore). The `copyAnimPhase` cover-animation sync (280) is DROPPED — a real
+  un-parked `#home` never restarted its animations, so there is no phase to re-sync; the plan's §5 does not
+  explicitly name `copyAnimPhase` among the retired effects (minor — folded into "no clone is built").
+- **`holdGhostUntilPaintable` `→home` branch (app.js:825-916)** — the `→home` invocation (app.js:1218) passes
+  `scrollSettle`, arming the `scrollend` listener (910) + `SETTLE_MS` timer (912) + the `settled` third gate
+  (833/887). DELETED for `→home` (no hold over home; the outgoing ghost drops off-screen). Verified the
+  `abort→browse` invocation (app.js:1235) passes NO opts, so `settled = !opts.scrollSettle` is already `true`
+  there and the gate already reduces to `decoded && painted` — deleting the `scrollSettle` plumbing leaves
+  `abort→browse` byte-equivalent, exactly as the plan's SCOPE cell asserts. The delete-scope claim SURVIVES.
+
+## Findings
+
+### F1 — Structural (defect) — Retiring `css:73` (base `.app` min-height) regresses short BROWSE-page bar seating — a path the plan declares untouched
+
+The plan's §8 "Sizing (honest)" and §12 SUBTRACTIVE list "the `.app`/`home-tall` runway min-height (css:73/81)"
+as a single home-path unit, retired under A1. But css:73 is NOT home-scoped. The CSS comment directly above
+it (css:63-68) states its purpose: *"Every base view carries a real scroll runway (12vh past the viewport)…
+Home already proved this fix works via `body.home-tall`; generalizing it to `.app` covers the OTHER short
+in-flow views too (a 1-book author, an empty/short list)."* And `body.home-tall .app` (css:81) carries the
+identical `calc(100%+12vh)` value, so on the home view it is redundant with the base rule; `home-tall`
+(nav.js:81) is set only when `#home` is un-parked, i.e. never during Browse.
+
+Consequence: short browse pages (a 1-book author, the files view of a short book, an empty/short list) rely
+SOLELY on css:73 for their document height. Retiring css:73 removes that runway and reintroduces the exact
+iOS-26 fixed-bar displacement css:73 was generalized to prevent — on Browse, which the plan lists under STAYS
+("`#browse`'s in-flow document-scroll model — untouched") and PRESERVED, and which R1(b) does not device-gate
+(R1(b) observes "a fixed own-scroll `#home`", the home view only). A builder following the sizing list
+literally ships a silent regression on short browse pages.
+
+Fix (the invariant, not a prescription): the home-scoped retirement is `css:81` + the `home-tall` toggle
+(nav.js:81) + the home-entry `scrollTo(0,1)` (nav.js:127) ONLY. `css:73` must be RETAINED for the other short
+in-flow views — or, if the plan intends to touch it, short-browse-page bar seating must become an explicit
+device gate. State which.
+
+### F2 — Structural (defect) — A1 ("viewport-anchored seating") inverts the recorded device truth; with `css:73` retained it collapses into A2
+
+§8 A1 is framed as *"PREFERRED, cleaner… the modern, newer-code-compatible mechanism… Why it should be
+stable: … removing the document-height dependency and anchoring to the viewport removes the exact input
+… the 30-round churn fought."* The recorded device truth runs the opposite way. css:63-66: *"iOS 26 only
+seats a `position:fixed; bottom:0` bar correctly when the document is genuinely scrollable — a viewport-sized
+document displaces the fixed nav bar ~5-10px UP (the black-band saga)."* The .30/.28 sagas' CONCLUSION was
+that document height is the FIX, not "the input the churn fought." A1 proposes seating the bars WITHOUT a tall
+document — the precise configuration the record says displaces them. Calling it "preferred/expected stable"
+is a calibration inversion (D4: the claim runs opposite to its own cited evidence).
+
+Compounding: A1's mechanism is unspecified — "(dynamic-viewport sizing / an explicit viewport-anchored
+shell)" is a parenthetical, not a named mechanism, against a record that says the class of approach fails.
+And the collapse: F1 requires css:73 to be RETAINED. With css:73 retained, the home view's document stays
+tall via css:73 even with `#home` fixed (the `.app` min-height floor is independent of `#home`'s flow
+participation) — which is exactly A2's mechanism ("`.app` retains its tall min-height so the document stays
+scrollable and the bars seat by today's exact mechanism"). So A1 differs from A2 ONLY by additionally
+retiring css:73, which F1 forbids. A1 as a distinct "preferred" option does not survive.
+
+Fix: make A2 (retain the css:73 runway; `#home` fixed own-scroll on top) the expected, primary seating path —
+it satisfies the user's one hard requirement by today's verified-stable mechanism. If A1 (a genuinely
+document-height-independent bar anchoring) is still to be attempted, re-frame it as speculative and
+contra-record, name its actual mechanism, and gate it on R1(b) as the exception, not the default.
+
+### F3 — Structural (defect) — The flash-elimination claim over-reads the DERIVED probes and contradicts R1(a); the surviving mechanism (transform-clear) is not made first-class
+(claim calibration + internal inconsistency)
+
+The plan headlines "make active `#home` fixed … so the reflow-driven raster-from-empty (the camera-confirmed
+flash) is ELIMINATED, not masked", and §3 says the carousels "do not reposition on the collapse (the
+reposition Linnaeus home-carousel §5 identifies as the underived re-raster trigger)." This over-reads the
+records on two counts:
+
+1. The probes carry TWO competing, both-[UD] hypotheses for the flash, neither confirmed: (i) the
+   document-collapse repositions the carousel boxes and their layers re-raster (`PROBE-home-carousel` §5,
+   marked [UD]); (ii) un-parking = clearing `#home`'s `translateX(-101vw)` on its `will-change:transform`
+   layer forces the descendant carousel scroll-layers to re-raster from empty (`PROBE-swap-necessity` §5/§6
+   item 1, marked [UD]). `PROBE-home-carousel` §5 does NOT "identify the reposition as the trigger" — it
+   marks it [UD] and names the same competing hypothesis. §3's phrasing promotes one [UD] hypothesis to "the
+   trigger."
+2. The design eliminates only mechanism (i). Mechanism (ii) SURVIVES: the incoming mover is the real `#home`
+   slid from its parked `translateX(-101vw)` (via un-park + an inline mover transform) to `translateX(0)` —
+   the same transform-clear on the same `will-change` layer whose descendants are the carousels. This is
+   exactly what R1(a) asks ("does clearing parked `translateX(-101vw)→translateX(0)` still one-frame-blank
+   the carousels, even fixed and un-occluded?"). So the plan simultaneously asserts "eliminated" (§3/headline)
+   and "may still one-frame-blank" (R1(a)) — an internal inconsistency (D5): a flash-fix plan cannot both
+   headline elimination and hold the elimination hostage to an untested device bet on the same page without
+   saying so plainly.
+
+Fix: state that the flash cause is one of two [UD] hypotheses; the design provably removes only the
+reflow-reposition (i); mechanism (ii) survives the design and IS R1(a); and R1(a)'s own "slide via an
+ancestor/wrapper so `#home`'s own layer is not transform-mutated" fallback is the mechanism-(ii) mitigation,
+in-scope and buildable if R1(a) reddens. This keeps the device bet honest without weakening the (real)
+architecture value. It does not require redesign — only recalibrated prose and an explicit "flash NOT claimed
+fixed until R1(a)" already present in §11 (lift that qualification into the headline).
+
+### F4 — Weak (recommendation) — "ONE construction-decision edit" undercounts §4's three enum-value changes
+
+The title, §1, and §12 assert "the ONE decision edited" / "one construction-decision edit." §4 correctly
+enumerates THREE value changes on the `→home` rows: `browse→home` incoming `home-snapshot`→`real-destination`
+AND outgoing `real-source`→`app-ghost`; `renderDestination` `none`→`home-host`; `overlay→home` incoming
+`home-snapshot`→`real-destination`. The outgoing `real-source`→`app-ghost` flip is a genuinely separate
+decision with its own choreography (§3 builds the outgoing app-ghost of `#browse`) and its own mutation need
+(F8). Recommend aligning the headline count with §4 so the builder scopes the full edit; the object-shape-vs-
+value-domain framing in §4 is accurate and should be the canonical statement.
+
+### F5 — Weak (defect) — The machine-readable `source_ranges` under-declare the actual edit surface
+
+The plan's `vitruvius-gate` `source_ranges` = `["js/app.js:1332-1358","js/nav.js:81-81","css/app.css:103-118"]`.
+The plan's own prose edits sites OUTSIDE these ranges: `css/app.css:73` and `:81` (the `.app`/`home-tall`
+runway retired/kept, §8/§12), `js/nav.js:127` (the home-entry `scrollTo(0,1)` retired → `#home.scrollTop=0`,
+§5/§9), and `js/app.js:1210-1219` + `:775` (the commit→home choreography branch replaced, §3/§5/§12). Since
+`boundary_relocation` is false the ledger is not required, but the declared ranges feed the adapter's
+completeness checks and a reviewer's boundary map; an undeclared edit site escapes both. Add the missing
+ranges (css:73/81, nav.js:127, app.js:1210-1219,775).
+
+### F6 — Weak (open-unknown) — The seating blast radius omits the additive-overlay-over-home base case from R1(b)
+Open question the plan owes: **whether** NP-over-home and Options-over-home seating stays stable under the
+fixed-`#home` model — the plan must **decide** to extend R1(b)'s device observation to those cases.
+
+Today `home-tall`/document-height also seats the NP pill and navbar when an additive overlay (NP, Options,
+settings subs) paints OVER an un-parked `#home` — nav.js:80 comment: *"This also keeps the NP pill seated
+when NP is over home."* Under the fixed-`#home` model with the runway reworked, that overlay-over-home base
+case is subject to the same iOS-26 displacement question, but R1(b) as written observes only "a fixed
+own-scroll `#home`" (bare home view). Decision the plan must record: R1(b)'s device observation includes
+NP-over-home and Options-over-home seating, across scroll + rotation, not the bare home view alone.
+
+### F7 — Weak (defect) — §3 Abort mis-cites the restoration path for `browse→home` abort
+
+§3 "Abort (`browse→home`)" says restore `#browse` "via the existing `abort→browse` reveal." That reveal
+(app.js:1228-1236, the held re-render) is guarded by `finalizationPlanFor.abortRender === 'rerender'`, which
+is TRUE only for `browse→browse` (swipe.js:174). A `browse→home` abort has `abortRender = 'none'` and takes
+the no-hold finalize path (app.js:1238-1257): `dropPanes()` + `applyScreen(dest=browse, render:false,
+resetScroll:false)` + `window.scrollTo(0, cur.scroll0)`. The mechanism restores `#browse` correctly (its page
+node persists; no destination was rendered into it since `renderDestination` is `home-host`, not
+`browse-host`), so `abortRender:'none'` is the right decision — but the citation names the wrong path and
+would send the builder to the rerender-hold branch. Correct the reference; keep `abortRender:'none'`.
+
+### F8 — Note (defect) — Mutation coverage for the new `browse→home` OUTGOING value and for `overlay→home` is thin
+(coverage)
+
+SNAPSHOTGONE's named mutation targets only the INCOMING value (re-introduce `home-snapshot`). The
+`browse→home` OUTGOING flip (`real-source`→`app-ghost`) is asserted only implicitly ("outgoing browse ghost
+dropped off-screen"). EC §4.10 requires a mutation testing the specific new decision: add a mutation that
+keeps `browse→home` outgoing at `real-source` (so no app-ghost is built and the outgoing-ghost assertion
+reddens). Separately, no integration cell drives `overlay→home`; its construction values are covered by spec
+row 59 + the descriptor-coverage gate, which is acceptable — state it explicitly so the coverage claim is not
+read as integration-level for `overlay→home`.
+
+## Coverage (blocking + defect/open-unknown findings → resolution)
+
+- **F1** — Vitruvius revises §8/§12 so that `css:73` is retained (or short-browse seating is added as an
+  explicit device gate); the home-scoped retirement is limited to `css:81` + `home-tall` toggle + the
+  home-entry `scrollTo`. Verified by re-read that no STAYS/PRESERVED item (`#browse` in-flow model) is
+  contradicted by the sizing list.
+- **F2** — Vitruvius re-frames A2 as the primary/expected seating path (satisfies the hard requirement by the
+  verified-stable mechanism); A1, if retained, is re-framed as speculative/contra-record with a named
+  mechanism and R1(b) as its gate. Verified by reconciling §8's A1/A2 framing against css:63-66.
+- **F3** — Vitruvius recalibrates the headline/§3 to state the two-hypothesis [UD] situation, that only
+  mechanism (i) is eliminated, that mechanism (ii) survives and is R1(a), and that R1(a)'s wrapper-slide
+  fallback is the in-scope mitigation. Verified by checking the headline no longer asserts unconditional
+  elimination and R1(a) is not contradicted elsewhere.
+
+- **F5** — no runtime surface: a declaration-hygiene fix (add the missing `source_ranges`). Owes no test;
+  verified by re-reading the declaration against the plan's prose edit sites.
+- **F6** — no CI surface (device open-unknown): closed by extending R1(b)'s on-device observation to
+  NP-over-home and Options-over-home seating; no jsdom cell can settle it.
+- **F7** — no runtime surface: a citation correction in the plan prose (`browse→home` abort takes the no-hold
+  path, `abortRender:'none'`); the mechanism is already covered by the ABORT cell.
+
+F4 and F8 are tightenings landing in the same revision; F4 is a headline-count alignment (no test), F8 adds
+the `browse→home` outgoing mutation to the SNAPSHOTGONE cell.
+
+## Prediction — where it breaks in execution if built as written
+
+1. **The builder follows the §12 sizing list and retires `css:73`.** Home seating is device-checked under
+   R1(b) and (if the fixed model holds) passes on the home view. Short BROWSE pages — a 1-book author, a short
+   files view — are never on the R1(b) checklist, so the bar-displacement regression ships and surfaces later
+   as an intermittent "the nav bar jumps on some authors" report, hard to bisect because the home view looks
+   fine (F1). This is the most likely and most expensive miss.
+2. **A1 is built as "preferred," device-tested, displaces the bar (per css:63-66), and falls back to A2** —
+   a wasted build+device cycle that the plan's own recorded evidence already predicts (F2). Not silent, but
+   avoidable by making A2 primary now.
+3. **R1(a) reddens** (the flash is mechanism (ii), the transform-clear). The plan's §3 "eliminated" framing
+   makes this read as a plan failure rather than the disclosed device bet it is; the wrapper-slide fallback is
+   present but buried in R1(a)'s fallback list rather than named as the mechanism-(ii) remedy (F3). The build
+   is recoverable via that fallback, but only if F3's recalibration made it first-class.
+
+## Handoff packet
+
+- **Source artifact:** `Claude/Charpy/PLAN-swipe-noswap-home-charpy.md` (this casebook).
+- **Verdict / status:** TEMPER — three Structural findings (F1, F2, F3) blocking; F4–F8 tightenings. The core
+  mechanism (fixed own-scroll `#home` slide-and-leave), the delete-scope, and the constraint-E dissolution are
+  sound and verified against source; the defects are confined to the navbar-seating rework and the
+  flash-elimination framing.
+- **Decisions confirmed against reality:** `opts.scrollSettle` is set at exactly one site (app.js:1218) →
+  the settle-gate deletion is `→home`-only and `abort→browse` is byte-equivalent; `snapshotHome`'s only live
+  consumer is the `home-snapshot` incoming branch (swipe.js:331) → deletable with the value flip; Linnaeus D2's
+  four-consumer enumeration is complete (independent grep for `home-tall`/`scrollSettle` matched); `css:73` is
+  the generalized (all-short-in-flow-views) runway, not a home-scoped rule (css:63-68).
+- **Open questions / who each waits on:** F1 (retain vs device-gate css:73) — Vitruvius must choose; F2 (drop
+  A1 or re-frame as speculative) — Vitruvius; F3 (recalibrate the elimination framing) — Vitruvius. R1(a/b/c)
+  remain device, downstream of the build, unchanged by this review.
+- **Next owner:** Vitruvius (temper the plan per F1–F3, land F4–F8), then re-submit or proceed to Brunel; Curie
+  builds the suite from §10 with F8's mutation added.
+- **Required evidence / gates:** the five CI mechanism cells green with F8's added `browse→home` outgoing
+  mutation; the flash NOT called fixed without R1(a)+R1(b)+R1(c) on device; the §2.1 overturn entered in
+  `Claude/Decisions/PolicyLedger.mjs` (policy-ledger-gate) with a stable ID + enforcing test.
+- **Records updated:** this casebook filed; board/decision-log update routed to Zelda on the dispatcher's side.
+
+VERDICT: TEMPER
