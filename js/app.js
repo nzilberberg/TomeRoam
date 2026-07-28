@@ -549,9 +549,14 @@
         if (deco.kind === 'now-playing-pill' && deco.base === 'outgoing') document.body.classList.remove('np-locked');
       }
 
-      // Park the incoming panes offscreen. Deliberately NO will-change on the real
-      // in-flow views (#home/#browse) — promoting them to a layer can nudge the iOS
-      // fixed navbar (a "pop" at swipe start). The transform alone is enough.
+      // Park the incoming panes offscreen. Deliberately NO promotion here on either
+      // real in-flow view (#home/#browse) — promoting one to a layer at swipe start
+      // can nudge the iOS fixed navbar (a "pop"); the mover transform alone is
+      // enough. #home is the ONE scoped exception: css/app.css now promotes it
+      // PERMANENTLY (a stylesheet `transform: translateZ(0)`, device-confirmed
+      // navbar-safe, PLAN-swipe-stage6g.md), so it is already promoted before this
+      // ever runs — this loop is not what promotes it and does not need to. #browse
+      // remains un-promoted; this invariant still governs #browse.
       for (const m of d.movers) if (m.base) m.el.style.transform = 'translateX(' + m.base + 'px)';
     }
 

@@ -120,6 +120,7 @@ const SOURCE_TEXT_GATES = {
   'mutation-anchors.test.js': 'asserts every mutation anchor still matches the source; a mutation removes the text it targets, so this fails for EVERY mutation',
   'swipe-model.test.js': 'fingerprints js/app.js regions (end, begin, navTo, nav-relation); a mutation inside one changes the hash by construction',
   'transition-matrix.test.js': 'fingerprints the js/app.js transition-branch region, same reason',
+  'home-layer-invariant.test.js': 'reads the TEXT of css/app.css (PLAN-swipe-stage6g.md cell PROMO); the stage6g PROMO mutation targets that same text, so counting this gate as "caught" would be a FALSE CAUGHT',
 };
 
 function behaviourTests() {

@@ -106,13 +106,14 @@ body.home-tall .app { min-height: calc(100% + 12vh); }
   transform: translateX(-101vw);   /* fully off-screen (own layer keeps it painted) */
   overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;
 }
-/* ⚠️ DIAGNOSTIC PROBE — build .256, REVERT after the device test (do NOT keep).
-   Keeps #home a STABLE compositing layer so removing `.parked` at the reveal does
-   NOT demote it → tests the reveal-teardown flash hypothesis (saga refinement
-   2026-07-27, Claude/Linnaeus/PROBE-swipe-reveal-teardown.md). If the commit
-   books→home and abort home→books flashes vanish, the #home un-park demote is the
-   cause. Watch the fixed navbar for a "pop" (app.js:552/364). Remove once measured. */
-#home { will-change: transform; }
+/* #home is a PERMANENT compositing layer: an unconditional real transform (not the
+   droppable `will-change` hint) so removing `.parked` at a reveal can never demote
+   it — the demote was the home→books ABORT flash (device-confirmed, build .256
+   controlled A/B; PLAN-swipe-stage6g.md). translateZ(0) over will-change because a
+   dropped hint would reintroduce the flash intermittently under memory pressure;
+   permanent over reveal-scoped because releasing the promotion while #home is the
+   visible active view would itself demote it. Device-confirmed navbar-safe. */
+#home { transform: translateZ(0); }
 
 /* Page-carousel transitions. The incoming view slides in from the side that matches
    the direction (forward = from the right, back = from the left). `.app` clips the
