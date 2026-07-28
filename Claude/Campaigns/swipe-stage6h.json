@@ -1,0 +1,13 @@
+{
+  "campaign": "swipe-stage6h",
+  "stage": "6h",
+  "note": "Definition of done for Stage 6h — the COMMIT books→home flash (flash A), grounded by Linnaeus (Claude/Linnaeus/PROBE-scroll-clamp-reveal.md) as an iOS COMPOSITOR SCROLL-SNAP: on commit from a scrolled-down tall #browse, applyScreen(home) collapses the document (14676→900) and clamps scroll (~11481→1) under the cover; the compositor is still scroll-snapping when the cover drops on the main-thread double-rAF gate (rAF-blind to the snap) → flash. Scroll-magnitude-dependent (top = no snap = clean — the user's RELIABLE repro). FIX: gate the commit→home cover drop on a real scroll-settle/`scrollend` signal (+ a fallback timer), HOME-scoped (app.js:1171-1176, no .alphaindex trap). NOT layer-promotion (A is not a demote), NOT a cover cross-fade (.203 falsified). ⭐ HONESTY: the FLASH is DEVICE-only to confirm — via the user's scroll-down repro (scroll down→flash / top→clean); CI/coverage verifies the MECHANISM (cover drops on scroll-settle not the bare rAF) + no regression + never-strand-cover fallback. NOT 'confirmed fixed' until the device repro is clean. DEFERRED (distinct roots): B abort home→books (#home un-park demote, .258-mitigated), C abort books→books (incoming #browse transform, T8-forked). Checked by tools/campaign/stage-gate-check.mjs. Every required gate carries a machine-readable verdict token. Adversary (Loki) required. Poirot glob permissive.",
+  "gates": [
+    { "gate": "plan-review",    "owner": "charpy",    "required": true, "verdictArtifactGlob": "Claude/Charpy/PLAN-swipe-stage6h-*.md",  "acceptVerdict": ["FORGE"] },
+    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6h.md",       "acceptVerdict": ["RED_SUITE_READY"] },
+    { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-stage6h-*.md",        "acceptVerdict": ["BUILD_GREEN"] },
+    { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage6h*.md",        "acceptVerdict": ["PASS", "SHIP"] },
+    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6h.md", "acceptVerdict": ["ADEQUATE"] },
+    { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-stage6h-*.md",   "acceptVerdict": ["HELD_STONE"] }
+  ]
+}
