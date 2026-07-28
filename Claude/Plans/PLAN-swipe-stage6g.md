@@ -51,7 +51,7 @@ exception into for `#home`.
 |---|---|---|---|---|
 | Saga refinement 2026-07-27 + build `.256` controlled A/B | `#home.parked` is a composited layer; removing `.parked` at the reveal DEMOTES it → iOS re-rasters → the home→books ABORT flash. A permanent promotion on `#home` (probe `#home { will-change: transform }`) made that flash CLEAN, one variable changed. | Device measurement (strongest evidence in the saga) | Realizes that exact fix in production form: keep `#home` a stable compositing layer THROUGH the reveal so removing `.parked` cannot demote it. | — (this plan IS the formalization) |
 | `css/app.css` `#home.parked` (103-108) + the DIAGNOSTIC probe (109-115) | Parked `#home` promotes via `will-change: transform` + `transform: translateX(-101vw)`; un-parking drops BOTH → demote. The probe `#home { will-change: transform; }` is a temporary diagnostic, marked REVERT-after-test. | Code under change | Replace the diagnostic probe with the PRODUCTION form: an unconditional `#home { transform: translateZ(0); }` base rule (§4). The parked rule is left intact (its own `translateX` transform keeps the layer while parked). | Replace lines 109-115 (§9) |
-| `js/app.js` "Deliberately NO will-change on the real in-flow views (#home/#browse) — promoting them to a layer can nudge the iOS fixed navbar" (552-554); the same warning at 364; the `tomeroam-js-dom` adapter (F) "no-promotion-on-real-panes invariant" | Do not promote the real in-flow views to a compositing layer — it risks a fixed-navbar "pop". | Subsystem invariant (code comment + plan-gate adapter) | **Deliberately reversed for `#home` only.** The `.256` A/B ran with `#home` permanently promoted and the navbar did NOT pop (device-confirmed narrowly: a probe-introduced pop would be visible with the probe live, and it is not). `#browse` stays governed by the invariant (its incoming-transform flash is deferred, §10). Classified NEW POLICY (EC §4.19): a scoped, device-justified exception for `#home`. | Update the app.js:552-554 comment to record the `#home` exception; update the subsystem contract; append DecisionLog (§9) |
+| `js/app.js` "Deliberately NO will-change on the real in-flow views (#home/#browse) — promoting them to a layer can nudge the iOS fixed navbar" (552-554); the `tomeroam-js-dom` adapter (F) "no-promotion-on-real-panes invariant" | Do not promote the real in-flow views to a compositing layer — it risks a fixed-navbar "pop". | Subsystem invariant (code comment + plan-gate adapter) | **Deliberately reversed for `#home` only.** The `.256` A/B ran with `#home` permanently promoted and the navbar did NOT pop (device-confirmed narrowly: a probe-introduced pop would be visible with the probe live, and it is not). `#browse` stays governed by the invariant (its incoming-transform flash is deferred, §10). Classified NEW POLICY (EC §4.19): a scoped, device-justified exception for `#home`. Note the base `translateZ(0)` guarantees no DEMOTE on the un-park REVEAL path; a `nav-in` slide animation still resolves `#home` to `none` transiently at its end frame (benign, non-reveal — §3). | Update the app.js:552-554 comment to record the `#home` exception; update the subsystem contract; append DecisionLog (§9) |
 | Saga DEAD-END `.195`/`.196` (permanent transform on `#browse` broke `.alphaindex`) + trap T7 (inline beats stylesheet) | A permanent transform on a real in-flow view makes it the containing block for its `position:fixed` descendants; `.alphaindex` (the A–Z strip) is such a descendant OF `#browse`, and broke. Inline transforms beat stylesheet ones. | Saga (measured) | Grounded as NOT applicable to `#home`: `.alphaindex` lives in `#browse`, not `#home`; `#home` has no `position:fixed` descendant that resolves against the viewport (the navbar/`#player`/`#nowplaying` are OUTSIDE `.app`, so `#home` becoming a containing block cannot capture them). The `.256` probe (`will-change: transform`, which per the CSS Will-Change spec creates the SAME containing block as an actual transform) ran on device with no reported strip/fixed-descendant breakage — empirical confirmation that the containing-block effect on `#home` is benign. The production form is a STYLESHEET rule, not inline, so trap T7 does not apply. | — |
 | `test/swipe-invariants.test.js` I5 (277-290): after a settled swipe no real view carries an inline `transform`/`transition`/`will-change`; `test/swipe-stage6f.test.js` (44-46, 145-161): the real `#home` carries NO inline swipe transform mid-drag; `#home.parked`'s STYLESHEET transform is explicitly noted as not confounding those inline reads | The existing suite asserts only INLINE styles on `#home`; the standing `#home.parked` stylesheet transform is already known not to confound them. | Test contract (compatibility) | UNBROKEN by construction: the production form is a STYLESHEET rule (`#home { transform: translateZ(0) }`), so `#home.style.transform` stays `''` after a gesture (I5 green) and the mid-drag inline read (6f) is unaffected — exactly as `#home.parked`'s stylesheet transform already is. This is the decisive reason the form is stylesheet, not inline. | — |
 | `EngineeringContract.md` §4.19 (parity vs policy), §4.10 (mutation verification; SOURCE_TEXT_GATES separation) | Classify every change; a source-text gate must be separated from behavioral sweeps and must not claim it caught runtime behavior. | Core rule | Classified NEW POLICY. The invariant is pinned by a SOURCE-TEXT gate over `css/app.css` (§8 PROMO), explicitly separated into the source-text sweep and explicitly NOT a runtime-compositing proof. No known-red is introduced (the new gate is GREEN on the shipped production form). | Register the mutation + gate (§9) |
@@ -78,8 +78,8 @@ Behavioural ownership, not line numbers.
   which it becomes `none`.
 
 **Changes (records-truth, not behaviour — flagged in §9, NOT applied by this plan):**
-- **`js/app.js` (552-554 comment; and 364).** Update the "Deliberately NO will-change on the real in-flow
-  views (#home/#browse)" comment to record the scoped `#home` exception (permanently promoted via a stylesheet
+- **`js/app.js` (552-554 comment).** Update the "Deliberately NO will-change on the real in-flow views
+  (#home/#browse)" comment to record the scoped `#home` exception (permanently promoted via a stylesheet
   `translateZ(0)`, device-confirmed navbar-safe; `#browse` remains un-promoted). No code changes; the comment
   is describing HEAD truth (StandardsDocument §6.6).
 
@@ -106,29 +106,50 @@ Option-A direction — superseded, not needed for the felt flashes).
 
 ## 3. The load-bearing promise and the single fracture for Loki
 
-**The load-bearing promise (single).** *No reveal path can leave `#home` without a compositing-promotion — a
-demote frame on `#home` is impossible by construction.* Concretely: because the base rule `#home { transform:
-translateZ(0) }` is UNCONDITIONAL, `#home`'s computed `transform` is a persistent, layer-promoting, non-`none`
-value in every state (`translateX(-101vw)` parked via the more-specific rule; `translateZ(0)` un-parked via
-the base rule; an inline `translateX(...)` mid-drag; back to `translateZ(0)` when the inline clears to `''`).
-Removing `.parked` at any reveal therefore cannot produce a `transform: none` frame, so the browser never
-destroys the layer, so iOS never re-rasterises the whole view.
+**The load-bearing promise (single, SCOPED to the reveal).** *No un-park / REVEAL transition — any transition
+that removes `.parked` from `#home` to make it the active view — leaves `#home` on `transform: none`. The base
+`translateZ(0)` holds across the parked↔un-parked cascade, so the reveal cannot demote `#home`'s compositing
+layer.* Concretely: the static rule cascade over `#home` is `{ #home { transform: translateZ(0) }, #home.parked
+{ transform: translateX(-101vw) } }`; the parked rule (more specific) wins while parked, the base rule applies
+the instant `.parked` is removed, and the inline mover transform during a drag is `translateX(...)` (cleared to
+`''` → stylesheet on reset). Across that cascade `#home`'s transform is never `none`, so removing `.parked` at
+a reveal produces no demote frame, so iOS does not re-rasterise the view.
 
-**Basis (U11).** A device-confirmed correctness fix (the `.256` A/B), realized as a STRUCTURAL guarantee
-(an unconditional rule) rather than an enumerated defense: the promotion is not "added at the reveal" (a place
-that can be missed) — it is a property `#home` always has, that `.parked` temporarily re-expresses as an
-off-screen transform. The choice of `translateZ(0)` over `will-change` and of PERMANENT over SCOPED are the
-two design decisions, grounded in §4.
+**⚠️ The promise is NOT "non-`none` in every state" — that absolute is false, and stating it would mis-aim the
+blind Loki.** `#home` carries class `view`, and a NON-reveal path resolves its transform to `none` by design:
+`navTo(desc, anim)` (app.js:144) and the unconditional `goBack()` (app.js:151) call `slideInView(viewElFor(
+'home'), …)` (nav.js:39/145), which adds `.nav-in-left`/`.nav-in-right`; those keyframes (app.css:123-124) END
+at `to { transform: none }` held by `animation-fill-mode: both`. Reachable: bottom-nav to Books, then on-screen
+Back → `#home` slides in via `nav-in-left` and its computed transform resolves to `none` at the animation's end
+frame, until `animationend` removes the class (nav.js:151) → it reverts to the base `translateZ(0)`. **This is
+BENIGN and NOT a flash regression:** it is a navigation ANIMATION (not the swipe un-park reveal), the running
+animation itself composites `#home` throughout the slide, and it reverts to `translateZ(0)` at `animationend` —
+strictly BETTER than today, where the same slide ends on `none` with no base transform to revert to. The slice
+neither introduces nor worsens this path; the promise simply does not (and must not) claim to cover it.
 
-**The single fracture Loki attacks.** A reachable state in which `#home`'s computed `transform` is `none`
-(the layer demoted) — i.e., a path that defeats the unconditional base rule. The only ways to do so are (a)
-an INLINE `transform: none`/`''`-to-`none` write on `#home` (grep the reveal/finalize/reset paths: the only
-inline writes are `translateX(...)` during a drag and `''` on reset — `''` falls back to the stylesheet, never
-`none`), or (b) a MORE-specific rule setting `#home` transform to `none` in some state (there is none). Loki's
-strike: drive the real reveal that lands on home (a home→books ABORT snap-back — the exact device scenario)
-and any other reachable applyScreen(home)/gesture path, and find a phase where `#home`'s effective transform
-resolves to `none` (or where an inline `none` is written). If none exists, the demote frame is impossible and
-the promise holds.
+**Basis (U11).** A device-confirmed correctness fix (the `.256` A/B), realized as a STRUCTURAL guarantee over
+the REVEAL cascade (an unconditional base rule the un-park falls back to) rather than an enumerated defense:
+the promotion is not "added at the reveal" (a place that can be missed) — it is a property `#home` always has
+in its static cascade, that `.parked` temporarily re-expresses as an off-screen transform. Certification is
+epistemic, not absolute: the base rule guarantees no DEMOTE frame on the un-park path; it does not (and is not
+claimed to) make `#home`'s transform non-`none` under every animation the app can run. The choice of
+`translateZ(0)` over `will-change` and of PERMANENT over SCOPED are the two design decisions, grounded in §4.
+
+**The single fracture Loki attacks (with the known-benign path handed over, not hidden).** The promise fails
+iff some **un-park / reveal** transition leaves `#home` on `transform: none` (a demote frame at the reveal).
+The base rule is unconditional, so the only ways to defeat it on a reveal path are (a) an INLINE `transform:
+none`/`''`-to-`none` write on `#home` at the reveal (grep the reveal/finalize/reset paths: the only inline
+writes are `translateX(...)` during a drag and `''` on reset — `''` falls back to the stylesheet, never
+`none`), or (b) a MORE-specific static rule setting `#home` transform to `none` in the un-parked state (there
+is none). Loki's strike: drive the real reveal that lands on home (a home→books ABORT snap-back — the exact
+device scenario) and any other reachable `applyScreen({v:'home'})`/gesture un-park path, and find a phase where
+`#home`'s effective transform resolves to `none` at the reveal.
+
+**Handed to Loki explicitly (so a blind strike does not false-clear or bounce on it):** the `nav-in`
+slide-animation path above DOES resolve `#home`'s transform to `none` at its end frame, but it is a NON-reveal
+navigation animation and is OUT of the promise's scope — it composites during the slide and reverts to
+`translateZ(0)` at `animationend`, so it is not a reveal demote. A strike that lands on the `nav-in` end frame
+has found the accounted-for benign path, not a fracture of the reveal promise.
 
 **⚠️ The promise is STRUCTURAL; the flash is DEVICE-confirmed, not CI-confirmed.** No CI cell asserts the
 flash is gone — iOS compositing/rasterisation is off the main thread and invisible to the harness (saga: the
@@ -175,9 +196,11 @@ into the production form.
   shape the planner discipline warns against.
 
 **Pure-CSS?** YES. The fix is one unconditional stylesheet rule; the un-park (removing `.parked`) then cannot
-demote because the base transform remains. `resetSwipeStyles`'s `style.transform = ''` clears only the inline
-value and falls back to the stylesheet — no JS change is required. The single JS touch (§2, §9) is a COMMENT
-scrub for HEAD truthfulness, not a functional change.
+demote *on the reveal path* because the base transform remains under it in the static cascade.
+`resetSwipeStyles`'s `style.transform = ''` clears only the inline value and falls back to the stylesheet — no
+JS change is required. (The guarantee is over the un-park cascade only; a `nav-in` slide animation still drives
+`#home` to `none` transiently at its end frame — benign, non-reveal, §3.) The single JS touch (§2, §9) is a
+COMMENT scrub for HEAD truthfulness, not a functional change.
 
 **The one thing the eyeball A/B could not settle (device-verify watch, §9).** A permanent real 3D transform
 rasterises the ACTIVE `#home` to a GPU texture; on some displays that can soften text versus the crisp
@@ -201,9 +224,11 @@ Named concerns:
   real view — this slice does the opposite for the layer: it never lets go of it).
 - **HOLD / MUTATE across state change.** While parked, the more-specific `#home.parked` rule MUTATES the
   transform to `translateX(-101vw)` (still a real transform → the SAME layer is held, off-screen). While a
-  drag is in flight, an INLINE `translateX(...)` mover transform mutates it. In every case the transform
-  stays non-`none`, so the held layer is never a different or destroyed layer — it is the same promotion
-  throughout.
+  drag is in flight, an INLINE `translateX(...)` mover transform mutates it. Across the parked → drag →
+  un-park states the transform stays non-`none`, so the reveal never destroys the layer — it is the same
+  promotion throughout. (Exception, out of scope: a `nav-in` slide animation drives the transform to `none`
+  at its end frame, but the running animation itself holds the layer during the slide and it reverts to
+  `translateZ(0)` at `animationend` — §3.)
 - **RELEASE / DISPOSE.** The layer is NEVER released or disposed by app code across the parked↔un-parked
   cycle — that release IS the demote this slice forbids. `resetSwipeStyles` clears the INLINE transform to
   `''`, which cascades back to `translateZ(0)` (a re-expression of the same promotion), not a release. The
@@ -245,7 +270,7 @@ what the PROMO source gate detects. No `@order` runtime section is owed.
 | Invariants | Yes | The load-bearing promise §3 (no reveal path lands `#home` on `transform: none`) — cell PROMO; REVEAL pins that the real reveal path is the parked→un-parked transition the invariant protects. |
 | Mutation cases | Yes | PROMO's mutation neutralises the base `#home` transform (source text); REVEAL's mutation breaks the un-park. |
 | Known-red | N/A | New policy; the source gate is GREEN on the shipped form; no known-red, no PolicyLedger entry (§9). |
-| Composition | Yes | The permanent base transform composes with `#home.parked` (more-specific override), the mid-drag inline mover transform, and `resetSwipeStyles`'s inline clear — none of which produces a `none` frame (cell PROMO reasons over all three states). |
+| Composition | Yes | The permanent base transform composes with FOUR states: `#home.parked` (more-specific override), the mid-drag inline mover transform, `resetSwipeStyles`'s inline clear (falls back to the stylesheet) — none of which produces a `none` frame on the reveal (cell PROMO) — and the `nav-in` slide animation, which DOES resolve to `none` at its end frame but is a benign non-reveal path that composites during the slide and reverts to `translateZ(0)` at `animationend` (§3, accounted, not a reveal demote). |
 | Contract claims (exact schema) | N/A | No contract object/schema changes. |
 | Concurrency | N/A | Static CSS; single-writer irrelevant. |
 | Observability | Yes | PROMO reads `css/app.css` source (the only channel where the promotion is observable — jsdom cannot compute a stylesheet transform); REVEAL reads the real `#home` class state through the harness reveal path. The compositor demote/flash is NOT observable in CI — device-only (§9). |
@@ -260,7 +285,7 @@ device-confirmed (`.256` A/B), stated §3/§9.**
 
 | id | Behavior proved | Fixture / channel | Mutation that must fail it | Layer |
 |---|---|---|---|---|
-| PROMO | `css/app.css` declares an UNCONDITIONAL base `#home` rule whose `transform` is a persistent, layer-promoting, non-`none` value (`translateZ`/`translate3d`/`matrix`), and `#home.parked` also carries a real transform — so no cascade resolution lands `#home` on `transform: none` across parked↔un-parked. | Source-text gate reading `css/app.css` (new `test/home-layer-invariant.test.js`); SOURCE_TEXT_GATES sweep. | Neutralise the base `#home` transform (change `translateZ(0)`→`none`, or delete the base rule, or replace it with a bare `will-change` and no transform) → the gate reddens. | source-contract (css text) |
+| PROMO | `css/app.css` declares an UNCONDITIONAL base `#home` rule whose `transform` is a persistent, layer-promoting, non-`none` value (`translateZ`/`translate3d`/`matrix`), and `#home.parked` also carries a real transform — so no resolution of the STATIC `#home` rule cascade `{#home, #home.parked}` lands `#home` on `transform: none` (this is the un-park/reveal guarantee; it does NOT cover transient animation-added classes like `nav-in`, which are non-reveal and out of scope, §3). | Source-text gate reading `css/app.css` (new `test/home-layer-invariant.test.js`); SOURCE_TEXT_GATES sweep. | Neutralise the base `#home` transform (change `translateZ(0)`→`none`, or delete the base rule, or replace it with a bare `will-change` and no transform) → the gate reddens. | source-contract (css text) |
 | REVEAL | Driving a real transition that lands on home through the app-harness (a home→books ABORT snap-back — the `.256` device scenario), the real reveal path (`applyScreen({v:'home'})`→`setView`) removes `.parked` from `#home` — i.e., the un-park the permanent promotion must survive genuinely occurs on the reveal path. (Proves the reveal IS the protected transition; does NOT prove compositing — jsdom cannot, stated.) | app-harness `h.touch` home→books drag then abort; assert `#home` does not have class `parked` after the reveal (and had it during the drag). | Break the un-park (make the reveal leave `.parked` on `#home`, or skip `setView('home')`) → the assertion reddens. | integration (real DOM class state) |
 
 ```vitruvius-coverage
@@ -278,8 +303,8 @@ defining-record edit flagged for the maker/Zelda.
   REVERT comment) with the production rule `#home { transform: translateZ(0); }` and a production comment
   (permanent compositing layer so un-parking cannot demote it; a real transform not the droppable `will-change`
   hint; device-confirmed navbar-safe, `.256` A/B). Confirm no other rule sets `#home` transform to `none`.
-- **`js/app.js` (552-554, and the 364 warning)** — update the "Deliberately NO will-change on the real in-flow
-  views (#home/#browse)" comment to record the scoped `#home` exception (permanently promoted via a stylesheet
+- **`js/app.js` (552-554)** — update the "Deliberately NO will-change on the real in-flow views
+  (#home/#browse)" comment to record the scoped `#home` exception (permanently promoted via a stylesheet
   `translateZ(0)`, device-confirmed navbar-safe; `#browse` remains un-promoted, its transform flash deferred).
   Comment-only; no code change. Confirm this is the ONLY place in HEAD asserting "no promotion on `#home`" so
   the reversal leaves no stale contradiction (the adapter (F) invariant text is a plan-gate check, not a HEAD
