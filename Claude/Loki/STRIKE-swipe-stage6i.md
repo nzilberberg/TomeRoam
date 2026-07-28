@@ -368,3 +368,120 @@ line 294 inside `showPage`.
 - **Records updated:** this casebook appended + committed; no other record touched.
 
 VERDICT: KILL
+
+---
+
+# RE-STRIKE #3 — Stage 6i plan repaired again (HEAD 4c3ca60), 2026-07-28 — HELD STONE
+
+Both prior KILLs closed and not re-run. KILL#1 (L5 outgoing home-ghost) fixed via
+content-translate + GHOSTSCROLL/R1(d). KILL#2 (browse→home abort cover re-decode) fixed
+by REVERTING the `browse→home` outgoing flip to `real-source` (option a) — `browse→home`
+is now INCOMING-ONLY, both movers borrowed-real, `#browse` stays the live never-hidden
+outgoing mover, R1(e) device-conceded. Blind pre-build. I attacked the option-(a) surfaces
+hard; the stone held. Filed with a kill's rigor.
+
+## Planes struck (the fresh surfaces option (a) opened)
+
+### Plane 1 — the borrowed-real recovery on `→home` (the freshest surface). HELD.
+Under option (a) `browse→home` has BOTH movers borrowed-real, NO owned pane; §6/§7 claim
+`disposeOwnedPanes` is a no-op and the borrowed views are cleared+restored. **Instrument:**
+`loki-6i-restrike3.js` — booted the REAL `js/nav.js` (module, injected stub deps) on the
+real `index.html`, drove the DOM into a mid-`→home` gesture (`#home` un-parked with an
+inline transform = incoming; the outgoing shown + transformed), then called the EXACT
+recovery target `applyScreen(sourceDesc, {render:false, resetScroll:false})` that
+`releaseGesture` (app.js:442) and the abort (app.js:1255) both invoke. **Executed result:**
+```
+browse→home recovery: #home re-parked=true, #home xf cleared=true, #browse shown=true,
+                      #browse xf cleared=true  → correct
+overlay→home recovery: #home left un-parked=true; PARITY: a fresh navTo(options)-over-home
+                      also leaves #home un-parked=true  → matches the normal base state
+```
+No stranded transform, no mid-transform `#browse`, no wrongly-un-parked `#home`. The
+`browse→home` recovery re-parks `#home`, re-shows `#browse`, and clears both transforms
+(`resetSwipeStyles` covers `#home` AND `#browse`, nav.js:105). The `overlay→home` recovery
+leaves `#home` un-parked, but that is the CORRECT options-over-home base state (executed
+parity), not a strand.
+
+### Plane 2 — `overlay→home` reachability beyond options-over-home (§7's pinning). HELD.
+The plan pins `overlay→home` to options-over-home to make the new pane-less
+settle-supersession admission harmless. **Attack:** traced the nav-intent state machine
+(`navTo` app.js:138-145 pushes the overlay + clears `fwdStack`; `goBack` 146-151;
+`openSub` 162-168) for EVERY route to a `→home` destination. Every reachable `overlay→home`
+has `navStack[-2] === home` (back-swipe `dest = navStack[-2]`, app.js:460) OR
+`fwdStack.top === home` with `navStack[-1] === overlay` (forward) — both mean the overlay
+was opened while home was the current view, so `setView(overlay)` (which never touches
+`#home.parked`, nav.js:56-65 guards the park to non-overlay views) left home un-parked as
+the base. **Executed contrast** (`restrike3.js`, scenario OB): `applyScreen(options)` with
+`#browse` shown / `#home` parked keeps `#home` parked — so an over-BROWSE overlay would
+strand home un-parked IF reachable, but it is not reachable with a home destination. The
+pinning is sound; no NP-over-browse or sub-over-browse `→home` exists.
+
+### Plane 3 — the enum / model overturn coherence (2 remaining changes). HELD.
+**Instrument:** `loki-6i-model3.js` — drove the REAL `Swipe.classifyTransition` over all 8
+structural transitions and applied the plan's §4 `constructionPlanFor` (a faithful patched
+copy; only the two `→home` rows differ). **Executed result:** `paneOf` (spec:66) flips
+`true→false` on EXACTLY `browse→home` and `overlay→home` and nothing else; `home→browse`
+and `home→overlay` keep an `app-ghost` outgoing (pane-OWNING, gated, NOT supersedable);
+`overlay→browse`/`overlay→overlay` were already pane-less at HEAD (no new admission). The
+`→home` `destinationHost` classifies as `"home"`, which `buildConstruction`'s incoming
+else-branch (swipe.js:338) routes through unchanged to `env.renderDestination(dest,"home")`
+— so the model needs no buildConstruction edit, only the planned `env.renderDestination`
+home-host un-park (app.js:507-511). Exactly the plan's claim; coherent.
+
+### Plane 4 — constraint-E dissolution beyond the scroll seam. HELD.
+Fixed `#home` is out of flow — any code reading `#home`'s document-relative geometry
+(`offsetTop`/`getBoundingClientRect`+`scrollY`) would break. **Attack:** grepped every
+`getBoundingClientRect`/`offsetTop`/`offsetParent` in `js/`. All hits are browse /
+virtuallist / slider / the ghost-diff diagnostic — NONE reads `#home`'s in-flow geometry.
+The only home-in-flow surface is the vertical scroll (the §9 six-consumer seam, Charpy
+confirmed complete). No seam-laundered non-scroll consumer.
+
+### Plane 5 — L5 content-translate under dynamic home. HELD (device-conceded, no structural break).
+The offset (`#home.scrollTop`) and the clone (`cloneNode`) are captured at the SAME instant
+(drag start); a home that re-renders or momentum-scrolls AFTER capture makes the ghost stale,
+but the ghost is the OUTGOING view leaving — staleness is expected and the real `#home`
+slides in fresh. The only visible-mismatch axis is a paint, already conceded to R1(d). No
+CI-checkable structural fracture.
+
+## Residual doubt named (honest; NOT a KILL — no runtime body)
+The `home-tall` retirement (§12: retire nav.js:81 toggle + css:81) is runtime-SAFE — css:73
+(`.app { min-height }`) provides the seating runway UNCONDITIONALLY, so removing
+`body.home-tall` changes no seating at runtime (executed indirectly: seating never depends
+on the class once css:73 is unconditional). BUT the retirement's scrub is INCOMPLETE beyond
+the plan's named two sites: `test/nav.test.js:65` and `:80` ASSERT `body.home-tall` is
+toggled (they redden when the toggle is retired), and `docs/swipe-model.generated.txt:104,108`
++ `tools/gen-swipe-model.mjs:284-285` pin `body.home-tall` as "the navbar seater" as a FROZEN
+PARITY rule. The plan's §12 subtractive list does not enumerate these. This is a
+test-update + records-scrub gap (Curie updates the pinning test; Zelda/Mendeleev scrub the
+generated inventory), not a runtime "preserve every non-→home behavior" fracture — so it is
+recorded as a residual for the next seat, not prosecuted as a strike. (A strike needs an
+executed runtime body; a test that pins a deliberately-retired behavior is an expected
+update, not a broken promise.)
+
+## Why HELD (the honest boundary of this pass)
+Option (a) narrowed the plan to an INCOMING-only `→home` change with both movers
+borrowed-real and no owned pane. I executed the three surfaces that change carried —
+recovery, model coherence, and reachability — and each restored/classified correctly. The
+constraint-E dissolution has no non-scroll consumer. Every remaining risk in the plan is a
+device-class PAINT the plan HONESTLY concedes (R1(a) the surviving flash, R1(b) bar seating,
+R1(c) nested scroll, R1(d) the L5 on-screen jump, R1(e) the browse→home abort demote) —
+conceded, not asserted, so outside a blind pre-build CI strike. With a bigger budget the
+next strike is a DEVICE pass on R1(a)/R1(d)/R1(e) (the paints jsdom cannot render), not
+another model/recovery probe — those are exhausted and green.
+
+## Re-strike #3 handoff
+
+- **Source artifact:** this casebook; target `Claude/Plans/PLAN-swipe-noswap-home.md`
+  (Stage 6i, HEAD 4c3ca60).
+- **Verdict / status:** HELD_STONE — no executed runtime counterexample survived; three
+  option-(a) surfaces executed clean (recovery, model coherence, reachability).
+- **Instruments (re-runnable, session scratch):** `loki-6i-restrike3.js` (real nav.js
+  recovery primitive), `loki-6i-model3.js` (real model + plan-patched construction).
+- **Residual doubt routed:** the `home-tall` retirement scrub gap (test/nav.test.js:65/80 +
+  docs/swipe-model.generated.txt + gen-swipe-model.mjs) — for Curie (test) + Zelda/Mendeleev
+  (generated-inventory scrub), NOT a build blocker.
+- **Next owner:** Curie (the six-cell suite incl. GHOSTSCROLL) + Brunel (build). The device
+  gates R1(a-e) remain owed downstream, as the plan already discloses.
+- **Records updated:** this casebook appended + committed; no other record touched.
+
+VERDICT: HELD_STONE
