@@ -565,9 +565,15 @@ const MUTATIONS = [
   { name: 'stage6h STRAND: the 600ms never-strand net is routed through gate() instead of calling drop() directly (-> STRAND never-paints removed-at-600ms assertion)',
     from: "          cur.revealTimer = setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever",
     to:   "          cur.revealTimer = setTimeout(() => gate('timeout'), 600);   // safety net — never keep the cover pane forever" },
-  { name: 'stage6h ONCE: drop() omits cancelling the settle-timeout loser (-> ONCE settle-timeout-retired-at-drop assertion)',
-    from: '            clearTimeout(cur.revealSettleTimer);',
-    to:   '            /* mutated: settle-timeout not retired */' },
+  { name: 'stage6h ONCE: onSettle omits cancelling the superseded SETTLE_MS backstop before arming the diagnostic hold (-> ONCE settle-timeout-retired-on-scrollend assertion)',
+    from: [
+      '            const onSettle = () => {',
+      '              clearTimeout(cur.revealSettleTimer);',
+    ].join('\n'),
+    to: [
+      '            const onSettle = () => {',
+      '              /* mutated: superseded settle-timeout not retired before the hold */',
+    ].join('\n') },
   { name: 'stage6h SCOPE: the abort→browse call is given the settle-gate flag it must never carry (-> SCOPE no-settle-machinery assertion)',
     from: "          holdGhostUntilPaintable($('browse'), cover);",
     to:   "          holdGhostUntilPaintable($('browse'), cover, { scrollSettle: true });" },

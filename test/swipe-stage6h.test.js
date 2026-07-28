@@ -59,7 +59,9 @@ const realSleep = (ms) => new Promise((r) => realSetTimeout(r, ms));
 const flashDrops = (h) => h.log.calls
   .filter((c) => c.name === 'debug' && c.args[0] === 'FLASH' && /^hold /.test(String(c.args[1])))
   .map((c) => String(c.args[1]));
-const viaOf = (msg) => ((String(msg).match(/via=(\w+)/) || [])[1]);
+// [\w+]+ (not \w+) so the Stage 6h hold-diagnostic's 'scrollend+hold' reason is captured
+// whole rather than truncated at the '+'.
+const viaOf = (msg) => ((String(msg).match(/via=([\w+]+)/) || [])[1]);
 const scrollend = (h) => h.window.dispatchEvent(new h.window.Event('scrollend'));
 
 // The reveal's PRE-EXISTING timer delays, so the settle-timer filter isolates only the
@@ -132,6 +134,13 @@ async function toAbortBrowseRevealPending(h) {
 // the ~11481px scrolled-down books offset the device flash tracks (PLAN §2/§4).
 const SCROLLED_DOWN = 12000;
 
+// Stage 6h hold-diagnostic (device build .259 finding, PLAN §10's named fallback): a real
+// scrollend no longer drops the cover immediately — it holds an EXTRA fixed SETTLE_HOLD_MS
+// past the signal first. Mirrors app.js's own diagnostic constant so the fake clock can be
+// advanced past it deterministically; kept as a named test constant (not re-derived from
+// production) so a drift between the two shows up as a red test rather than a silent no-op.
+const SETTLE_HOLD_MS = 280;
+
 // ── GATE — the cover PERSISTS past the bare double-rAF and drops only on scrollend ──────
 // PLAN §8 cell GATE. On a scrolled-down commit→home reveal the gate is
 // `decoded && painted && settled`; `settled` starts false and is flipped only by a real
@@ -152,11 +161,16 @@ test('GATE — commit→home cover persists past the double-rAF and drops only o
       // BEFORE the settle signal: the cover must still be up.
       assert.equal(flashDrops(h).length, 0,
         'the commit→home cover must NOT drop on decode+double-rAF alone — it must wait for a scroll-settle signal');
-      // AFTER a real scrollend: the cover is removed, released by that signal.
+      // AFTER a real scrollend: the cover still must NOT drop immediately — the
+      // hold-diagnostic holds it an EXTRA SETTLE_HOLD_MS past the signal.
       scrollend(h);
+      assert.equal(flashDrops(h).length, 0,
+        'the cover must NOT drop immediately on scrollend — the diagnostic hold must elapse first');
+      await h.clock.advance(SETTLE_HOLD_MS);
       const d = flashDrops(h);
-      assert.equal(d.length, 1, 'the cover drops after scrollend');
-      assert.equal(viaOf(d[0]), 'scrollend', 'the drop is released by the scrollend signal (via=scrollend)');
+      assert.equal(d.length, 1, 'the cover drops after scrollend + the diagnostic hold');
+      assert.equal(viaOf(d[0]), 'scrollend+hold',
+        'the drop is released by the scrollend signal after the diagnostic hold (via=scrollend+hold)');
     } finally { h.dispose(); }
   });
 
@@ -213,15 +227,17 @@ test('STRAND — view never paints: the 600ms DIRECT net is the sole remover (ne
     } finally { h.dispose(); }
   });
 
-// ── ONCE — exactly-once under the {scrollend, SETTLE_MS, 600ms} race + handle retirement ─
-// PLAN §8 cell ONCE. Five async producers (decode, double-rAF, scrollend, SETTLE_MS,
-// 600ms net) feed one drop(); the cover is removed EXACTLY once and the loser SETTLE_MS
-// timer is retired AT the drop (not left to fire a later dropped-guarded no-op).
+// ── ONCE — exactly-once under the {scrollend, SETTLE_MS, hold, 600ms} race + retirement ──
+// PLAN §8 cell ONCE. A real scrollend supersedes the SETTLE_MS backstop IMMEDIATELY (it is
+// retired the moment scrollend arrives, not left pending to race the diagnostic hold it
+// would otherwise beat — SETTLE_MS=100ms < SETTLE_HOLD_MS=280ms). The cover is removed
+// EXACTLY once, after the hold elapses, and no later producer (the now-cancelled SETTLE_MS
+// timer, or the 600ms net) fires a second, dropped-guarded drop.
 //
 // RED @HEAD: there is no single SETTLE_MS backstop timer to capture (the reveal already
 // dropped on paint and queued its teardown timers instead) — the fixture guard fails.
 // Right reason: the settle machinery does not exist yet.
-test('ONCE — exactly-once under the settle race, and the SETTLE_MS loser is retired at drop',
+test('ONCE — exactly-once under the settle race, and the SETTLE_MS loser is retired on scrollend',
   async () => {
     const h = boot({ fakeTimers: true, deferRaf: true });
     try {
@@ -234,14 +250,20 @@ test('ONCE — exactly-once under the settle race, and the SETTLE_MS loser is re
       assert.equal(settleTimers.length, 1,
         `fixture: exactly one SETTLE_MS backstop timer must be pending on the scrollSettle path; got ${JSON.stringify(h.clock.pendingDump())}`);
       const settleId = settleTimers[0].id;
-      // Fire the race: scrollend drives the drop; the SETTLE_MS timer must be retired THERE.
+      // A real scrollend arrives: it must retire the SETTLE_MS loser IMMEDIATELY (before the
+      // diagnostic hold elapses) so the backstop cannot race in and drop early.
       scrollend(h);
       assert.ok(!h.clock.pendingDump().map((t) => t.id).includes(settleId),
-        `drop() must retire the SETTLE_MS loser timer AT the drop; id ${settleId} still pending in ${JSON.stringify(h.clock.pendingDump())}`);
-      // Advancing past the (now-cancelled) SETTLE_MS and the 600ms net must NOT drop again.
+        `a real scrollend must retire the SETTLE_MS loser timer at once; id ${settleId} still pending in ${JSON.stringify(h.clock.pendingDump())}`);
+      assert.equal(flashDrops(h).length, 0,
+        'the cover must not drop yet — scrollend arms the diagnostic hold, it does not drop immediately');
+      // Advancing past the hold (and, further, the 600ms net) must produce exactly one drop.
       await h.clock.advance(600);
-      assert.equal(flashDrops(h).length, 1,
-        `the cover is removed EXACTLY once under the {scrollend, SETTLE_MS, 600ms} race; saw ${flashDrops(h).length} drops`);
+      const d = flashDrops(h);
+      assert.equal(d.length, 1,
+        `the cover is removed EXACTLY once under the {scrollend, SETTLE_MS, hold, 600ms} race; saw ${d.length} drops`);
+      assert.equal(viaOf(d[0]), 'scrollend+hold',
+        'the one drop is released by the diagnostic hold following scrollend (via=scrollend+hold), not the 600ms net');
     } finally { h.dispose(); }
   });
 
@@ -297,7 +319,8 @@ test('OWN — drop() removes the scrollend listener (spied) so it cannot accumul
       h.setScrollY(SCROLLED_DOWN);
       await toHeldRevealPending(h);
       await h.raf.frame(); await h.raf.frame();   // painted; gate held on settled (no drop yet)
-      scrollend(h);                               // drive the drop through the settle signal
+      scrollend(h);                               // arms the diagnostic hold
+      await h.clock.advance(SETTLE_HOLD_MS);      // the hold must elapse before drop() runs
       const removedScrollend = removed.filter((r) => r.type === 'scrollend');
       assert.equal(removedScrollend.length, 1,
         `drop() must removeEventListener('scrollend', …) exactly once so listeners cannot accumulate across gestures; saw ${removedScrollend.length}`);
