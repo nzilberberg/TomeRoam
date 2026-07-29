@@ -165,3 +165,107 @@ device-confirms, not a hard-coded 53.
   `--page-bg` gradient stays untouched.
 
 VERDICT: FORGE
+
+---
+
+## M1 re-stress after the Loki KILL — patched plan HEAD `2792c4f` (2026-07-29)
+
+Scope: the M1 PATCH ONLY (fix 2 — restore the abort/recovery→home reveal from the gesture's own `cur.ghostY`,
+dropping the KILL'd recorder/`dataset.st`/`applyScreen`-branch entirely). **M2 stays FORGE'd — not revisited.**
+Read the Loki KILL (`STRIKE-home-shift-m1.md`, `5167e8c`) and the source at the two restore sites (app.js:444
+supersession recovery, app.js:1220-1229 abort, app.js:548-551 `ghostY` storage, swipe.js:274-292 capture).
+**Verdict on the M1 patch: TEMPER — one Structural coverage finding (F1); the design itself is sound and
+closes the KILL by construction.**
+
+### 1. Does fix 2 close the KILL? — YES, and the record is truly removed (not left alongside)
+
+I verified the recorder / `dataset.st` / nav.js restore-branch are NOT built, from three angles: the
+`vitruvius-gate` `source_ranges` dropped `app.js:2887-2890` (recorder) and `js/nav.js:144-172` (restore branch)
+and now list only `app.js:548-551` (the pre-existing `ghostY` storage), `app.js:442-448` (supersession), and
+`app.js:1220-1229` (abort); §2 (line 63) says the carousel recorder is UNTOUCHED and no `#home` clause is
+added; §4 (line 88) and §8 R-scope (line 155) both state "no recorder, no `dataset.st`, no `applyScreen`/nav.js
+restore branch." So the ONLY value is `cur.ghostY`, captured per-gesture pre-park at swipe.js:289 and stored at
+app.js:549. **No persisted last-scroll record exists to carry a pre-nav value forward** — the exact desync the
+KILL exploited. The KILL's interleaving is closed: the top-start gesture captures `ghostY=0` FRESH from the
+live (already-reset) `scrollTop=0`, so the abort restores 0, and there is no stale 500 anywhere in the
+gesture's state. Confirmed.
+
+### 2. The new app.js:444 supersession-recovery site — LOGIC self-consistent (the re-strike plane)
+
+I traced the KILL's own plane. The added line (§4) is `if (cur && cur.ghostY != null && currentDesc().v ===
+'home') $('home').scrollTop = cur.ghostY;`, placed after the recovery's `applyScreen(currentDesc(), …)`
+(app.js:444). Here `cur` is the SUPERSEDED session (the one `disposeOwnedPanes(cur,'superseded')` is tearing
+down, app.js:442). A superseded gesture never committed, so `navStack` sits at its SOURCE → `currentDesc()` is
+that source. Therefore `currentDesc().v === 'home'` ⟺ the superseded gesture's source is home ⟺ that gesture
+built a home app-ghost ⟺ `cur.ghostY` is that gesture's own pre-park home scroll. So the recovery restores the
+SUPERSEDED session's OWN `ghostY` — self-consistent with the ghost that session showed — for double-abort,
+supersede-during-held-ghost, and rapid re-gesture: each gesture carries its own per-session `ghostY`; no
+cross-session or stale value can reach this site (there is no shared/last-scroll record left). `cur.ghostY` is
+never stale (set once at build, never mutated) and never from the wrong session (the `currentDesc().v==='home'`
+gate binds it to the home-source case). The logic holds by the same construction as the abort site. (The
+executed interleavings remain Loki's to run — see the RE-strike scope.)
+
+### 3. `cur.ghostY` freshness + the null gate — sound
+
+`cur.ghostY` is set at app.js:549 from `c.capture.ghostY` (swipe.js:289), per-gesture, pre-park. Every
+home-SOURCE gesture builds an outgoing app-ghost of home (source in-flow, dest ≠ home ⇒ app-ghost), and the
+app-ghost ALWAYS carries `ghostY` (app.js:543) — so `cur.ghostY` is set exactly when a home reveal needs it;
+there is no home-reveal path where it is needed but null (⇒ no regression-to-0). The `!= null` + `dest.v /
+currentDesc().v === 'home'` gates correctly exclude non-home sources: a books→books abort has `dest.v ==='browse'`
+→ skip (it does NOT restore a home scroll, even though `cur.ghostY` holds the browse ghost's value); browse→home
+is a fresh-nav top-reset (commit) or aborts back to browse (`dest.v==='browse'` → skip). Confirmed.
+
+### F1 — Structural (defect) — the app.js:444 supersession-recovery restore has NO CI cell, yet the ledger and coverage matrix claim M1FRESHNAV covers it
+The `vitruvius-ledger` (line 114) attributes "home scroll ghostY recovery … recovery home restore@S2 …
+M1FRESHNAV cell," and the §7 dimension rows (Recovery authority boundary line 128, Composition line 135,
+Concurrency line 137) all credit M1FRESHNAV with the supersession-recovery restore. But M1FRESHNAV's fixture
+(line 143) drives an ABORT (scroll → nav-away → nav-home → swipe-from-top → **abort** → assert), which
+exercises the abort finalize (app.js:1227) — NOT the supersession recovery (app.js:444). So **the NEW restore
+site, on the exact plane the KILL lived on, is exercised by no CI cell**, while the ledger says it is. This is
+the same coverage-blindness the KILL exploited (Loki §5: "the M1RESTORE cell is green over this fracture … the
+suite as designed ships the bug") — and the plan's own §8 R-M1-interleave (line 153) contradicts the ledger by
+naming the supersession site a "residual for the RE-strike," i.e. Loki-owned, not M1FRESHNAV-covered. Resolve
+the inconsistency: **preferably add a `M1SUPERSEDE` cell** that drives the recovery (start a home→X gesture so
+`cur.ghostY` captures a home scroll, supersede it with a second gesture, and assert `#home.scrollTop ===` the
+superseded gesture's `ghostY`, not a stale/wrong value or 0 — the restore-VALUE logic is jsdom-drivable via the
+harness's supersede path, the same way the stage-6b loser-cancel tests trigger supersession; the on-screen
+paint stays device-owed). Failing that, correct the ledger/dimensions to state the supersession-restore value
+is Loki/device-owned and drop the M1FRESHNAV attribution. Given the first KILL was *caused* by a cell that
+claimed coverage it did not have, adding the regression cell is the disciplined resolution — do not ship the
+supersession site with only a one-shot Loki pass and no regression gate.
+
+### F2 — Note (recommendation) — M1FRESHNAV's declared mutation is a design-revert, not a natural code-mutant of fix 2
+M1FRESHNAV's mutation column says "the restore reads a persisted last-scroll record instead of the gesture's
+own `ghostY` so the stale five hundred survives." But fix 2 has NO persisted record to mutate — the only
+home-scroll value in the top-start gesture is `ghostY=0`, so no single-line mutation of fix 2's code produces
+the 500 that reddens the cell; the reddening variant must REINTRODUCE the KILL'd persisted-record design. That
+is a valid regression-lock (the cell's PASS meaningfully proves the interleaving lands 0, and the OLD design
+would fail it), but per EC §4.10 Curie must register the mutant explicitly as a "stale-record restore"
+injection in `tools/mutate.mjs` and confirm it reddens — it is not a one-liner. Note this so the
+mutation-verification is not assumed automatic. (M1RESTORE's mutation — "the abort omits the `ghostY` restore"
+→ reveals at the clamped 0 → reddens — IS a clean natural mutant and is fine.)
+
+### The cells that are sound
+
+M1RESTORE (abort→home restores `cur.ghostY`, mutation omits-the-restore → reddens) and M1FRESHNAV (the Loki
+interleaving lands 0, regression-lock) are well-formed and jsdom-safe (scrollTop is a settable/readable
+property; the ghost captures from the set scrollTop); the on-screen shift stays honestly device-owed (§9).
+M2ALIGN is untouched (M2 stays FORGE'd). No vacuously-green paint cell exists.
+
+## Verdict — re-stress: TEMPER (F1 coverage; the M1 design is sound)
+
+Fix 2 closes the Loki KILL by construction — no separate record, the restore value IS the gesture's own
+per-gesture-fresh `capture.ghostY`, and both restore sites (abort app.js:1227, supersession app.js:444) are
+self-consistent (the `currentDesc()/dest.v === 'home'` gate binds the value to the home-source gesture that
+built it). The re-strike plane (app.js:444) holds in LOGIC. The one blocking gap is COVERAGE: the supersession
+site is credited to M1FRESHNAV in the ledger/matrix but exercised by no cell — the same coverage-blindness that
+produced the first KILL. On F1 (add a `M1SUPERSEDE` cell, or honestly reconcile the ledger to Loki-owned) plus
+F2 (register M1FRESHNAV's design-revert mutant explicitly), the patch is FORGE-ready.
+
+**The Loki RE-strike scope is confirmed and correctly routed** (§8): the NEW supersession-recovery→home site
+(app.js:444), double-abort, supersede-during-held-ghost, and Loki's own lesson (enumerate every writer of the
+visible scroll the `cur.ghostY` restore might still miss). Do NOT skip it — fix 2 is structurally stronger but
+adds a restore site on the exact plane the KILL lived on. M2 stays FORGE'd; the red `--page-bg` gradient is
+untouched; flash C is out.
+
+VERDICT: TEMPER
