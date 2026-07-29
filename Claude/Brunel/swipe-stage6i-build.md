@@ -90,21 +90,58 @@ mutants (the deleted scroll-settle gate). Re-anchored `swipe5 F7a`/`S5_ORDER` fo
 `ghostApp(fromKind)` signature.
 
 **Full mutation sweep (all 85 registered mutants, 3 shards): 0 uncaught, 0 unapplied, 0 stale
-flags.** Each new mutant confirmed to redden its DESIGNATED cell (verified per-mutant). The
-PTR mutant needed a two-part edit (both the arm and disarm gates) — reverting only the arm
-gate was UNCAUGHT because the still-correct disarm gate disarms on the first move. The
-F2-r-wiring mutant went UNCAUGHT after the home-snapshot retirement (its defect unreachable);
-removed with a documented rationale.
+flags.** Each new mutant is caught by its NAMED defender (per-mutant verified): 7 of the 8 by
+their designated integration/source cell; **the 8th (`stage6i CONTRACT`, the constructionPlanFor
+→home value revert) is caught by the INDEPENDENT ORACLE `test/swipe-transition.test.js`, NOT by
+an integration cell** — it is runtime-inert (buildConstruction branches on
+`plan.renderDestination`, never reads `plan.incoming`; both `'none'` and `'home-host'` hit the
+same borrowed-real else-branch, and the un-park is driven by `destinationHost==='home'`), so it
+changes only the frozen contract value the three-layer oracle reconciles (EC §4.14). Its
+registry name states this explicitly (Poirot Finding 1 — the mutant was previously misnamed
+`SNAPSHOTGONE`; SNAPSHOTGONE's true behavioral guard is the separate `stage6i home-host`
+mutant). The PTR mutant needed a two-part edit (both the arm and disarm gates) — reverting only
+the arm gate was UNCAUGHT because the still-correct disarm gate disarms on the first move. Three
+mutants were removed whose defect is unreachable post-6i (targets deleted): `swipe5 F2-r`
+(home-snapshot capture ghostY), `swipe5 F2-r-wiring` (L3 synthesizes ghostY on the home path),
+and the 7 `stage6h` mutants (the deleted scroll-settle gate). Re-anchored `swipe5 F7a`/`S5_ORDER`
+for the `ghostApp(fromKind)` signature.
+
+**Sweep-hygiene fix (Poirot re-verify pass):** the new `test/no-mutbak-gate.test.js` asserts the
+`.mutbak` check exits 0 on a CLEAN repo — but the sweep applies a mutation that leaves a
+`*.mutbak` backup, so the repo is never clean mid-sweep and the test failed for EVERY mutation
+(a false CAUGHT that flipped the pre-existing benign-alone playback mutant #4 to "stale"). Added
+`no-mutbak-gate.test.js` to `SOURCE_TEXT_GATES` in `tools/mutation-sweep.mjs` (the same
+fails-by-construction class as the anchors gate) — the sweep is now honest (0 stale) and the
+normal `npm test` battery still runs the gate test (where the repo is genuinely clean).
 
 ## Verification
 
-- Full suite: **737 tests, 736 pass, 0 fail, 1 skip** (the device-only KEEPER cell). The 7
-  `test/swipe-stage6i.test.js` cells un-skipped and green.
+- Full suite: **740 tests, 739 pass, 0 fail, 1 skip** (the device-only KEEPER cell) at the
+  Poirot re-verify HEAD. The 7 `test/swipe-stage6i.test.js` cells un-skipped and green.
 - Lint (`eslint js sw.js`): clean. Typecheck (`tsc -p jsconfig.json`): clean.
-- Build stamp coherence (`stamp-build --check`): PASS at 2026-07-28.262.
+- Build stamp coherence (`stamp-build --check`): PASS at 2026-07-28.264.
 - `.mutbak` pre-commit gate built (`tools/hooks/no-mutbak-check.mjs`, wired first in
   `run-checks.mjs`) + proven both ways (blocks with a dummy `zzz.mutbak` exit 1, passes clean
-  exit 0) + regression test `test/no-mutbak-gate.test.js` (3 cases green). Separate commit.
+  exit 0) + regression test `test/no-mutbak-gate.test.js` (3 cases green). Separate commit (.263).
+
+## Poirot review dispositions (Findings 1 & 2 + O4, build .264)
+
+- **Finding 1 (mutation misattribution) — FIXED.** Reproduced first: `#77` applied leaves
+  SNAPSHOTGONE green (7/0) and reddens only the oracle `swipe-transition` (12/1). Reframed the
+  mutant's name/attribution to `stage6i CONTRACT … (-> swipe-transition oracle, NOT SNAPSHOTGONE)`
+  and corrected the per-mutant claim in this log (above). Re-verified: the CAUGHT attribution is
+  now truthful.
+- **Finding 2 (incomplete concept-scrub) — FIXED.** Updated three stale `snapshotHome`/
+  `home-snapshot` comments (`js/app.js` paneBuilders header, the capture-record comment, the
+  paneKindOf header) to current truth; **removed the dead `'snapshot'` arm** in `paneKindOf`
+  (verified unreachable from source: the only owned-pane recipe post-6i is the app-ghost, which
+  requires `toKind !== 'home'`, so `cur.dest.v === 'home'` can never coincide with an owned pane)
+  — `paneKindOf` now returns `p.length ? 'ghost' : 'none'`.
+- **O4 (vestigial if/else) — DONE.** Collapsed `buildConstruction`'s incoming branch
+  (`swipe.js`) — both arms wrapped the identical `env.renderDestination(...)` borrowed-real mover
+  — to one line with a comment naming the per-host dispatch. O3/O5 left as Poirot directed.
+- Regenerated `docs/swipe-model.generated.txt` (the comment additions shifted the app.js
+  line-number census the frozen model prints).
 
 ## Device-owed (NOT built here, NOT claimed)
 

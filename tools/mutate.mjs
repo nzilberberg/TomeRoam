@@ -571,7 +571,17 @@ const MUTATIONS = [
   // are deleted in the same build — no guard is left undefended, the mechanism itself
   // is gone).
   // ── SWIPE stage 6i: fixed own-scroll #home slide-and-leave (PLAN-swipe-noswap-home.md) ─
-  { name: 'stage6i SNAPSHOTGONE: constructionPlanFor keeps home-snapshot for →home incoming (-> SNAPSHOTGONE test)',
+  // CONTRACT-VALUE mutant, caught by the INDEPENDENT ORACLE (test/swipe-transition.test.js), NOT
+  // by the SNAPSHOTGONE integration cell. Reverting constructionPlanFor's →home VALUES to the
+  // retired home-snapshot domain is a pure contract change: buildConstruction branches on
+  // `plan.renderDestination` and never reads `plan.incoming`, and both 'none' and 'home-host'
+  // hit the same borrowed-real else-branch (the un-park is driven by `destinationHost==='home'`,
+  // not by plan.renderDestination), so this mutation is RUNTIME-INERT and leaves SNAPSHOTGONE
+  // green — the behavioral SNAPSHOTGONE guard is the SEPARATE `stage6i home-host` mutant below.
+  // What this mutant proves is that the three-layer oracle (EC §4.14) catches the frozen
+  // →home contract value drifting out of its domain: swipe-transition reconciles production
+  // constructionPlanFor against the hand-written spec rows, so the value revert reddens there.
+  { name: 'stage6i CONTRACT: constructionPlanFor →home values revert to the retired home-snapshot domain (-> swipe-transition oracle, NOT SNAPSHOTGONE)',
     file: 'js/swipe.js',
     from: "    else if (c.toKind === 'home') { incoming = 'real-destination'; renderDestination = 'home-host'; }",
     to:   "    else if (c.toKind === 'home') { incoming = 'home-snapshot'; renderDestination = 'none'; }" },

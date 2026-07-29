@@ -336,15 +336,12 @@ const Swipe = (() => {
       outgoing = mover(resolveSource(), 'borrowed-real', 'outgoing');
     }
 
-    // ── INCOMING — always the real destination element (Stage 6i retires the
-    // home-snapshot outcome: 'home-host' un-parks the real fixed #home, the same
-    // borrowed-real shape as 'browse-host'/overlay). ──
-    if (plan.renderDestination === 'browse-host') {
-      const hostEl = env.renderDestination(dest, destinationHost);   // renders dest into #browse
-      incoming = mover(hostEl, 'borrowed-real', 'incoming');
-    } else {                                        // 'home-host' or real-destination overlay
-      incoming = mover(env.renderDestination(dest, destinationHost), 'borrowed-real', 'incoming');
-    }
+    // ── INCOMING — always the real destination element as a borrowed-real mover (Stage 6i
+    // retired the home-snapshot owned-pane outcome). env.renderDestination dispatches by host:
+    // 'browse-host' renders the destination into #browse, 'home-host' un-parks the real fixed
+    // #home (without hiding #browse), an overlay host renders the real overlay — every case
+    // returns the real element, so the mover shape is identical for all three. ──
+    incoming = mover(env.renderDestination(dest, destinationHost), 'borrowed-real', 'incoming');
 
     // ── DECORATIONS — the NP pill; zero or one (plan §3). Its np-locked unlock stays in L3.
     for (const deco of plan.decorations) {

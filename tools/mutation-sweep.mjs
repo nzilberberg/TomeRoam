@@ -120,6 +120,7 @@ const SOURCE_TEXT_GATES = {
   'mutation-anchors.test.js': 'asserts every mutation anchor still matches the source; a mutation removes the text it targets, so this fails for EVERY mutation',
   'swipe-model.test.js': 'fingerprints js/app.js regions (end, begin, navTo, nav-relation); a mutation inside one changes the hash by construction',
   'transition-matrix.test.js': 'fingerprints the js/app.js transition-branch region, same reason',
+  'no-mutbak-gate.test.js': 'asserts the no-mutbak check exits 0 on a CLEAN repo; the sweep applies a mutation that leaves a *.mutbak backup, so the repo is never clean mid-sweep and this fails for EVERY mutation — the same false-CAUGHT class as the anchors gate',
 };
 
 function behaviourTests() {

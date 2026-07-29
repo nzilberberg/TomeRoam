@@ -363,10 +363,12 @@
       if (disposed && window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);
     };
     const navPill = () => $('navbar').querySelector('.np-actions');
-    // The Now Playing pill clone, the two capture recipes (ghostApp/snapshotHome) and their
-    // helper cluster (ghostWrap/freezeArt/copyScroll/copyAnimPhase, GHOST_BG) moved into
-    // js/swipe.js Swipe.buildConstruction behind the injected `env` (stage 5, boundary B —
-    // Claude/Plans/PLAN-swipe-stage5.md). start() builds the env below and consumes the
+    // The Now Playing pill clone, the app-ghost capture recipe (ghostApp) and their helper
+    // cluster (ghostWrap/freezeArt/copyScroll/copyAnimPhase, GHOST_BG) moved into js/swipe.js
+    // Swipe.buildConstruction behind the injected `env` (stage 5, boundary B —
+    // Claude/Plans/PLAN-swipe-stage5.md). (Stage 6i retired the second capture recipe,
+    // snapshotHome: a →home reveal un-parks the real fixed #home instead of cloning a snapshot,
+    // so ghostApp is now the sole capture recipe.) start() builds the env below and consumes the
     // Construction it returns; the destination render dispatch stays here in env.renderDestination.
 
     function begin(x, y, target) {
@@ -538,8 +540,11 @@
       if (c.movers.decoration) d.movers.push(toMover(c.movers.decoration));
 
       // Record the owned pane's capture for the reveal diagnostic — ONLY the fields the
-      // capture carries. A home snapshot has no ghostY, so today's "no ghost ⇒ d.ghostY
-      // untouched" holds (plan §3, F2-r); both d.ghostY readers null-guard it.
+      // capture carries. Post-Stage-6i the only owned-pane capture is the app-ghost, which
+      // ALWAYS carries a ghostY; a →home reveal builds NO capture at all (c.capture === null),
+      // so d.ghostY/d.animSync stay untouched on that path and both d.ghostY readers null-guard
+      // them (the "no ghost ⇒ d.ghostY untouched" invariant now holds by there being no →home
+      // capture, not by a ghostY-less home snapshot — plan §3/§12).
       if (c.capture) {
         if ('ghostY' in c.capture) d.ghostY = c.capture.ghostY;
         d.animSync = (d.animSync || 0) + c.capture.animSync;
@@ -749,14 +754,16 @@
         };
         requestAnimationFrame(tick);
       };
-      // Which kind of full-viewport pane this settle built, if any. The owned panes are the
-      // app-ghost (any non-overlay→browse) and the home snapshot (→home), both built by
-      // Swipe.buildConstruction; every other transition slides REAL elements and covers
-      // nothing. That is the correlation to test.
+      // Which kind of full-viewport pane this settle built, if any. Post-Stage-6i the ONLY
+      // owned-pane recipe is the app-ghost (built by Swipe.buildConstruction for any in-flow
+      // source going to a non-home destination); the home-snapshot recipe is retired, so a
+      // →home reveal builds NO owned pane at all (both movers are borrowed-real). Every
+      // transition without an owned pane slides REAL elements and covers nothing → 'none'.
+      // (`cur.dest.v === 'home'` can never coincide with an owned pane now — an app-ghost
+      // requires toKind !== 'home' — so a 'snapshot' label is unreachable and removed.)
       const paneKindOf = () => {
         const p = cur.movers.filter((m) => m.own === 'owned-pane');
-        if (!p.length) return 'none';
-        return cur.dest && cur.dest.v === 'home' ? 'snapshot' : 'ghost';
+        return p.length ? 'ghost' : 'none';
       };
       const runFinalize = () => {
         // `tgt=detached` means the node the finger started on was destroyed mid-drag
