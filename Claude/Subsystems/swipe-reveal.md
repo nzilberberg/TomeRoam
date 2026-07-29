@@ -67,6 +67,16 @@ new `opts.scrollSettle` argument is set, and retired in `drop()` alongside the e
 is byte-unchanged; the small/top commit→home passes `scrollSettle:false`, so it too takes the
 pre-6h path.
 
+**Browse-decouple (PLAN-browse-decouple.md, 2026-07-29):** active `#browse` joins `#home` in the
+fixed-own-scroll class (css: `#browse`) — the symmetric completion of Stage 6i. Both are
+borrowed-real movers with transient mid-drag/mid-park transforms; NEITHER is in-flow any longer,
+so the document height comes ONLY from the `.app` runway (§8/css:73) regardless of which is
+shown. The six window-scroll consumers (the virtual-list realize listener + metrics, the browse
+scroll recorder/restore, `playingTrackY`, the custom scrollbar, and the outgoing app-ghost's
+offset source) re-home to `#browse.scrollTop`. The `.266` stable-height probe (nav.js) that once
+pinned `.app` min-height on `→home` is retired — a fixed `#browse` cannot collapse the document,
+so there is nothing to pin against.
+
 **8. Resource owner.** The gesture session (`d`/`cur`). Stage 3 stamped the session id;
 resource-handle ownership (settle rAF stored on the session, cancelled in finalize) landed at
 `.226`. **Stage 6b (release half, 2026-07-26):** the 340ms settle fallback timer, the reveal
@@ -237,6 +247,16 @@ handle is retired at that one drop; and the abort→browse reveal is byte-unchan
 `< 600` (fires before the never-strand net) and `≥ the snap floor` (or it releases mid-snap and
 still flashes) — both device-tuned. This is NEW POLICY (EC §4.19, an async-gate on the reveal
 cover-drop); the guarantee is the MECHANISM — the flash going clean is device-only (§22).
+**Browse-decouple (PLAN-browse-decouple.md, 2026-07-29):** `#browse` joins `#home`'s fixed-own-
+scroll KIND class, but the "no promotion on the real in-flow views" un-promoted invariant is
+UNCHANGED for `#browse` — the recipe carries NO `will-change`/transform (css: `#browse`), which
+PRESERVES the invariant rather than lifting it; the fixed `.alphaindex` A–Z strip depends on
+`#browse` staying un-promoted (a promoted `#browse` would establish a containing block for the
+strip and re-parent/misposition it, the `.195`/`.196` break). The Stage 6f/6g "in-flow source
+view" language above describes `#browse` BEFORE this stage: `#browse` is no longer in-flow (it is
+now `position:fixed`, out of the document's normal flow), but the invariant those stages pin —
+`#browse` is never a mover and receives no swipe-written inline transform outside its own
+mid-drag mover role — is unaffected by the positioning change and still holds.
 
 **19. Mutation cases.** Registered in `tools/mutate.mjs` (swipe4 F1/F3/F4/F5/F6/F7/no-dead-
 fields/F-i/F-ii/§15/§4.11; stage-6d FP/AB — force `abortRender` to `'none'`; RC — drop the
@@ -304,6 +324,19 @@ Stage 6h ships a DEVICE-PENDING mechanism fix — the conditional scroll-settle 
 books→home = this scroll-clamp compositor snap (device-pending fix); B abort home→books = the `#home`
 un-park layer demote (mitigated by Stage 6g's permanent `#home` compositing layer, device-owed); C
 abort books→books headline = the incoming real-`#browse` transform (T8-forked, deferred).
+
+**Browse-decouple (PLAN-browse-decouple.md, 2026-07-29):** flash A (the commit books→home
+scroll-clamp compositor snap) is removed BY CONSTRUCTION, not by a settle gate — the clean,
+permanent form of the device-proven `.266` stable-height probe (superseding
+`PLAN-stableheight-probe.md`). Active `#browse` is now `position:fixed` (§7/§18), so it never
+drives the document height; hiding it on `→home` cannot collapse the document, so there is no
+scroll to clamp and no compositor snap to catch. This is DEVICE-PROVEN for the DIRECTION (the
+`.266` probe achieved the same removal by pinning the document tall per-transition) but the
+decouple's own clean-repro confirmation is a separate device gate (R-flash, downstream of this
+build). Flash B is unaffected (a `#home` un-park layer concern, unrelated to `#browse`'s scroll
+model). Flash C (the browse→browse abort in-list `letterhead` divider re-raster) is explicitly
+UNCHANGED and stays open — it is the abort re-render/demote/teardown compositor re-raster of the
+whole `#browse`, coupling-independent from the window-scroll removal this stage makes.
 
 **23. Conditions requiring revision.** Stage 5 (move the pane builders into swipe.js — done); stage 6
 finalization half: the `abortRender` field is DONE (Stage 6d — `finalizationPlanFor(classification)

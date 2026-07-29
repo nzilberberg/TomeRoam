@@ -260,15 +260,16 @@ const Swipe = (() => {
     // A ghost of the current app-view (minus the shared topbar), shifted up by the current
     // scroll to match what's on screen. Used app-view↔app-view (the real view is re-rendered
     // for the destination). `fromKind` selects the offset SOURCE (Stage 6i, PLAN-swipe-
-    // noswap-home.md §9 L5, Loki KILL): a HOME source's own vertical scroll lives on
-    // #home.scrollTop (a fixed own-scroll view, not the document), so a home-sourced ghost
-    // must read ITS offset from there — window.scrollY is always 0 for a fixed #home and
-    // would build the ghost at top (the 500px jump-to-top Loki's counterexample found). A
-    // browse source stays on the unchanged document-scroll offset (env.scrollY()). Both
-    // feed the SAME whole-clone content-translate; the clone is a static id-stripped
-    // content tree, never a scroll container, so the offset is carried by the transform,
-    // not by a clone scrollTop (a clone's #home id is stripped, so `overflow-y:auto` never
-    // applies to it — a scrollTop write on the clone would be inert). Returns
+    // noswap-home.md §9 L5, Loki KILL; the browse-decouple, PLAN-browse-decouple.md §6 B6,
+    // does the same for browse): a HOME source's own vertical scroll lives on #home.scrollTop
+    // and a BROWSE source's on #browse.scrollTop (both fixed own-scroll views, not the
+    // document), so each must read ITS offset from its own element — window.scrollY is
+    // always 0 for a fixed #home/#browse and would build the ghost at top (the 500px
+    // jump-to-top Loki's counterexample found). Both feed the SAME whole-clone
+    // content-translate; the clone is a static id-stripped content tree, never a scroll
+    // container, so the offset is carried by the transform, not by a clone scrollTop (a
+    // clone's #home/#browse id is stripped, so `overflow-y:auto` never applies to it — a
+    // scrollTop write on the clone would be inert). Returns
     // { wrap, capture:{ ghostY, animSync, animRes } }.
     function ghostApp(fromKind) {
       const clone = doc.querySelector('.app').cloneNode(true);
@@ -276,9 +277,18 @@ const Swipe = (() => {
       clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
       const tb = clone.querySelector('.topbar'); if (tb) tb.remove();
       clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());
+      // Exclude the fixed .alphaindex A–Z strip (PLAN-browse-decouple.md §9): a non-none
+      // transform on the clone (below) becomes the containing block for a position:fixed
+      // descendant, which would re-parent the strip and misposition it by the browse-source
+      // offset. The REAL .alphaindex (in the live #browse) is unaffected — it re-renders
+      // correctly when the source page comes back. The ghost is a transient visual cover;
+      // the strip is not essential mid-swipe.
+      clone.querySelectorAll('.alphaindex').forEach((n) => n.remove());
       freezeArt(clone);
       clone.style.margin = '0 auto';
-      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0) : (env.scrollY() || 0);
+      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0)
+        : fromKind === 'browse' ? (doc.getElementById('browse').scrollTop || 0)
+        : (env.scrollY() || 0);
       clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
       const wrap = ghostWrap();
       wrap.appendChild(clone);

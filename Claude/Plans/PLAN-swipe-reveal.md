@@ -139,12 +139,23 @@ If the rewrite lands and the flash remains, it still succeeded.
 =====================================================================
 2. THE MODEL AS IT EXISTS TODAY
 
-2.1  TWO KINDS OF VIEW
+2.1  TWO KINDS OF VIEW (ORIGINAL DESIGN — see the 2026-07-29 amendment below)
      IN-FLOW    #home, #browse — inside .app, SHARE the document scroll.
                 Two in-flow views cannot be on screen at once.
      OVERLAY    fixed, outside .app's flow, own scroll box.
      isOverlay(v) === options | nowplaying | Nav.SETTINGS_SUBS.
      HOME IS NOT AN OVERLAY. Draft 1's error came from forgetting this.
+
+     AMENDED (Stage 6i, PLAN-swipe-noswap-home.md; the browse-decouple,
+     PLAN-browse-decouple.md, 2026-07-29): the IN-FLOW / shared-document-scroll
+     class above is now EMPTY. #home (Stage 6i) and #browse (the browse-decouple)
+     both left it and joined a third kind, FIXED-OWN-SCROLL — position:fixed
+     against the viewport with an own overflow-y:auto scroll box (css: #home,
+     #browse), never driving the document height. window.scrollY is a constant 0
+     on every signed-in app view (#signin is a separate in-flow pre-app state,
+     outside the swipe flow). "Two in-flow views cannot be on screen at once" is
+     now vacuous — there are no in-flow views left to conflict. isOverlay/HOME IS
+     NOT AN OVERLAY are unaffected: the overlay set is unrelated to this axis.
 
 2.2  GESTURE LIFECYCLE (js/app.js bindSwipeBack)
      begin()  arm within EDGE of an edge if a destination exists; hard-
@@ -199,6 +210,14 @@ If the rewrite lands and the flash remains, it still succeeded.
        abort: { screen:'source', render:'none',
                 hiddenHostState:'destination-may-remain' }
      Canonicalizing the hidden host is a SEPARATE cleanup after parity.
+
+     AMENDED (2026-07-29): the KIND column (home/browse/overlay) and every
+     pane?/GHOST/SNAPSHOT rule above are UNCHANGED — the construction/
+     classification/finalization contracts were not touched by Stage 6i or the
+     browse-decouple (both are pure scroll-model relocations, §2.1 amendment).
+     "real #browse" and "real #home" as movers now mean the FIXED own-scroll
+     element (mid-drag/mid-park transient transforms), not an in-flow one — the
+     mover ROLE is unchanged, only the base positioning under it.
 
 2.5  CONCRETE SCREENS — GENERATED, NEVER HAND-LISTED
      The registry is derived from the real sources of truth:

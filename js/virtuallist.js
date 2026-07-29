@@ -147,7 +147,13 @@ const VirtualList = (() => {
     rafPending = true;
     requestAnimationFrame(() => { rafPending = false; if (activeCtl) activeCtl._realize(); });
   }
-  if (typeof window !== 'undefined') window.addEventListener('scroll', onDocScroll, { passive: true });
+  // Capture-phase on document (mirrors scrollbar.js:95): the browse-decouple made active
+  // #browse a position:fixed overflow-y:auto own-scroll box, so its scroll event fires ON
+  // #browse and does NOT bubble — a listener on `window` never sees it. Capture-phase
+  // document catches any element's scroll on the way down, generically, with no #browse
+  // name baked in here (the module stays scroller-agnostic; browse.js injects the
+  // #browse-relative metrics the active controller reads — see createController).
+  if (typeof document !== 'undefined') document.addEventListener('scroll', onDocScroll, { capture: true, passive: true });
 
   // ---- controller ------------------------------------------------------------
   // opts: { container, groupedItems, rowFn(item), strides:{header,row},

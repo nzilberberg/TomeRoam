@@ -1,9 +1,10 @@
-// Browse.render()'s CACHE-MISS path owns the window scroll, and it must only use that
-// ownership while its page is the one on screen.
+// Browse.render()'s CACHE-MISS path owns the #browse (here #mount) scroll, and it must
+// only use that ownership while its page is the one on screen.
 //
-// render() awaits fetchFor(), then calls positionOnEnter → applyScrollY →
-// window.scrollTo. If the user navigates away during a slow fetch, the superseded
-// page's completion still scrolled — to a Y measured from a display:none node.
+// render() awaits fetchFor(), then calls positionOnEnter → applyScrollY, which writes
+// #mount's own scrollTop (the browse-decouple, PLAN-browse-decouple.md §6 B3). If the
+// user navigates away during a slow fetch, the superseded page's completion still
+// scrolled — to a Y measured from a display:none node.
 //
 // The subtlety that makes this worth a test: the obvious guard (is this node still
 // the cached one, still connected?) does NOT catch it. Pages stay cached and stay in
@@ -19,8 +20,14 @@ global.document = dom.window.document;
 global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 global.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 
+// Spy the #mount.scrollTop WRITE surface (applyScrollY's write target, not window.scrollTo).
 let scrolls = [];
-dom.window.scrollTo = (x, y) => scrolls.push(y);
+let scrollTopBacking = 0;
+Object.defineProperty(dom.window.document.getElementById('mount'), 'scrollTop', {
+  configurable: true,
+  get() { return scrollTopBacking; },
+  set(v) { scrollTopBacking = v; scrolls.push(v); },
+});
 
 global.PBLogic = require('../js/logic.js');
 let releaseBooks = null;

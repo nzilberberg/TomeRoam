@@ -2,17 +2,12 @@
 // from PLAN-browse-decouple.md §11 Coverage Model, BEFORE Brunel's build (red-first TDD law,
 // Claude/Decisions/DecisionLog.md). Companion note: Claude/Curie/RED-browse-decouple.md.
 //
-// WHAT THIS SLICE PROMISES (PLAN §3/§6/§9). Active #browse becomes a position:fixed +
+// WHAT THIS SLICE PROVES (PLAN §3/§6/§9). Active #browse is a position:fixed +
 // overflow-y:auto own-scroll view (NO will-change/transform, so the fixed .alphaindex strip
 // stays viewport-anchored). With #home also fixed (6i), no signed-in app view drives the
-// document height and window.scrollY is a constant 0. The six window-scroll consumers re-home to
-// #browse.scrollTop; the .266 stable-height probe is retired; the abort ghost excludes .alphaindex.
-//
-// ⚠️ SKIP-PENDING-BUILD. Every NEW cell is authored RED against current HEAD (the fixed #browse
-// behaviour does not exist yet) and is committed `{ skip }` so the pre-commit suite stays green
-// (the hook runs the whole suite; a plain-red cell would block the commit, and the project does
-// not use --no-verify). Each was CONFIRMED RED with the skip removed — see the RED note. Brunel
-// REMOVES the skip to drive it red, then builds to green. Do NOT weaken an assertion to green a cell.
+// document height and window.scrollY is a constant 0. The six window-scroll consumers are
+// re-homed to #browse.scrollTop; the .266 stable-height probe is retired; the abort ghost
+// excludes .alphaindex. Built GREEN by Brunel (Claude/Brunel/browse-decouple-build.md).
 //
 // ⚠️ DEVICE-OWED, NOT HERE (honest scoping — jsdom computes no layout). The Books→Home flash
 // (R-flash), navbar seating (R-navbar), the strip anchoring/clip (R-strip), and browse→browse as
@@ -28,8 +23,6 @@ const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 const { boot } = require('./app-harness.js');
 const { readRoot, ROOT } = require('./dom-fixture.js');
-
-const SKIP = 'red-first browse-decouple — remove skip to run; Brunel greens (Claude/Curie/RED-browse-decouple.md)';
 
 async function settle(h, n = 12) { for (let i = 0; i < n; i++) await h.settle(); }
 const realSetTimeout = global.setTimeout;
@@ -83,7 +76,7 @@ function baseBrowseRuleBody(css) {
 }
 
 test('BROWSEFIXED — the active #browse base rule is a position:fixed overflow-y:auto own-scroll view with NO will-change/transform (source)',
-  { skip: SKIP }, () => {
+  () => {
     const css = fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8');
     const body = baseBrowseRuleBody(css);
     assert.ok(body, 'a base `#browse { … }` rule must exist in css/app.css (the decouple recipe)');
@@ -105,7 +98,7 @@ test('BROWSEFIXED — the active #browse base rule is a position:fixed overflow-
 // surfaceKind returns null → the supported-surface assertion reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 test('SCROLLBAR — surfaceKind recognises the fixed own-scroll #browse as a supported browse surface',
-  { skip: SKIP }, () => {
+  () => {
     const dom = new JSDOM(readRoot('index.html'));
     global.window = dom.window; global.document = dom.window.document;
     delete require.cache[require.resolve('../js/scrollbar.js')];
@@ -127,7 +120,7 @@ test('SCROLLBAR — surfaceKind recognises the fixed own-scroll #browse as a sup
 // the captured offset is 0 → the equals-500 source assertion reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 test('GHOSTSCROLL — the outgoing app-ghost of a scrolled BROWSE source reads #browse.scrollTop, not window.scrollY',
-  { skip: SKIP }, () => {
+  () => {
     const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
     const { env, doc } = mkGhostEnv({ browseScrollTop: 500 });
     // books→authors: an in-flow browse source going to browse builds an outgoing app-ghost.
@@ -150,7 +143,7 @@ test('GHOSTSCROLL — the outgoing app-ghost of a scrolled BROWSE source reads #
 // the no-strip assertion reddens. (The on-screen strip POSITION is device-owed, R-strip.)
 // ─────────────────────────────────────────────────────────────────────────────────────────
 test('STRIPEXCLUDE — the abort ghost clone excludes the fixed .alphaindex strip',
-  { skip: SKIP }, () => {
+  () => {
     const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
     const { doc } = mkGhostEnv({ browseScrollTop: 200, withStrip: true });
     // Rebuild the env against the SAME doc so the strip we injected is in the source #browse.
@@ -180,7 +173,7 @@ test('STRIPEXCLUDE — the abort ghost clone excludes the fixed .alphaindex stri
 // #browse-dispatched scroll never reaches the handler → the handler-ran assertion reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 test('REALIZE — a #browse-dispatched scroll reaches the virtual-list realize handler (capture-phase document); the pure windowFor model is correct',
-  { skip: SKIP }, () => {
+  () => {
     const dom = new JSDOM('<!doctype html><body><div id="browse"></div></body>');
     global.window = dom.window; global.document = dom.window.document;
     global.window.requestAnimationFrame = (fn) => { fn(0); return 0; };
@@ -219,7 +212,7 @@ test('REALIZE — a #browse-dispatched scroll reaches the virtual-list realize h
 // intercepting the opts virtualView passes to VirtualList.createController.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 test('METRICS — browse.js virtualView injects #browse-relative metrics into the virtual controller',
-  { skip: SKIP }, async () => {
+  async () => {
     const h = boot({ realBrowse: true, fakeTimers: true, deferRaf: true });
     try {
       await settle(h);
@@ -260,7 +253,7 @@ test('METRICS — browse.js virtualView injects #browse-relative metrics into th
 // the wrote-#browse assertion reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 test('RESTORE — a browse→browse abort re-render writes the #browse.scrollTop surface via positionOnEnter/applyScrollY',
-  { skip: SKIP }, async () => {
+  async () => {
     const h = boot({ realBrowse: true, fakeTimers: true, deferRaf: true });
     try {
       h.tap('.navbtn[data-nav="books"]'); await settle(h);
@@ -298,7 +291,7 @@ test('RESTORE — a browse→browse abort re-render writes the #browse.scrollTop
 // assertion reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 test('PINGONE — going to home from a scrolled browse never pins the app min-height (the .266 probe is retired)',
-  { skip: SKIP }, async () => {
+  async () => {
     const h = boot({ fakeTimers: true });
     try {
       await settle(h);

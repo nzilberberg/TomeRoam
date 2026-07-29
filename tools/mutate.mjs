@@ -137,11 +137,14 @@ const S5_NPPILL_FROM = [
   '      const clone = env.navPill().cloneNode(true);',
 ].join('\n');
 const S5_NPPILL_TO = '      const clone = env.navPill().cloneNode(true);';
+// RE-ANCHORED (browse-decouple, PLAN-browse-decouple.md §9): the .alphaindex clone-exclude
+// line now sits directly before freezeArt(clone) (the .hidden/.parked prune is no longer the
+// immediate predecessor) — same mutation intent (freezeArt is skipped), new adjacent anchor.
 const S5_FREEZEART_FROM = [
-  "      clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());",
+  "      clone.querySelectorAll('.alphaindex').forEach((n) => n.remove());",
   '      freezeArt(clone);',
 ].join('\n');
-const S5_FREEZEART_TO = "      clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());";
+const S5_FREEZEART_TO = "      clone.querySelectorAll('.alphaindex').forEach((n) => n.remove());";
 const S5_UNHIDE_FROM = [
   "          el.classList.remove('hidden');",
   '          return el;',
@@ -623,30 +626,56 @@ const MUTATIONS = [
     file: 'js/scrollbar.js',
     from: "    if (t && t.id === 'home') return 'home';",
     to:   "    if (false && t && t.id === 'home') return 'home';" },
+  // RE-ANCHORED (browse-decouple, PLAN-browse-decouple.md §6 B6): the single-line home/else
+  // ternary gained a browse branch and became three lines; same mutation intent (a HOME
+  // source reverts to window.scrollY), new anchor. Independent of the browse-decouple's own
+  // GHOSTSCROLL mutation below, which drops the BROWSE branch instead.
   { name: 'stage6i GHOSTSCROLL: the outgoing app-ghost reverts to reading window.scrollY for a HOME source (-> GHOSTSCROLL equals-500 test)',
     file: 'js/swipe.js',
-    from: "      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0) : (env.scrollY() || 0);",
-    to:   "      const ghostY = env.scrollY() || 0;" },
+    from: "      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0)\n        : fromKind === 'browse' ? (doc.getElementById('browse').scrollTop || 0)\n        : (env.scrollY() || 0);",
+    to:   "      const ghostY = fromKind === 'browse' ? (doc.getElementById('browse').scrollTop || 0)\n        : (env.scrollY() || 0);" },
   { name: 'stage6i HOMEFIXED: the active #home rule drops position:fixed/overflow-y (-> HOMEFIXED source-text test)',
     file: 'css/app.css',
     from: '#home {\n  position: fixed; left: 0; right: 0;',
     to:   '#home {\n  left: 0; right: 0;' },
-  // stable-height PROBE (PLAN-stableheight-probe.md) — replaces the .265 clamp mutation (whose
-  // scrollTo(0,0) anchor is deleted). Three defenders for the STABLEHEIGHT cell's load-bearing
-  // assertions: (A) the pin-set (before the #browse hide), (B) the →browse clear, (C) the
-  // no-.265-pre-empt guard.
-  { name: 'clamp-probe A: the .app min-height pin is omitted on →home (no stable-height hold before the collapse) (-> STABLEHEIGHT pin-set + order)',
+  // ── browse-decouple (PLAN-browse-decouple.md, §11 Coverage Model) ────────────────
+  // Active #browse becomes a position:fixed+overflow-y:auto own-scroll view (NO
+  // will-change), the six window-scroll consumers re-home to #browse.scrollTop, the
+  // .266 stable-height probe (the three clamp-probe mutations above it) is retired, and
+  // the abort ghost excludes .alphaindex. Each mutation names the browse-decouple.test.js
+  // cell it reddens.
+  { name: 'browse-decouple BROWSEFIXED: will-change is added to the #browse rule (would re-parent the fixed .alphaindex) (-> BROWSEFIXED source-text test)',
+    file: 'css/app.css',
+    from: '#browse {\n  position: fixed; left: 0; right: 0;',
+    to:   '#browse {\n  position: fixed; left: 0; right: 0;\n  will-change: transform;' },
+  { name: 'browse-decouple SCROLLBAR: surfaceKind stops recognising the fixed own-scroll #browse (-> SCROLLBAR supported-surface test)',
+    file: 'js/scrollbar.js',
+    from: "    if (t && t.id === 'browse') return 'browse';",
+    to:   "    if (false && t && t.id === 'browse') return 'browse';" },
+  { name: 'browse-decouple GHOSTSCROLL: the outgoing app-ghost reverts to reading window.scrollY for a BROWSE source (-> GHOSTSCROLL equals-500 test)',
+    file: 'js/swipe.js',
+    from: "      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0)\n        : fromKind === 'browse' ? (doc.getElementById('browse').scrollTop || 0)\n        : (env.scrollY() || 0);",
+    to:   "      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0)\n        : (env.scrollY() || 0);" },
+  { name: 'browse-decouple STRIPEXCLUDE: the .alphaindex exclusion is dropped from the ghost clone (-> STRIPEXCLUDE no-strip test)',
+    file: 'js/swipe.js',
+    from: "      clone.querySelectorAll('.alphaindex').forEach((n) => n.remove());",
+    to:   "      /* mutated: .alphaindex not excluded from the ghost clone */" },
+  { name: 'browse-decouple REALIZE: the virtual-list scroll listener reverts to window (bubble phase), never seeing a #browse own-scroll (-> REALIZE listener test)',
+    file: 'js/virtuallist.js',
+    from: "  if (typeof document !== 'undefined') document.addEventListener('scroll', onDocScroll, { capture: true, passive: true });",
+    to:   "  if (typeof window !== 'undefined') window.addEventListener('scroll', onDocScroll, { passive: true });" },
+  { name: 'browse-decouple METRICS: browse.js virtualView stops injecting #browse-relative metrics/scrollTo (-> METRICS injected-metrics test)',
+    file: 'js/browse.js',
+    from: "      metrics: {\n        scrollY: () => o.mount.scrollTop,\n        viewportH: () => o.mount.clientHeight,\n        listTop: () => o.mount.scrollTop + list.getBoundingClientRect().top - o.mount.getBoundingClientRect().top,\n      },\n      scrollTo: (y) => { o.mount.scrollTop = y; },",
+    to:   "      /* mutated: no #browse-relative metrics/scrollTo injected — falls to the window default */" },
+  { name: 'browse-decouple RESTORE: applyScrollY reverts to window.scrollTo instead of writing #browse.scrollTop (-> RESTORE write-surface test)',
+    file: 'js/browse.js',
+    from: "    o.mount.scrollTop = clampY(y, o.mount.scrollHeight, o.mount.clientHeight);",
+    to:   "    window.scrollTo(0, clampY(y, o.mount.scrollHeight, o.mount.clientHeight));   // mutated: window, not #browse.scrollTop" },
+  { name: 'browse-decouple PINGONE: the retired .266 stable-height pin is reintroduced on →home (-> PINGONE stays-empty test)',
     file: 'js/nav.js',
-    from: "        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';",
-    to:   "        /* mutated: .app min-height pin omitted */" },
-  { name: 'clamp-probe B: the →browse min-height clear is omitted (a short browse page over-scrolls into empty space) (-> STABLEHEIGHT clear-on-browse)',
-    file: 'js/nav.js',
-    from: "      if (v === 'browse' && appEl) appEl.style.minHeight = '';",
-    to:   "      /* mutated: →browse min-height clear omitted */" },
-  { name: 'clamp-probe C: the .265 window.scrollTo(0,0) pre-empt is re-added on →home (the delta the probe removes) (-> STABLEHEIGHT no-scrollTo(0,0))',
-    file: 'js/nav.js',
-    from: "        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';",
-    to:   "        window.scrollTo(0, 0);\n        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';" },
+    from: "        if (d.browseWillHide) d.browseWillHide();\n      }",
+    to:   "        if (d.browseWillHide) d.browseWillHide();\n        const appEl = document.querySelector('.app');\n        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';\n      }" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

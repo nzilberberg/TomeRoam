@@ -20,6 +20,14 @@ const Browse = require('../js/browse.js');
 const { patchRows, bookSig } = Browse;          // public API
 const { keepCover, bookRow } = Browse._test;    // internals
 
+// applyScrollY (exercised below) now writes o.mount.scrollTop directly (the
+// browse-decouple, PLAN-browse-decouple.md §6 B3) instead of window.scrollTo, so a
+// real mount element is needed even though this file drives applyScrollY standalone,
+// never through Browse.render/positionOnEnter.
+const mount = document.createElement('div');
+document.body.appendChild(mount);
+Browse.init({ mount });
+
 // A library book. leafCount/viewedLeafCount are the progress fields the tile
 // shows; lastViewedAt/addedAt are invisible bookkeeping that churns on the active
 // book every open.
@@ -163,7 +171,6 @@ const { applyScrollY, isRestoring } = Browse._test;
 
 let frames = [];
 global.requestAnimationFrame = (cb) => { frames.push(cb); return frames.length; };
-global.window.scrollTo = () => {};
 const runOneFrame = () => { const due = frames; frames = []; due.forEach((cb) => cb()); };
 
 test('a stale restore finalizer cannot end a newer restore', () => {

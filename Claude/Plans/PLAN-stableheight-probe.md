@@ -4,7 +4,19 @@ Type: plan
 
 <!-- vitruvius-gate {"plan_type":"probe","patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":false,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":false}} -->
 
-Status: **PLAN_READY — recommend a QUICK Charpy stress on the two side-effects (navbar-seating + pin-lifecycle) before Brunel; see §6.** The `.265` clamp pre-empt (`window.scrollTo(0,0)` at nav.js:85) shipped and STILL FLASHED: Linnaeus `PROBE-clamp-preempt-2026-07-28.md` (dca795c) proves it RELOCATED the 10211→0 window-scroll change to before the collapse rather than ELIMINATING it — a scrolled commit still travels the full delta; the device-clean TOP case has NO delta (0→0). This probe tests whether the scroll DELTA is the driver by removing it entirely: keep the document height STABLE across the `#browse` hide so the collapse forces no clamp and `window.scrollY` stays put (no delta at all), and remove the now-counterproductive `.265` pre-empt. **This is an unproven DISCRIMINATOR — the device on/off test decides, not the reasoning:** on the reliable oracle (scroll books down, commit to home), if it goes CLEAN the delta was the driver and we then build the full `#browse` decouple as the clean version; if it STILL FLASHES the delta is not it and we pivot to the incoming `#home` slide-transform demote (Linnaeus Q5 candidate 3). Minimal and revertable by construction.
+Status: **SUPERSEDED (2026-07-29) by `PLAN-browse-decouple.md`.** The discriminator this probe
+built ANSWERED YES — the device-confirmed pin (log #21) removed the Books→Home flash by holding
+the document tall across the `#browse` hide, proving the scroll DELTA was the driver. Per §4
+below, a clean answer means "build the full `#browse` decouple as the clean version" — that build
+is `PLAN-browse-decouple.md`, which makes active `#browse` a `position:fixed` own-scroll view (the
+permanent form: the delta's SOURCE is removed, not relocated per-transition). The probe's pin
+SET/CLEAR (nav.js, once at lines 68-90) and this plan's discriminator are RETIRED — Brunel deleted
+the pin in the browse-decouple build; there is nothing left to revert. Kept for its historical
+record of the delta-vs-flash reasoning (Records Standards §6.1); not an active plan.
+
+---
+
+Status (as shipped, historical): **PLAN_READY — recommend a QUICK Charpy stress on the two side-effects (navbar-seating + pin-lifecycle) before Brunel; see §6.** The `.265` clamp pre-empt (`window.scrollTo(0,0)` at nav.js:85) shipped and STILL FLASHED: Linnaeus `PROBE-clamp-preempt-2026-07-28.md` (dca795c) proves it RELOCATED the 10211→0 window-scroll change to before the collapse rather than ELIMINATING it — a scrolled commit still travels the full delta; the device-clean TOP case has NO delta (0→0). This probe tests whether the scroll DELTA is the driver by removing it entirely: keep the document height STABLE across the `#browse` hide so the collapse forces no clamp and `window.scrollY` stays put (no delta at all), and remove the now-counterproductive `.265` pre-empt. **This is an unproven DISCRIMINATOR — the device on/off test decides, not the reasoning:** on the reliable oracle (scroll books down, commit to home), if it goes CLEAN the delta was the driver and we then build the full `#browse` decouple as the clean version; if it STILL FLASHES the delta is not it and we pivot to the incoming `#home` slide-transform demote (Linnaeus Q5 candidate 3). Minimal and revertable by construction.
 
 ## Index
 1. Defining records and authority (the .265 relocate-not-eliminate finding; the stable-height viability)

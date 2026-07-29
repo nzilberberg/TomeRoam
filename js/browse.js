@@ -57,7 +57,21 @@ const Browse = (() => {
     if (el && el._vctl) { el._vctl.destroy(); el._vctl = null; }
   }
 
-  function init(opts) { o = opts; }
+  function init(opts) {
+    o = opts;
+    // The browse scroll recorder (moved here from module-load so it can bind directly to
+    // the injected #browse element — o.mount does not exist until init() runs). #browse is
+    // its own position:fixed overflow-y:auto scroller (the browse-decouple), so its scroll
+    // event is heard by listening on the element itself (scroll doesn't bubble; a listener
+    // on window would never fire for it).
+    if (o.mount) {
+      o.mount.addEventListener('scroll', () => {
+        if (restoring || !browseVisible()) return;
+        const cur = activeEntry();
+        if (cur) cur.sy = o.mount.scrollTop || 0;
+      }, { passive: true });
+    }
+  }
   function reset() {
     dropHold();                  // these controllers are going away; no hold may outlive them
     authorsCache = null;
@@ -93,15 +107,16 @@ const Browse = (() => {
   }
 
   // ---- per-page scroll memory ----------------------------------------------
-  // Browse pages all ride the ONE shared document scroll, so a page's position is
-  // lost the moment you go anywhere else (Home resets it, another page overwrites
-  // it). Remember it per cache entry (`sy`) and put it back on return.
+  // Browse pages all ride #browse's own fixed scroll box (the browse-decouple), so a
+  // page's position is lost the moment another page swaps in (another browse page
+  // overwrites #browse.scrollTop). Remember it per cache entry (`sy`) and put it back
+  // on return.
   //
   // Captured from a passive scroll listener rather than a "leaving" hook because
   // there is no single leave path — you can swap pages, tap Home, open Options, or
-  // swipe. `restoring` gates it: swapping pages changes the document height, so the
-  // browser clamps scrollY and fires a scroll event that would otherwise record a
-  // bogus position against the page we're arriving at.
+  // swipe. `restoring` gates it: swapping pages changes #browse's scrollHeight, so the
+  // browser clamps #browse.scrollTop and fires a scroll event that would otherwise
+  // record a bogus position against the page we're arriving at.
   let restoring = false;
   let restoreGen = 0;
   // ONE owned restoration operation. beginRestore() takes ownership and hands back a
@@ -194,13 +209,6 @@ const Browse = (() => {
     for (const v of pageCache.values()) if (!offscreen(v.el)) return v;
     return null;
   }
-  if (typeof window !== 'undefined') {
-    window.addEventListener('scroll', () => {
-      if (restoring || !browseVisible()) return;
-      const cur = activeEntry();
-      if (cur) cur.sy = window.scrollY || 0;
-    }, { passive: true });
-  }
   // Pure: clamp to what's actually scrollable — this is what makes "as close to the
   // top as possible" true for a track near the END of the list (it can't reach the
   // top; the document simply runs out).
@@ -216,9 +224,8 @@ const Browse = (() => {
     return savedY || 0;
   }
   function applyScrollY(y) {
-    const se = document.scrollingElement || document.documentElement;
     const mine = beginRestore();
-    window.scrollTo(0, clampY(y, se.scrollHeight, window.innerHeight));
+    o.mount.scrollTop = clampY(y, o.mount.scrollHeight, o.mount.clientHeight);
     // This is a DELIBERATE placement — the page's real entry position — which is the
     // opposite of the transient scrolls the swipe freezes realization for (iOS
     // granting a native scroll, or a shorter page clamping scrollY). So realize
@@ -232,8 +239,8 @@ const Browse = (() => {
     // Two frames: the scroll + any clamp it provokes must both land first.
     requestAnimationFrame(() => requestAnimationFrame(() => endRestore(mine)));
   }
-  // Document Y that puts the locally-playing track's row just under the fixed title
-  // bar. null when this book isn't the one loaded here (or its row isn't built).
+  // #browse.scrollTop Y that puts the locally-playing track's row just under the fixed
+  // title bar. null when this book isn't the one loaded here (or its row isn't built).
   function playingTrackY(book, page) {
     if (!o.playingTrackKey || !book) return null;
     const tk = o.playingTrackKey(book.ratingKey);
@@ -242,7 +249,7 @@ const Browse = (() => {
     if (!row) return null;
     const bar = document.querySelector('.topbar');
     const clear = (bar ? bar.getBoundingClientRect().bottom : 0) + 8;   // sit just below it
-    return (window.scrollY || 0) + row.getBoundingClientRect().top - clear;
+    return o.mount.scrollTop + row.getBoundingClientRect().top - clear;
   }
   // Where a page sits when you arrive at it (see entryScrollY for the rule).
   function positionOnEnter(desc, page, savedY) {
@@ -637,7 +644,18 @@ const Browse = (() => {
       strides: vStrides(list),
       release: releaseRow,
       onMaterialized: pingRender,
-      scrollTo: (y) => window.scrollTo(0, y),
+      // #browse-relative metrics (the browse-decouple, PLAN-browse-decouple.md §6 B1):
+      // the controller's own default falls back to window.scrollY/innerHeight, which is
+      // wrong now that #browse is its own fixed overflow-y:auto scroller. scrollY/scrollTo
+      // read/write o.mount.scrollTop directly; listTop is the list's offset within the
+      // scroller's CONTENT (o.mount.scrollTop + the list's rect top minus o.mount's rect
+      // top) — the exact analog of the document version's window.scrollY + rect.top.
+      metrics: {
+        scrollY: () => o.mount.scrollTop,
+        viewportH: () => o.mount.clientHeight,
+        listTop: () => o.mount.scrollTop + list.getBoundingClientRect().top - o.mount.getBoundingClientRect().top,
+      },
+      scrollTo: (y) => { o.mount.scrollTop = y; },
     }, vlOpts || {}));
     m._vctl = ctl;
     if (letters) m.appendChild(buildIndex(m, letters));

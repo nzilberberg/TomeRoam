@@ -26,11 +26,11 @@ global.Plex = {
   onTruncationChange: (fn) => { truncCb = fn; },
 };
 global.window.Plex = global.Plex;
-// Real scroll plumbing for entry-restore tests: window.scrollTo drives the same
-// `view` the injected vl metrics read, and the document reports enough height
-// that applyScrollY's clamp doesn't flatten every restore to 0 (jsdom has no layout).
-global.window.scrollTo = (x, y) => { view.scrollY = y; };
-Object.defineProperty(dom.window.document.documentElement, 'scrollHeight', { get: () => 10e6, configurable: true });
+// Real scroll plumbing for entry-restore tests: applyScrollY now writes #mount's own
+// scrollTop directly (the browse-decouple, PLAN-browse-decouple.md §6 B3 — o.mount is
+// #browse in production, #mount here), and #mount reports enough scrollHeight that
+// applyScrollY's clamp doesn't flatten every restore to 0 (jsdom has no layout).
+Object.defineProperty(dom.window.document.getElementById('mount'), 'scrollHeight', { get: () => 10e6, configurable: true });
 const released = [];
 global.window.ArtLoader = { release: (img) => released.push(img.getAttribute('data-art')), scan: () => {}, observe: () => {} };
 global.ArtLoader = global.window.ArtLoader;
@@ -218,9 +218,12 @@ test('swipe hold: scroll-driven realize is frozen for the gesture, then runs ONC
     const firstKeys = [...a.querySelectorAll('.book')].map((r) => r.getAttribute('aria-posinset')).join(',');
 
     const tok = Browse.beginHold();
-    // A transient scroll lands mid-gesture — the native scroll iOS granted.
+    // A transient scroll lands mid-gesture — the native scroll iOS granted. Dispatched on
+    // #mount (not window): the virtual-list listener is capture-phase on document (the
+    // browse-decouple, PLAN-browse-decouple.md §6 B1), which catches a scroll fired on the
+    // scroller element itself — scroll doesn't bubble, and window never sees it.
     view.scrollY = 9000;
-    global.window.dispatchEvent(new global.window.Event('scroll'));
+    document.getElementById('mount').dispatchEvent(new dom.window.Event('scroll'));
     assert.equal([...a.querySelectorAll('.book')].map((r) => r.getAttribute('aria-posinset')).join(','), firstKeys,
       'NOTHING may realize mid-gesture — that is what destroys the rows on screen');
 
@@ -546,7 +549,9 @@ test('hidden SWR insert above the anchor: returning restores the ROW at its offs
   const p2 = m2.keyIndex.get('b500');
   const wantY = m2.groups[p2.gi].rowsTop + p2.li * vlOpts.strides.row + 11;
   assert.notEqual(wantY, oldY, 'fixture sanity: the insert really moved the row');
-  assert.equal(view.scrollY, wantY, 'viewport follows row b500 to its NEW position');
+  // applyScrollY now writes #mount's own scrollTop (the browse-decouple, §6 B3), not
+  // window.scrollTo/view.scrollY — view.scrollY here only feeds the injected VL metrics.
+  assert.equal(document.getElementById('mount').scrollTop, wantY, 'viewport follows row b500 to its NEW position');
   a._vctl.destroy(); b._vctl.destroy(); T.pageCache.clear();
 });
 

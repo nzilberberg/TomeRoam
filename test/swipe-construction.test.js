@@ -178,12 +178,16 @@ test('overlay->overlay builds no owned pane: capture is null and both sides are 
 
 // ── F2-r (recipe) — app-ghost capture carries ghostY; →home is pane-less (Stage 6i) ──
 test('an app-ghost capture carries ghostY; a browse→home transition builds no owned pane', () => {
-  const ghostCtx = mkEnv({ scrollY: 137 });
+  const ghostCtx = mkEnv();
+  // The browse-decouple (PLAN-browse-decouple.md §6 B6): a BROWSE source's ghost offset is
+  // read from #browse.scrollTop, not env.scrollY() (that branch is home-only) — mirrors
+  // test/swipe-stage6i.test.js's home-source GHOSTSCROLL cell.
+  ghostCtx.doc.getElementById('browse').scrollTop = 137;
   const ghost = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ghostCtx);
   assert.ok(ghost.capture, 'a browse->browse transition builds an app-ghost with a capture');
   assert.deepEqual(Object.keys(ghost.capture).sort(), ['animRes', 'animSync', 'ghostY'],
     'the app-ghost capture carries ghostY plus the two animation fields');
-  assert.equal(ghost.capture.ghostY, 137, 'ghostY is the scroll the ghost is frozen at (env.scrollY)');
+  assert.equal(ghost.capture.ghostY, 137, 'ghostY is the scroll the ghost is frozen at (#browse.scrollTop)');
 
   // Stage 6i (PLAN-swipe-noswap-home.md, option (a)): browse→home builds NO owned
   // pane — the outgoing real #browse and the incoming real #home are both borrowed-real,
