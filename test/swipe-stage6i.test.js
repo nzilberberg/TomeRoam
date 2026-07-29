@@ -323,3 +323,62 @@ test('HOMEFIXED — the active #home rule is a position:fixed own-scroll view (s
     assert.match(body, /overflow-y\s*:\s*auto/,
       'the active #home must be an overflow-y:auto own scroller sized to its dynamic carousel content');
   });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// CLAMP (PLAN-swipe-clamp-fix.md §3/§4/§7, Charpy FORGE) — on a →home transition that hides a
+// shown #browse, setView resets the WINDOW scroll to (0,0) BEFORE #browse is display:none'd.
+//
+// WHY (device-confirmed, PLAN §1): the persisting books→home flash is the window-scroll CLAMP
+// that rides the outgoing #browse display:none collapse — hiding a tall, scrolled-down in-flow
+// #browse shrinks the document and the browser clamps window.scrollY in the same frame, forcing
+// an iOS recomposite that re-rasters the fixed #home carousel layers. Zeroing window.scrollY
+// while #browse is STILL TALL (a valid in-range scroll, not a clamp) reduces the scrolled case
+// to the device-proven top-clean collapse (a height change with scrollY already 0 → no clamp).
+//
+// ⚠️ ORDER ONLY — the flash is DEVICE-OWED (§7 device gate). jsdom does no layout, so this cell
+// cannot see the compositor re-raster; it asserts CALL ORDER only: a (0,0) window scroll fires
+// while #browse is still SHOWN (before its display:none), which is the whole content of the fix
+// (a scroll placed after the hide, the retired scrollTo(0,1) position, is too late — the clamp
+// already fired). The scrolled state is modelled via h.setScrollY; the fix is unconditional on
+// the →home hide path (no scroll-value guard), so the ordering holds regardless.
+//
+// RED AT HEAD (confirmed): setView('home') resets only #home's OWN scroll (nav.js:130 —
+// $('home').scrollTop = 0), never the WINDOW scroll, before hiding #browse — so no (0,0)
+// window.scrollTo fires with #browse still shown. MUTATION (tools/mutate.mjs): move the
+// window.scrollTo(0,0) to AFTER the #browse display:none → the (0,0) call then fires while
+// #browse is already hidden → the "before the hide" assertion reddens.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+test('CLAMP — a →home commit resets the window scroll to (0,0) BEFORE #browse is display:none\'d (pre-empts the collapse clamp; ORDER only, flash device-owed)',
+  async () => {
+    const h = boot({ fakeTimers: true, deferRaf: true });
+    const realScrollTo = h.window.scrollTo;
+    try {
+      await toAuthors(h);            // Authors shown (#browse), #home parked; back-swipe = Authors→Home
+      h.setScrollY(600);            // model the scrolled-down case the clamp rides (ordering is asserted)
+
+      // Spy window.scrollTo: at each (0,0) call, capture whether #browse was still SHOWN. The fix
+      // must zero the window scroll while #browse is not yet hidden (before the collapse), so a
+      // (0,0) call must be observed with browse NOT yet display:none'd. Forward to the real
+      // recorder so scrollCalls/other assertions stay intact.
+      const clampCalls = [];
+      h.window.scrollTo = (x, y) => {
+        if (x === 0 && y === 0) clampCalls.push({ browseShownAtCall: !browseHidden(h) });
+        return realScrollTo(x, y);
+      };
+
+      // Commit the back-swipe → applyScreen(home) → setView('home') hides #browse.
+      h.touch.start(10, 300, addRow(h));
+      h.touch.move(80, 302);
+      await realSleep(12); h.touch.move(600, 304); await realSleep(12); h.touch.end(600, 304);
+      await settle(h); await h.clock.advance(700); await settle(h);
+      for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();
+      await settle(h);
+
+      assert.ok(/commit/.test(settles(h)[0] || ''), `fixture: the swipe must have committed — got ${settles(h)[0]}`);
+      assert.equal(browseHidden(h), true, 'fixture: #browse ends display:none\'d after the →home commit');
+      assert.ok(clampCalls.some((c) => c.browseShownAtCall === true),
+        'setView must reset the window scroll to (0,0) BEFORE #browse is display:none\'d, so the document '
+        + 'collapse forces no scroll clamp (the books→home flash driver). No pre-hide (0,0) window scroll was '
+        + `observed — got ${JSON.stringify(clampCalls)}`);
+    } finally { h.window.scrollTo = realScrollTo; h.dispose(); }
+  });

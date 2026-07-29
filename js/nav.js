@@ -56,11 +56,34 @@ const Nav = (() => {
     if (!npOpen && !optOpen && !subOpen) {
       $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
       const browseEl = $('browse');
-      // On the shown→hidden edge, deactivate Browse's virtual controller BEFORE
-      // display:none lands — a hidden box measures zero, so the anchor must be
-      // captured now (from real geometry). Re-entry activation is owned by
-      // Browse.showPage(), not here. See Browse.deactivate() for the full rationale.
-      if (v !== 'browse' && !browseEl.classList.contains('hidden') && d.browseWillHide) d.browseWillHide();
+      // The shown→hidden edge: going to a non-browse view (home) while #browse is shown.
+      if (v !== 'browse' && !browseEl.classList.contains('hidden')) {
+        // Deactivate Browse's virtual controller BEFORE display:none lands — a hidden box
+        // measures zero, so the anchor must be captured now (from real geometry). Re-entry
+        // activation is owned by Browse.showPage(), not here. See Browse.deactivate() for
+        // the full rationale. (Runs FIRST so the pre-emptive scroll below neither corrupts
+        // the captured anchor nor churns the now-deactivated controller — PLAN §4 / U8.)
+        if (d.browseWillHide) d.browseWillHide();
+        // ⭐ CLAMP PRE-EMPT (PLAN-swipe-clamp-fix.md, Charpy FORGE) — the device-confirmed
+        // driver of the persisting books→home carousel flash. Hiding a tall, scrolled-down
+        // in-flow #browse (line below) shrinks the document and the browser clamps
+        // window.scrollY in the SAME frame → iOS recomposites and re-rasters the fixed #home
+        // carousel layers (the flash). Zeroing the window scroll HERE — while #browse is
+        // still TALL (a valid in-range scroll, not a clamp) — makes the subsequent collapse
+        // a height change with scrollY already 0, i.e. the device-proven top-clean case (no
+        // clamp, no recomposite). SAFE + INVISIBLE: this scrollTo(0,0) and the #browse
+        // display:none run in ONE synchronous setView with no paint between them, so #browse
+        // is never composited in the scrolled-to-0-but-tall state; and across that single
+        // frame the viewport is covered by the opaque fixed #home content band (css:123-131,
+        // top safe+51 → bottom navbar) PLUS the fixed topbar/navbar/transport tiling the
+        // strips — so the off-screen #browse scrolling to its top shows nothing. #home is
+        // position:fixed (viewport-anchored), so a window scroll does not move it or
+        // re-raster its layers. Home's OWN scroll is reset separately in applyScreen
+        // ($('home').scrollTop = 0); this touches only the window/document scroll — now a
+        // pure clamp-surface (PLAN §3). Not the retired scrollTo(0,1): that sat in
+        // applyScreen AFTER setView (after the collapse — too late to pre-empt the clamp).
+        window.scrollTo(0, 0);
+      }
       browseEl.classList.toggle('hidden', v !== 'browse');
     }
     // Leave the settings overlays' hidden state untouched when going TO NowPlaying so

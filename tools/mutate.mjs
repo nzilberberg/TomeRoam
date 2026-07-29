@@ -631,6 +631,14 @@ const MUTATIONS = [
     file: 'css/app.css',
     from: '#home {\n  position: fixed; left: 0; right: 0;',
     to:   '#home {\n  left: 0; right: 0;' },
+  // clamp-fix (PLAN-swipe-clamp-fix.md): move the pre-emptive window.scrollTo(0,0) to AFTER the
+  // #browse display:none. It still fires a (0,0) call, but with #browse already hidden — too
+  // late to pre-empt the collapse clamp. The CLAMP cell asserts the (0,0) fires BEFORE the hide
+  // (with #browse still shown), so relocating it after the toggle reddens that ordering assertion.
+  { name: 'clamp: the pre-emptive window.scrollTo(0,0) is moved AFTER the #browse display:none (too late to pre-empt the clamp) (-> CLAMP order test)',
+    file: 'js/nav.js',
+    from: "        window.scrollTo(0, 0);\n      }\n      browseEl.classList.toggle('hidden', v !== 'browse');",
+    to:   "      }\n      browseEl.classList.toggle('hidden', v !== 'browse');\n      if (v !== 'browse') window.scrollTo(0, 0);" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

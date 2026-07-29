@@ -169,3 +169,55 @@ not paint. 6g's `#home{will-change}` deletion is device-gated (plan §12).
   Flagged for review.
 
 VERDICT: BUILD_GREEN
+
+---
+
+## Follow-on build — books→home scroll-clamp pre-empt (build .265)
+
+Plan: `Claude/Plans/PLAN-swipe-clamp-fix.md` (Charpy FORGE, `Claude/Charpy/PLAN-swipe-clamp-fix-charpy.md`).
+Separate, targeted fix on top of shipped 6i (fixed `#home` KEPT — orthogonal, not reverted).
+
+**Diagnosis (device-confirmed, not mine to re-derive):** the persisting books→home carousel flash
+is the window-scroll CLAMP that rides the outgoing `#browse` `display:none` collapse — hiding a
+tall, scrolled-down in-flow `#browse` shrinks the document and the browser clamps `window.scrollY`
+in the same frame, forcing an iOS recomposite that re-rasters the fixed `#home` carousel layers.
+6i's fixed-`#home` insulated the carousels from the document scroll but did NOT remove the clamp,
+so the flash survived (device oracle: flashes only scrolled-down, clean from the top).
+
+**The fix (one guarded call, `js/nav.js` `setView`, the `!npOpen && !optOpen && !subOpen` block):**
+inserted `window.scrollTo(0, 0)` AFTER `browseWillHide()` and BEFORE the `#browse`
+`classList.toggle('hidden', …)`, so the window scroll is zeroed while `#browse` is still tall (a
+valid in-range scroll, not a clamp) → the subsequent collapse forces no clamp (the device-proven
+top-clean case). **F2 (Charpy): GUARDED** — restructured the former single-line `browseWillHide`
+guard into a block gated by `v !== 'browse' && !browseEl.classList.contains('hidden')` (going to a
+non-browse view while `#browse` is shown), so the scroll fires ONLY on the `→home` hide path, not
+on `setView('browse')`. **F1 (Charpy): ANNOTATED** — the code comment states why it is safe and
+invisible: the `scrollTo` and the `#browse` `display:none` run in ONE synchronous `setView` with no
+paint between them (so `#browse` is never composited scrolled-to-0-while-tall), and across that
+single frame the viewport is covered by the opaque fixed `#home` band + the fixed topbar/navbar/
+transport; `#home` is `position:fixed` so a window scroll does not move it or re-raster its layers.
+Home's OWN scroll reset (`$('home').scrollTop = 0` in applyScreen) is untouched — this touches only
+the window/document scroll, now a pure clamp-surface.
+
+**CLAMP CI cell (`test/swipe-stage6i.test.js`, red-first):** drives a real commit `Authors→Home`
+(with `h.setScrollY(600)` modelling the scrolled case), spies `window.scrollTo`, and asserts a
+`(0,0)` call fires while `#browse` is STILL SHOWN (before its `display:none`). ORDER only — jsdom
+does no layout, so the compositor re-raster/flash is DEVICE-owed (plan §7 device gate); the cell
+comment scopes this honestly. **Red-first proof:** RED at HEAD before the fix (7 pass / 1 fail — no
+pre-hide `(0,0)` window scroll exists), GREEN after (8/8). **Mutation** `tools/mutate.mjs` #85
+(move the `scrollTo(0,0)` to AFTER the `#browse` hide → the `(0,0)` fires while `#browse` is already
+hidden → the before-the-hide assertion reddens): applied, reddens ONLY the CLAMP cell (7 pass / 1
+fail), restored clean; foreground sweep of #85 → **caught (1 failing), 0 uncaught, tree clean**.
+
+**Verification:** full suite **741 tests / 740 pass / 0 fail / 1 device-only skip**; lint + typecheck
+clean; build stamp coherent at **2026-07-28.265**. Files changed: `js/nav.js` (the guarded call +
+F1 comment), `test/swipe-stage6i.test.js` (CLAMP cell), `tools/mutate.mjs` (mutation #85), plus the
+four stamp files.
+
+**Device-owed (NOT claimed fixed):** the flash is NOT called fixed until the reliable on/off device
+oracle passes — a scrolled `books→home` commit shows no carousel flash (clean from the top either
+way). R1 (does the pre-emptive scroll itself flash) is strongly grounded against (occluded band +
+fixed bars + single synchronous frame + viewport-anchored fixed `#home`); the option-2 stable-height
+document is the specified fallback if it bites.
+
+VERDICT: BUILD_GREEN
