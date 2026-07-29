@@ -48,8 +48,13 @@ function defaultSteps() {
   const eslint = join(ROOT, 'node_modules', 'eslint', 'bin', 'eslint.js');
   const tsc = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
   // Each step is invoked with THIS node (portable-safe) — no dependency on npm/eslint/tsc
-  // being on PATH.
+  // being on PATH. `no-mutbak` runs FIRST: an interrupted mutation sweep leaves an APPLIED
+  // mutant (a `*.mutbak` backup beside the mutated file), and committing that lands the
+  // mutant AND greens a suite that only passes because the mutation is in place — so block
+  // before spending time on the rest of the battery (StandardsDocument §4: structure over
+  // vigilance; this footgun recurred until mechanized).
   return [
+    ['no-mutbak', [join(ROOT, 'tools', 'hooks', 'no-mutbak-check.mjs')]],
     ['stamp', [join(ROOT, 'tools', 'stamp-build.mjs'), '--check']],
     ['lint', existsSync(eslint) ? [eslint, 'js', 'sw.js'] : null],
     ['typecheck', existsSync(tsc) ? [tsc, '-p', 'jsconfig.json'] : null],
