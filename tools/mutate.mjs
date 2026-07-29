@@ -631,14 +631,22 @@ const MUTATIONS = [
     file: 'css/app.css',
     from: '#home {\n  position: fixed; left: 0; right: 0;',
     to:   '#home {\n  left: 0; right: 0;' },
-  // clamp-fix (PLAN-swipe-clamp-fix.md): move the pre-emptive window.scrollTo(0,0) to AFTER the
-  // #browse display:none. It still fires a (0,0) call, but with #browse already hidden — too
-  // late to pre-empt the collapse clamp. The CLAMP cell asserts the (0,0) fires BEFORE the hide
-  // (with #browse still shown), so relocating it after the toggle reddens that ordering assertion.
-  { name: 'clamp: the pre-emptive window.scrollTo(0,0) is moved AFTER the #browse display:none (too late to pre-empt the clamp) (-> CLAMP order test)',
+  // stable-height PROBE (PLAN-stableheight-probe.md) — replaces the .265 clamp mutation (whose
+  // scrollTo(0,0) anchor is deleted). Three defenders for the STABLEHEIGHT cell's load-bearing
+  // assertions: (A) the pin-set (before the #browse hide), (B) the →browse clear, (C) the
+  // no-.265-pre-empt guard.
+  { name: 'clamp-probe A: the .app min-height pin is omitted on →home (no stable-height hold before the collapse) (-> STABLEHEIGHT pin-set + order)',
     file: 'js/nav.js',
-    from: "        window.scrollTo(0, 0);\n      }\n      browseEl.classList.toggle('hidden', v !== 'browse');",
-    to:   "      }\n      browseEl.classList.toggle('hidden', v !== 'browse');\n      if (v !== 'browse') window.scrollTo(0, 0);" },
+    from: "        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';",
+    to:   "        /* mutated: .app min-height pin omitted */" },
+  { name: 'clamp-probe B: the →browse min-height clear is omitted (a short browse page over-scrolls into empty space) (-> STABLEHEIGHT clear-on-browse)',
+    file: 'js/nav.js',
+    from: "      if (v === 'browse' && appEl) appEl.style.minHeight = '';",
+    to:   "      /* mutated: →browse min-height clear omitted */" },
+  { name: 'clamp-probe C: the .265 window.scrollTo(0,0) pre-empt is re-added on →home (the delta the probe removes) (-> STABLEHEIGHT no-scrollTo(0,0))',
+    file: 'js/nav.js',
+    from: "        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';",
+    to:   "        window.scrollTo(0, 0);\n        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

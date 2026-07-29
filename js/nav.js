@@ -56,34 +56,38 @@ const Nav = (() => {
     if (!npOpen && !optOpen && !subOpen) {
       $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
       const browseEl = $('browse');
+      const appEl = document.querySelector('.app');
       // The shown→hidden edge: going to a non-browse view (home) while #browse is shown.
       if (v !== 'browse' && !browseEl.classList.contains('hidden')) {
         // Deactivate Browse's virtual controller BEFORE display:none lands — a hidden box
         // measures zero, so the anchor must be captured now (from real geometry). Re-entry
         // activation is owned by Browse.showPage(), not here. See Browse.deactivate() for
-        // the full rationale. (Runs FIRST so the pre-emptive scroll below neither corrupts
-        // the captured anchor nor churns the now-deactivated controller — PLAN §4 / U8.)
+        // the full rationale. (Runs FIRST so the pin below captures the still-tall
+        // scrollHeight and the deactivated controller does not churn — PLAN §4.)
         if (d.browseWillHide) d.browseWillHide();
-        // ⭐ CLAMP PRE-EMPT (PLAN-swipe-clamp-fix.md, Charpy FORGE) — the device-confirmed
-        // driver of the persisting books→home carousel flash. Hiding a tall, scrolled-down
-        // in-flow #browse (line below) shrinks the document and the browser clamps
-        // window.scrollY in the SAME frame → iOS recomposites and re-rasters the fixed #home
-        // carousel layers (the flash). Zeroing the window scroll HERE — while #browse is
-        // still TALL (a valid in-range scroll, not a clamp) — makes the subsequent collapse
-        // a height change with scrollY already 0, i.e. the device-proven top-clean case (no
-        // clamp, no recomposite). SAFE + INVISIBLE: this scrollTo(0,0) and the #browse
-        // display:none run in ONE synchronous setView with no paint between them, so #browse
-        // is never composited in the scrolled-to-0-but-tall state; and across that single
-        // frame the viewport is covered by the opaque fixed #home content band (css:123-131,
-        // top safe+51 → bottom navbar) PLUS the fixed topbar/navbar/transport tiling the
-        // strips — so the off-screen #browse scrolling to its top shows nothing. #home is
-        // position:fixed (viewport-anchored), so a window scroll does not move it or
-        // re-raster its layers. Home's OWN scroll is reset separately in applyScreen
-        // ($('home').scrollTop = 0); this touches only the window/document scroll — now a
-        // pure clamp-surface (PLAN §3). Not the retired scrollTo(0,1): that sat in
-        // applyScreen AFTER setView (after the collapse — too late to pre-empt the clamp).
-        window.scrollTo(0, 0);
+        // ⭐ STABLE-HEIGHT PROBE (PLAN-stableheight-probe.md, Charpy FORGE) — a REVERTABLE
+        // DISCRIMINATOR of the persisting books→home carousel flash, replacing the .265
+        // scrollTo(0,0) pre-empt (which only RELOCATED the window-scroll delta rather than
+        // eliminating it — Linnaeus PROBE-clamp-preempt — and still flashed). This removes
+        // the delta ENTIRELY: pin the document tall (its current scrollHeight) BEFORE the
+        // #browse display:none below, so hiding the tall, scrolled-down in-flow #browse
+        // cannot collapse the document beneath the outgoing scroll → the browser has nothing
+        // to clamp → window.scrollY stays put, no delta (the device-proven top-clean case, on
+        // the delta axis). #home is position:fixed opaque own-scroll (css:123-131),
+        // viewport-anchored, so a persistent tall document behind it is invisible, and home
+        // does not read window.scrollY (6i re-homed pull-to-refresh + the scrollbar onto
+        // #home.scrollTop). Cleared on every →browse (below) so a short browse page never
+        // over-scrolls into empty space. DEVICE-owed discriminator: clean ⇒ the delta was the
+        // driver (build the full #browse decouple); still flashes ⇒ pivot to the incoming
+        // #home slide-transform demote (PLAN §4). Revert = drop the pin + the clear and
+        // restore the .265 scrollTo(0,0).
+        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';
       }
+      // CLEAR the pin on EVERY →browse entry (Charpy F1: unconditional on v==='browse', NOT
+      // nested in the pin-set guard) — every terminal browse show routes through
+      // setView('browse') (commit / abort / button-nav / refresh), so this single clear
+      // covers them all and a short browse page uses its real height.
+      if (v === 'browse' && appEl) appEl.style.minHeight = '';
       browseEl.classList.toggle('hidden', v !== 'browse');
     }
     // Leave the settings overlays' hidden state untouched when going TO NowPlaying so

@@ -221,3 +221,70 @@ fixed bars + single synchronous frame + viewport-anchored fixed `#home`); the op
 document is the specified fallback if it bites.
 
 VERDICT: BUILD_GREEN
+
+---
+
+## Follow-on build — stable-height PROBE / flash discriminator (build .266)
+
+Plan: `Claude/Plans/PLAN-stableheight-probe.md` (Charpy FORGE quick-stress,
+`Claude/Charpy/PLAN-stableheight-probe-charpy.md`). A minimal, REVERTABLE discriminator that
+SUPERSEDES the `.265` clamp pre-empt for `→home`.
+
+**Why (Linnaeus `PROBE-clamp-preempt`):** the `.265` `scrollTo(0,0)` pre-empt only RELOCATED the
+window-scroll delta (a scrolled commit still travels the full 10211→0) rather than eliminating it
+— and it still flashed on device. This probe removes the DELTA entirely by holding the document
+tall across the `#browse` hide, so `window.scrollY` never changes. It is an unproven
+DISCRIMINATOR: the device on/off oracle decides — clean ⇒ the delta (or the collapse recomposite)
+was the driver (build the full `#browse` decouple next); still-flashing ⇒ pivot to the incoming
+`#home` slide-transform demote.
+
+**The two edits (`js/nav.js` `setView`, the `!npOpen && !optOpen && !subOpen` block):**
+1. **REMOVED** the `.265` pre-empt `window.scrollTo(0, 0)` and its comment block (was nav.js:85)
+   — the probe wants ZERO scroll change, not a relocated one.
+2. **PIN** (nav.js:83, inside the `→home` hide guard `v !== 'browse' && !browseEl.classList.contains('hidden')`,
+   after `browseWillHide()`): `if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px'`
+   (`appEl = document.querySelector('.app')`). Holds the document tall so hiding the scrolled `#browse`
+   cannot collapse it beneath the outgoing scroll → no clamp → `window.scrollY` stays put.
+3. **CLEAR** (nav.js:86): `if (v === 'browse' && appEl) appEl.style.minHeight = ''` — **Charpy F1:
+   UNCONDITIONAL on `v === 'browse'`, NOT nested in the pin-set guard**, so every terminal browse
+   entry (commit / abort / button-nav / refresh, all route through `setView('browse')`) clears it
+   and a short browse page uses its real height. `books→books` stays on browse → never sets the pin.
+
+**STABLEHEIGHT CI cell (`test/swipe-stage6i.test.js`, red-first) — replaces the retired CLAMP cell**
+(whose subject, the `.265` `scrollTo(0,0)`, is deleted). Drives a real commit `Authors→Home` (with
+`h.setScrollY(600)`), then a `→books` nav. Asserts (a) `.app.style.minHeight` is a non-empty px
+string set BEFORE `#browse` is `display:none`'d — observed via a MutationObserver capturing the
+pin-set and `#browse`-hide in DOM-mutation order (`['pin-set','browse-hidden']`); (b) NO
+`window.scrollTo(0,0)` fires on `→home`; (c) the pin is cleared (`''`) after the `→browse`.
+**DOM/STYLE STATE + ORDER only** — jsdom does no layout, so `.app.scrollHeight` reads 0 (pin =
+`0px`); the cell asserts the STYLE is set/ordered/cleared, NOT its magnitude, the flash, or the
+navbar seating (all device-owed, scoped honestly in the cell comment). **Red-first proof:** RED
+against the shipped `.265` code (nav.js stashed to HEAD → 7 pass / 1 fail — no pin, and the `.265`
+`scrollTo(0,0)` still fires), GREEN with the probe (8/8). **Mutations** `tools/mutate.mjs` #85-87
+(A: omit the pin-set; B: omit the `→browse` clear; C: re-add the `.265` pre-empt): each reddens
+ONLY STABLEHEIGHT (7 pass / 1 fail); foreground sweep of 85-87 → **all caught (1 failing each), 0
+uncaught, tree clean**.
+
+**Verification:** full suite **741 tests / 740 pass / 0 fail / 1 device-only skip**; lint + typecheck
+clean; build stamp coherent at **2026-07-28.266**. Files changed: `js/nav.js` (the two edits),
+`test/swipe-stage6i.test.js` (CLAMP cell → STABLEHEIGHT cell), `tools/mutate.mjs` (clamp mutation →
+3 clamp-probe mutations), plus the four stamp files.
+
+**Device-owed (NOT claimed fixed — this is a DISCRIMINATOR; clean-or-flash both inform):**
+1. **FLASH discriminator** — scrolled `books→home` commit: clean ⇒ delta was the driver; still
+   flashing ⇒ pivot to the `#home` slide-transform demote (plan §4).
+2. **NAVBAR seating** — the fixed bars must seat correctly with the NEW persistent tall-scrolled
+   document while home is active (Charpy: grounded-safe direction — taller, never short — but a new
+   shipped state in the `.28`/black-band zone, so device-observed).
+3. **home→books scroll (Charpy F2 device note)** — the probe leaves `window.scrollY` stale (~10211)
+   on home (no pre-empt, no clamp); `home→books` slides `#browse` in at that stale scroll until
+   `Browse.applyScrollY` overwrites it with the destination's saved position. For a return to the
+   SAME books (saved ≈ stale) this is smoother than `.265`; for a nav to a fresh/different books
+   (saved ≈ 0) it is a transient ~10211→0 correction (end state correct, not a persistent bug). The
+   device gate must confirm **no wrong-scroll flash on `home→books`**. No code change — this is the
+   visible face of the benign stale `window.scrollY` (home is fixed own-scroll and reads
+   `#home.scrollTop`, not `window.scrollY` — 6i re-homed pull-to-refresh + the scrollbar).
+
+Revert = drop the pin + clear and restore the `.265` `scrollTo(0,0)` (one commit).
+
+VERDICT: BUILD_GREEN

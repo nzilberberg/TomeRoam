@@ -325,60 +325,90 @@ test('HOMEFIXED — the active #home rule is a position:fixed own-scroll view (s
   });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────
-// CLAMP (PLAN-swipe-clamp-fix.md §3/§4/§7, Charpy FORGE) — on a →home transition that hides a
-// shown #browse, setView resets the WINDOW scroll to (0,0) BEFORE #browse is display:none'd.
+// STABLEHEIGHT (PLAN-stableheight-probe.md §3/§5/§7, Charpy FORGE) — a REVERTABLE DISCRIMINATOR
+// of the books→home flash. On a →home transition that hides a shown #browse, setView pins `.app`
+// min-height (holding the document tall) BEFORE #browse is display:none'd, and issues NO
+// window.scrollTo(0,0) on →home; on a subsequent →browse the pin is cleared ('').
 //
-// WHY (device-confirmed, PLAN §1): the persisting books→home flash is the window-scroll CLAMP
-// that rides the outgoing #browse display:none collapse — hiding a tall, scrolled-down in-flow
-// #browse shrinks the document and the browser clamps window.scrollY in the same frame, forcing
-// an iOS recomposite that re-rasters the fixed #home carousel layers. Zeroing window.scrollY
-// while #browse is STILL TALL (a valid in-range scroll, not a clamp) reduces the scrolled case
-// to the device-proven top-clean collapse (a height change with scrollY already 0 → no clamp).
+// WHY (Linnaeus PROBE-clamp-preempt): the .265 scrollTo(0,0) pre-empt only RELOCATED the
+// window-scroll delta (scrolled commit still travels it) and still flashed. Pinning the document
+// tall removes the DELTA entirely — hiding the tall #browse cannot collapse the document beneath
+// the outgoing scroll, so the browser has nothing to clamp and window.scrollY stays put. If the
+// delta was the driver the scrolled case now matches the device-clean top case (no jump); the
+// device decides.
 //
-// ⚠️ ORDER ONLY — the flash is DEVICE-OWED (§7 device gate). jsdom does no layout, so this cell
-// cannot see the compositor re-raster; it asserts CALL ORDER only: a (0,0) window scroll fires
-// while #browse is still SHOWN (before its display:none), which is the whole content of the fix
-// (a scroll placed after the hide, the retired scrollTo(0,1) position, is too late — the clamp
-// already fired). The scrolled state is modelled via h.setScrollY; the fix is unconditional on
-// the →home hide path (no scroll-value guard), so the ordering holds regardless.
+// ⚠️ DOM/STYLE STATE + ORDER ONLY — the flash, the navbar seating, and the home→books scroll are
+// DEVICE-OWED (§7 device gate). jsdom does no layout, so: (a) `.app.scrollHeight` reads 0 → the
+// pin sets `min-height: 0px`; this cell asserts the STYLE is SET (a non-empty px string) before
+// the hide, NOT its magnitude (device-owed); (b) it asserts NO window.scrollTo(0,0) fires on
+// →home (the .265 pre-empt is removed); (c) it asserts the pin is CLEARED to '' after a →browse.
+// A MutationObserver captures the pin-set and #browse-hide in DOM-mutation order.
 //
-// RED AT HEAD (confirmed): setView('home') resets only #home's OWN scroll (nav.js:130 —
-// $('home').scrollTop = 0), never the WINDOW scroll, before hiding #browse — so no (0,0)
-// window.scrollTo fires with #browse still shown. MUTATION (tools/mutate.mjs): move the
-// window.scrollTo(0,0) to AFTER the #browse display:none → the (0,0) call then fires while
-// #browse is already hidden → the "before the hide" assertion reddens.
+// RED AT HEAD (before the probe): setView('home') hides #browse with no `.app` min-height pin
+// (only the .265 window.scrollTo(0,0), which this probe removes) — so no pinned min-height is set
+// before the hide → the "pin set before the hide" assertion reddens. MUTATIONS (tools/mutate.mjs):
+// move the pin to AFTER the #browse hide → the ordering assertion reddens; omit the →browse clear
+// → the "cleared after browse" assertion reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
-test('CLAMP — a →home commit resets the window scroll to (0,0) BEFORE #browse is display:none\'d (pre-empts the collapse clamp; ORDER only, flash device-owed)',
+test('STABLEHEIGHT — a →home commit pins .app min-height BEFORE #browse is display:none\'d (no scrollTo(0,0)); a →browse clears it (state+order only, flash device-owed)',
   async () => {
     const h = boot({ fakeTimers: true, deferRaf: true });
     const realScrollTo = h.window.scrollTo;
     try {
       await toAuthors(h);            // Authors shown (#browse), #home parked; back-swipe = Authors→Home
-      h.setScrollY(600);            // model the scrolled-down case the clamp rides (ordering is asserted)
+      h.setScrollY(600);            // model the scrolled-down case whose collapse would clamp
 
-      // Spy window.scrollTo: at each (0,0) call, capture whether #browse was still SHOWN. The fix
-      // must zero the window scroll while #browse is not yet hidden (before the collapse), so a
-      // (0,0) call must be observed with browse NOT yet display:none'd. Forward to the real
-      // recorder so scrollCalls/other assertions stay intact.
-      const clampCalls = [];
-      h.window.scrollTo = (x, y) => {
-        if (x === 0 && y === 0) clampCalls.push({ browseShownAtCall: !browseHidden(h) });
-        return realScrollTo(x, y);
-      };
+      const appEl = h.document.querySelector('.app');
+      const browseEl = h.$('browse');
+      assert.ok(appEl, 'fixture: the .app content container exists');
 
-      // Commit the back-swipe → applyScreen(home) → setView('home') hides #browse.
+      // Record the DOM-mutation ORDER of the pin-set (.app style min-height becomes non-empty)
+      // and the #browse hide (#browse gains the `hidden` class). A MutationObserver delivers
+      // records in mutation order, so pin-before-hide is observable without layout.
+      const order = [];
+      const obs = new h.window.MutationObserver((records) => {
+        for (const r of records) {
+          if (r.target === appEl && r.attributeName === 'style' && appEl.style.minHeight && !order.includes('pin-set')) order.push('pin-set');
+          if (r.target === browseEl && r.attributeName === 'class' && browseEl.classList.contains('hidden') && !order.includes('browse-hidden')) order.push('browse-hidden');
+        }
+      });
+      obs.observe(appEl, { attributes: true, attributeFilter: ['style'] });
+      obs.observe(browseEl, { attributes: true, attributeFilter: ['class'] });
+
+      // Spy window.scrollTo to confirm the .265 pre-empt (0,0) is GONE on →home.
+      const zeroScrolls = [];
+      h.window.scrollTo = (x, y) => { if (x === 0 && y === 0) zeroScrolls.push(true); return realScrollTo(x, y); };
+
+      // Commit the back-swipe → applyScreen(home) → setView('home') pins then hides #browse.
       h.touch.start(10, 300, addRow(h));
       h.touch.move(80, 302);
       await realSleep(12); h.touch.move(600, 304); await realSleep(12); h.touch.end(600, 304);
       await settle(h); await h.clock.advance(700); await settle(h);
       for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();
       await settle(h);
+      obs.takeRecords().forEach(() => {});   // no-op flush; callback already drained via settle
+      obs.disconnect();
 
       assert.ok(/commit/.test(settles(h)[0] || ''), `fixture: the swipe must have committed — got ${settles(h)[0]}`);
       assert.equal(browseHidden(h), true, 'fixture: #browse ends display:none\'d after the →home commit');
-      assert.ok(clampCalls.some((c) => c.browseShownAtCall === true),
-        'setView must reset the window scroll to (0,0) BEFORE #browse is display:none\'d, so the document '
-        + 'collapse forces no scroll clamp (the books→home flash driver). No pre-hide (0,0) window scroll was '
-        + `observed — got ${JSON.stringify(clampCalls)}`);
+      // (a) the pin is SET (non-empty px string) after the →home commit…
+      assert.match(appEl.style.minHeight, /^\d+px$/,
+        `.app must be pinned to a px min-height on →home to hold the document tall (magnitude is device-owed; `
+        + `jsdom scrollHeight is 0 → "0px"); got "${appEl.style.minHeight}"`);
+      // …and set BEFORE #browse was hidden (the load-bearing order: pin then collapse).
+      assert.deepEqual(order, ['pin-set', 'browse-hidden'],
+        `the .app min-height pin must be set BEFORE #browse is display:none'd, so the collapse forces no clamp; `
+        + `got mutation order ${JSON.stringify(order)}`);
+      // (b) the .265 window.scrollTo(0,0) pre-empt is REMOVED on →home.
+      assert.equal(zeroScrolls.length, 0,
+        `no window.scrollTo(0,0) may fire on →home — the .265 pre-empt is replaced by the stable-height pin; `
+        + `got ${zeroScrolls.length} zero-scroll(s)`);
+
+      // (c) a subsequent →browse CLEARS the pin so a short page uses its real height.
+      h.tap('.navbtn[data-nav="books"]');
+      await settle(h);
+      assert.equal(appEl.style.minHeight, '',
+        `the .app min-height pin must be cleared on →browse (Charpy F1: unconditional on v==='browse'); `
+        + `got "${appEl.style.minHeight}"`);
     } finally { h.window.scrollTo = realScrollTo; h.dispose(); }
   });
