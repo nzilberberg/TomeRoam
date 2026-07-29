@@ -215,3 +215,69 @@ recommend scoping the claim to "the signed-in app views" so a future reader does
   frozen construction contract PROVEN unchanged. Flash C explicitly NOT gated here.
 
 VERDICT: TEMPER
+
+---
+
+## Confirmation pass on the three tempered findings — tempered plan HEAD `05aa99d` (2026-07-28)
+
+Scope: the three tempered findings only; the design-sound parts (virtual-list re-home arithmetic,
+`.alphaindex` exclude, KIND-model, navbar) are settled and not re-opened. **All three fixes landed and are
+correct. Verdict: FORGE.**
+
+### Finding-one (coverage honesty) — CONFIRMED resolved
+
+- **REALIZE (§11 line 246)** is rescoped to the capture-phase listener wiring + the PURE `windowFor` model
+  under INJECTED scroll numbers, with the explicit disclaimer "the production real-geometry listTop arithmetic
+  and clamp are device or manual owned not asserted here." The overclaim ("rows for the new position
+  materialize" from real scroll) is gone; the mutation (listener stays on window → a `#browse`-dispatched
+  scroll never reaches the handler) still reddens the handler-ran assertion. Well-formed, non-vacuous.
+- **RESTORE (§11 line 248)** is rescoped to the write SURFACE (the recorder captures `#browse.scrollTop`,
+  `applyScrollY` writes `#browse.scrollTop` not the window, the abort restore targets `#browse.scrollTop`),
+  with "the correct clamped landing value is real-geometry and device or manual owned not asserted here." The
+  overclaim ("restores to the saved value" — which needed the clamp/geometry) is gone; the mutation
+  (`applyScrollY` keeps `window.scrollTo` → the write stays off `#browse.scrollTop`) reddens. Well-formed.
+- **METRICS (new, §11 line 247)** is exactly the structural production-wiring check F1 asked for: it builds a
+  books controller through the real `Browse.virtualView`, sets `#browse.scrollTop`, and asserts the INJECTED
+  `metrics.scrollY` returns it and the injected `scrollTo` writes `#browse.scrollTop` — pure property access,
+  jsdom-safe (no layout). The mutation ("browse.js injects no metrics → `createController` falls back to the
+  window default → injected `scrollY` reads `window.scrollY`") reddens the reads-`#browse` assertion. So the
+  production metrics-injection — which B1's arithmetic rests on, and which browse.js:633-641 lacks today — is
+  now CI-gated. Cell count 7→8; `blocking_questions` carries all eight. The three seams (listener, write
+  surface, metrics-injection) are gated at CI; the real-geometry windowing/clamp is honestly device/manual-owned,
+  mirroring the GHOSTSCROLL split. The overclaim is fully retired.
+
+### Finding-two (atomicity) — CONFIRMED resolved
+
+§4 (line 122) now states "S1 (the fixed `#browse` recipe) + S2 (the six-consumer re-home) + S3 (the
+swipe.js:281 browse `ghostY` branch → `#browse.scrollTop` AND the `.alphaindex` clone exclude) must ship in ONE
+commit," and explicitly "an interim S1+S2 (without S3) is not shippable" — with the jump-to-top-plus-misplaced-
+strip rationale (S1 without S3 makes every outgoing browse ghost read `window.scrollY`=0). §14 (line 289) marks
+S4 (retire the `.266` pin) as a permitted follow-up ("a benign redundant no-op under a fixed `#browse`") and S5
+(the ledger) as records reconciliation. The sequencing now forbids the interim S1+S2 exactly as required.
+
+### Finding-three (invariant scope) — CONFIRMED resolved
+
+The `window.scrollY ≡ 0` invariant is scoped to the signed-in app views (`#home`/`#browse`) at all three sites:
+§3 (line 85, a dedicated F3 paragraph), the §11 Invariants row (line 236), and the PolicyLedger `decision`
+(line 210). `#signin` is named as a separate in-flow pre-app state outside the swipe flow in each. No residual
+asserts a global always-0.
+
+### Not disturbed / constraint honored
+
+The design-sound parts verified last pass are untouched. The red `--page-bg` gradient (css:41) is referenced
+by the recipe, never altered — the hard user constraint holds.
+
+## Verdict — FINAL: FORGE
+
+The plan is sound and its coverage is now honest. The `#browse` fixed-own-scroll decouple is the correct clean
+form of the device-proven `.266` fix: the virtual-list re-home arithmetic ports (verified), the six consumers
+re-home to `#browse.scrollTop` with the production metrics-injection now CI-gated (METRICS), the `.alphaindex`
+exclude is scoped to the transient ghost, the KIND-model change is safe under a signed-in `window.scrollY ≡ 0`,
+the navbar residual is honestly device-owed, and the eight CI cells gate the wiring seams without overclaiming
+any device paint. The atomic S1+S2+S3 boundary prevents a half-done regression. Build it.
+
+Next: Loki (the adversary) on the tempered plan, then Curie (the eight cells, honestly scoped) + Brunel (the
+atomic S1+S2+S3 build). The four device gates R-flash/R-navbar/R-strip/R-browse2browse remain device-owed
+downstream; flash C is explicitly out; the red gradient stays untouched.
+
+VERDICT: FORGE
