@@ -321,6 +321,27 @@ hold (if scrollend fires before the re-tile). ⚠️ PROCESS this session: two p
 stop" recommendation — all wrong (memories `device-only-fix-ship-tested-form`, `no-unsolicited-stopping-offers`); the win came
 from the user's reproducible clue + Linnaeus grounding, not my theories.
 
+**Browse-decouple BUILT GREEN (2026-07-29) — bench, not pushed.** `Claude/Plans/PLAN-browse-decouple.md`
+(Charpy FORGE, Loki HELD_STONE) — the symmetric completion of Stage 6i: active `#browse` is now
+`position:fixed`+`overflow-y:auto` own-scroll (NO `will-change`, so the fixed `.alphaindex` strip
+stays viewport-anchored). With both in-flow views now fixed, `window.scrollY` is a constant 0 on
+every signed-in app view, so hiding `#browse` on `→home` can no longer collapse the document — flash
+A (the commit books→home scroll-clamp compositor snap) is removed **by construction**, not by the
+Stage 6h settle gate (already superseded by 6i) or the `.266` stable-height probe (now retired,
+`PLAN-stableheight-probe.md` marked superseded). Six window-scroll consumers re-homed to
+`#browse.scrollTop` (virtual-list listener+metrics, scroll recorder/`applyScrollY`,
+`playingTrackY`, the scrollbar's new `'browse'` kind, the outgoing app-ghost's offset source); the
+abort ghost now excludes `.alphaindex` so the browse-source content-translate can't re-parent it.
+Construction/classification/finalization contracts UNCHANGED. Curie's 8-cell red suite un-skipped
+and green; 2 lockstep tests updated + 3 collateral tests fixed (pre-existing scroll-surface fakery
+broken by the re-home) + `swipe-stage6i.test.js`'s `STABLEHEIGHT` cell removed (it asserted the
+retired pin's presence, directly contradicting the new `PINGONE` cell). 8 new + 2 re-anchored
+mutations, sweep 0-uncaught. Full suite 748/747/0-fail/1-skip (pre-existing device-only). Build log
+`Claude/Brunel/browse-decouple-build.md`; build `2026-07-29.267`. **DEVICE-OWED, not claimed:**
+R-flash (confirm the clean repro), R-navbar (bars seat with no in-flow view), R-strip (`.alphaindex`
+anchored under a fixed `#browse` on iOS-26), R-browse2browse (browse→browse as a fixed mover). Flash
+C (the browse→browse in-list `letterhead` divider re-raster) is untouched, stays open, T8-forked.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired
