@@ -170,3 +170,6 @@ tools/hooks/run-checks.mjs`: PASS (no-mutbak / stamp / lint / typecheck / tests 
 (marked superseded), `Claude/Plans/PLAN-swipe-reveal.md` (§2.1/§2.4 amended),
 `Claude/Subsystems/swipe-reveal.md` (§7/§18/§22 amended). `Claude/Decisions/PolicyLedger.mjs` was
 already correct (Curie) — no change needed.
+
+
+VERDICT: BUILD_GREEN

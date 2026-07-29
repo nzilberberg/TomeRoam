@@ -59,6 +59,11 @@ function defaultSteps() {
     ['lint', existsSync(eslint) ? [eslint, 'js', 'sw.js'] : null],
     ['typecheck', existsSync(tsc) ? [tsc, '-p', 'jsconfig.json'] : null],
     ['tests', ['--test', 'test/*.test.js']],
+    // A STAGED campaign manifest (Claude/Campaigns/*.json) is a declaration that the stage is
+    // done — so it must pass its own stage-gate-check (every required gate has a filed, accepted
+    // verdict) before it can land. No-ops when no manifest is staged. (Closes: a "COMPLETE"
+    // manifest committed while the build gate's verdict was unfiled.)
+    ['campaign-gates', [join(ROOT, 'tools', 'hooks', 'campaign-complete-check.mjs')]],
   ];
 }
 
