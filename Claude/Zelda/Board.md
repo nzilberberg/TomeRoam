@@ -342,6 +342,42 @@ R-flash (confirm the clean repro), R-navbar (bars seat with no in-flow view), R-
 anchored under a fixed `#browse` on iOS-26), R-browse2browse (browse→browse as a fixed mover). Flash
 C (the browse→browse in-list `letterhead` divider re-raster) is untouched, stays open, T8-forked.
 
+**HOME-SHIFT FIX — IN FLIGHT (2026-07-29), design only, NOTHING BUILT.** `Claude/Plans/PLAN-home-shift-fix.md`
+(HEAD `8cebe7d`, PLAN_READY, plan gate exit 0). Target = the device-reported **home→books scroll SHIFT that
+persisted after `.267`** (window scroll is now ≡0 under the decouple, so it is NOT the window clamp). Two
+mechanisms: **M2** = align the outgoing-home ghost clone's padding so its first-content viewport-Y equals the
+real fixed-inset `#home`'s `calc(safe+65)` — the constant ~19px, scroll-independent half; Charpy-FORGE'd; the
+exact constant is **device-owed** (jsdom has no layout; Charpy flags Linnaeus's ≈46px measurement as evidence
+against the 53 headline, so Brunel measures). Also fixes the browse ghost (identical geometry css:150-154 ==
+css:126-131). **M1** = the scroll-dependent half, **KILLED TWICE by Loki pre-build**: (1) `STRIKE-home-shift-m1.md`
+— recorder + `dataset.st`, a stale value survived a fresh-nav reset because a 0→0 `scrollTop` write fires no
+scroll event; record dropped entirely, restore from the gesture's own `cur.ghostY`. (2)
+`STRIKE-home-shift-m1-restrike.md` — the restore was gated on the live DESTINATION while `cur.ghostY` is the
+gesture's SOURCE scroll; executed: browse-source abort + Home tap during the ~340ms settle → `#home.scrollTop=800`
+(a browse scroll onto home). **Fix = gate on `cur.from.v === 'home'`** (captured immutably app.js:460/467 vs
+`dest` read fresh app.js:793), applied at BOTH restore sites — abort finalize app.js:1227 + supersession recovery
+app.js:444. Coverage 4→6 cells (M1RESTORE, M1FRESHNAV, M1SUPERSEDE, M2ALIGN, **M1CROSSSRC**, **M1SUPCROSS** —
+one new cell per restore site, since the two sites are gated by two separate expressions and one cell would
+credit a site its fixture never drives); natural per-site mutants in `tools/mutate.mjs`.
+⛔ **BLOCKING coverage finding (Vitruvius-measured, jsdom 29.1.1): a class whose computed `overflow` is `hidden`
+does NOT clamp `scrollTop`** (500 survived the park; a parked write stuck at 700). The browser clamp M1 exists to
+repair never happens in test, so `M1RESTORE`/`M1SUPERSEDE` passed identically with the restore line REMOVED —
+**cells that cannot fail**, their named mutants un-reddenable. Remedy required before Curie: model the park clamp
+(harness-level shim preferred over per-fixture steps) + a write-observation oracle mirroring the harness's
+`scrollTo` recorder. `M1FRESHNAV` survives only because nav.js:140 writes `scrollTop = 0` explicitly.
+⚠️ **V2 reachability correction** (Vitruvius, §1): Loki's claim that app.js:444 fires for browse→browse via the
+held-ghost window is WRONG — `paneLess` is static on `movers` (app.js:251), an app-ghost mover is `owned-pane`
+(swipe.js:343), and app.js:385 refuses a pane-owning session. The recovery site is reached **mid-drag**
+(`d` non-null, `finishing` false → app.js:400 → 442-445), making it LESS common than the abort site. Fracture +
+fix unamended. **Gates run:** Charpy FORGE (M2 + M1 design), Loki KILL ×2 (both folded). **NEXT:** Charpy
+re-stress of the coverage half (in flight) → one FINAL blind Loki strike prosecuting the **enumeration** question
+(does `#home.scrollTop` have any writer outside the two known sites?) → Curie + Brunel → Poirot + Mendeleev →
+device. ⭐ **Vitruvius's cross-cutting observation: all three failures this campaign are ONE defect shape — a
+coverage cell credited with a crossing its fixture never drove.** The existing mutation sweep does catch that
+class (an un-reddenable cell reports UNCAUGHT) but only after the build; that generator is still live.
+**Unpushed stack** (bench, on top of pushed `d5b4532`): build `.267` + the campaign manifest + the
+campaign-completion pre-commit gate + all home-shift plan/casebook/strike commits through `8cebe7d`.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired
