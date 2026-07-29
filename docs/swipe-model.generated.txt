@@ -55,9 +55,9 @@ before this document is trusted again. Never update a pinned constant alone.
      js/app.js:140   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
      js/app.js:141   else navStack.push(desc);
      js/app.js:164   navStack.push({ v }); fwdStack.length = 0;
-     js/app.js:778   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
-     js/app.js:779   else navStack.push(fwdStack.pop());
-     js/app.js:1389  navStack = [{ v: 'home' }];
+     js/app.js:783   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:784   else navStack.push(fwdStack.pop());
+     js/app.js:1358  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------
@@ -66,7 +66,7 @@ before this document is trusted again. Never update a pinned constant alone.
    same type, different identity     files(A) -> files(B)                    pane=yes abort=rerender back=reachable
    same semantic descriptor          books() -> books()                      pane=yes abort=rerender back=UNREACHABLE
    same parameterized identity       authorBooks(A) -> authorBooks(A)        pane=yes abort=rerender back=reachable
-   browse -> home                    books() -> home()                       pane=yes abort=none     back=reachable
+   browse -> home                    books() -> home()                       pane=no  abort=none     back=reachable
    home -> browse                    home() -> books()                       pane=yes abort=none     back=reachable
    overlay -> overlay                general() -> options()                  pane=no  abort=none     back=reachable
    overlay -> browse                 options() -> books()                    pane=no  abort=none     back=reachable
@@ -99,13 +99,13 @@ before this document is trusted again. Never update a pinned constant alone.
         code
         verified at: openSub(): navStack.push({v}) while currentDesc().v === options
    [parity] scroll policy
-        FROZEN FOR PARITY. Home entry uses window.scrollTo(0,1) when
-        resetScroll is set. This is NOT an iOS-26 runway requirement —
-        nav.js says the navbar seater is body.home-tall and the 1px is a
-        remnant of the abandoned runway theory. Stage 1 does NOT decide
-        whether the 1px survives; remove it AFTER device parity in a
-        separate commit
-        verified at: nav.js: body.home-tall seating comment; plan §2.6.4 / T12
+        Stage 6i (PLAN-swipe-noswap-home.md): active #home is a
+        position:fixed own-scroll view; the home-scoped body.home-tall
+        toggle and the document scrollTo(0,1) home-entry write are RETIRED.
+        Home entry resets #home.scrollTop to 0 when resetScroll is set. The
+        fixed navbar seater is the retained, generalized .app min-height
+        runway (css:73), unchanged by this stage
+        verified at: nav.js: applyScreen home branch (#home.scrollTop reset); css/app.css .app runway; PLAN-swipe-noswap-home.md §8
 
    scroll policy object (plan states policy; Browse resolves coordinates):
         onCommit   destination-entry

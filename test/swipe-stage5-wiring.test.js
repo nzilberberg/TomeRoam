@@ -96,16 +96,19 @@ test('F5c WIRING — a browse-host swipe cleans up a STALE settings overlay left
   } finally { h.dispose(); }
 });
 
-// ── F2-r (wiring) — L3 records capture WITHOUT synthesizing a ghostY on the home path ───
-// A home snapshot is pinned at top with no scroll freeze, so its capture carries no ghostY;
-// L3 must leave d.ghostY untouched (the reveal reports it as "?"), while still recording
-// animSync/animRes. Synthesizing a 0 would report `ghostY=0` — today it is never assigned.
-test('F2-r WIRING — a back->home swipe records animSync but leaves d.ghostY untouched', async () => {
+// ── F2-r (wiring) — browse→home is pane-less: L3 never synthesizes animSync or ghostY ───
+// Stage 6i (PLAN-swipe-noswap-home.md §5/§12) retired the home-snapshot recipe: a →home
+// reveal no longer builds ANY owned pane (the real fixed #home is the un-parked incoming
+// mover, borrowed-real), so buildConstruction's `capture` is null for browse→home — L3's
+// `if (c.capture) { ... }` guard (app.js start()) never runs, and neither d.animSync nor
+// d.ghostY is ever assigned. A build that synthesizes either from a null capture would
+// report a number instead of "?".
+test('F2-r WIRING — a browse→home swipe is pane-less: L3 never synthesizes animSync or ghostY', async () => {
   const h = boot({ fakeTimers: true });
   try {
     h.tap('.navbtn[data-nav="books"]'); await settle(h);   // navStack = [home, books]; back = home
     const row = addRow(h);
-    // Abort back->home: builds a home snapshot (owned-pane), then the reveal watcher reports.
+    // Abort books->home: no owned pane is built (Stage 6i), so there is no capture to record.
     h.touch.start(10, 300, row);
     h.touch.move(80, 302); await realSleep(12);
     h.touch.move(200, 304); await realSleep(12);
@@ -114,11 +117,13 @@ test('F2-r WIRING — a back->home swipe records animSync but leaves d.ghostY un
     // Advance past BOTH the 340ms finalize timer and the 500ms reveal window it then arms.
     await settle(h); await h.clock.advance(1200); await settle(h);
     const line = flashLog(h).find((m) => /@reveal/.test(m));
-    assert.ok(line, `a back->home swipe must produce a @reveal line — got ${JSON.stringify(flashLog(h))}`);
-    assert.match(line, /animSync=\d/, `the home snapshot's animSync must be recorded: ${line}`);
+    assert.ok(line, `a books→home swipe must produce a @reveal line — got ${JSON.stringify(flashLog(h))}`);
+    assert.match(line, /animSync=\?/,
+      `browse→home builds no owned pane (Stage 6i), so d.animSync must never be assigned `
+      + `(reported "?"), not synthesized as a number: ${line}`);
     assert.match(line, /ghostY=\?/,
-      `a home snapshot has no scroll freeze, so d.ghostY must be left untouched (reported "?"), `
-      + `not synthesized as a number: ${line}`);
+      `browse→home builds no owned pane (Stage 6i), so d.ghostY must never be assigned `
+      + `(reported "?"), not synthesized as a number: ${line}`);
   } finally { h.dispose(); }
 });
 

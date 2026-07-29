@@ -34,6 +34,14 @@ function addRow(h) {
   h.$('browse').appendChild(row);
   return row;
 }
+/** Authors over Books: a left-edge back-swipe is browse->browse, the same-browse-host
+ *  abort-re-render case (finalizationPlanFor.abortRender === 'rerender'). */
+async function onAuthorsOverBooks(h) {
+  h.tap('.navbtn[data-nav="books"]');
+  await settle(h);
+  h.tap('.navbtn[data-nav="authors"]');
+  await settle(h);
+}
 /** Play bookA and open Now Playing, so ctx is set and NP is the current screen. */
 async function openNowPlaying(h) {
   await settle(h);
@@ -70,33 +78,38 @@ test('F5a — the mid-drag render forwards the FULL dest descriptor payload (not
 });
 
 // ── F1a-L3 — toMover emits the `own` key (teardown by ownership type) ─────────────────
-// A commit→home HELD reveal builds an owned-pane snapshot (own==='owned-pane'). On the held
-// path applyScreen runs with keepGhosts:true (app.js:1092), so resetSwipeStyles does NOT
-// remove the ghost — the own-gated fadePanes (app.js:641, `m.own !== 'owned-pane'` → skip)
-// is the SOLE disposer. So the ghost leaves the DOM only because toMover stamped `own`; a
-// toMover emitting just {el, base} would strand it (fadePanes matches nothing). The
-// borrowed-real home view is never removed (it is not owned-pane). Requires deferRaf (the
-// paint gate) + a clock advance (the fade-removal timer).
+// An ABORTED browse->browse swipe (Authors<->Books) is a HELD reveal that builds an
+// owned-pane app-ghost (own==='owned-pane'). Stage 6i (PLAN-swipe-noswap-home.md §5/§12)
+// retired the commit→home held reveal this test used to drive — browse→home no longer
+// holds (the real fixed #home is the un-parked incoming mover, never covered by a
+// snapshot or a ghost). On the held path applyScreen runs with keepGhosts:true (app.js),
+// so resetSwipeStyles does NOT remove the ghost — the own-gated fadePanes (app.js,
+// `m.own !== 'owned-pane'` → skip) is the SOLE disposer. So the ghost leaves the DOM only
+// because toMover stamped `own`; a toMover emitting just {el, base} would strand it
+// (fadePanes matches nothing). The borrowed-real #browse (re-rendered under the ghost) is
+// never removed (it is not owned-pane). Requires deferRaf (the paint gate) + a clock
+// advance (the fade-removal timer).
 test('F1a-L3 — toMover emits the `own` key: a held-reveal owned-pane is disposed by its own type, borrowed-real views survive', async () => {
   const h = boot({ fakeTimers: true, deferRaf: true });
   try {
-    h.tap('.navbtn[data-nav="authors"]');   // navStack = [home, authors]; a back-swipe commits → home
-    await settle(h);
-    h.touch.start(10, 300, addRow(h));
+    await onAuthorsOverBooks(h);
+    const row = addRow(h);
+    h.touch.start(10, 300, row);
     h.touch.move(80, 302); await realSleep(12);
-    h.touch.move(600, 304); await realSleep(12);   // past threshold → COMMIT (Authors → Home)
-    h.touch.end(600, 304);
+    h.touch.move(200, 304); await realSleep(12);   // out
+    h.touch.move(30, 304); await realSleep(12);    // retreat → ABORT
+    h.touch.end(30, 304);
     await settle(h); await h.clock.advance(400); await settle(h);   // finalize → held reveal covers
-    assert.equal(ghosts(h), 1, 'fixture sanity: the commit→home reveal is holding one owned-pane snapshot');
+    assert.equal(ghosts(h), 1, 'fixture sanity: the abort→browse reveal is holding one owned-pane app-ghost');
 
     for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();   // paint gate → drop() → fadePanes
     await h.clock.advance(100);              // the FADE_MS+60 removal timer
     await settle(h);
 
     assert.equal(ghosts(h), 0,
-      'the owned-pane snapshot must be removed via its own===owned-pane type — a toMover that '
+      'the owned-pane app-ghost must be removed via its own===owned-pane type — a toMover that '
       + 'dropped the `own` key would leave fadePanes matching nothing and strand the pane');
-    assert.ok(h.$('home'), 'the borrowed-real home view (not owned-pane) is never removed by teardown');
+    assert.ok(h.$('browse'), 'the borrowed-real #browse view (not owned-pane) is never removed by teardown');
   } finally { h.dispose(); }
 });
 

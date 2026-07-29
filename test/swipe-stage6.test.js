@@ -302,27 +302,33 @@ test('OB — an orphan-pane hard reset (no live session) disposes as hard-reset 
 // resetScroll:false onto the ORPHAN sub-case (d===null) too — not just the live-recovery
 // branch that needs it (so applyScreen won't stomp the explicit d.scroll0 restore). For an
 // orphan hard-reset whose currentDesc() is `home`, the PRE-6a code reset the document scroll
-// to top (nav.js:127, `if (resetScroll) window.scrollTo(0, 1)` under the default resetScroll:true);
-// the committed f09cf9d does not — an unclassified parity regression the OB test above is blind
-// to (it drives a BROWSE source, where nav.js never resets scroll, so resetScroll is inert).
+// to top; the committed f09cf9d does not — an unclassified parity regression the OB test
+// above is blind to (it drives a BROWSE source, where nav.js never resets scroll, so
+// resetScroll is inert).
 //
-// This asserts the pre-6a parity: an orphan hard-reset on a home source issues the scroll-to-top.
-// RED against f09cf9d (resetScroll:false forced onto the orphan) for THAT reason — no scrollTo(0,1).
-// Brunel's fix (`resetScroll: d ? false : undefined`, so only the live-recovery branch forces false)
-// greens it; the OB browse guard stays green (browse is inert to resetScroll). (Options/sub sources
-// reset a PANEL scrollTop, not window — home is the window-observable source kind.)
-test('OB-home — an orphan hard-reset on a HOME source resets the document scroll to top (pre-6a parity; Poirot F1)', async () => {
+// Stage 6i (PLAN-swipe-noswap-home.md §6) RE-HOMES what gets reset: active #home is now its
+// own position:fixed overflow-y:auto scroller, so home entry resets #home's OWN scrollTop
+// (nav.js), not the document's `window.scrollTo(0, 1)` (retired). The INVARIANT this cell
+// pins is unchanged — an orphan hard-reset on a home source must still reset home's scroll
+// to top — only the OBSERVABLE CHANNEL moved.
+//
+// This asserts the pre-6a parity on the re-homed channel: an orphan hard-reset on a home
+// source resets #home.scrollTop to 0. Brunel's fix (`resetScroll: d ? false : undefined`, so
+// only the live-recovery branch forces false) greens it; the OB browse guard stays green
+// (browse is inert to resetScroll). (Options/sub sources reset a PANEL scrollTop — home is
+// now the SAME kind of own-scroll source, no longer the window-observable one.)
+test('OB-home — an orphan hard-reset on a HOME source resets #home\'s own scroll to top (pre-6a parity; Poirot F1; Stage 6i re-homed)', async () => {
   const h = boot({ fakeTimers: true });
   try {
     h.tap('.navbtn[data-nav="home"]');      // currentDesc() === home
     await settle(h);
+    h.$('home').scrollTop = 500;            // #home scrolled down within its own fixed scroller
 
     // An orphan: a leftover .nav-ghost with NO live session (d === null), on a HOME source.
     const orphan = h.document.createElement('div');
     orphan.className = 'nav-ghost';
     h.$('home').appendChild(orphan);
 
-    const before = scrollCalls(h).length;
     const hrBefore = hardResets(h).length;
     // Any touchstart with a leftover ghost trips begin()'s hard reset (it runs before the
     // edge/exclusion checks). Do NOT drive it live — isolate the hard-reset's applyScreen.
@@ -330,10 +336,9 @@ test('OB-home — an orphan hard-reset on a HOME source resets the document scro
     await settle(h);
 
     assert.ok(hardResets(h).length > hrBefore, 'fixture sanity: the orphan tripped begin()\'s hard reset');
-    const issued = scrollCalls(h).slice(before).map((c) => c.args);
-    assert.ok(issued.some((a) => a[0] === 0 && a[1] === 1),
-      'an orphan hard-reset on a home source must reset the document scroll to top '
-      + `(applyScreen home → window.scrollTo(0, 1)); got scrollTo calls ${JSON.stringify(issued)}`);
+    assert.equal(h.$('home').scrollTop, 0,
+      'an orphan hard-reset on a home source must reset #home\'s OWN scroll to top '
+      + '(applyScreen home → #home.scrollTop = 0)');
   } finally { h.dispose(); }
 });
 

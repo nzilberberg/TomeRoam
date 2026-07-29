@@ -489,49 +489,15 @@ test('the ghost inherits the live view’s animation phase, not a restarted one 
   } finally { h.dispose(); }
 });
 
-// ⭐ .206 — the HOME snapshot needs the same phase sync, and the report must SAY so.
-//
-// The .205 device reading looked like a pass and was not: on `commit→home` the
-// comparison printed `0/0` for every selector, because it probed `.book`/`.letterhead`
-// while HOME is built from `.tile`, and `phase=0ms` came from elements that carry no
-// animation at all (the animation is on the `.cover` INSIDE a row). Measuring the wrong
-// elements is not a null result, and a bare 0 read as "in sync" when it meant "never
-// measured". The user reports the WHOLE home screen flashing on every swipe back, and
-// home is 36 of 45 images without src — i.e. almost entirely shimmering skeleton.
-//
-// So this pins the home path end-to-end: the snapshot builder seeds phase, and the
-// report states how many covers were seeded. `animSync=0` would mean the fix never ran,
-// which is otherwise indistinguishable from "ran and did not help".
-test('the HOME snapshot phase-syncs its covers, and the report says how many (.206)', async () => {
-  const h = boot({ fakeTimers: true });
-  try {
-    h.tap('.navbtn[data-nav="books"]');       // navStack = [home, books] → back = home
-    await settle(h);
-
-    const tile = h.document.createElement('div');
-    tile.className = 'tile';
-    const cover = h.document.createElement('img');
-    cover.className = 'cover';
-    tile.appendChild(cover);
-    h.$('home').appendChild(tile);
-
-    h.window.Element.prototype.getAnimations = function () {
-      return this.classList && this.classList.contains('cover') ? [{ currentTime: 640 }] : [];
-    };
-
-    const row = addRow(h);
-    await edgeSwipe(h, row);
-    await h.clock.advance(600);
-    await settle(h);
-
-    const line = flashLog(h).find((m) => /@reveal/.test(m));
-    assert.ok(line, `no @reveal line — got ${JSON.stringify(flashLog(h))}`);
-    const m = /animSync=(\d+|\?)/.exec(line);
-    assert.ok(m, `the report must state how many covers were phase-seeded: ${line}`);
-    assert.ok(m[1] !== '?' && Number(m[1]) >= 1,
-      `home's covers must be phase-seeded — animSync=${m && m[1]} in: ${line}`);
-  } finally { h.dispose(); }
-});
+// ⭐ .206 "the HOME snapshot needs the same phase sync" is RETIRED (Stage 6i,
+// PLAN-swipe-noswap-home.md §5/§12): its subject, snapshotHome(), is deleted — a
+// browse→home reveal no longer builds any owned pane (no snapshot, no ghost), so there
+// is no home-snapshot capture left to phase-sync or report an animSync for. The
+// surviving mechanism (copyAnimPhase inside the app-ghost recipe, ghostApp) stays
+// covered: at the recipe level by test/swipe-construction.test.js's
+// "copyAnimPhase syncs animation phase through the env Element" test, and at the
+// real-gesture level by the .205 test above and the .208 test below (both
+// browse→browse, an app-ghost transition unchanged by this stage).
 
 // ⭐ .208 — the phase sync must pair covers that CORRESPOND, not covers at the same
 // index in two differently-shaped trees.

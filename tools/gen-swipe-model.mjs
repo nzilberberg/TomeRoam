@@ -281,8 +281,8 @@ export const RESOLVED_RULES = [
     basis: 'parity', where: 'begin(): the fromLeft / from.v===nowplaying / fwdStack.length branch chain' },
   { rule: 'overlay->overlay reachability', statement: 'ESTABLISHED, not deferred: openSub() pushes a sub-screen ON TOP of Options, so a left-edge swipe yields e.g. general->options directly. Button navigation between overlays uses Nav.overlayFilmstrip(), a DIFFERENT path this plan does not touch and must not assume shares code',
     basis: 'parity', where: 'openSub(): navStack.push({v}) while currentDesc().v === options' },
-  { rule: 'scroll policy', statement: 'FROZEN FOR PARITY. Home entry uses window.scrollTo(0,1) when resetScroll is set. This is NOT an iOS-26 runway requirement — nav.js says the navbar seater is body.home-tall and the 1px is a remnant of the abandoned runway theory. Stage 1 does NOT decide whether the 1px survives; remove it AFTER device parity in a separate commit',
-    basis: 'parity', where: 'nav.js: body.home-tall seating comment; plan §2.6.4 / T12' },
+  { rule: 'scroll policy', statement: 'Stage 6i (PLAN-swipe-noswap-home.md): active #home is a position:fixed own-scroll view; the home-scoped body.home-tall toggle and the document scrollTo(0,1) home-entry write are RETIRED. Home entry resets #home.scrollTop to 0 when resetScroll is set. The fixed navbar seater is the retained, generalized .app min-height runway (css:73), unchanged by this stage',
+    basis: 'parity', where: 'nav.js: applyScreen home branch (#home.scrollTop reset); css/app.css .app runway; PLAN-swipe-noswap-home.md §8' },
 ];
 
 /** §2.6.4 — the plan states policy; Browse resolves coordinates. */

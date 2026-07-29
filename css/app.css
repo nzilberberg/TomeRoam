@@ -59,26 +59,20 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
    The `+ 2px` is a harmless remnant of the abandoned "scroll runway" theory —
    a tiny runway does NOT seat the fixed navbar (that was the whole .30-saga dead
    end). The ACTUAL fix for the short-screen navbar displacement is real scroll
-   height on the base view: `body.home-tall .app` below. */
+   height on the base view, below. */
 /* Every base view carries a real scroll runway (12vh past the viewport). iOS 26
    only seats a `position:fixed; bottom:0` bar correctly when the document is
    genuinely scrollable — a viewport-sized document displaces the fixed nav bar
-   ~5-10px UP (the black-band saga). Home already proved this fix works via
-   `body.home-tall`; generalizing it to `.app` covers the OTHER short in-flow
-   views too (a 1-book author, an empty/short list). Tall lists just get a little
-   empty scroll room below them — harmless. NOT a "scroll runway" token hack
-   (1-2px never seats it — that theory died in the .30 saga); 12vh is genuinely
-   scrollable. Does NOT touch the forbidden architectures (no overflow:hidden
-   body, no fixed-body, no per-view scroller). */
+   ~5-10px UP (the black-band saga). This is the GENERALIZED runway seating the
+   bars for every short in-flow view (a 1-book author, an empty/short list — and,
+   before Stage 6i, Home). NOT a "scroll runway" token hack (1-2px never seats it
+   — that theory died in the .30 saga); 12vh is genuinely scrollable. Does NOT
+   touch the forbidden architectures (no overflow:hidden body, no fixed-body, no
+   per-view scroller). RETAINED unchanged by Stage 6i (PLAN-swipe-noswap-home.md
+   §8, F1) — #home moved OFF this runway onto its own fixed scroller, but #browse
+   still needs it. */
 .app { min-height: calc(100% + 12vh); padding: calc(var(--safe-top) + 12px) 16px calc(var(--nav-pad) + 84px); max-width: 640px; margin: 0 auto; }
 body.has-player .app { padding-bottom: calc(var(--nav-pad) + 190px); }
-/* HOME is short (2 horizontal carousels) → its document ends up ~viewport-sized,
-   the state that displaces the fixed navbar ~5-10px UP on iOS 26 (a 1-2px runway
-   does NOT count as tall — that theory died in the .30 saga; only a genuinely
-   scrollable document seats the bar, which is why the tall Browse list is fine).
-   So when home is the base view, give it real scroll height like Browse has.
-   Trade-off: a little empty scroll room below the carousels. Tunable via 12vh. */
-body.home-tall .app { min-height: calc(100% + 12vh); }
 .hidden { display: none !important; }
 /* A browse page PARKED for the duration of a swipe: off-viewport but STILL
    PAINTED, so iOS keeps its decoded cover bitmaps. display:none drops them, and
@@ -114,8 +108,29 @@ body.home-tall .app { min-height: calc(100% + 12vh); }
    argument was falsified on real iOS). Reverted to the device-clean form here. Efficacy is
    DEVICE-verified, not spec-guaranteed (will-change is a droppable hint; if it proves
    intermittent, simple layer-promotion isn't enough). Coverage for this form is deferred
-   until the device re-confirms it. Saga: memory tomeroam-swipe-repaint-saga. */
-#home { will-change: transform; }
+   until the device re-confirms it. Saga: memory tomeroam-swipe-repaint-saga.
+   Stage 6i (PLAN-swipe-noswap-home.md §3/§6/§8) makes the ACTIVE #home a position:fixed
+   own-scroll view too — it never leaves position:fixed, so a →home reveal never reflows
+   the document (removes flash hypothesis (i), plan §3). Same inset-scroll-box model as
+   #options/#downloads below: confined between the fixed topbar and navbar, with its own
+   overflow-y:auto sized to its DYNAMIC content (a conditional Downloads carousel can make
+   it taller than the viewport — correction 1). An opaque background so it fully occludes
+   #browse during the browse→home filmstrip (two real movers, §3); z-index above the
+   unpositioned #browse, below every additive overlay. overscroll-behavior:contain bounds
+   the retained runway's possible phantom document double-scroll (§8 A2, device gate
+   R1(c)). 6g's will-change disposition under a permanently-fixed #home is device-gated,
+   plan §12. */
+#home {
+  position: fixed; left: 0; right: 0;
+  top: calc(var(--safe-top) + 51px);                 /* bottom edge of the fixed .topbar */
+  bottom: calc(var(--nav-h) + var(--nav-pad));       /* top of the nav bar (no transport) */
+  z-index: 20;
+  max-width: 640px; margin: 0 auto; padding: 14px 16px 40px;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  background: var(--page-bg);
+  will-change: transform;
+}
+body.has-player #home { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); padding-bottom: 20px; }
 
 /* Page-carousel transitions. The incoming view slides in from the side that matches
    the direction (forward = from the right, back = from the left). `.app` clips the
@@ -724,12 +739,13 @@ body.has-player #scrollind { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px)
 #scrollind.on { opacity: 1; }
 #scrollind > i { position: absolute; right: 0; top: 0; width: 100%; border-radius: 3px; background: rgba(255,255,255,.34); }
 /* Hide native scrollbars ONLY on the surfaces the custom indicator supports — the
-   document (Home/Books/Authors) and the settings overlays. Higher, differently-shaped
-   scrollers (Now Playing z60, speed popover z50, track-info sheet z80, book menu z85)
-   sit ABOVE #scrollind and have their own geometry, so they KEEP their native
-   scrollbar affordance (scrollbar.js ignores their scroll events). */
-html, body, #options, #general, #playback, #buffering, #downloads, #diagnostics { scrollbar-width: none; }
-html::-webkit-scrollbar, body::-webkit-scrollbar,
+   document (Books/Authors/files), the fixed own-scroll #home (Stage 6i), and the
+   settings overlays. Higher, differently-shaped scrollers (Now Playing z60, speed
+   popover z50, track-info sheet z80, book menu z85) sit ABOVE #scrollind and have
+   their own geometry, so they KEEP their native scrollbar affordance (scrollbar.js
+   ignores their scroll events). */
+html, body, #home, #options, #general, #playback, #buffering, #downloads, #diagnostics { scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar, #home::-webkit-scrollbar,
 #options::-webkit-scrollbar, #general::-webkit-scrollbar, #playback::-webkit-scrollbar,
 #buffering::-webkit-scrollbar, #downloads::-webkit-scrollbar, #diagnostics::-webkit-scrollbar { width: 0; height: 0; }
 

@@ -67,7 +67,9 @@ test('native scrollbars are hidden ONLY on the surfaces the indicator supports',
     .filter((s) => !s.includes('.carousel'));
   assert.equal(sel.length, 1, 'expected exactly one scoped native-scrollbar-hide rule');
   const list = sel[0].split(',').map((s) => s.trim());
-  assert.deepEqual(sortd(list), sortd(['html', 'body', ...subs.map((s) => '#' + s), '#options']));
+  // Stage 6i (PLAN-swipe-noswap-home.md §9 L2): #home left the document-scroll surface
+  // and became its own fixed scroller, so it joins the scoped native-scrollbar hide too.
+  assert.deepEqual(sortd(list), sortd(['html', 'body', '#home', ...subs.map((s) => '#' + s), '#options']));
   assert.ok(!list.includes('*'), 'never hide native scrollbars globally — see finding 2');
   assert.ok(!list.includes('#nowplaying'), 'Now Playing must keep its native scrollbar');
 });

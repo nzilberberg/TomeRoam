@@ -570,15 +570,14 @@ test('endpoint — a VERTICAL abandon leaves no active owner', async () => {
 test('endpoint — a HELD reveal keeps the owner THROUGH finalize, releasing it only at drop', async () => {
   const h = boot({ fakeTimers: true, deferRaf: true });
   try {
-    // Authors → Home is a commit→home held reveal (snapshot pane held until paintable).
-    h.tap('.navbtn[data-nav="authors"]');
-    await settle(h);
-    h.touch.start(10, 300, addRow(h));
-    h.touch.move(80, 302);
-    await realSleep(12); h.touch.move(600, 304); await realSleep(12); h.touch.end(600, 304);
-    await settle(h);
-    await h.clock.advance(400);   // fire the 340ms finalize; the 600ms backstop stays unfired
-    await settle(h);
+    // Stage 6i (PLAN-swipe-noswap-home.md §5/§12) retired the commit→home held reveal
+    // this test used to drive — browse→home no longer holds (the real fixed #home is the
+    // un-parked incoming mover, never covered by a snapshot or a ghost). An ABORTED
+    // browse->browse swipe (Authors<->Books) is the surviving held path: it re-renders
+    // the source under the ghost and holds until paintable
+    // (holdGhostUntilPaintable($('browse'), cover), unchanged by this stage).
+    await onAuthorsOverBooks(h);
+    await abortingSwipe(h, addRow(h));   // drives the 340ms finalize; the 600ms backstop stays unfired
     // finalize ran and STARTED the held reveal; the paint gate (double-rAF) is queued,
     // not fired, so the pane still covers — the owner must survive.
     assert.ok(activeSession(h),

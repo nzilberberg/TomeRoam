@@ -176,8 +176,8 @@ test('overlay->overlay builds no owned pane: capture is null and both sides are 
   assert.equal(c.movers.incoming.ownership, 'borrowed-real', 'the overlay destination is its real element');
 });
 
-// ── F2-r (recipe) — app-ghost capture carries ghostY; home-snapshot never does ──────
-test('an app-ghost capture carries ghostY; a home-snapshot capture never does', () => {
+// ── F2-r (recipe) — app-ghost capture carries ghostY; →home is pane-less (Stage 6i) ──
+test('an app-ghost capture carries ghostY; a browse→home transition builds no owned pane', () => {
   const ghostCtx = mkEnv({ scrollY: 137 });
   const ghost = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ghostCtx);
   assert.ok(ghost.capture, 'a browse->browse transition builds an app-ghost with a capture');
@@ -185,13 +185,14 @@ test('an app-ghost capture carries ghostY; a home-snapshot capture never does', 
     'the app-ghost capture carries ghostY plus the two animation fields');
   assert.equal(ghost.capture.ghostY, 137, 'ghostY is the scroll the ghost is frozen at (env.scrollY)');
 
+  // Stage 6i (PLAN-swipe-noswap-home.md, option (a)): browse→home builds NO owned
+  // pane — the outgoing real #browse and the incoming real #home are both borrowed-real,
+  // so there is nothing to capture (the home-snapshot outcome is retired).
   const homeCtx = mkEnv();
   const home = build(desc('books'), desc('home'), homeCtx);
-  assert.ok(home.capture, 'a browse->home transition builds a home-snapshot with a capture');
-  assert.ok(!('ghostY' in home.capture),
-    'the home-snapshot capture must NOT carry ghostY — parity with today, where snapshotHome never sets it');
-  assert.deepEqual(Object.keys(home.capture).sort(), ['animRes', 'animSync'],
-    'the home-snapshot capture carries only the two animation fields');
+  assert.equal(home.capture, null, 'browse→home is pane-less — no home-snapshot is built (Stage 6i)');
+  assert.equal(home.movers.outgoing.ownership, 'borrowed-real', 'the outgoing real #browse is a borrowed-real mover');
+  assert.equal(home.movers.incoming.ownership, 'borrowed-real', 'the incoming real #home is a borrowed-real mover');
 });
 
 // ── F4a — driven with NO ambient DOM; the pane is built in env.document ──────────────
@@ -289,22 +290,24 @@ test('the NP pill decoration is cloned, stripped, classed, and slotted by endpoi
 });
 
 // ── freezeArt — data-art stripped BEFORE the clone connects to the live document ─────
-test('both owned-pane recipes strip data-art before the clone is mounted', () => {
-  // app-ghost path (home->browse builds a ghost of .app).
-  const ghostCtx = mkEnv();
-  addCovers(ghostCtx.doc, ghostCtx.doc.querySelector('.app'), 3);
-  build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ghostCtx);
-  const ghostImgs = ghostCtx.doc.querySelectorAll('.nav-ghost img.cover');
-  assert.ok(ghostImgs.length > 0, 'the ghost clones the covers');
-  assert.equal([...ghostImgs].filter((i) => i.hasAttribute('data-art')).length, 0,
+test('the app-ghost recipe strips data-art before the clone is mounted, for both a browse-family and a home source', () => {
+  // browse source (books->authors builds a ghost of .app while browse is showing).
+  const browseCtx = mkEnv();
+  addCovers(browseCtx.doc, browseCtx.doc.querySelector('.app'), 3);
+  build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), browseCtx);
+  const browseImgs = browseCtx.doc.querySelectorAll('.nav-ghost img.cover');
+  assert.ok(browseImgs.length > 0, 'the ghost clones the covers');
+  assert.equal([...browseImgs].filter((i) => i.hasAttribute('data-art')).length, 0,
     'the app-ghost clone must have every img[data-art] stripped, so a cloned cover cannot re-trigger the art loader');
 
-  // home-snapshot path (browse->home clones #home).
+  // home source (home->browse builds a ghost of .app while home is showing — Stage 6i:
+  // browse→home no longer builds ANY owned pane, so a home-as-SOURCE ghost is the only
+  // remaining owned-pane path that touches #home's own content; home-snapshot is retired).
   const homeCtx = mkEnv();
   addCovers(homeCtx.doc, homeCtx.doc.getElementById('home'), 3);
-  build(desc('books'), desc('home'), homeCtx);
+  build(desc('home'), desc('books'), homeCtx);
   const homeImgs = homeCtx.doc.querySelectorAll('.nav-ghost img.cover');
-  assert.ok(homeImgs.length > 0, 'the home snapshot clones the covers');
+  assert.ok(homeImgs.length > 0, 'the home-source ghost clones #home\'s covers');
   assert.equal([...homeImgs].filter((i) => i.hasAttribute('data-art')).length, 0,
-    'the home-snapshot clone must have every img[data-art] stripped too');
+    'the home-source app-ghost clone must have every img[data-art] stripped too');
 });

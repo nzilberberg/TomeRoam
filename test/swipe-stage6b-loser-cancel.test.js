@@ -79,18 +79,19 @@ async function abortToSettling(h, row) {
   await settle(h);   // microtasks only — under fakeTimers the 340ms does NOT fire here
 }
 
-// Drive Authors -> Home to the exact "finalize ran, held reveal PENDING" state the RR
-// cells branch from: the 340ms fires finalize (which cancels the settle rAF, then starts
-// the held reveal), so the reveal double-rAF OUTER frame is queued (unfired) and the
-// reveal 600ms safety-net is pending. Mirrors swipe-invariants.test.js's held-reveal
-// fixture (endpoint — a HELD reveal ...:569).
+// Drive an aborting browse->browse gesture to the exact "finalize ran, held reveal
+// PENDING" state the RR cells branch from: the 340ms fires finalize (which cancels the
+// settle rAF, then starts the held reveal for the abort→browse re-render), so the reveal
+// double-rAF OUTER frame is queued (unfired) and the reveal 600ms safety-net is pending.
+// Stage 6i (PLAN-swipe-noswap-home.md §5/§12) retired the commit→home held reveal this
+// fixture used to drive — browse→home no longer holds (the real fixed #home is the
+// un-parked incoming mover, never covered). The abort→browse held reveal
+// (holdGhostUntilPaintable($('browse'), cover), unchanged by this stage) is the surviving
+// held path and exercises the exact same loser-cancel machinery RR pins. Mirrors
+// swipe-invariants.test.js's held-reveal fixture (endpoint — a HELD reveal ...).
 async function toHeldRevealPending(h) {
-  h.tap('.navbtn[data-nav="authors"]');
-  await settle(h);
-  h.touch.start(10, 300, addRow(h));
-  h.touch.move(80, 302);
-  await realSleep(12); h.touch.move(600, 304); await realSleep(12); h.touch.end(600, 304);
-  await settle(h);
+  await onAuthorsOverBooks(h);
+  await abortToSettling(h, addRow(h));
   await h.clock.advance(400);   // fire the 340ms finalize; the reveal frame + 600ms are now queued
   await settle(h);
 }

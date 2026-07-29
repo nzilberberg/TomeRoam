@@ -75,10 +75,11 @@ const Nav = (() => {
     }
     $('nowplaying').classList.toggle('hidden', !npOpen);
     document.body.classList.toggle('np-locked', npOpen);   // CSS hook: navbar button/pill swap
-    // Home is the base view (even under an additive overlay) whenever it isn't
-    // parked → give the document real height so the fixed navbar seats at the true
-    // bottom (see .app CSS). This also keeps the NP pill seated when NP is over home.
-    document.body.classList.toggle('home-tall', !$('home').classList.contains('parked'));
+    // Stage 6i (PLAN-swipe-noswap-home.md §8, F1) RETIRES the home-scoped `home-tall`
+    // toggle: active #home is now a position:fixed own-scroll view that never shares
+    // the document's height, so it no longer needs its own seating hack. The fixed
+    // navbar keeps seating off the RETAINED, generalized `.app` min-height runway
+    // (css:73), unchanged by this stage.
     $('navbar').classList.toggle('hidden', !d.isSignedIn());
     d.updatePlayerUI();
   }
@@ -118,13 +119,15 @@ const Nav = (() => {
     const render = !opts || opts.render !== false;
     const $ = d.byId;
     resetSwipeStyles(opts && opts.keepGhosts);   // baseline: no swipe can leave stale transforms/ghosts behind
-    // Home's fixed-navbar seating is handled by `body.home-tall` (real scroll
-    // height — see .app CSS); the scrollTo just puts it at the top on entry. (The
-    // 1px is a harmless remnant of the abandoned "scroll runway" theory.) NOTE: no
-    // carousel-scroll restore here — home is PARKED (painted), not display:none, so
-    // its carousels keep their scrollLeft on their own; re-setting it would fire a
-    // scroll-snap correction (the "oh wait, let me scroll over" animation).
-    if (!desc || desc.v === 'home') { setView('home'); setNavActive('home'); if (resetScroll) window.scrollTo(0, 1); return; }
+    // Stage 6i (PLAN-swipe-noswap-home.md §6): active #home is its own fixed
+    // overflow-y:auto scroller, so home entry resets #home's OWN scrollTop, not the
+    // document — the home-scoped `body.home-tall` seating hack + the document
+    // `scrollTo(0,1)` are both retired (F1: the fixed navbar keeps seating off the
+    // retained, generalized `.app` runway, css:73). NOTE: no carousel-scroll restore
+    // here — home is PARKED (painted), not display:none, so its carousels keep their
+    // scrollLeft on their own; re-setting it would fire a scroll-snap correction (the
+    // "oh wait, let me scroll over" animation).
+    if (!desc || desc.v === 'home') { setView('home'); setNavActive('home'); if (resetScroll) $('home').scrollTop = 0; return; }
     // The Options hub + its sub-screens are additive overlays (like NP): no document
     // scroll changes — the page underneath stays exactly as it was. Only their own
     // panel resets. Sub-screens keep the Options tab lit ("inside Options").

@@ -74,8 +74,7 @@ async function toAuthors(h) {
 // MUTATION (§10): constructionPlanFor keeps `incoming:'home-snapshot'` for →home → the snapshot
 // pane is built over #home and #home stays parked → this reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
-test('SNAPSHOTGONE — a committed browse→home builds no home-snapshot pane; the real fixed #home is the incoming mover',
-  { skip: SKIP }, async () => {
+test('SNAPSHOTGONE — a committed browse→home builds no home-snapshot pane; the real fixed #home is the incoming mover', async () => {
     const h = boot({ fakeTimers: true, deferRaf: true });
     try {
       await toAuthors(h);
@@ -131,8 +130,7 @@ test('SNAPSHOTGONE — a committed browse→home builds no home-snapshot pane; t
 // byte-unchanged drop is already a green guard (swipe-stage6b-loser-cancel.test.js RR(a/b/c) +
 // swipe-invariants.test.js held-reveal endpoint).
 // ─────────────────────────────────────────────────────────────────────────────────────────
-test('SCOPE — a scrolled browse→home commit deletes the scroll-settle gate: no SETTLE_MS timer, no held reveal',
-  { skip: SKIP }, async () => {
+test('SCOPE — a scrolled browse→home commit deletes the scroll-settle gate: no SETTLE_MS timer, no held reveal', async () => {
     const h = boot({ fakeTimers: true, deferRaf: true });
     try {
       await toAuthors(h);
@@ -167,8 +165,7 @@ test('SCOPE — a scrolled browse→home commit deletes the scroll-settle gate: 
 // MUTATION (§10): the abort path omits re-parking #home → #home stays the active fixed view over
 // #browse → the parked-after assertion reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
-test('ABORT — an aborted browse→home re-parks the fixed #home, restores #browse, and restores the start scroll',
-  { skip: SKIP }, async () => {
+test('ABORT — an aborted browse→home re-parks the fixed #home, restores #browse, and restores the start scroll', async () => {
     const h = boot({ fakeTimers: true, deferRaf: true });
     try {
       await toAuthors(h);
@@ -210,8 +207,7 @@ test('ABORT — an aborted browse→home re-parks the fixed #home, restores #bro
 // MUTATION (§10): pull-to-refresh still reads window.scrollY → arms with the document at 0 while
 // #home is scrolled → reddens.
 // ─────────────────────────────────────────────────────────────────────────────────────────
-test('PTR — pull-to-refresh reads #home.scrollTop, not window.scrollY: a scrolled fixed #home does not arm the pull',
-  { skip: SKIP }, async () => {
+test('PTR — pull-to-refresh reads #home.scrollTop, not window.scrollY: a scrolled fixed #home does not arm the pull', async () => {
     const h = boot({ fakeTimers: true });
     try {
       await settle(h);   // boot lands on Home, #home un-parked, the current screen
@@ -245,8 +241,7 @@ test('PTR — pull-to-refresh reads #home.scrollTop, not window.scrollY: a scrol
 // jsdom does no layout, so its correctness is a build detail Brunel must expose; the CI-observable,
 // mutation-targeted surface is surfaceKind. See the RED note.)
 // ─────────────────────────────────────────────────────────────────────────────────────────
-test('SCROLLBAR — surfaceKind recognises the fixed own-scroll #home as a supported home surface',
-  { skip: SKIP }, () => {
+test('SCROLLBAR — surfaceKind recognises the fixed own-scroll #home as a supported home surface', () => {
     const dom = new JSDOM(readRoot('index.html'));
     global.window = dom.window; global.document = dom.window.document;
     delete require.cache[require.resolve('../js/scrollbar.js')];
@@ -290,8 +285,7 @@ function mkGhostEnv(homeScrollTop) {
   return { env, doc };
 }
 
-test('GHOSTSCROLL — the outgoing app-ghost of a scrolled HOME source reads #home.scrollTop, not window.scrollY',
-  { skip: SKIP }, () => {
+test('GHOSTSCROLL — the outgoing app-ghost of a scrolled HOME source reads #home.scrollTop, not window.scrollY', () => {
     const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
     const { env, doc } = mkGhostEnv(500);
     // home→books: an in-flow home source going to browse builds an outgoing app-ghost.
@@ -318,8 +312,7 @@ test('GHOSTSCROLL — the outgoing app-ghost of a scrolled HOME source reads #ho
 // layout, so the own-scroll geometry has no runtime effect to observe). Targets the ACTIVE #home
 // rule specifically, NOT #home.parked (which already carries position:fixed at HEAD).
 // ─────────────────────────────────────────────────────────────────────────────────────────
-test('HOMEFIXED — the active #home rule is a position:fixed own-scroll view (source)',
-  { skip: SKIP }, () => {
+test('HOMEFIXED — the active #home rule is a position:fixed own-scroll view (source)', () => {
     const css = fs.readFileSync(path.join(ROOT, 'css', 'app.css'), 'utf8');
     // The ACTIVE #home rule: `#home {` NOT followed by `.parked`/`.hidden`/other qualifiers.
     const m = css.match(/#home\s*\{([^}]*)\}/);

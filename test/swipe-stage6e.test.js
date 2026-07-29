@@ -37,11 +37,16 @@
 //                      superseded owned .nav-ghost is gone and the successor arms cleanly
 //                      (no leaked ghost). Byte-identical to HEAD (the sweep removes it today) —
 //                      GREEN @HEAD, RED under mutation #13 (recovery disposes nothing).
-//   BR    parity       the Loki residual-2 INVARIANT: on a browse->home supersession the
-//                      borrowed-real #browse is NEVER removed by the disposer; only the owned
-//                      home-snapshot goes. GREEN @HEAD, RED under mutation (broaden the disposer
-//                      to remove every mover — a manual HEAD channel-proof below; Brunel registers
-//                      the built-code "broaden the filter" mutant per plan §9).
+//                      DP.browse-home covers the browse->home pair; Stage 6i (PLAN-swipe-
+//                      noswap-home.md) retired that pair's owned home-snapshot, so it now
+//                      asserts the pane-less reality instead (disposeOwnedPanes no-ops).
+//   BR    parity       the Loki residual-2 INVARIANT: a borrowed-real mover is NEVER removed
+//                      by the disposer. GREEN @HEAD, RED under a mutation that broadens the
+//                      disposer to remove every mover (Brunel registers the built-code mutant;
+//                      a manual HEAD channel-proof is recorded in Claude/Curie/RED-swipe-
+//                      stage6e.md). Stage 6i retired the browse->home pair's owned
+//                      home-snapshot, so BR now demonstrates the invariant on BOTH of that
+//                      pair's movers (#browse and #home), which are both borrowed-real.
 //   HR    parity       a leftover ORPHAN .nav-ghost with no owning session is disposed at begin()
 //                      before arming, via the FULL resetSwipeStyles sweep on the cur-null branch.
 //                      GREEN @HEAD, RED under mutation #13 (recovery disposes nothing).
@@ -230,7 +235,8 @@ test('RSN [DIAGNOSTIC] — an owned-pane supersession records the disposal reaso
 // ════════════════════════════════════════════════════════════════════════════════════════════
 // Plan §8 DP (wiring, real DOM). Parity feature oracle: GREEN @HEAD (byte-identical to today's
 // sweep), RED under mutation #13 (the recovery disposes nothing -> the ghost leaks into the
-// successor). Two owned-pane transitions: browse->browse (app-ghost) and browse->home (home-snapshot).
+// successor). browse->browse builds an owned app-ghost; browse->home (Stage 6i) builds NO
+// owned pane at all — disposeOwnedPanes has nothing to dispose there (see DP.browse-home).
 
 test('DP.browse-browse — a pane-owning DRAGGING browse->browse supersession disposes the owned .nav-ghost; the successor arms with no leaked pane', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true });
@@ -257,42 +263,49 @@ test('DP.browse-browse — a pane-owning DRAGGING browse->browse supersession di
   } finally { h.dispose(); }
 });
 
-test('DP.browse-home — a pane-owning DRAGGING browse->home supersession disposes the owned home-snapshot', async () => {
+test('DP.browse-home — a browse->home DRAGGING supersession is pane-less (Stage 6i): disposeOwnedPanes no-ops, and #home is re-parked cleanly', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true });
   try {
     h.tap('.navbtn[data-nav="books"]'); await settle(h);   // navStack [home, books]
     await liveDragNoRelease(h, addRow(h));                  // back-swipe books->home (browse->home)
     assert.ok(/start back books→home/.test(starts(h).at(-1) || ''),
       `fixture: the drag is browse->home — got ${starts(h).at(-1)}`);
-    assert.equal(ghosts(h), 1, 'fixture: browse->home minted one owned home-snapshot .nav-ghost');
+    // Stage 6i (PLAN-swipe-noswap-home.md, option (a)): browse->home mints NO owned
+    // pane — the real fixed #home is the un-parked incoming mover, the real #browse is
+    // the borrowed-real outgoing mover.
+    assert.equal(ghosts(h), 0, 'fixture: browse->home mints no owned pane (Stage 6i)');
+    assert.equal(h.$('home').classList.contains('parked'), false,
+      'fixture: #home is the un-parked incoming mover mid-drag');
     const hr0 = hardResets(h).length;
 
     h.touch.start(10, 300, h.$('browse'));
     assert.ok(hardResets(h).length > hr0, 'fixture: the supersession tripped the recovery');
-    assert.equal(ghosts(h), 0,
-      'the owned home-snapshot must be disposed on supersession (mutation #13 reddens this at HEAD). '
-      + `ghosts after recovery=${ghosts(h)}`);
+    assert.equal(ghosts(h), 0, 'still no owned pane after recovery — disposeOwnedPanes has nothing to dispose');
+    assert.equal(h.$('home').classList.contains('parked'), true,
+      'the recovery re-parks #home (setView restores the source view, books, per currentDesc())');
   } finally { h.dispose(); }
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
 // BR — the INVARIANT (Loki residual 2): a borrowed-real mover is NEVER removed by the disposer.
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// Plan §8 BR / §3.2 / EC §4.4. On a browse->home supersession the outgoing mover is the borrowed
-// real #browse and the incoming is the owned home-snapshot. disposeOwnedPanes must remove the
-// snapshot and NEVER the #browse — a structural guarantee by the own filter. GREEN @HEAD (the
-// sweep only queries .nav-ghost, never a borrowed real), RED under a mutation that broadens the
-// disposer to remove every mover (Brunel registers the built-code mutant; a manual HEAD
-// channel-proof is recorded in Claude/Curie/RED-swipe-stage6e.md).
+// Plan §8 BR / §3.2 / EC §4.4. disposeOwnedPanes must NEVER remove a borrowed-real mover —
+// a structural guarantee by the own filter. GREEN @HEAD (the sweep only queries .nav-ghost,
+// never a borrowed real), RED under a mutation that broadens the disposer to remove every
+// mover (Brunel registers the built-code mutant; a manual HEAD channel-proof is recorded in
+// Claude/Curie/RED-swipe-stage6e.md). Stage 6i (PLAN-swipe-noswap-home.md, option (a))
+// retired the browse->home pair's owned home-snapshot: BOTH of that pair's movers (#browse
+// outgoing, #home incoming) are now borrowed-real, so this demonstrates the invariant holds
+// for both, not just one.
 
-test('BR — on a browse->home supersession the borrowed-real #browse is never removed; only the owned home-snapshot goes', async () => {
+test('BR — on a browse->home supersession neither borrowed-real mover (#browse or #home) is ever removed (Stage 6i: both are borrowed-real)', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true });
   try {
     h.tap('.navbtn[data-nav="books"]'); await settle(h);
-    const browseEl = h.$('browse');
-    await liveDragNoRelease(h, addRow(h));                  // browse->home; outgoing borrowed #browse, incoming owned snapshot
+    const browseEl = h.$('browse'), homeEl = h.$('home');
+    await liveDragNoRelease(h, addRow(h));                  // browse->home; both movers borrowed-real (Stage 6i)
     assert.ok(/start back books→home/.test(starts(h).at(-1) || ''), `fixture: browse->home — got ${starts(h).at(-1)}`);
-    assert.equal(ghosts(h), 1, 'fixture: exactly one owned pane (the home-snapshot) — the outgoing #browse is borrowed, not a ghost');
+    assert.equal(ghosts(h), 0, 'fixture: browse->home is pane-less — no owned pane exists to remove (Stage 6i)');
     const hr0 = hardResets(h).length;
 
     h.touch.start(10, 300, browseEl);                      // supersede mid-drag
@@ -301,7 +314,9 @@ test('BR — on a browse->home supersession the borrowed-real #browse is never r
       'the borrowed-real #browse (the source host) must SURVIVE the supersession — disposeOwnedPanes removes only '
       + 'own===\'owned-pane\' movers, so a broad "remove every mover" disposer that deletes #browse would leave the '
       + 'successor rendering into a missing host (EC §4.4). The invariant Loki residual-2 pins.');
-    assert.equal(ghosts(h), 0, 'and the owned home-snapshot IS removed (the disposer touches owned panes only)');
+    assert.ok(h.$('home') === homeEl && homeEl.isConnected,
+      'the borrowed-real #home (the incoming mover) must also SURVIVE the supersession — it is never an owned pane');
+    assert.equal(ghosts(h), 0, 'no owned pane existed to remove, before or after the recovery');
   } finally { h.dispose(); }
 });
 

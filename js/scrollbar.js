@@ -1,18 +1,21 @@
 // scrollbar.js — a custom scroll indicator confined to the band BETWEEN the fixed
-// title bar and the transport (or nav bar). WHY: the main content uses DOCUMENT
+// title bar and the transport (or nav bar). WHY: Books/Authors/files use DOCUMENT
 // scroll (required so the iOS-26 fixed bars seat at the true bottom — an inner
 // scroller / viewport-sized document displaced them, the reverted build .28 dead
 // end), and the native viewport scrollbar runs the full window height, behind both
 // fixed bars, with no way to inset it. So we hide the native scrollbars on the
-// surfaces THIS indicator supports (the document + the settings overlays — see the
-// SCOPED rule in app.css) and draw our own thin indicator here.
+// surfaces THIS indicator supports (the document, the fixed own-scroll #home, and
+// the settings overlays — see the SCOPED rule in app.css) and draw our own thin
+// indicator here.
 //
-// SCOPE (important): the indicator only covers surfaces whose scroll fits the
-// title-bar→transport band: the DOCUMENT (Home / Books / Authors / files) and the
-// settings overlays (#options + subs). Higher, differently-shaped scrollers — Now
-// Playing (z60), the speed popover (z50), the track-info sheet (z80), the book menu
-// (z85) — sit ABOVE this indicator and have their OWN geometry, so they KEEP their
-// native scrollbars and this module ignores their scroll events (surfaceKind → null).
+// SCOPE (important): the indicator covers surfaces whose scroll fits the
+// title-bar→transport band: the DOCUMENT (Books / Authors / files), the fixed
+// own-scroll #home (Stage 6i, PLAN-swipe-noswap-home.md §9 L2 — #home left the
+// document-scroll surface and became its own scroller), and the settings overlays
+// (#options + subs). Higher, differently-shaped scrollers — Now Playing (z60), the
+// speed popover (z50), the track-info sheet (z80), the book menu (z85) — sit ABOVE
+// this indicator and have their OWN geometry, so they KEEP their native scrollbars
+// and this module ignores their scroll events (surfaceKind → null).
 //
 // It shows on EVERY supported screen, including Books/Authors, where it sits beside
 // the A-Z .alphaindex (which is shifted left in app.css to make room). An earlier
@@ -37,11 +40,13 @@ const ScrollBar = (() => {
 
   const isDoc = (t) => t === document || t === document.documentElement || t === document.body || t === window;
 
-  // 'doc' = the window/document scroll (Home / Books / Authors / files); 'overlay' =
-  // a settings sub-screen's own scroll; null = anything else (NP / sheet / popover /
-  // modal / stray element) → NOT ours, leave its native scrollbar alone.
+  // 'doc' = the window/document scroll (Books / Authors / files); 'home' = the fixed
+  // own-scroll #home (Stage 6i); 'overlay' = a settings sub-screen's own scroll; null
+  // = anything else (NP / sheet / popover / modal / stray element) → NOT ours, leave
+  // its native scrollbar alone.
   function surfaceKind(t) {
     if (isDoc(t)) return 'doc';
+    if (t && t.id === 'home') return 'home';
     if (t && typeof t.matches === 'function' && t.matches(OVERLAY_SEL)) return 'overlay';
     return null;
   }

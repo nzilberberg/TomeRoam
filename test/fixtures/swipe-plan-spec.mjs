@@ -29,10 +29,12 @@
 export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options' };
 
 // The eight structural transitions (home->home is not a transition). Each expectation
-// mirrors js/swipe.js constructionPlanFor() as of stage 6f:
+// mirrors js/swipe.js constructionPlanFor() as of stage 6i (PLAN-swipe-noswap-home.md):
 //   outgoing 'app-ghost' iff the SOURCE is not an overlay AND the DESTINATION is NOT home
-//   incoming 'home-snapshot' iff the DESTINATION is home
+//   incoming 'real-destination' ALWAYS — the home-snapshot outcome is RETIRED (Stage 6i):
+//     a →home reveal un-parks the real fixed #home as the incoming mover instead
 //   renderDestination 'browse-host' iff the DESTINATION is browse
+//   renderDestination 'home-host' iff the DESTINATION is home (Stage 6i)
 //   decorations [] for every structural case (the NP pill is a MODIFIER, below)
 //
 // expectedFinalization carries FROZEN finalization DATA — currently just the abort
@@ -53,17 +55,19 @@ export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options
 export const STRUCTURAL_CASES = [
   { from: 'home',    to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
   { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
-  { from: 'browse',  to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'home-snapshot',    renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'home' } },
+  { from: 'browse',  to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'home-host',   decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'home' } },
   { from: 'browse',  to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'rerender' }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
   { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
-  { from: 'overlay', to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'home-snapshot',    renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'home' } },
+  { from: 'overlay', to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'home-host',   decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'home' } },
   { from: 'overlay', to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'browse-host' } },
   { from: 'overlay', to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'overlay' } },
 ];
 
-// A pane covers the view iff the outgoing is a ghost or the incoming is a Home snapshot.
-// Derived from the construction contract, not stored on the plan (no redundant field).
-export const paneOf = (c) => c.outgoing === 'app-ghost' || c.incoming === 'home-snapshot';
+// A pane covers the view iff the outgoing is a ghost. The home-snapshot incoming
+// outcome is RETIRED (Stage 6i, PLAN-swipe-noswap-home.md): a →home reveal never builds
+// an owned pane. Derived from the construction contract, not stored on the plan (no
+// redundant field).
+export const paneOf = (c) => c.outgoing === 'app-ghost';
 
 // The Now Playing pill MODIFIER — the outcome data, written once. NP as SOURCE clones a
 // decoration mover based at the outgoing slot (and the body loses np-locked); NP as

@@ -76,20 +76,21 @@ test('the SETTINGS-SUB half of the registry is derived from nav.js, not hand-lis
 // stated in prose, independently of any implementation — a hand-error in the spec fails
 // here before it can propagate. (Production is checked against the spec separately in
 // test/swipe-transition.test.js.)
-test('the frozen spec builds a pane exactly when the GHOST/SNAPSHOT rules say', async () => {
+test('the frozen spec builds a pane exactly when the GHOST rule says (SNAPSHOT retired, Stage 6i)', async () => {
   const spec = await loadSpec();
   const wrong = [];
   for (const c of spec.STRUCTURAL_CASES) {
-    //   GHOST    iff source is not an overlay AND destination is NOT home
-    //   SNAPSHOT iff destination is home
+    //   GHOST iff source is not an overlay AND destination is NOT home. The home-
+    //   snapshot incoming outcome is RETIRED (Stage 6i, PLAN-swipe-noswap-home.md): a
+    //   →home reveal never builds an owned pane, so GHOST is the only pane-building rule.
     const expectGhost = c.from !== 'overlay' && c.to !== 'home';
-    const expectSnap = c.to === 'home';
     const ec = c.expectedConstruction;
     if ((ec.outgoing === 'app-ghost') !== expectGhost) wrong.push(`${c.from}->${c.to} ghost`);
-    if ((ec.incoming === 'home-snapshot') !== expectSnap) wrong.push(`${c.from}->${c.to} snapshot`);
-    if (spec.paneOf(ec) !== (expectGhost || expectSnap)) wrong.push(`${c.from}->${c.to} pane`);
-    // renderDestination is 'browse-host' exactly when the destination is browse.
+    if (spec.paneOf(ec) !== expectGhost) wrong.push(`${c.from}->${c.to} pane`);
+    // renderDestination is 'browse-host' exactly when the destination is browse;
+    // 'home-host' exactly when the destination is home (Stage 6i).
     if ((ec.renderDestination === 'browse-host') !== (c.to === 'browse')) wrong.push(`${c.from}->${c.to} render`);
+    if ((ec.renderDestination === 'home-host') !== (c.to === 'home')) wrong.push(`${c.from}->${c.to} render-home`);
   }
   assert.deepEqual(wrong, [], `the spec disagrees with the stated rules: ${wrong.slice(0, 8).join(', ')}`);
   assert.equal(spec.STRUCTURAL_CASES.length, 8, 'there are eight structural transitions (home->home is not one)');

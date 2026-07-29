@@ -32,7 +32,10 @@
 // (ghostApp/snapshotHome), the real overlayEl/appViewEl source resolution, and the
 // npPillClone decoration builder here behind an injected env, while the destination render
 // dispatch (renderScreen/renderNowPlaying/Browse.render) and the Browse hold stay in
-// app.js until stages 6/7.
+// app.js until stages 6/7. Stage 6i (PLAN-swipe-noswap-home.md) later retires snapshotHome
+// entirely: active #home becomes a position:fixed own-scroll view that is un-parked as the
+// real incoming mover, so a →home reveal needs no snapshot — ghostApp is now the sole
+// owned-pane recipe.
 const Swipe = (() => {
   'use strict';
 
@@ -117,12 +120,16 @@ const Swipe = (() => {
   //                                        the real in-flow view is never a mover
   //                    'real-source'      move the real source element (borrowed-real):
   //                                        an overlay, or an in-flow view going to home
-  //   incoming         'home-snapshot'    a static Home snapshot at top (owned-pane)
-  //                    'real-destination' the real overlay element, or the real #browse
-  //                                        with the destination rendered into it
+  //   incoming         'real-destination' the real overlay element, the real #browse
+  //                                        with the destination rendered into it, or
+  //                                        (Stage 6i, PLAN-swipe-noswap-home.md) the
+  //                                        real fixed #home un-parked as the incoming
+  //                                        mover — 'home-snapshot' is RETIRED: a →home
+  //                                        reveal never builds an owned pane
   //   renderDestination 'browse-host'     render the destination INTO #browse mid-drag
-  //                    'none'             no #browse render (overlay renders itself; a
-  //                                        Home snapshot needs no live render)
+  //                    'home-host'        un-park the real fixed #home as the incoming
+  //                                        mover (Stage 6i) — #browse is NOT hidden
+  //                    'none'             no live render (overlay renders itself)
   //   decorations       an independent deep-frozen COPY of the classification's list
   function constructionPlanFor(c) {
     // No default branch on EITHER kind. The toKind else-throws below; the fromKind is
@@ -136,12 +143,17 @@ const Swipe = (() => {
     // outgoing is an app-ghost iff the source is in-flow (not overlay) AND the
     // destination is NOT home (stage 6f: widened from "destination is browse" to
     // include in-flow->overlay, so the real in-flow view is never a mover on those
-    // transitions too; in-flow->home stays real-source, deferred, plan §10).
+    // transitions too; in-flow->home stays real-source — Stage 6i, PLAN-swipe-noswap-
+    // home.md option (a) — the real #browse/overlay outgoing mover is what keeps its
+    // covers warm across an abort, so it is never ghosted).
     const outgoing = c.fromKind === 'overlay' ? 'real-source'
       : (c.toKind === 'home' ? 'real-source' : 'app-ghost');
     let incoming, renderDestination;
     if (c.toKind === 'overlay') { incoming = 'real-destination'; renderDestination = 'none'; }
-    else if (c.toKind === 'home') { incoming = 'home-snapshot'; renderDestination = 'none'; }
+    // Stage 6i (PLAN-swipe-noswap-home.md §4): active #home is a position:fixed
+    // own-scroll view that never leaves the DOM, so →home no longer needs a snapshot —
+    // the real fixed #home is un-parked as the incoming mover via 'home-host'.
+    else if (c.toKind === 'home') { incoming = 'real-destination'; renderDestination = 'home-host'; }
     else if (c.toKind === 'browse') { incoming = 'real-destination'; renderDestination = 'browse-host'; }
     else throw new Error('Swipe.constructionPlanFor: unhandled destination kind "' + c.toKind + '"');
     // Independently immutable: CLONE the caller's decorations and freeze the copy, so the
@@ -176,8 +188,10 @@ const Swipe = (() => {
   }
 
   // ── STAGE 5 (plan §3/§7) — the pane BUILDERS, private to the L1 seam ────────────────
-  // The two capture recipes (app-ghost / home-snapshot), the shared helper cluster, and
-  // the NP decoration builder, relocated from js/app.js start() behind an injected `env`.
+  // The owned-pane capture recipe (app-ghost — Stage 6i, PLAN-swipe-noswap-home.md,
+  // retired the second recipe, home-snapshot, along with the home-snapshot outcome: a
+  // →home reveal now un-parks the real fixed #home instead), the shared helper cluster,
+  // and the NP decoration builder, relocated from js/app.js start() behind an injected `env`.
   // They read the world ONLY through env (env.document / env.scrollY / env.navPill), never
   // an ambient document/window/Element/getComputedStyle — so the module stays DOM-free at
   // load and the recipes are drivable against a fake env (plan §7; the require() no-DOM gate
@@ -204,9 +218,9 @@ const Swipe = (() => {
     }
     // …nor animation PHASE. A clone restarts every cover animation at t=0; seek each clone
     // animation to its live twin's currentTime so the ghost is not out of phase at the swap.
-    // Pair covers that SURVIVE the .hidden/.parked prune (walk up to the root, never test the
-    // root — snapshotHome's source IS #home.parked) so index `i` cannot pair covers in two
-    // differently-shaped trees. Reads Element through env's window, never a global one (F4b).
+    // Pair covers that SURVIVE the .hidden/.parked prune (walk up to, but never test, the
+    // root itself) so index `i` cannot pair covers in two differently-shaped trees. Reads
+    // Element through env's window, never a global one (F4b).
     // Returns { synced, residual }: residual is the max gap measured AT the seek (0 = it took).
     function copyAnimPhase(src, dst) {
       const El = win && win.Element;
@@ -245,8 +259,18 @@ const Swipe = (() => {
     }
     // A ghost of the current app-view (minus the shared topbar), shifted up by the current
     // scroll to match what's on screen. Used app-view↔app-view (the real view is re-rendered
-    // for the destination). Returns { wrap, capture:{ ghostY, animSync, animRes } }.
-    function ghostApp() {
+    // for the destination). `fromKind` selects the offset SOURCE (Stage 6i, PLAN-swipe-
+    // noswap-home.md §9 L5, Loki KILL): a HOME source's own vertical scroll lives on
+    // #home.scrollTop (a fixed own-scroll view, not the document), so a home-sourced ghost
+    // must read ITS offset from there — window.scrollY is always 0 for a fixed #home and
+    // would build the ghost at top (the 500px jump-to-top Loki's counterexample found). A
+    // browse source stays on the unchanged document-scroll offset (env.scrollY()). Both
+    // feed the SAME whole-clone content-translate; the clone is a static id-stripped
+    // content tree, never a scroll container, so the offset is carried by the transform,
+    // not by a clone scrollTop (a clone's #home id is stripped, so `overflow-y:auto` never
+    // applies to it — a scrollTop write on the clone would be inert). Returns
+    // { wrap, capture:{ ghostY, animSync, animRes } }.
+    function ghostApp(fromKind) {
       const clone = doc.querySelector('.app').cloneNode(true);
       const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '46px';
       clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
@@ -254,7 +278,7 @@ const Swipe = (() => {
       clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());
       freezeArt(clone);
       clone.style.margin = '0 auto';
-      const ghostY = env.scrollY() || 0;
+      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0) : (env.scrollY() || 0);
       clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
       const wrap = ghostWrap();
       wrap.appendChild(clone);
@@ -263,22 +287,6 @@ const Swipe = (() => {
       // AFTER insertion: a detached clone has no CSS animations to seek.
       const { synced, residual } = copyAnimPhase(doc.querySelector('.app'), clone);
       return { wrap, capture: { ghostY, animSync: synced, animRes: residual } };
-    }
-    // A fixed snapshot of HOME at its TOP, the incoming pane for back-to-home. Pinned at top
-    // with no scroll freeze, so its capture carries NO ghostY (plan §3, F2-r) — only the two
-    // animation fields. Returns { wrap, capture:{ animSync, animRes } }.
-    function snapshotHome() {
-      const clone = doc.getElementById('home').cloneNode(true);
-      clone.removeAttribute('id'); clone.classList.remove('hidden', 'parked');
-      freezeArt(clone);
-      const lib = doc.createElement('div'); lib.style.paddingTop = '46px'; lib.appendChild(clone);
-      const box = doc.createElement('div'); box.className = 'app'; box.style.margin = '0 auto'; box.appendChild(lib);
-      const wrap = ghostWrap();
-      wrap.appendChild(box);
-      doc.body.appendChild(wrap);
-      copyScroll(doc.getElementById('home'), clone);
-      const { synced, residual } = copyAnimPhase(doc.getElementById('home'), clone);
-      return { wrap, capture: { animSync: synced, animRes: residual } };
     }
     // A detached, non-interactive clone of the Now Playing pill for the duration of an NP
     // swipe: it rides with NP as a mover. Removes any stale float first, strips ids, classes it.
@@ -290,7 +298,7 @@ const Swipe = (() => {
       doc.body.appendChild(clone);
       return clone;
     }
-    return { ghostApp, snapshotHome, npPillClone };
+    return { ghostApp, npPillClone };
   }
 
   // buildConstruction — the L1 seam (plan §3). Given the canonical gesture descriptors and
@@ -303,8 +311,8 @@ const Swipe = (() => {
   function buildConstruction(from, dest, env) {
     const classification = classifyTransition({ from, to: dest });
     const plan = constructionPlanFor(classification);
-    const { sourceHost, destinationHost } = classification;
-    const { ghostApp, snapshotHome, npPillClone } = paneBuilders(env);
+    const { fromKind, sourceHost, destinationHost } = classification;
+    const { ghostApp, npPillClone } = paneBuilders(env);
     const mover = (element, ownership, slot) => ({ element, ownership, slot });
 
     // Resolve the real source element at most once, for a borrowed-real outgoing mover.
@@ -316,26 +324,25 @@ const Swipe = (() => {
     };
 
     // ── OUTGOING — built to completion FIRST, before any destination render can clobber the
-    // source #browse (plan §6 step 5, F7a). Exactly one owned pane produces capture per
-    // transition (app-ghost XOR home-snapshot), so `capture` is a single object or null.
+    // source #browse (plan §6 step 5, F7a). At most one owned pane produces capture per
+    // transition (the outgoing app-ghost; Stage 6i retired the incoming home-snapshot, so
+    // →home now builds NO owned pane at all — `capture` is a single object or null).
     let capture = null, outgoing, incoming, decoration = null;
     if (plan.outgoing === 'app-ghost') {
-      const g = ghostApp();
+      const g = ghostApp(fromKind);
       outgoing = mover(g.wrap, 'owned-pane', 'outgoing');
       capture = g.capture;
     } else {
       outgoing = mover(resolveSource(), 'borrowed-real', 'outgoing');
     }
 
-    // ── INCOMING ──
-    if (plan.incoming === 'home-snapshot') {
-      const s = snapshotHome();
-      incoming = mover(s.wrap, 'owned-pane', 'incoming');
-      capture = s.capture;
-    } else if (plan.renderDestination === 'browse-host') {
+    // ── INCOMING — always the real destination element (Stage 6i retires the
+    // home-snapshot outcome: 'home-host' un-parks the real fixed #home, the same
+    // borrowed-real shape as 'browse-host'/overlay). ──
+    if (plan.renderDestination === 'browse-host') {
       const hostEl = env.renderDestination(dest, destinationHost);   // renders dest into #browse
       incoming = mover(hostEl, 'borrowed-real', 'incoming');
-    } else {                                                          // real-destination overlay
+    } else {                                        // 'home-host' or real-destination overlay
       incoming = mover(env.renderDestination(dest, destinationHost), 'borrowed-real', 'incoming');
     }
 

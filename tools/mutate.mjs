@@ -125,12 +125,12 @@ const S5_GHOSTBG_FROM = [
 const S5_GHOSTBG_TO = "    const GHOST_BG = getComputedStyle(doc.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)';";
 const S5_ORDER_FROM = [
   "    if (plan.outgoing === 'app-ghost') {",
-  '      const g = ghostApp();',
+  '      const g = ghostApp(fromKind);',
 ].join('\n');
 const S5_ORDER_TO = [
   "    if (plan.outgoing === 'app-ghost') {",
   '      env.renderDestination(dest, destinationHost);',
-  '      const g = ghostApp();',
+  '      const g = ghostApp(fromKind);',
 ].join('\n');
 const S5_NPPILL_FROM = [
   "      doc.querySelectorAll('.np-pill-float').forEach((n) => n.remove());",
@@ -395,10 +395,12 @@ const MUTATIONS = [
     file: 'js/swipe.js',
     from: '    let capture = null, outgoing, incoming, decoration = null;',
     to:   '    let capture = { animSync: 0, animRes: 0 }, outgoing, incoming, decoration = null;' },
-  { name: 'swipe5 F2-r: the home snapshot capture carries a ghostY it must not (-> app-ghost-vs-home capture test)',
-    file: 'js/swipe.js',
-    from: '      return { wrap, capture: { animSync: synced, animRes: residual } };',
-    to:   '      return { wrap, capture: { ghostY: 0, animSync: synced, animRes: residual } };' },
+  // swipe5 F2-r "the home snapshot capture carries a ghostY it must not" REMOVED (Stage 6i,
+  // PLAN-swipe-noswap-home.md §5/§12 scrub): its target, snapshotHome()'s return statement,
+  // is DELETED — a →home reveal no longer builds any owned pane, so there is no home-snapshot
+  // capture left for a ghostY to leak into. The class of defect (a capture missing/gaining a
+  // field it should not carry) stays covered elsewhere: swipe5 F1c above (capture set when it
+  // must be null) and the exact-key assertions in test/swipe-construction.test.js.
   { name: 'swipe5 F4a: the app-ghost recipe reads an ambient document, not env.document (-> no-ambient recipe test)',
     file: 'js/swipe.js',
     from: "      const clone = doc.querySelector('.app').cloneNode(true);",
@@ -441,9 +443,17 @@ const MUTATIONS = [
   { name: 'swipe5 F5c: showAppView drops the stale-overlay cleanup (-> F5c stale-overlay wiring)',
     from: "      for (const s of ['options', ...SETTINGS_SUBS]) if (!d || d.from.v !== s) $(s).classList.add('hidden');",
     to:   '      /* mutated: stale-overlay cleanup dropped */' },
-  { name: 'swipe5 F2-r-wiring: L3 SYNTHESIZES a ghostY on the home path (-> F2-r wiring)',
-    from: "        if ('ghostY' in c.capture) d.ghostY = c.capture.ghostY;",
-    to:   "        d.ghostY = ('ghostY' in c.capture) ? c.capture.ghostY : 0;" },
+  // swipe5 F2-r-wiring "L3 SYNTHESIZES a ghostY on the home path" REMOVED (Stage 6i,
+  // PLAN-swipe-noswap-home.md §5/§12 scrub): the defect it modeled — L3 assigning
+  // d.ghostY=0 for a capture that legitimately LACKS a ghostY — is unreachable now. The
+  // only ghostY-less capture was the home-snapshot, which is retired; a →home reveal
+  // builds NO capture at all (the `if (c.capture)` block never runs), and every surviving
+  // capture is an app-ghost that always carries ghostY, so both mutation forms set the
+  // identical value and no test can distinguish them (it swept UNCAUGHT). The surviving
+  // invariant (browse→home is pane-less, so L3 synthesizes neither animSync nor ghostY —
+  // both reported "?") is asserted by the rewritten F2-r WIRING test in
+  // test/swipe-stage5-wiring.test.js; a build that reintroduces a →home capture is caught
+  // by SNAPSHOTGONE (mutation `stage6i SNAPSHOTGONE`).
   { name: 'swipe5 F7b: the row hold no longer precedes the clobbering render (-> F7b ordering wiring)',
     from: '      takeRowHold();   // from here the outgoing page keeps its rows until this gesture ends\n',
     to:   '',
@@ -551,32 +561,66 @@ const MUTATIONS = [
   { name: 'stage6f REVEAL: the browse→overlay abort reveal is routed through the paint-gated hold instead of the plain no-hold path (-> REVEAL no-hold test)',
     from: "        if (!commit && cur.finPlan.abortRender === 'rerender') {",
     to:   "        if (!commit) {" },
-  // ── SWIPE stage 6h: commit→home scroll-settle cover-drop gate (PLAN-swipe-stage6h.md §8) ─
-  { name: 'stage6h GATE: the commit→home call omits engaging the settle gate (-> GATE cover-persists-past-paint assertion)',
-    from: "          holdGhostUntilPaintable($('home'), cover, { scrollSettle: cur.scroll0 > SETTLE_SCROLL_MIN });",
-    to:   "          holdGhostUntilPaintable($('home'), cover, { scrollSettle: false });" },
-  { name: 'stage6h BACKSTOP: the SETTLE_MS settle-timeout is never created (-> BACKSTOP via=settle assertion)',
+  // ── SWIPE stage 6h: commit→home scroll-settle cover-drop gate — RETIRED (Stage 6i,
+  // PLAN-swipe-noswap-home.md §5/§7/§12): →home was the gate's only consumer, and a
+  // fixed, never-reflowing #home no longer causes the scroll-collapse snap the gate
+  // existed to wait out. holdGhostUntilPaintable reverted to its pre-6h form
+  // (decoded && painted, no opts/scrollSettle/SETTLE_MS/SETTLE_SCROLL_MIN); the seven
+  // GATE/BACKSTOP/STRAND/ONCE/SCOPE/OWN/FASTPATH mutations that defended the deleted
+  // machinery are removed with it (their designated tests, test/swipe-stage6h.test.js,
+  // are deleted in the same build — no guard is left undefended, the mechanism itself
+  // is gone).
+  // ── SWIPE stage 6i: fixed own-scroll #home slide-and-leave (PLAN-swipe-noswap-home.md) ─
+  { name: 'stage6i SNAPSHOTGONE: constructionPlanFor keeps home-snapshot for →home incoming (-> SNAPSHOTGONE test)',
+    file: 'js/swipe.js',
+    from: "    else if (c.toKind === 'home') { incoming = 'real-destination'; renderDestination = 'home-host'; }",
+    to:   "    else if (c.toKind === 'home') { incoming = 'home-snapshot'; renderDestination = 'none'; }" },
+  { name: 'stage6i home-host: the seam renderDestination branch never un-parks the real #home (-> SNAPSHOTGONE test)',
+    from: "          if (host === 'home') { $('home').classList.remove('parked'); return $('home'); }",
+    to:   "          if (host === 'home') { return $('home'); }" },
+  { name: 'stage6i SCOPE: the commit→home held-reveal branch is reinstated (-> SCOPE no-hold-timer test)',
     from: [
-      '            cur.revealSettleTimer = setTimeout(() => {',
-      "              settled = true; cover.settleVia = 'settle'; gate('settle');",
-      '            }, SETTLE_MS);',
+      "        mark('finalize');",
+      '        // Stage 6i (PLAN-swipe-noswap-home.md §5/§12): the commit→home held-reveal branch',
     ].join('\n'),
-    to: '' },
-  { name: 'stage6h STRAND: the 600ms never-strand net is routed through gate() instead of calling drop() directly (-> STRAND never-paints removed-at-600ms assertion)',
-    from: "          cur.revealTimer = setTimeout(() => drop('timeout'), 600);   // safety net — never keep the cover pane forever",
-    to:   "          cur.revealTimer = setTimeout(() => gate('timeout'), 600);   // safety net — never keep the cover pane forever" },
-  { name: 'stage6h ONCE: drop() omits cancelling the settle-timeout loser (-> ONCE settle-timeout-retired-at-drop assertion)',
-    from: '            clearTimeout(cur.revealSettleTimer);',
-    to:   '            /* mutated: settle-timeout not retired */' },
-  { name: 'stage6h SCOPE: the abort→browse call is given the settle-gate flag it must never carry (-> SCOPE no-settle-machinery assertion)',
-    from: "          holdGhostUntilPaintable($('browse'), cover);",
-    to:   "          holdGhostUntilPaintable($('browse'), cover, { scrollSettle: true });" },
-  { name: 'stage6h OWN: drop() omits removing the scrollend listener (-> OWN removeEventListener-spy assertion)',
-    from: '            if (cur.revealScrollEnd) cur.revealScrollEnd();',
-    to:   '            /* mutated: scrollend listener not removed */' },
-  { name: 'stage6h FASTPATH: the commit→home call forces the settle gate unconditionally, ignoring cur.scroll0 (-> FASTPATH no-timer-at-scroll0 assertion)',
-    from: "          holdGhostUntilPaintable($('home'), cover, { scrollSettle: cur.scroll0 > SETTLE_SCROLL_MIN });",
-    to:   "          holdGhostUntilPaintable($('home'), cover, { scrollSettle: true });" },
+    to: [
+      "        mark('finalize');",
+      "        if (commit && dest.v === 'home') {",
+      "          applyScreen(dest, { render: false, keepGhosts: true });",
+      "          revealPending = true;",
+      "          holdGhostUntilPaintable($('home'), cover);",
+      '          return;',
+      '        }',
+      '        // Stage 6i (PLAN-swipe-noswap-home.md §5/§12): the commit→home held-reveal branch',
+    ].join('\n') },
+  { name: 'stage6i ABORT: setView stops re-parking #home when the target view is not home (-> ABORT parked-after test; also DP.browse-home)',
+    file: 'js/nav.js',
+    from: "    $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)",
+    to:   "    $('home').classList.toggle('parked', false);   // mutated: #home never re-parks" },
+  // Both the arm gate (touchstart) AND the disarm gate (touchmove) read #home.scrollTop
+  // (Stage 6i, PLAN-swipe-noswap-home.md §9 L1) — defence in depth, same shape as the
+  // "inline-style clearing removed, BOTH sites" mutation above. Reverting only the
+  // touchstart gate is UNCAUGHT: the still-correct touchmove gate disarms the pull on the
+  // very first move regardless, so #ptr never changes and the PTR assertion still passes.
+  { name: 'stage6i PTR: pull-to-refresh reverts to reading window.scrollY instead of #home.scrollTop, BOTH the arm and disarm gates (-> PTR does-not-arm test)',
+    from: "      if (refreshing || (hs && hs.v && hs.v !== 'home') || $('home').classList.contains('parked') || $('home').scrollTop > 0\n        || e.target.closest('#player, .navbar, .alphaindex, input')) { y0 = null; return; }",
+    to:   "      if (refreshing || (hs && hs.v && hs.v !== 'home') || $('home').classList.contains('parked') || window.scrollY > 0\n        || e.target.closest('#player, .navbar, .alphaindex, input')) { y0 = null; return; }",
+    also: {
+      from: "      if ($('home').scrollTop > 0) { y0 = null; if (pulling) setPtr(0); pulling = false; return; }",
+      to:   "      if (window.scrollY > 0) { y0 = null; if (pulling) setPtr(0); pulling = false; return; }",
+    } },
+  { name: 'stage6i SCROLLBAR: surfaceKind stops recognising the fixed own-scroll #home (-> SCROLLBAR supported-surface test)',
+    file: 'js/scrollbar.js',
+    from: "    if (t && t.id === 'home') return 'home';",
+    to:   "    if (false && t && t.id === 'home') return 'home';" },
+  { name: 'stage6i GHOSTSCROLL: the outgoing app-ghost reverts to reading window.scrollY for a HOME source (-> GHOSTSCROLL equals-500 test)',
+    file: 'js/swipe.js',
+    from: "      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0) : (env.scrollY() || 0);",
+    to:   "      const ghostY = env.scrollY() || 0;" },
+  { name: 'stage6i HOMEFIXED: the active #home rule drops position:fixed/overflow-y (-> HOMEFIXED source-text test)',
+    file: 'css/app.css',
+    from: '#home {\n  position: fixed; left: 0; right: 0;',
+    to:   '#home {\n  left: 0; right: 0;' },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
