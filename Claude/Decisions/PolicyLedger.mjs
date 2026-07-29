@@ -32,4 +32,21 @@ export const POLICY_LEDGER = [
       'SNAPSHOTGONE — a committed browse→home builds no home-snapshot pane; the real fixed #home is the incoming mover',
       'HOMEFIXED — the active #home rule is a position:fixed own-scroll view (source)',
     ] },
+  // Browse-decouple (PLAN-browse-decouple.md) — the symmetric completion of 6i: active #browse
+  // leaves the in-flow shared-document-scroll class and joins the fixed-own-scroll class (WITHOUT
+  // will-change/transform, so the fixed .alphaindex stays viewport-anchored). With #home also
+  // fixed, no signed-in app view drives the document height and window.scrollY is a constant 0 on
+  // the app views. Pinned by named GREEN guards (knownRed:false — enforced, not `{todo}`).
+  { id: 'PL-swipe-browse-fixed-ownscroll',
+    subsystem: 'swipe-reveal',
+    decision: 'Active #browse is a position:fixed overflow-y:auto own-scroll view (not an in-flow shared-document-scroll view), WITHOUT will-change/transform so the fixed .alphaindex strip stays viewport-anchored; the six window-scroll consumers read/write #browse.scrollTop. With #home also fixed (6i), no signed-in app view drives the document height and window.scrollY is always 0 on the app views (home/browse); #signin is a separate in-flow pre-app state outside the swipe flow.',
+    reason: 'Completes the 6i fixed-own-scroll move for #browse: removes the Books->Home scroll-clamp flash by construction (hiding a fixed #browse cannot collapse the document), retiring the .266 stable-height probe and its Home->Books band-aid glitch; the .app css:73 runway is retained to seat the fixed bars for both views.',
+    status: 'active',
+    introduced: '2026-07-29 (browse-decouple)',
+    removalTrigger: 'if #browse returns to the in-flow document-scroll model, or a will-change/transform is added to #browse (which would re-parent the fixed .alphaindex)',
+    knownRed: false,
+    tests: [
+      'BROWSEFIXED — the active #browse base rule is a position:fixed overflow-y:auto own-scroll view with NO will-change/transform (source)',
+      'REALIZE — a #browse-dispatched scroll reaches the virtual-list realize handler (capture-phase document); the pure windowFor model is correct',
+    ] },
 ];
