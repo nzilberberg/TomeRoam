@@ -15,13 +15,18 @@ tools/hooks/no-mutbak-check.mjs (new), tools/hooks/run-checks.mjs,
 docs/swipe-model.generated.txt, docs/transition-matrix.generated.txt.
 Plan of record: `Claude/Plans/PLAN-swipe-noswap-home.md` (PLAN_READY, Charpy FORGE + Loki HELD_STONE).
 
-`Verdict: **FINDINGS (fix-then-ship)**` — the core mechanism is correct and complete, coverage is
-genuinely 0-uncaught, the three plan-ambiguities are resolved soundly, the removed mutant's defect is
-genuinely dead, and no CI cell overclaims a device paint. Two Minor defects a house-rule-following
-reviewer would require corrected before submit: a mutation MISATTRIBUTION (mutant #77 is named for a
-cell it does not redden, and the build report overclaims per-mutant verification), and an INCOMPLETE
-concept-scrub (three stale `snapshotHome`/`home-snapshot` comments + one dead branch in js/app.js).
-Nothing is reachable-and-broken; both fixes are trivial.
+`Verdict: **SHIP**` (re-review pass, commit `e6e7666`) — original verdict was **FINDINGS
+(fix-then-ship)**; Brunel's fix commit resolves both Minor findings + O4 + a sweep-hygiene defect, and
+the fixes are confirmed correct and did not disturb the cleared mechanism/ambiguities/removed-mutant.
+One non-blocking residual (a pre-existing, plan-deferred taxonomic-comment scrub gap) is tracked, not a
+blocker. See "## Re-review" below.
+
+Original (commit `b8df043`): the core mechanism is correct and complete, coverage is genuinely
+0-uncaught, the three plan-ambiguities are resolved soundly, the removed mutant's defect is genuinely
+dead, and no CI cell overclaims a device paint. Two Minor defects a house-rule-following reviewer would
+require corrected before submit: a mutation MISATTRIBUTION (mutant #77 is named for a cell it does not
+redden, and the build report overclaims per-mutant verification), and an INCOMPLETE concept-scrub (three
+stale `snapshotHome`/`home-snapshot` comments + one dead branch in js/app.js). Nothing reachable-and-broken.
 
 ---
 
@@ -219,6 +224,74 @@ transform-clear on `#home`'s own `will-change` layer — live, and the flash is 
 device says so. The build discloses this honestly and claims nothing. The wrapper/ancestor-slide is the
 buildable next lever if R1(a) reddens.
 
+## Re-review (findings-confirmation pass, commit `e6e7666`, build .264)
+
+Range `e0e9530..e6e7666` (js/app.js, js/swipe.js, tools/mutate.mjs, tools/mutation-sweep.mjs,
+docs/swipe-model.generated.txt, Claude/Brunel/swipe-stage6i-build.md, build stamps). Scope: confirm the
+two findings + O4 + the NEW sweep-hygiene change; verify the fixes did not disturb the cleared areas.
+
+**Finding 1 — CONFIRMED FIXED (truthful).** Mutant #77 is reframed to `stage6i CONTRACT:
+constructionPlanFor →home values revert to the retired home-snapshot domain (-> swipe-transition oracle,
+NOT SNAPSHOTGONE)`; its registry comment now states it is runtime-inert and oracle-caught, and names
+`stage6i home-host` as SNAPSHOTGONE's true behavioral guard. The FROM/TO are unchanged (only the
+name/comment), so mutation-anchors still passes (2/2) and the reframed mutant is still caught by the
+oracle (executed: swipe-transition `12 pass / 1 fail`). The build log's false "each mutant reddens its
+designated cell" is corrected to "7 of the 8 by their designated integration/source cell; the 8th
+(stage6i CONTRACT) by the INDEPENDENT ORACLE, NOT an integration cell", citing this finding. Truthful.
+
+**Finding 2 — CONFIRMED FIXED (the flagged items); one non-blocking residual.** The three cited comments
+(js/app.js:363-370, 540-547, 754-763) now state current truth (one capture recipe; →home builds no
+capture; the 'snapshot' label unreachable). The dead arm is removed — `paneKindOf` is now `return
+p.length ? 'ghost' : 'none';` (js/app.js:766), behavior-identical for every reachable input (→home
+already returned 'none' via the old `!p.length` guard; only the unreachable 'snapshot' case is dropped).
+**Residual (non-blocking):** the §6.6 scrub of "snapshot" as a *pane-kind* is not HEAD-exhaustive —
+pre-existing `(ghost/snapshot)` taxonomic comments, made stale by 6i's retirement of the home-snapshot,
+survive at js/app.js:227, 250, 378 (deferred-mechanism regions the changelist never touched) and in
+`Claude/Subsystems/swipe-reveal.md` (3 refs). These over-list the pane-owning set (now `{app-ghost}`
+only); none misdescribes current control flow the way the fixed paneKindOf comment did. My original
+Finding 2 under-scoped to the diff-region comments (3 of 6+) — I own that miss. These fall under the
+plan's explicitly-deferred approval-scrub (§13; W26), now tracked for code comments too (W28-residual).
+Not a blocker: the plan sequenced the concept-scrub to approval, and the load-bearing/misleading
+comments are fixed.
+
+**O4 — CONFIRMED FIXED (behavior-identical).** buildConstruction's incoming `if/else` (swipe.js) is
+collapsed to `incoming = mover(env.renderDestination(dest, destinationHost), 'borrowed-real',
+'incoming');` — identical to the old else-branch (which was byte-identical to the old if-branch bar a
+comment). No behavior change.
+
+**Sweep-hygiene (SOURCE_TEXT_GATES += no-mutbak-gate.test.js) — SOUND.**
+- *(i) Reasoning correct.* The test spawns the REAL CLI (`no-mutbak-check.mjs`) and asserts it exits 0
+  on a clean repo; the sweep applies each mutant by writing a transient `<file>.mutbak` backup, so the
+  repo is never clean mid-sweep → the CLI exits 1 → the clean-exit(0) assertion fails for EVERY mutant.
+  Genuinely fails-by-construction, the same class as `mutation-anchors`. (Live-confirmed the mechanism
+  this pass: my own interrupted sweep left a `.mutbak` and the CLI exited 1.)
+- *(ii) No coverage loss.* Grep confirms NO registered mutant targets `tools/hooks/no-mutbak-check.mjs`
+  or `run-checks.mjs`, so the test never discriminated any production mutant — it only ever false-caught
+  all of them (and corrupted the per-mutant accounting, flipping the benign-alone two-part playback
+  mutant #4 to "stale"). It still runs in normal `npm test` (the full suite of 740 includes it). O5
+  (the CLI's own exit-1 branch is exercised only by an inline reimplementation) is UNCHANGED by this
+  exclusion — the exclusion touches only the sweep, not normal test — so O5 stays an acceptable low-risk
+  Observation, NOT a new gap.
+- *(iii) Right pattern, not a dodge.* The test catches no *specific* mutant (it fails for all equally →
+  discriminates none), SOURCE_TEXT_GATES is the established mechanism for exactly this class, and
+  `behaviourTests()` self-guards (exits 2 if a named gate no longer exists). Executed proof: bounded
+  sweep of `{4, 77}` → `#4 benign alone (expected: needs #6's second edit to bite)`, `#77 caught (1
+  failing)`, `swept 2: 0 uncaught, 0 unapplied, 0 stale flags`; tree clean, no leftover `.mutbak`.
+
+**Cleared areas undisturbed.** The z-index/geometry/abort-reparft mechanism and the removed-mutant are
+untouched by the fix commit (app.js edits are comment-only + the paneKindOf return simplification;
+swipe.js edit is the if/else collapse; the rest is the mutant rename + sweep gate + regenerated model
+census). Full suite re-run green: **740 tests / 739 pass / 0 fail / 1 skip**.
+
+**Re-review executed evidence:** `node --test "test/*.test.js"` → 740/739/0/1; `mutation-anchors` 2/2;
+`swipe-transition` under #77 → 12/1; `node tools/mutation-sweep.mjs 4 77` → 0 uncaught / 0 stale, tree
+clean; grep `no-mutbak|run-checks|hooks/` in mutate.mjs → empty (no mutant targets the check); grep
+`snapshot|home-snapshot` in js/app.js → survivors are current-truth narration or pre-existing
+`(ghost/snapshot)` taxonomic comments (residual above). **Boundary (honest):** the full 85-mutant sweep
+was NOT independently re-run (infeasible under bounded execution); the build's "85 / 0-uncaught" is
+corroborated by the affected-mutant spot-checks (#4 corrected, #77 caught), mutation-anchors (no no-op
+mutant across the whole registry), and the green full suite — not by an independent full run.
+
 ## Watch-list
 
 - **[W1] open** — 6b records reconciliation un-applied in HEAD. Owner Zelda. Carried.
@@ -244,12 +317,13 @@ buildable next lever if R1(a) reddens.
 - **[W24] open (NEW)** — R1(c) nested vertical-`#home`/horizontal-carousel momentum coherence + the A2 phantom document double-scroll (mitigated by `overscroll-behavior:contain`, device-check). Owner on-device strike.
 - **[W25] open (NEW)** — R1(d) the L5 on-screen zero-jump (device paint jsdom cannot see); R1(e) the browse→home abort cover-warmth + no-`#browse`-demote (conceded not asserted, behavior-preserving vs HEAD). Both verified on the scrolled home→books / browse→home repros. Owner on-device strike.
 - **[W26] open (NEW)** — 6i apply-on-approval records (plan §13): amend plan-of-record §2.1/§2.4 (the §2.1 overturn — `#home` joins the fixed-own-scroll class); annotate `PROBE-swap-necessity` (constraint E omitted) + `PROBE-home-scroll-surface` D1 (dynamic Downloads carousel) + D2 (seam-laundered consumer); scrub subsystem 6g `translateZ(0)`→`will-change`; note §2.3's pre-6f branch; build-number bump landed. Owner Zelda.
-- **[W27] open (NEW)** — Finding 1: mutant #77 is misattributed to SNAPSHOTGONE (it is caught by the oracle swipe-transition; SNAPSHOTGONE's true guard is #78). Owner Brunel (fix), then Mendeleev (the coverage-audit consequence: a cell whose named guard does not guard it is the vacuous-cell shape). Carried until the registry attribution is corrected.
-- **[W28] open (NEW)** — Finding 2: incomplete concept-scrub — stale `snapshotHome`/`home-snapshot` comments (js/app.js:366, 541-542, 752-755) + dead `paneKindOf` 'snapshot' arm (:759). Owner Brunel. Carried until scrubbed.
+- **[W27] resolved: fixed** — Finding 1: mutant #77 reframed to `stage6i CONTRACT (-> swipe-transition oracle, NOT SNAPSHOTGONE)` and the build-log per-mutant claim corrected (commit `e6e7666`); verified oracle-caught (12/1), anchors 2/2. Graduated lesson to Mendeleev: a cell whose *named* guard does not guard it is the vacuous-cell shape — a mutation registry's "intended failing test" must be the test that actually reddens, and the audit should reconcile named-guard vs actual-guard.
+- **[W28] resolved: fixed (residual tracked below)** — Finding 2: the three flagged comments updated to current truth + the dead `paneKindOf` 'snapshot' arm removed (`p.length ? 'ghost' : 'none'`), commit `e6e7666`.
+- **[W28-residual] open (NEW)** — the §6.6 scrub of "snapshot" as a *pane-kind* is not HEAD-exhaustive: pre-existing `(ghost/snapshot)` taxonomic comments (over-listing the now-single pane-owning kind) survive at js/app.js:227, 250, 378 and in `Claude/Subsystems/swipe-reveal.md` (3 refs). Made stale by 6i's home-snapshot retirement; deferred-mechanism regions the changelist never touched. Fold into the tracked approval-scrub (W26) — now explicitly covering code comments, not only records. Owner Zelda/Brunel. Non-blocking (plan §13 sequenced the concept-scrub to approval; no comment misdescribes current control flow).
 - **[W29] open (NEW)** — O3: `plan.incoming` is now single-valued/production-unread (oracle-asserted contract field only). Candidate contract simplification; within current dead-return policy. Owner Vitruvius (design), non-blocking.
 
 ---
 
-Verdict: **FINDINGS**
+Verdict: **SHIP**
 
-{"persona":"poirot","stage":"6i","verdict":"FINDINGS","target":"b8df043","range":"e21b4c6~1..b8df043","findings":[{"id":1,"sev":"minor","where":"tools/mutate.mjs#77 + build log","what":"mutation misattribution + per-mutant overclaim: #77 is caught by the oracle swipe-transition, not its named SNAPSHOTGONE cell (that cell is guarded by #78); coverage is 0-uncaught but the attribution and the report claim are wrong"},{"id":2,"sev":"minor","where":"js/app.js:366,541-542,752-755,759","what":"incomplete concept-scrub (StandardsDocument §6.6): three stale snapshotHome/home-snapshot comments + a dead paneKindOf 'snapshot' arm"}],"ambiguities":{"z_index":"sound","geometry":"sound","abort_reparft":"sound"},"removed_mutant_F2r_wiring":"sound-defect-dead","ci_device_overclaim":"none","loki_restrike_needed":true,"return_to":"brunel"}
+{"persona":"poirot","stage":"6i","verdict":"SHIP","prior_verdict":"FINDINGS","target":"e6e7666","range":"e0e9530..e6e7666","findings_resolved":[{"id":1,"status":"fixed","what":"mutant #77 reframed to CONTRACT/oracle-caught; build-log per-mutant claim corrected; verified oracle 12/1, anchors 2/2"},{"id":2,"status":"fixed-with-residual","what":"three cited comments now current-truth; dead paneKindOf 'snapshot' arm removed; residual W28-residual = pre-existing (ghost/snapshot) taxonomic comments at app.js:227,250,378 + subsystem doc, tracked under the plan-deferred approval-scrub, non-blocking"},{"id":"O4","status":"fixed","what":"buildConstruction incoming if/else collapsed, behavior-identical"}],"sweep_hygiene":"sound (no coverage loss — no mutant targets the no-mutbak check; still runs in npm test; correct fails-by-construction class; #4 restored to benign-alone, #77 caught, 0 stale)","full_sweep_independently_rerun":false,"full_suite":"740/739/0/1","ci_device_overclaim":"none","loki_restrike_needed":true,"return_to":"mendeleev"}
