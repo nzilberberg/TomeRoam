@@ -131,6 +131,16 @@ device-confirms, not a hard-coded 53.
 
 - **F1** — no CI surface beyond M2ALIGN (already device-scoped): a Note steering Brunel's device measurement;
   the exact aligned value is layout-owed and settled on the home→books-from-top repro, not in jsdom.
+- **F3** (coverage re-stress) — no new cell; a defect in the mutation REGISTRATION that would mis-credit
+  M1CROSSSRC. Verified at registration: each per-site `from` occurs EXACTLY ONCE in `js/app.js`, and the sweep
+  is read against a stated expected-killing-cell per mutant. Detail in the coverage re-stress section below.
+- **F4** (coverage re-stress) — gates M1RESTORE, M1SUPERSEDE and M1SUPCROSS: without a synchronous,
+  correctly-keyed clamp model those cells cannot fail. Verified by removing each restore line and confirming
+  the corresponding cell reddens (the plan's own §10 prerequisite, run as the shim's acceptance test).
+- **F5** (coverage re-stress) — gates the second (write-observation) oracle on M1CROSSSRC and M1SUPCROSS.
+  Verified by the same per-site mutant runs: with the mutant applied BOTH the residual and the write
+  assertion must fail; with the fix in place both must pass.
+- **F6** (coverage re-stress) — no runtime surface: a within-document count correction in the plan's §7.
 
 ## Prediction — where it could bite in execution
 
@@ -267,5 +277,225 @@ F2 (register M1FRESHNAV's design-revert mutant explicitly), the patch is FORGE-r
 visible scroll the `cur.ghostY` restore might still miss). Do NOT skip it — fix 2 is structurally stronger but
 adds a restore site on the exact plane the KILL lived on. M2 stays FORGE'd; the red `--page-bg` gradient is
 untouched; flash C is out.
+
+VERDICT: TEMPER
+
+---
+
+## COVERAGE re-stress after the Loki 2nd KILL + the source-gate fold — plan HEAD `8cebe7d` (2026-07-29)
+
+Scope: the amended **COVERAGE half only** — the two new cross-source cells (M1CROSSSRC, M1SUPCROSS), the V1
+jsdom clamp finding and its prescribed remedy, the per-site mutant registration rule, the V2 reachability
+correction, and the ledger/§7/count coherence. The DESIGN half (source-gating both restore sites on
+`cur.from.v`) stays approved. **M2 stays FORGE'd — not revisited.** Flash C out; the red `--page-bg`
+gradient (css:41) untouched. **Verdict: TEMPER — three Structural coverage defects (F3, F4, F5); the two
+new cells are the RIGHT cells and every claim I could reach in source holds.**
+
+**Record note (a filing gap, not a technical one).** The design-half re-stress of the source-gated fix was
+performed in a session that died before it filed anything, so no design-half verdict exists in this casebook.
+This section therefore also records the design-adjacent facts I re-derived from source here (V2 below, and
+`cur.from` immutability), so the record does not depend on a lost transcript.
+
+### 1. The V2 reachability correction — HOLDS, verified from source
+
+Every link in the plan's §1 V2 chain is in the shipped source at HEAD `8cebe7d`:
+- `paneLess` is a STATIC predicate over the session's movers — `const paneLess = (s) => !s.movers.some((m) => m.own === 'owned-pane');` (app.js:251), and `movers` is assigned once at app.js:539 (`d.movers = [toMover(c.movers.outgoing), toMover(c.movers.incoming)]`, plus an optional decoration push at 540) and never spliced.
+- The outgoing app-ghost mover is tagged `owned-pane` — `outgoing = mover(g.wrap, 'owned-pane', 'outgoing')` (swipe.js:343), inside `if (plan.outgoing === 'app-ghost')` (swipe.js:341), and that branch is the only producer of `capture` (swipe.js:344), i.e. of `ghostY`.
+- The `begin()` gate rejects a pane-owning session while finishing — `if (finishing && !(session && paneLess(session))) return;` (app.js:385).
+
+So `cur.ghostY != null` ⟹ an app-ghost was built ⟹ the session owns a pane ⟹ it can never pass app.js:385
+while `finishing` is true. The reachable route is therefore `finishing === false` with `d` non-null → the
+admission `if (d || document.querySelector('.nav-ghost') || (finishing && session))` (app.js:400) → the
+recovery block, `const cur = d || session` (app.js:436) → `applyScreen(currentDesc(), …)` (app.js:444).
+**Mid-drag, not the held-ghost window — the correction is right, and the consequence is right too:** the
+recovery site needs a second touch while the first finger is still down, so it is LESS common than the abort
+site. The strike's FRACTURE and its fix direction stand unamended — the defect at app.js:444 is real (the
+recovery renders `currentDesc()`, which an external actor can have moved to home) and the source gate closes
+it. One useful detail for the fixture: the recovery block at app.js:400-450 runs BEFORE the target-exclusion
+bail (app.js:457) and BEFORE the edge test (app.js:458), so ANY second touchstart that passes app.js:385
+drives the recovery — the second touch does not need to be at an edge.
+
+### 2. Do the two new cells genuinely DRIVE the sites they are credited with? — YES, both
+
+**M1CROSSSRC → the abort finalize (app.js:1227).** Traced end to end:
+- `abortRender` is `'none'` for books→options: `const abortRender = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'rerender' : 'none';` (swipe.js:186). So the held early-return `if (!commit && cur.finPlan.abortRender === 'rerender')` (app.js:1200) is NOT taken and control reaches the no-hold else branch at app.js:1223-1229. **The plan's parenthetical is correct and load-bearing** — a browse→browse abort takes the held path and never reaches the fix, so the cross-source cell had to use an overlay destination.
+- The gesture arms: a right-edge forward swipe requires a non-empty `fwdStack` (app.js:464), which the fixture's committed back-swipe from Options supplies (the commit pushes `navStack.pop()` onto `fwdStack`, app.js:789).
+- The outgoing pane is an app-ghost (source in-flow, destination not home — swipe.js:149-150), so `ghostY = #browse.scrollTop = 800` (swipe.js:290).
+- The external nav survives to the finalize: `h.tap` dispatches a real bubbling `MouseEvent('click')` (app-harness.js:700-705) at the shipped listener (`document.querySelectorAll('#navbar [data-nav]')…click`, app.js:2873) → `goHome()` (app.js:155) → `navTo` → `applyScreen({v:'home'})` → `setView('home')` un-parks `#home` (`$('home').classList.toggle('parked', v !== 'home')`, nav.js:57) and nav.js:140 zeroes `#home.scrollTop`. Nothing on that path touches `finishing`, `session` or `settleTimer`, so the identity guard `if (cur !== session) return;` (app.js:1257) still passes when the 340ms `setTimeout(finalize, 340)` (app.js:1271) fires. **§5 O4's premise is verified, not assumed.**
+- At the finalize `dest = currentDesc()` is read fresh (app.js:793) and is home, so the pre-fix `dest.v` gate would have passed — the mutant writes 800 onto an un-parked `#home`, which jsdom stores (probe below). **The site is reached and the mutant can redden it.**
+
+**M1SUPCROSS → the supersession recovery (app.js:444).** Same crossing on the mid-drag route of §1: `d` non-null, `finishing` false, second touchstart → app.js:400 → 436/444. The recovery's own `applyScreen(currentDesc(), { render: cur.live && cur.finPlan.abortRender === 'rerender', resetScroll: false, keepGhosts: true })` renders home (`currentDesc()` moved by the tap) and `setView('home')` un-parks it, while `resetScroll:false` means nav.js:140 does NOT zero — so the mutated `currentDesc().v` gate writes 800 onto an un-parked `#home`. **Site reached; mutant reddens.**
+
+**One harness constraint that is not a defect but must be known before Curie writes these two.** `h.touch` keeps a SINGLE shared `target` closure variable (app-harness.js:744) that `start()` unconditionally reassigns (app-harness.js:760-767), so a second `h.touch.start(...)` mid-drag **overwrites the first gesture's binding**. That is still sufficient here — the second `touchstart` bubbles to the document listener (app.js:1278) and drives `begin()`, and the recovery itself calls `releaseGesture()` (app.js:403), so the first gesture is dead by design and needs no further driving. The constraint is only that **after the second `start()` the first gesture can no longer be moved or lifted**, so both recovery-site cells must assert without touching it again. No harness change is needed; a fixture written expecting two independently drivable touches would fail.
+
+### 3. Two cells rather than one extension of M1SUPERSEDE — CONFIRMED the right call
+
+Three independent reasons, each sufficient:
+1. **Two separate gate expressions.** The shipped guards are two distinct statements — `cur.from.v === 'home'` in the abort finalize (app.js:1227 region) and `cur && cur.from.v === 'home'` in the recovery (app.js:444 region) — so a single mutant cannot exist per §7's own one-mutant-per-site rule, and a single cell cannot kill two mutants it does not both reach.
+2. **Two different routes with different mechanics.** The abort site is reached asynchronously through the 340ms `settleTimer` (app.js:1271) with `finishing` true; the recovery is reached synchronously mid-drag with `finishing` false. One fixture cannot be in both states.
+3. **Opposite oracles.** M1SUPERSEDE is the POSITIVE recovery cell (home source ⇒ restore equals `ghostY`); M1SUPCROSS is the NEGATIVE one (browse source ⇒ no write at all). Folding the negative into M1SUPERSEDE would couple two mutants to one cell — reintroducing precisely the F1 masking shape these cells exist to close.
+
+The plan's own statement of (1) in the §7 Mutation-cases row and the handoff is accurate.
+
+### 4. The V1 jsdom clamp finding — INDEPENDENTLY REPRODUCED; the remedy's ALTITUDE is right, its SPECIFICATION is not
+
+**Reproduced.** I re-probed the project's jsdom 29.1.1 directly (scratchpad, not in the repo). Measured:
+`scrollTop` writes are stored verbatim (500 stored; `scrollHeight`/`clientHeight` both 0 and no clamp is
+applied against them); adding a class whose computed `overflow` resolves to `hidden` leaves `scrollTop`
+unchanged at 500; a write of 700 WHILE parked sticks at 700; the value survives the un-park. **The plan's
+measurement is correct, and so is its consequence** — with no clamp, M1RESTORE and M1SUPERSEDE assert a value
+that is already correct before the restore line runs, so both pass with the fix removed and their named
+natural mutants cannot redden them. That is the standing `tests-must-be-able-to-fail` violation, and the plan
+is right to make the fidelity blocking and a prerequisite (§10). Two further measured facts matter downstream:
+`Element.prototype.scrollTop` IS a configurable accessor (so a write-observing override is possible), and
+`Element.prototype.scrollTo`/`scrollIntoView` do not exist in jsdom at all.
+
+**M1FRESHNAV's exemption is correct.** It survives with no shim because nav.js:140 writes
+`$('home').scrollTop = 0` in shipped code on a `resetScroll` nav — an explicit write, not a clamp. Verified at
+nav.js:140. Worth keeping the reason in the record so the exemption is not "fixed" later.
+
+**Altitude: harness-level is the RIGHT altitude, and the masking risk is empirically near-zero.** A per-fixture
+zeroing step is a rule someone must remember at the moment it applies, which is the shape that has already
+failed three times in this campaign; the harness is where the environment belongs (StandardsDocument §4), and
+the harness already owns comparable environment fakes. I had the whole `test/` tree swept for blast radius: **no
+existing test would change outcome** if `#home.scrollTop` were zeroed the instant `.parked` lands. The reason is
+structural rather than lucky — every existing `boot()`-based test that parks `#home` (swipe-stage6i.test.js
+ABORT at 168-198, swipe-stage6e.test.js DP.browse-home at 266-287) asserts only on the class, never on
+`scrollTop`; every test that sets a `#home.scrollTop` it cares about does so while home is the CURRENT,
+un-parked screen (swipe-stage6i.test.js PTR at 210-228; swipe-stage6.test.js OB-home at 320-343, whose expected
+value is the same 0 nav.js:140 already writes); and the ghost-scroll cells reach `#home` through their own bare
+`JSDOM` (swipe-stage6i.test.js:271, 288-300), structurally outside a harness shim. The pull-to-refresh guard
+also already short-circuits on the class before it reads the offset (`$('home').classList.contains('parked') ||
+$('home').scrollTop > 0`, app.js:1316), so the shim moves PTR toward browser behaviour, not away from it.
+
+The three specification defects are F4 and F5 below. The altitude is not the problem; the fidelity spec is.
+
+**Does the write-observation oracle distinguish "restored to `ghostY`" from "never written"? — Partly, and not
+where it is most needed.** Stated precisely: in the two cross-source cells the pair (residual `=== 0` AND no
+write) IS the correct oracle for "the gate refused", and it is strictly stronger than the residual alone — but
+with `ghostY = 800` the residual check already separates the mutant from the fix, so the write oracle is
+defence-in-depth there rather than load-bearing. Its real value is a case the residual can never catch: a future
+restore that writes 0 — harmless in value, but still a browse-source gesture touching `#home`, which is the
+policy the source gate exists to enforce. What the write oracle does NOT do is prove the site was REACHED; a
+cell that silently never arrives satisfies "no write" perfectly. That is the fixture guard's job, and the plan
+correctly requires one for both cells (see F7 for the observable it should use). Keep all three — residual,
+write, reachability — and do not let the write oracle be read as a substitute for the guard.
+
+### 5. Mutant registration — the per-site reasoning is RIGHT; the mechanics have an unguarded hole (F3)
+
+The plan's reasoning is correct on every point I could check. `tools/mutate.mjs` is an explicit anchor list of
+`{name, file?, from, to, also?}` literal substitutions with no generative operators; a `from` that does not
+occur prints `ANCHOR NOT FOUND for #<i> in <file> — mutation NOT applied` and exits 1 (mutate.mjs:740-743), and
+`test/mutation-anchors.test.js` fails on rot by checking every part's `from` (including `also.from`, resolved
+against `part.file || m.file || DEFAULT_FILE`) still occurs in its file. So the plan is right that the only
+question for any mutant is whether its `from` exists in shipped source; right that the two cross-source mutants
+are NATURAL (`cur.from.v === 'home'` is shipped text, and the substitutions to `dest.v === 'home'` and
+`currentDesc().v === 'home'` are literally the pre-fix gates the 2nd KILL executed against); and right to refuse
+a combined `also` mutant — `also` is for defence-in-depth pairs where reverting one half is UNCAUGHT, whereas
+these two guards protect two different reveals with a cell each, so a combined revert would die to either cell
+and prove nothing about the sibling. **F2's sharpening is also correct:** a design-revert has no shipped `from`,
+so it fails both `mutate.mjs` and the anchors gate and must be an additive two-part mutant whose parts both
+anchor; note additionally that the anchors file carries a SECOND gate — no mutation may be a no-op (`from ===
+to`) — so both parts of that additive mutant must genuinely change their target.
+
+What the plan does not address is F3.
+
+### F3 — Structural (defect) — the two per-site mutants share identical anchor text, and `mutate.mjs` replaces only the FIRST occurrence with no uniqueness check
+`mutate.mjs` applies a mutation as `byFile.set(f, src.replace(from, part.to…))` (mutate.mjs:745) —
+`String.prototype.replace` with a string pattern, which replaces **the first occurrence only** — and nothing
+anywhere counts occurrences. The two shipped guards are, per §4 of the plan,
+`if (cur.from.v === 'home' && cur.ghostY != null) $('home').scrollTop = cur.ghostY;` (abort) and
+`if (cur && cur.from.v === 'home' && cur.ghostY != null) $('home').scrollTop = cur.ghostY;` (recovery), so the
+substring `cur.from.v === 'home' && cur.ghostY != null) $('home').scrollTop = cur.ghostY;` is **byte-identical at
+both sites**, and the recovery site occurs FIRST in `js/app.js` (line ~444 vs ~1227). The plan's §7 mutation
+column and the Curie handoff both specify these mutants as the bare gate substitution — "`cur.from.v === 'home'`
+→ `dest.v === 'home'` at 1227, and → `currentDesc().v === 'home'` at 444". Registered literally that way, the
+"abort" mutant mutates the RECOVERY site, dies to M1SUPCROSS, and reports as caught — while the abort gate is
+never mutated at all and M1CROSSSRC is credited with killing a mutant it never saw. **This is the campaign's own
+defect shape (a mutant/cell credited with a crossing it never drove) reproduced one level down, inside the
+tooling built to detect it — and no gate catches it:** `mutation-anchors.test.js` only asserts the `from`
+occurs (it does, at the wrong site); the no-op gate only compares `from` to `to`; and `mutation-sweep.mjs`
+reports a COUNT of failures (`caught (${failures} failing)`, mutation-sweep.mjs:211), never WHICH cell killed
+the mutant, so the sweep reads green over the mis-siting. **Required:** each of the two anchors must be a
+per-site UNIQUE `from` — the full statement including its distinguishing prefix (`if (cur && cur.from.v` vs
+`if (cur.from.v`) and its leading indentation, which is already this table's convention (see the PTR anchors at
+mutate.mjs:620-624) — and Curie must confirm each `from` occurs EXACTLY ONCE in `js/app.js` before registering
+it, since the tooling will not. State the expected killing cell beside each mutant name so a future sweep can be
+read against intent.
+
+### F4 — Structural (defect) — the prescribed clamp shim is specified against the wrong cause and in an ASYNCHRONOUS mechanism, and it under-models the half the design's own safety claim rests on
+Three separable specification errors in the §7 fidelity note, each of which re-opens the hole V1 exists to close:
+- **(a) The recommended mechanism is asynchronous.** The note recommends "a `MutationObserver` on `#home`'s class attribute that zeroes `scrollTop` when `.parked` lands". Measured in the project's jsdom: a `MutationObserver` callback does NOT run synchronously with `classList.add` — immediately after the add the value was still 123, and only after a microtask checkpoint did it become 0. The park happens inside `start()` during a synchronous `touchmove`; M1SUPERSEDE and M1SUPCROSS then drive a **second touch in the same synchronous run** with no awaited boundary in between. A fixture written that way sees NO clamp at the moment the recovery reads `#home.scrollTop`, so M1SUPERSEDE passes with the restore removed — the identical "cannot fail" defect, now hidden behind a shim that appears to fix it. **Required invariant: the modelled clamp must be observable SYNCHRONOUSLY at the instant the park lands**, i.e. keyed to the read/write rather than to an observer callback (or, if an observer is kept, every fixture must cross an awaited checkpoint between the park and the next assertion — a per-fixture discipline, which is what the harness altitude was chosen to avoid).
+- **(b) The cause is mis-stated, and the mis-statement invites a shim that DOES mask real behaviour.** The note frames the gap as "a class whose computed `overflow` is `hidden` does not clamp `scrollTop`", inheriting Linnaeus's "an `overflow:hidden` box has no scroll offset" (probe §0/§3). That reason is false as a general fact: an `overflow:hidden` box is still a scroll container and IS programmatically scrollable, so a bare overflow flip would not clamp anything. The real clamp in this case is the geometry: active `#home` is a fixed box with BOTH insets (`top: calc(var(--safe-top) + 51px)` and `bottom: calc(…)`, css:128-129) so its content overflows a constrained height, whereas `#home.parked` sets `top: 0` with **no `bottom` and no `height`** (css:98-102) — the box becomes content-height, the scrollable overflow region collapses, and the offset is necessarily 0. The clamp is real, so M1's premise is untouched; but a shim keyed to computed `overflow: hidden` would be keyed to a non-cause and would fire on unrelated elements (`.browsepage.parked`, css:86, is a different rule on a different element the browser does not clamp this way). **Required: key the model to the specific park recipe on `#home` — the `.parked` class or the collapsed-height geometry — never to a generic "computed overflow is hidden ⇒ zero" environment rule.** This is the one way the harness altitude could genuinely mask real behaviour, and it comes from the mis-stated cause rather than from the altitude.
+- **(c) The write-while-parked half is unmodelled, and one plan claim depends on it.** §4 asserts that when an external nav moves `dest` away mid-settle for a HOME-source gesture, "home is parked → the write clamps to 0 → harmless". That claim is TRUE on device (a content-height box has no scroll range, so any write clamps), but it is not true in jsdom (my probe: a write of 700 while parked stuck), and the recommended shim models only the clamp-on-park, not the clamp-of-a-write-while-parked. So a by-construction safety claim in the design is asserted, uncovered by any of the six cells, and actively contradicted by the environment the suite will run in. **Required: model both halves** (a single accessor on `#home.scrollTop` that reports/stores 0 while `.parked` is present satisfies (a), (b) and (c) at once, and subsumes the F5 recorder), **or** state the write-while-parked case explicitly as an uncovered device-owed residual in §8 rather than leaving it as an unqualified "harmless".
+
+### F5 — Structural (defect) — the write-observation oracle is unscoped in two of three statements, and the cited precedent is the wrong mechanism
+Two problems, both of which land on Curie:
+- **Scoping.** M1CROSSSRC's fixture scopes it correctly ("no write to `#home.scrollTop` occurred **during the finalize**"), but the §7 fidelity note ("record writes to `#home.scrollTop` and assert NONE occurred") and M1SUPCROSS's fixture ("still 0 AND unwritten") are unscoped. Unscoped, the oracle is FALSE even with the fix in place, because at least two legitimate writes precede the assertion window: nav.js:140 writes `$('home').scrollTop = 0` on the Home tap, and the clamp shim's own zeroing write is itself a write to the same property. The literal oracle therefore yields a cell that cannot PASS — and the dangerous part is not the red, it is the natural repair: weakening it to "no NON-ZERO write" silently collapses the second oracle back into the residual-value oracle it was added to strengthen. **Required: the recording window must be armed after the external nav and closed around the restore site, and the three statements must say the same thing** (StandardsDocument §7 within-document scrub).
+- **Mechanism.** The note says to mirror "the harness's existing `scrollTo` recorder". That recorder is a plain function-property replacement — `window.scrollTo = (x, y) => { log.calls.push(…) }` (app-harness.js:266) — which cannot work for `scrollTop`: it is an ACCESSOR on `Element.prototype` (confirmed present and configurable in my probe), and jsdom has no `Element.prototype.scrollTo` at all. The correct mechanism is an `Object.defineProperty` get/set override on the `#home` element, for which the repo already has precedent (`test/browse-decouple.test.js:264-266` does exactly this on `#browse`, pushing each write into an array; `test/browse-render-race.test.js:26-30` repeats the pattern). Naming the wrong precedent is the kind of detail that turns into an hour of dead ends. Note also that this same accessor is the natural home for F4's clamp, so one mechanism can serve both requirements.
+
+### F6 — Weak (defect) — §7's cell-count sentence contradicts the six-cell arity it introduces
+§7's summary paragraph opens "**SIX cells, each on a crossing no other cell reaches**" and then states "The
+**four** M1 cells read `#home.scrollTop` after the reveal (not a record); the two cross-source cells
+additionally observe that no write happened at all." There are FIVE M1 cells (M1RESTORE, M1FRESHNAV,
+M1SUPERSEDE, M1CROSSSRC, M1SUPCROSS) plus M2ALIGN. "Four" matches neither reading: the two cross-source cells
+ARE M1 cells, so "additionally" makes the correct figure five; and the non-cross-source M1 cells number three,
+not four. It is a stale count from the pre-fold revision. Every other count in the plan is coherent — the gate
+declaration's `blocking_questions` lists all six, §7's coverage block has six rows, §10 assigns three cells to
+the abort site and two to the recovery site plus M2ALIGN, and the Required-evidence list names six. Fix the one
+sentence.
+
+### F7 — Note (recommendation) — name the observable the required fixture guard uses
+Both cross-source fixtures require a guard that the site was really reached with `ghostY = 800`, phrased as
+"the reveal really reported `ghostY=800`". That maps to a real observable, and it is worth naming so Curie does
+not have to rediscover it: `cover.ghostY` is set from `cur.ghostY` (app.js:1154) and printed in the reveal
+FLASH line as `ghostY=<n>` (app.js:1105), with established precedent for asserting on it
+(`assert.match(line, /ghostY=\d/)`, test/swipe-gesture.test.js:387-389, and the `/ghostY=\?/` negative at
+test/swipe-stage5-wiring.test.js:124). One timing caveat: that line is emitted by the reveal watcher's
+`finish()`, which runs on a 500ms timer (app.js:1116) or early on the next `touchstart`/`mousedown`
+(app.js:1120-1123) — a `click` from `h.tap` does not trigger it — so under `fakeTimers` the clock must be
+advanced past 500ms to read the guard, AFTER the `scrollTop` assertions at 400ms. A simpler synchronous
+alternative for M1SUPCROSS, which has no settle: assert the ghost clone's own
+`transform: translateY(-800px)` (swipe.js:292) while the pane is still mounted. Either satisfies the invariant;
+recommend Curie pick one per cell rather than inventing a third.
+
+## Coverage — coverage re-stress (F3–F7)
+
+- **F3** — no new cell; it is a defect in the mutation REGISTRATION that would mis-credit M1CROSSSRC. Verified by Curie at registration time: each `from` occurs exactly once in `js/app.js`, and the sweep is read against a stated expected-killing-cell per mutant.
+- **F4** — gates M1RESTORE, M1SUPERSEDE and (via (a)) M1SUPCROSS; without it those cells cannot fail. Verified by removing the restore line and confirming each reddens — the plan's own §10 prerequisite, which is the right acceptance test for the shim and should be run as one.
+- **F5** — gates the second oracle on M1CROSSSRC and M1SUPCROSS. Verified by the same mutant runs: with the per-site gate mutant applied, both the residual and the write assertion must fail; with the fix in place, both must pass.
+- **F6** — no CI surface; a within-document count correction.
+- **F7** — no CI surface; steers the fixture guard both cross-source cells already require.
+
+### Prediction — where the coverage half breaks in execution if built as written
+
+1. **F3 fires silently.** Curie registers both mutants on the bare gate expression, both apply cleanly to the recovery site, the sweep prints two `caught` lines, and the abort-site gate ships with no mutation-verified cell — the exact shape of all three prior failures, this time inside the mutation tooling where the sweep's own output conceals it.
+2. **F4(a) fires next.** The `MutationObserver` shim lands, M1RESTORE (which crosses an awaited clock advance) reddens correctly on its mutant, M1SUPERSEDE (which does not) passes with the restore removed, and the suite reads as fully mutation-verified while one of the two restore sites is still ungated.
+3. **F5 gets repaired the wrong way.** The unscoped write oracle fails on the shim's own zeroing write, and the cheapest repair — "assert no non-zero write" — passes review as a clarification while quietly removing the only assertion that catches a zero-valued policy violation.
+4. **F4(c) leaves a device-owed claim reading as proven.** The "the write clamps to 0 → harmless" sentence in §4 stays unqualified, is contradicted by the test environment, and is covered by nothing — a small instance of the campaign's generator rather than a new class.
+
+### Verdict — coverage re-stress: TEMPER (F3/F4/F5 blocking; the cells themselves are right)
+
+The amended Coverage Model is materially better than the one the 2nd KILL walked through. The two new cells
+are the right two, each genuinely drives the site it is credited with (traced through `abortRender`, the
+`fwdStack` arming precondition, the real nav listener, and the identity guard), the two-cells-per-site call is
+correct for three independent reasons, the per-site mutant rule is correct and correctly justified, V2 holds in
+source, F1's ledger mis-credit is properly folded, and the two §7 verdict changes (Identities, Async
+operations) are both justified rather than decorative. What is not yet safe is the MECHANICS: the two per-site
+mutants are specified in a form that silently mutates one site twice (F3), the clamp fidelity is specified
+against the wrong cause in an asynchronous mechanism that leaves M1SUPERSEDE still unable to fail (F4), and
+the second oracle is specified unscoped and against the wrong precedent (F5). All three are cheap; all three
+are the campaign's own defect generator, which is the reason to fix them here rather than discover them in the
+sweep.
+
+**The final Loki strike should PROCEED, and it does not need to wait on F3/F4/F5** — none of them touches the
+design half, and the strike's plane is the ENUMERATION question. One input for it, from my own grep of `js/`:
+the only shipped WRITER of `#home.scrollTop` today is nav.js:140; app.js:1316 and app.js:1323 are pull-to-refresh
+READS. So the enumeration the plan must defend is not "which assignments exist" — that set is small and known —
+but which mechanisms move the OBSERVABLE without an assignment: the park's own geometry clamp (F4(b)), the
+un-park, and anything that scrolls `#home` implicitly. That is the durable lesson the 2nd KILL filed, and it is
+the right target.
+
+M2 stays FORGE'd. The red `--page-bg` gradient (css:41) is untouched. Flash C is out.
 
 VERDICT: TEMPER
