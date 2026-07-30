@@ -809,6 +809,13 @@ const MUTATIONS = [
     file: 'tools/mutate.mjs', from: MUTUNIQ_GUARD_FROM, to: MUTUNIQ_GUARD_TO },
   { name: 'MUTUNIQ-b: the applier reverts to first-occurrence src.replace, so a DISAMBIGUATED entry mutates the wrong site while every registration-time check stays green (-> MUTUNIQ intended-occurrence test)',
     file: 'tools/mutate.mjs', from: MUTUNIQ_APPLY_FROM, to: MUTUNIQ_APPLY_TO },
+  // M2ALIGN's `from` is the POST-FIX line, so it could not be registered until the M2 fix
+  // itself landed (registering it against the pre-fix `46px` line would either rot the
+  // anchors gate or be refused as a no-op). One occurrence in js/swipe.js.
+  { name: 'M2ALIGN: the ghost builder reverts to the vestigial in-flow 46px, misaligning the clone content-top from the real fixed-inset content-top (-> M2ALIGN aligned-value test)',
+    file: 'js/swipe.js',
+    from: "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '53px';",
+    to:   "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '46px';" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

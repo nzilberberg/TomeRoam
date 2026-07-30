@@ -154,7 +154,7 @@ function buildHomeGhost({ homeScrollTop = 250 } = {}) {
 }
 
 test('M2ALIGN — the outgoing app-ghost builder sets the clone active-view content-top to the real '
-  + 'fixed-inset content-top, not the vestigial in-flow 46px', { skip: SKIP }, () => {
+  + 'fixed-inset content-top, not the vestigial in-flow 46px', () => {
   const want = alignedCandidates();
   const { construction, clone } = buildHomeGhost({ homeScrollTop: 250 });
 
