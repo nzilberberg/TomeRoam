@@ -405,13 +405,27 @@ hardening, and the reported shift stays device-unverified until both land.)
 **Charpy TEMPER on the coverage half (`5d27739`) — 3 blocking mechanics defects, all owed to makers:**
 **F3** `mutate.mjs:745` is `src.replace(from,to)` = FIRST OCCURRENCE ONLY with no uniqueness check, so the
 plan's two byte-identical `cur.from.v === 'home'` gates would mutate one site twice and report a FALSE GREEN.
-**F4** the clamp-shim spec is wrong 3 ways — `MutationObserver` is ASYNC (measured) while M1SUPERSEDE/M1SUPCROSS
-drive a second touch in the SAME synchronous run, so M1SUPERSEDE would still pass with the restore removed
-BEHIND a shim that looks like the fix; the CAUSE is mis-stated (`overflow:hidden` boxes ARE programmatically
-scrollable — the real clamp is `.parked` dropping the `bottom` inset, css:98-102, leaving no scroll range, so
-keying a shim to computed `overflow` is the one way this altitude could mask real behaviour); and the
-clamp-of-a-write-while-parked half is unmodelled though the design's "the write clamps to 0 → harmless" claim
-rests on it. **F5** the write oracle is unscoped in 2 of 3 statements and cites the wrong mechanism
+**F4** the clamp-shim spec was wrong 3 ways — `MutationObserver` is ASYNC (measured) while the cells drive a
+second touch in the SAME synchronous run, so M1SUPERSEDE would still pass with the restore removed BEHIND a
+shim that looks like the fix; the cause was mis-stated; and the clamp-of-a-write-while-parked half was
+unmodelled. ⚠️ **F4 IS NOW RETIRED — see V3 below; there is no restore line, so no cell asserts a restored
+value and there is no shim to specify.** ⛔⛔ **BOTH earlier CAUSE statements were FALSE — do not re-cite either
+(V3, Vitruvius `afe54b8`, Charpy-verified `5526fd9`):** Linnaeus's "an `overflow:hidden` box has no scroll
+offset" is false (it remains a scroll container), and Charpy's F4(b) replacement — "`.parked` drops the
+`bottom` inset → content-height box" — is ALSO false: `#home.parked` (css:98-103) declares no
+`bottom`/`height`/`min-height`/`max-height`, and **a rule cannot un-declare a property**, so `#home`'s own
+`bottom` (css:129, or css:136 under `body.has-player`) CASCADES onto a parked home and the box stays
+inset-solved. **The real mechanism: `.parked`'s vestigial `top: 0`** (a pre-6i in-flow leftover, same era and
+shape as M2's vestigial `46`) makes the parked box TALLER than the active box by exactly
+`var(--safe-top) + 51px`, shrinking max scroll by the same amount. Loss =
+`max(0, scrollTop − (maxScroll − (safe+51)))` — **bounded by `safe+51` and SATURATING, not scaling with scroll
+depth.** Charpy verified the step nobody had: no `#home` descendant sizes off the box height (subtree is
+section titles/statuslines/carousels, no % or viewport heights), so `scrollHeight` is identical parked vs
+active — the delta is real, not cancelled. ⚠️ **The magnitude bound is CONDITIONAL on a [UD] premise:** if
+WebKit discards the offset on `overflow:hidden`, the pre-fix loss is the FULL `scrollTop`. **The FIX is robust
+either way; the magnitude claim is not.** M1 is also derived-but-never-OBSERVED (the only device datum,
+`ghostY=0`/home-at-top, is silent on M1). Three sessions reasoned about a clamp none had derived correctly,
+and the magnitude went unquestioned because both wrong readings predicted a TOTAL loss. **F5** the write oracle is unscoped in 2 of 3 statements and cites the wrong mechanism
 (`scrollTop` needs `Object.defineProperty`, not the function-property `scrollTo` recorder). Charpy CONFIRMED:
 two cells per site is right (2 distinct gate statements, 2 routes, opposite oracles), both fixtures reach their
 sites, per-site mutants right, V2 holds, and a harness-level clamp shim masks NO existing test (whole `test/`
@@ -419,6 +433,45 @@ tree swept). ⛔ See [[tomeroam-maintainability-gates]] for the LIVE F3 fallout 
 mutations: `#24` ("abort stops restoring the starting scroll") has 3 occurrences and has been mutating the
 **supersession recovery** (app.js:445), NOT either abort restore (1203/1228) — a live false-green candidate on
 the very lines M1 touches; makers must re-anchor it per-site.
+
+**M1 RE-DERIVED → CSS-ONLY, and Charpy TEMPER #2 (2026-07-29, plan `afe54b8`, casebook `5526fd9`).** Rather than
+build Loki's ownership witness, Vitruvius attacked the CAUSE (V3 above) — so **M1 is now TWO CSS DELETIONS:
+remove `top: 0` and `overflow: hidden` from `#home.parked`** under **INVARIANT P** (*parking `#home` may change
+only where the box paints and whether it takes input — never its scroll range or scroll-container status*);
+`will-change: transform` retained verbatim in both rules. **No restore, NO DEFERRED WRITE — so all three Loki
+kill classes are unreachable by CONSTRUCTION** (no record to go stale K1, no gate to mis-scope K2, no reveal
+ownership to prove K3). On Loki's own K3 interleaving the finalize makes no scroll write, so the Home tap's
+`scrollTop = 0` stands — the shipped-stable behaviour the strike measured. Witnesses designed and REJECTED
+(plan §4.4, so they are not rediscovered): **W-A swept-pane** (rests on intra-function ordering enforced by
+memory; infers from an absence; fails OPEN on `keepGhosts:true`, CLOSED when `begin()` sweeps
+`.nav-ghost.spent`) and **W-B nav epoch — FALSIFIED** (app.js:520 un-parks `#home` WITHOUT calling
+`applyScreen`, so `applyScreen` is not the only reveal choke point). If a device measurement ever forces a
+restore back, promote W-B with the bump inside `setView` — but re-derive the loss mechanism FIRST.
+**Charpy verdict: design half SOUND** (derivation holds; **delete BOTH** — the `overflow` deletion adds no new
+surface since a `hidden` box is already a scroll container already scrolled by `scrollIntoView`/focus reveal,
+`overflow-x` computes to `auto` in both states, and covers-warm rests on being painted, not on overflow;
+`top: 0` alone is the LOOSER change). **3 blocking coverage defects (F8/F9/F10):** **F8** `M1PARKRANGE`
+**cannot pass on the fix it exists to lock** — its second clause demands every retained declaration be absent
+from `#home` or byte-identical, but `.parked` keeps `z-index: 0` vs `#home`'s `z-index: 20` (and §4.2 says keep
+it); dropping that clause is the cheap repair but it is the only half that stops `inset: 0` re-adding the
+defect (the forbidden list is a DENYLIST missing `inset`, logical sizes, `margin-top`) → **invert to an
+ALLOW-LIST of the four park effects.** **F9** `M1WRITERSET`'s write half is correct but its stated HEAD baseline
+**omits ≥7 sites its own `scrollTo` pattern derives** (app.js:445/1203/1228, the reveal watcher's runtime
+replacement of that API at app.js:1174/1186, browse.js:860/862) → **the gate is RED on landing**, and the cheap
+repair narrows the pattern, dropping exactly the `scrollIntoView` coverage the next strike targets. **F10** the
+invariant both cells carry — the writer set is one **"by construction"** — is **FALSIFIED: `overflow-anchor` is
+unset anywhere, so scroll anchoring is at `auto` on `#home`, and `home-screen.js` re-renders the carousels and
+toggles `#dlSection` under a live offset — a mover with NO API call and no text for any static gate to derive.**
+⭐ **A THIRD live non-unique anchor found:** `M1NOWRITE`'s `resetScroll: false` occurs **5×**, first at the held
+path the fixture never takes. **F4 retirement CONFIRMED correct**; **F5 airtight** and verified independently
+(the Home tap takes navTo's same-view replace-top branch, `applyScreen` once with `anim` null ⟹ nav.js:140
+writes 0 exactly once; `Object.defineProperty` precedent `test/browse-decouple.test.js:260-266` is real).
+Charpy also confirmed the 2 disclosed M2-text edits are faithful to its F1 and harmless (KEPT). **NEXT:**
+Vitruvius folds F8/F9/F10 + the 3rd anchor + the §4.1 line-120 formula (it drops the inner `max(0, …)` that
+line 118 carries, over-stating the short-library case) → **4th Loki strike, re-aimed: SCROLL ANCHORING is the
+highest-value plane** (it moves the observable with NO API call and is demonstrably live); the descendant-scroll
+cases the plan lists have no shipped call site into `#home`'s subtree, so a strike aimed only there likely
+returns a held stone → Curie + Brunel.
 
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
