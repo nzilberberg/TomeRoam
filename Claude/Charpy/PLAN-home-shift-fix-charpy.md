@@ -499,3 +499,459 @@ the right target.
 M2 stays FORGE'd. The red `--page-bg` gradient (css:41) is untouched. Flash C is out.
 
 VERDICT: TEMPER
+
+---
+
+## RE-STRESS of the REPLACED M1 (design AND coverage) â€” plan HEAD `afe54b8` (2026-07-29)
+
+Scope: the M1 half in full â€” the V3 cascade derivation (Â§4.1), INVARIANT P and the two deletions (Â§4.2),
+the closure-by-removal argument (Â§4.3), the rejected witnesses (Â§4.4), the six re-cut cells (Â§7.1), the
+inverted fidelity prohibition (Â§7.2), the tooling remedy and the two live non-unique anchors (Â§7.3) â€” plus
+the two disclosed edits inside M2's text. **M2's DESIGN stays FORGE'd and is not revisited.** Flash C out;
+the red `--page-bg` gradient (css:41) untouched; read-only throughout (no tooling built, no code edited).
+
+**The previous design-half approval does not carry, and neither does my own F4(b).** Vitruvius falsified
+F4(b) and is right to: `.parked` declares no `bottom`, and in CSS a rule cannot un-declare a property, so
+`#home`'s `bottom` (css:129, or css:136 under `body.has-player`) applies to a parked home and the box is
+inset-sized, not content-sized. My substitute cause was wrong in the same direction as the deriver's
+(both predicted a total loss). I applied the same skepticism to the replacement and it survives â€” see Â§A.
+
+### A. The Â§4.1 derivation â€” HOLDS on every point I could reach in source, including one nobody had checked
+
+Verified at HEAD, from `css/app.css` and `index.html`:
+
+1. **The rule set is complete.** Exactly three rules can match a parked `#home`: `#home` (css:126-135),
+   `#home.parked` (css:98-103), `body.has-player #home` (css:136), plus the scrollbar-hiding rules
+   (css:772-775). No `@media` variant, no other selector, and no JavaScript writes `top`, `height` or
+   `overflow` inline â€” `resetSwipeStyles` (nav.js:114-120) clears only `transform`, `transition`,
+   `willChange` and `zIndex`. Confirmed by reading the rules and by grep over `js/`.
+2. **`.parked` declares no `bottom`, `height`, `min-height` or `max-height`** (css:98-103) â€” confirmed
+   verbatim. `#home` declares `top: calc(var(--safe-top) + 51px)` and
+   `bottom: calc(var(--nav-h) + var(--nav-pad))` (css:128-129) â€” confirmed verbatim. So `bottom` cascades
+   onto a parked home and the only geometric delta is `.parked`'s `top: 0`. **The cascade reading is
+   correct.**
+3. **`clientHeight_parked = clientHeight_active + (var(--safe-top) + 51px)`.** A `position:fixed`
+   non-replaced box with both `top` and `bottom` set and `height:auto` has its height solved from the
+   insets (CSS 2.1 Â§10.6.4) â€” universal, not engine-specific. `box-sizing: border-box` applies globally
+   (css:24), no borders exist on either rule, and scrollbars are width/height 0 on `#home`
+   (css:772-775), so `clientHeight` equals the inset-solved box height in both states. **Holds.**
+4. **`scrollHeight` is identical parked and active â€” VERIFIED, not assumed, and this is the check nobody
+   had run.** The claim only holds if no `#home` descendant sizes off `#home`'s own height; otherwise the
+   taller parked box would grow the content too and partially cancel the delta. I read `#home`'s subtree
+   (index.html:48-59): two `.section-title`, two `.statusline`, three `.carousel` rows and the
+   `#dlSection` wrapper. None carries a percentage or viewport height; the only `height: 100%` rules in
+   the stylesheet that could appear inside a card (`.tile .progress > i`, css:390) resolve against a
+   fixed-height parent, not against `#home`. Content width, `padding-left/right`, `padding-top` and
+   `padding-bottom` are identical in both states (`.parked` restates the two horizontal paddings at the
+   same `16px`; it declares no block padding, so `#home`'s `padding: 14px 16px 40px` â€” or css:136's
+   `padding-bottom: 20px` with a player â€” governs both). **So `scrollHeight` is height-independent and
+   identical. Holds.**
+5. **`maxScroll_parked = maxScroll_active âˆ’ (safe+51)`, and the clamp formula at Â§4.1 line 118 is
+   correct** â€” including the inner `max(0, â€¦)`, which is what makes it right in the short-range case.
+6. **`body.has-player` composes correctly.** With a player, `bottom` is css:136's value in BOTH states
+   (`.parked` declares no `bottom`, and css:136 has higher specificity than `.parked` anyway), and
+   `padding-bottom` is 20px in both. The delta stays exactly `safe+51`. A player appearing mid-park
+   shrinks the box and *grows* max scroll â€” no clamp. **Holds.** (One precision gap: a player
+   *disappearing* mid-park grows the box and does clamp, by up to 106px. Post-fix that is identical for a
+   parked and an active home, so it is existing behaviour rather than a park effect â€” but Â§7's Composition
+   row states only the appearing case. Recorded in F17.)
+7. **A zero `--safe-top`** (no notch) makes the delta exactly 51px. The derivation is parameterized in
+   `var(--safe-top)` throughout and does not depend on its value. **Holds.**
+8. **A reachable state that collapses the range to ZERO â€” yes, and the plan names it.** When home's
+   content height falls between `clientHeight_active` and `clientHeight_parked`, `scrollHeight_parked`
+   degenerates to `clientHeight_parked` and `maxScroll_parked` is 0, so the whole offset is lost. The plan
+   states this ("the full `scrollTop` only when home's entire scroll range is smaller than `safe+51`px â€” a
+   short library, which is a real and reachable case"). **A second route I checked: content changing while
+   parked.** `home-screen.js` re-renders `#clRow`/`#raRow` and unhides `#dlSection` (home-screen.js:52,
+   76-77, 118-120; cleared at app.js:1436-1437), so home's content height can change while parked and
+   trigger a fresh clamp against the taller box. Post-fix that clamp is identical to an active home's, so
+   it is park-neutral. Neither route falsifies the derivation.
+9. **An engine that discards the offset on `overflow:hidden` despite the spec** â€” not reachable in source
+   and not measurable in jsdom; the plan marks it [UD] and, critically, the fix removes the dependency by
+   deleting the declaration. This is the one place the magnitude claim is exposed (F13), not the fix.
+
+**Is the magnitude claim right? Bounded â€” yes; the loss expression as written â€” no.** The bound "at most
+`var(--safe-top) + 51px`" holds universally, and "the loss does not scale with scroll depth, it saturates"
+is correct: `loss = max(0, scrollTop âˆ’ K)` with `K = max(0, maxScroll_active âˆ’ (safe+51))`, so it is zero
+below `K`, rises 1:1 across the last `safe+51`px of the range, and caps there. The expression printed at
+Â§4.1 line 120 and in the headline, `max(0, scrollTop âˆ’ (maxScroll âˆ’ (safe+51)))`, drops the inner
+`max(0, â€¦)` that line 118 has and therefore over-states the loss in exactly the short-library case the
+prose gets right (F11).
+
+### B. Deleting `overflow: hidden` â€” the trade is RIGHT; delete BOTH, not `top: 0` alone
+
+I stressed every side-effect axis the brief names, and the deletion adds no new surface:
+
+- **It creates no new input path.** An `overflow:hidden` box is already a scroll container and is already
+  scrolled by a descendant `scrollIntoView` or a focus reveal. So that hazard exists at HEAD and is
+  *unchanged* by the deletion â€” which is the strongest argument for it. Independently, nothing in `js/`
+  focuses or scrolls into a `#home` descendant: the only `.focus()` calls are `debug.js:432` and
+  `debug.js:571`, both on a textarea appended to `document.body`.
+- **It creates no new user-scroll path.** The parked box keeps `pointer-events: none`, `z-index: 0` and
+  `transform: translateX(-101vw)`; scrollbars are width/height 0 (css:772-775); there is no wheel on the
+  target platform; `overscroll-behavior: contain` (css:132) cascades onto the parked box after the
+  deletion exactly as it does today, so chaining is bounded either way.
+- **`overflow-x` does not differ from the active box.** `#home` declares only `overflow-y: auto`, so
+  `overflow-x` computes to `auto` (a `visible` value beside a non-`visible` sibling computes to `auto`).
+  Post-deletion the parked box matches the active box on both axes. Nothing new can appear parked that
+  does not already appear active.
+- **It does not weaken `.parked`'s stated purpose.** The comment at css:92-97 attributes warm decoded
+  covers to *being painted at all* (a `will-change` compositing layer instead of `display:none`);
+  `overflow` plays no part in it. The `top: 0` deletion does shrink the painted region by `safe+51`px â€”
+  but post-fix the parked box is geometrically identical to the active box at the same offset, so the
+  painted region becomes exactly the region about to be revealed. That is a small improvement in warmth,
+  not a regression. (The device gate should still be told what to look at â€” F17.)
+- **And it is what makes INVARIANT P hold by construction.** Keeping `overflow: hidden` would leave the
+  entire fix resting on one unverifiable engine claim â€” that WebKit retains the offset on a `hidden` box â€”
+  which is precisely the class of claim this campaign has now been wrong about twice. Vitruvius's stated
+  reason ("not because it is proven to clamp but because keeping it makes P depend on an unverifiable
+  browser claim") is the correct reason, and `top: 0` alone would be the looser change, not the tighter
+  one. **Delete both.**
+
+### C. Deleting `top: 0` â€” regression surface: none I can find in source
+
+- **Nothing visible or behavioural.** The parked box is translated `-101vw`, `pointer-events: none`, and
+  at `z-index: 0` beneath every other layer. Moving its top edge from `0` to `calc(var(--safe-top)+51px)`
+  changes only which off-screen band it occupies.
+- **The abort-flash mitigations are untouched.** `will-change: transform` stays verbatim in BOTH rules
+  (css:102 and css:134) â€” the `.256` device-validated form, and the plan's Â§2 STAYS pins it. The layer
+  identity the css:104-112 contract cares about (fixed, transformed, `will-change`) is unchanged. What
+  changes is the box's height and its overflow, and the plan routes that to R-M1-flash rather than
+  claiming it clean. Correct handling.
+- **The ghost geometry M2 targets is unaffected.** The builder clones `.app`, strips ids (swipe.js:277)
+  and removes `.parked` nodes outright (swipe.js:279), so the park recipe cannot reach the clone. M2's
+  constant and M1's deletions are genuinely independent.
+- **`.browsepage.parked` (css:86) is correctly left alone** â€” a different element with an in-flow model
+  and no `bottom` inset of its own to inherit. But after M1 the two park rules DIVERGE with nothing saying
+  why, and "symmetrizing" them is exactly what a future editor would do (F17).
+
+### D. The closure-by-removal argument and the rejected witnesses â€” both sound
+
+Â§4.3's claim is structural rather than enumerated, and it holds: with no deferred write there is no
+interleaving that can land one. I re-verified the one link that carries it for the 3rd KILL's own
+interleaving â€” the abort finalize's `applyScreen(dest, { render: â€¦, resetScroll: false })` at app.js:1227
+makes no scroll write at all, because nav.js:140's reset is gated on `resetScroll` â€” so the Home tap's
+deliberate `scrollTop = 0` stands. Â§4.4's rejection of W-B is correct against shipped source: app.js:520
+does `$('home').classList.remove('parked')` with no `applyScreen` call, so `applyScreen` is not the only
+reveal choke point and a nav-epoch witness fails open there. W-A's three defects are all real (the
+`dropPanes()`-at-1213-before-1227 and `disposeOwnedPanes`-at-442-before-444 orderings, the
+inference-from-absence, and `begin()`'s `.nav-ghost.spent` sweep at app.js:393). Recording both as
+REJECTED with reasons is the right disposition.
+
+### E. F4's RETIREMENT is correct; F5's window scoping is airtight
+
+**Retiring F4 is right, and a CSS-only fix does not need a fidelity cell.** With no restore line, no cell
+asserts a restored value, so there is no subject for a shim to be mis-keyed or made asynchronous against.
+The inversion into a PROHIBITION is the correct reading of the same measurement: jsdom stores `scrollTop`
+verbatim and never clamps, so a "the scroll survives the park" cell would pass regardless of what
+`#home.parked` declares â€” vacuously green. What CI can prove honestly is the RECIPE (a static stylesheet
+read, which no environment can make vacuous) and the WRITE SET (observations, which need no clamp). There
+is no third thing jsdom could prove about this fix: it does no layout and does not resolve `calc()` against
+`env()`, so a computed-geometry cell would be a fiction. The preservation is correctly device-owed.
+
+**F5's two windows are airtight for M1NAVWINS, and I verified the count.** Window A is the Home tap: the
+navbar listener (app.js:2873-2879) calls `goHome()` â†’ `navTo({v:'home'}, null)` (app.js:155) â†’ because
+`currentDesc().v` is still `'home'` on an aborted gesture, navTo takes the same-view replace-top branch
+(app.js:140) and calls `applyScreen(desc)` **once** with defaults, so nav.js:140 writes 0 **exactly once**;
+`anim` is `null` so no `slideInView` runs and nothing else on the path touches the property. **"Exactly one
+write of value 0 in window A" is correct as specified.** Window B is the clock advance that fires the
+340ms `settleTimer`; nothing writes between the abort lift and the arming, so A and B are contiguous and
+exhaustive. The mechanism citation is also correct: `test/browse-decouple.test.js:260-266` is exactly the
+`Object.defineProperty(el, 'scrollTop', {configurable:true, get, set})` write-recorder the note prescribes,
+and the `window.scrollTo` recorder at app-harness.js:266 is correctly named as the wrong precedent. One
+gap worth stating rather than fixing: the reachability guard requires advancing past 500ms *after* the
+window-B assertions, which opens an unnamed third interval â€” say explicitly that no write is asserted
+after B, so a future reader does not treat the guard advance as part of B.
+
+### F. The re-cut coverage â€” the cells are the right six, but two of them do not do what the plan says
+
+M1NOWRITE and M1NAVWINS genuinely drive the sites they are credited with (`abortRender` is `'none'` for
+homeâ†’browse â€” swipe.js:186 â€” so the held early-return at app.js:1200 is not taken and control reaches
+app.js:1223-1229), their mutants are correctly typed (M1NOWRITE natural, M1NAVWINS additive), and the
+app.js:444 recovery site is honestly **not credited to any cell** â€” Â§7's Recovery-authority row says so
+explicitly and routes the negative claim to M1WRITERSET file-wide, which is the correct answer to my own
+F1 masking shape rather than a repeat of it. Counts are coherent everywhere I checked: the gate
+declaration's `blocking_questions` (6), Â§7.1's rows (6), the "SIX cells" sentence, Â§7's Invariants row
+(i)-(v), Â§10's sequencing (1 + 1 + 4), the Required-evidence list, and the Curie handoff all agree. My F6
+is resolved. **The two defects are in M1PARKRANGE and M1WRITERSET â€” F8, F9 and F10 below.**
+
+### G. The two live non-unique anchors â€” both confirmed, and Vitruvius's correction of the brief is right
+
+- **`#24`** â€” `window.scrollTo(0, cur.scroll0);` occurs **three times** in `js/app.js`: 445 (recovery,
+  inside `if (cur) `), 1203 (held abort, followed by `mark('restored')`), 1228 (no-hold abort, preceded by
+  the `applyScreen(dest, â€¦)` statement). 445 is FIRST, so first-occurrence-wins mutates the recovery and
+  neither abort restore has ever been proven able to fail. The plan's three disambiguating contexts each
+  match source exactly. Remedy correct.
+- **`#42`** â€” `    if (KINDS.indexOf(c.fromKind) === -1) {` occurs **twice** in `js/swipe.js`, at 140
+  (`constructionPlanFor`) and 180 (`finalizationPlanFor`). The intended site is 140 and it is first, so
+  the `caught` is legitimate by source order only. The unique re-anchor the plan names exists:
+  `throw new Error('Swipe.constructionPlanFor: unhandled source kind "' â€¦` at swipe.js:141.
+- **Vitruvius's correction of the dispatcher's brief is CORRECT.** The comment at mutate.mjs:467-470 is
+  not false: it accurately states that BC-1a's own anchor (the `finalizationPlanFor` throw line) is unique
+  and accurately warns that the bare `if (KINDSâ€¦)` line is shared. The defect is that sibling entry `#42`
+  anchors on precisely that shared line, so the comment reads as if the hazard were handled where it is
+  not. Confirmed.
+
+### H. The two disclosed M2 edits â€” both FAITHFUL to F1 and harmless
+
+- **The Â§3 clause "Weight the â‰ˆ46 measurement over the 53 headline (Charpy F1)."** Faithful. My F1 said
+  exactly that, and the sentence adds nothing beyond it: it steers Brunel's measurement without changing
+  the fix, the derivation, the candidates, or the device gate. It is also correctly placed â€” inside the
+  paragraph that already names both candidates and defers to the device measurement, so it reads as a
+  weighting of an existing open choice rather than a new commitment. M2's mechanism is untouched.
+- **The `M2ALIGN` row gaining `NATURAL` and an expected-killing-cell label.** Faithful and harmless. The
+  mutation's content is byte-unchanged ("the builder reverts to the in-flow forty-six pxâ€¦"); the row only
+  adopts the labelling convention Â§7.1 now applies to all six mutants, and the label is correct (reverting
+  a shipped constant is a natural substitution, and M2ALIGN is the cell that reads that constant).
+  M2ALIGN's oracle stays value-agnostic ("the fixed-inset-aligned value â€¦ not the string forty-six px"),
+  which is what my F1 asked for.
+
+**Neither edit re-opens M2's mechanism, and I raise no finding against them.** Keeping them was the right
+call; had either changed the fix or the candidate set, the correct disposition would have been to strip it
+and route it back.
+
+### F8 â€” Structural (defect) â€” M1PARKRANGE as specified CANNOT PASS on the prescribed fix, and its forbidden-property list is a denylist that already has holes
+Two problems in one cell, both of which get "repaired" the same cheap way.
+
+**(a) The second clause fails on `z-index`.** The cell must assert "every declaration it does carry is
+either absent from the `#home` block or byte-identical to the value `#home` sets." After the fix
+`#home.parked` carries `z-index: 0` while `#home` carries `z-index: 20` (css:130) â€” neither absent nor
+byte-identical â€” so the clause is FALSE on the very implementation Â§4.2 prescribes, which explicitly says
+to KEEP `z-index: 0`. Every other retained declaration passes (`position`/`left`/`right`/`max-width`/
+`margin` restate `#home`'s values; `will-change: transform` is byte-identical to css:134; `transform` and
+`pointer-events` are absent from `#home`). A cell that cannot PASS is repaired by whoever hits it, and the
+cheapest repair is to drop the second clause â€” which deletes the only half that stops a geometry property
+returning under a different name.
+
+**(b) The first clause is a denylist and misses reachable equivalents.** Forbidding `top`, `bottom`,
+`height`, `min-height`, `max-height`, `overflow`, `overflow-y` does not catch `inset: 0` (which re-adds
+`top: 0` *and* overrides the inherited `bottom`), `inset-block`, `block-size`/`min-block-size`/
+`max-block-size`, `margin-top`, or `translate`. Any one of them re-introduces the defect while the cell
+stays green â€” a gate credited with an invariant it does not enforce, which is this campaign's own
+generator.
+
+**Required (one remedy fixes both): invert the second clause into an ALLOW-LIST.** Assert that
+`#home.parked` declares NOTHING outside an explicit permitted set, and name the set as the park's four
+effects (`transform`, `pointer-events`, `z-index`, `will-change`) plus whichever `#home`-restating
+declarations Brunel elects to keep under Â§4.2's recommendation. An allow-list makes the forbidden list
+unnecessary, cannot rot as new CSS properties appear, and passes on the prescribed fix. **Also specify
+whether the comparison expands shorthands** â€” `.parked`'s `padding-left/right: 16px` versus `#home`'s
+`padding: 14px 16px 40px` is exactly the ambiguous case, and it decides whether the cell reads
+`padding-left` as absent or as byte-identical.
+
+### F9 â€” Structural (defect) â€” M1WRITERSET's stated HEAD registered set is incomplete against its own stated derivation, so the gate is RED at HEAD and the cheap repair blinds it
+The cell derives "every textual write to a `scrollTop` property and every `scrollTo`, `scrollBy` and
+`scrollIntoView` call site" over `js/` and fails on any derived site that is not registered. The plan
+states the HEAD registered set as seven entries: nav.js:140, nav.js:147, browse.js:228, browse.js:658,
+browse.js:845, virtuallist.js:304, debug.js:533. My own derivation over `js/` finds those seven â€” the
+five `scrollTop` writes are exactly nav.js:140/147, browse.js:228/658 and debug.js:533, so the WRITE half
+of the inventory is complete and correct â€” **but at least seven further sites match the plan's own
+`scrollTo` pattern and are unregistered**: `window.scrollTo(0, cur.scroll0)` at app.js:445, 1203 and 1228;
+the reveal watcher's REPLACEMENT of the API itself at app.js:1174 and its restore at app.js:1186; and the
+two calls of browse.js:845's local `scrollTo` helper at browse.js:860 and 862. Registered literally as
+specified, the gate is red the moment it lands, and the cheapest repair is to narrow the pattern â€” drop
+`scrollTo`, or exclude `app.js` â€” which removes `scrollIntoView`-class coverage, i.e. precisely the
+residual R-writer-enum names as the highest-value target for the next adversarial pass. **Required: state
+the derivation's SCOPING RULE before the baseline** â€” the inventory is of movers of an ELEMENT's vertical
+scroll, and `window`-targeted document scrolls are a separate registered class whose registration records
+why they cannot reach `#home` (window scroll is always 0 on the signed-in app views now that both `#home`
+and `#browse` are fixed â€” the reasoning already recorded at css:146-149) â€” **then complete the baseline
+against that rule, and give every entry an owner AND a one-line reason it cannot move `#home`.** The
+app.js:1173-1186 monkey-patch of `window.scrollTo` deserves its own entry: a gate that inventories an API
+while shipped code replaces that API at runtime must say so, or the next reader deletes the pattern.
+
+### F10 â€” Structural (defect) â€” "the writer set of `#home`'s vertical scroll is exactly one, BY CONSTRUCTION" over-claims what any textual gate can prove, and a live, textless mover exists
+Â§7's Identities row and Invariants (iii) both assert the writer set is one "by construction", and Â§4.3
+leans on that wording to convert the 2nd KILL's durable lesson "from judgment into a failing gate". A
+static derivation cannot support "by construction", and the gap is not hypothetical: **browser scroll
+anchoring moves `#home.scrollTop` with no API call and no text of any kind for a pattern to find.**
+`overflow-anchor` is not set anywhere in `css/app.css`, so it is at its `auto` default on `#home`, and
+`#home`'s content height genuinely changes underneath a scroll position â€” `home-screen.js` re-renders
+`#clRow` and `#raRow` and toggles `#dlSection` between hidden and shown (home-screen.js:52, 76-77,
+118-120), and app.js:1436-1437 clears both rows. A refresh landing while home holds a non-zero offset
+therefore adjusts that offset, parked or not, with nothing in `js/` to derive. This does NOT falsify
+INVARIANT P â€” post-fix the parked box is geometrically identical to the active box, so anchoring behaves
+the same in both states and the park stays scroll-neutral â€” and it is not a defect in the fix. It is a
+defect in the **claim**: R-writer-enum names "a scroll-moving API the gate's patterns do not name" and
+lists a descendant `scrollIntoView`, a focus scroll and a dynamic target, all of which are at least API
+calls; it does not name the one mover that needs no API at all and is demonstrably live. **Required:
+(i) state the invariant at the bound the gate actually proves** â€” the set of code paths that TEXTUALLY
+move `#home`'s vertical scroll is exactly one â€” and drop "by construction" from the Identities row,
+Invariants (iii), Â§4.3 and the handoff (StandardsDocument Â§7 within-document scrub: the phrase appears in
+four places); **(ii) register scroll anchoring in R-writer-enum as a NAMED non-textual mover, routed to
+device/judgment rather than to the gate.** Setting `overflow-anchor: none` on `#home` would close it but
+is a behaviour change outside this plan's scope â€” do not fold it in without a decision.
+
+### F11 â€” Weak (defect) â€” Â§4.1's loss expression drops the inner `max(0, â€¦)` that its own clamp formula carries
+Line 118 states the clamp correctly:
+`scrollTop_after = min(scrollTop_before, max(0, maxScroll_active âˆ’ (safe+51)))`. Line 120 and the headline
+then state the loss as `max(0, scrollTop âˆ’ (maxScroll_active âˆ’ (safe+51)))`, which omits the inner
+`max(0, â€¦)` and therefore yields a loss GREATER than `scrollTop` whenever
+`maxScroll_active < safe+51` â€” impossible, and exactly the short-library case the same paragraph
+describes correctly in prose. The exact expression is
+`loss = scrollTop âˆ’ min(scrollTop, max(0, maxScroll_active âˆ’ (safe+51)))`. The BOUND ("at most
+`safe+51`px") and the saturation claim are both correct under the exact expression and need no change; fix
+the two printed formulas (Â§4.1 line 120 and the headline paragraph, which restates it).
+
+### F12 â€” Weak (defect) â€” the Â§1 record row states a false specificity relation between `#home.parked` and `body.has-player #home`
+The V3 row (Â§1, the `.parked` cascade entry) says `bottom` cascades "from `#home` (or from
+`body.has-player #home`, equal specificity and later in source order)". The specificities are not equal:
+`body.has-player #home` is (1 id, 1 class, 1 type) and `#home.parked` is (1 id, 1 class, 0 types), so
+css:136 is HIGHER, not tied, and source order is not what decides it. The conclusion is unaffected â€”
+the two rules declare no property in common, so nothing turns on which would win â€” but the stated reason
+is wrong, and a wrong cascade reason in the record is what produced the two false cause statements this
+pass just replaced. State it as: css:136 has higher specificity than `#home.parked` and declares
+`bottom` and `padding-bottom`, neither of which `.parked` declares, so both apply to a parked home.
+
+### F13 â€” Weak (recommendation) â€” the headline and Status assert the bounded magnitude without the [UD] hedge Â§4.1 carries, and nothing records that M1 has never been observed
+Two calibration gaps that matter for how the device pass will be read.
+**(a)** The title and Status state the magnitude as settled ("The park loses `max(0, â€¦)` â€” at most
+`safe+51`px", "a bounded â‰¤`safe+51`px loss"), while Â§4.1 correctly marks the premise it rests on as [UD]:
+"whether WebKit conforms on that point is not measurable in jsdom and is device-owed." If WebKit does NOT
+retain the offset under `overflow: hidden`, the pre-fix loss is the FULL `scrollTop` and the headline's
+magnitude is wrong. **The FIX is robust to that outcome â€” deleting `overflow: hidden` closes that channel
+too â€” but the MAGNITUDE CLAIM is not**, and the two are stated with the same confidence. Hedge the
+headline to match Â§4.1, or state that the bound holds conditional on offset retention and that R-M1-cause's
+BEFORE reading is what settles it.
+**(b)** The only observation that exists is silent on M1. The Linnaeus probe records the reported case at
+`ghostY=0` â€” home at the top â€” with the shift persisting, and Â§1 of the probe itself notes that at
+`scrollTop=0` M1 contributes nothing. So M1 is a DERIVED defect that has never been observed, and the new
+magnitude does not conflict with the report because the report does not reach it. Recording that plainly
+matters: it makes R-M1-cause's before/after reading the FIRST observation of M1 rather than a confirmation
+of it, and it forecloses reading a small measured loss as evidence the fix failed.
+
+### F14 â€” Note (defect) â€” M1NOWRITE's natural mutant anchor is FIVE-way non-unique, the third live instance of the F3 hazard
+M1NOWRITE's declared mutant flips the abort finalize's `resetScroll: false` to `true` at app.js:1227. The
+substring `resetScroll: false` occurs five times in `js/app.js` â€” 1201 (the HELD abort path), 1227 (the
+intended site), 2625, 3127 and 3220 â€” with 1201 FIRST. Registered as the bare flip it would mutate the
+held path, and since M1NOWRITE's fixture takes the no-hold branch (`abortRender` is `'none'` for
+homeâ†’browse, swipe.js:186) the intended gate would never be mutated at all. Â§7.3's blanket "each must be
+confirmed unique at registration (now mechanically)" does cover it once MUTUNIQ lands, and this is a third
+independent instance of the hazard, which further justifies Â§10 sequencing the tooling remedy first. Worth
+naming rather than leaving to the tool: the disambiguating context is the whole statement including its
+`render: cur.finPlan.abortRender === 'rerender', ` prefix, which is unique.
+
+### F15 â€” Note (defect) â€” the Â§6 ledger credits M2ALIGN with a crossing it does not assert
+The ledger's fifth row gives `outgoing ghost capture ghostY` the verification "M2ALIGN cell plus the
+existing swipe suite". M2ALIGN builds the app-ghost and asserts the CLONE's `#library` padding; it makes no
+assertion about `ghostY`. The honest verification for that crossing is the existing swipe suite alone
+(`test/swipe-gesture.test.js:387-389` asserts the reveal's `ghostY=<n>`). The row's prose is honest â€” it
+exists to record that this plan REMOVES a consumer â€” so the fix is to drop `M2ALIGN` from that one cell.
+Small, but it is the same false-credit shape as my F1 and it sits in the ledger a future audit reads first.
+
+### F16 â€” Note (recommendation) â€” M1NAVWINS's mutant declares two expected killing cells without saying whether both must redden
+Â§7.1's M1NAVWINS row ends "expected killing cells M1NAVWINS and M1NOWRITE". Both would in fact redden on
+the additive design-revert: the appended restore writes `cur.ghostY` inside window B, which breaks
+M1NAVWINS's "zero writes in B, still 0" and also M1NOWRITE's "zero writes in B" (M1NOWRITE's VALUE
+assertion still passes, since the injected write restores the same seeded value it asserts). That is
+honest, but the sweep-reading rule the plan introduces â€” read the result against the declared expected
+killing cell â€” is ambiguous for a two-cell declaration. State whether the expectation is BOTH or AT LEAST
+ONE; a mutant that only its sibling cell kills is the masked-cell shape these declarations exist to expose.
+
+### F17 â€” Note (recommendation) â€” three small precision gaps around the park-recipe change
+- **`.browsepage.parked` divergence.** After M1, css:86 keeps `top: 0` and `overflow: hidden` while
+  css:98 has neither, and nothing says why. The asymmetry is correct (a `.browsepage` is in-flow and has no
+  `bottom` inset to inherit), but it is invisible at the edit site and "symmetrizing the two park rules" is
+  the obvious future edit. Ask Brunel for a one-line comment in `#home.parked` stating the invariant and
+  why `.browsepage.parked` does not share it.
+- **R-M1-flash should name the mechanism it wants looked at.** The risk currently says "what changes is
+  the parked box's height and its overflow". The concrete consequence is that the parked box's PAINTED
+  region changes â€” and, verified above, it changes toward warmth: post-fix the painted band equals the band
+  about to be revealed. So the device check is looking for a cover re-decode at the bottom edge of home
+  after an abort from a scrolled position, not a whole-view flash. Naming that is the difference between a
+  device pass that can fail and one that reports "looked fine".
+- **Â§7's Composition row covers only the player APPEARING mid-park.** A player *disappearing* mid-park
+  grows the box by 106px and does clamp. Post-fix that is identical for a parked and an active home, so it
+  is park-neutral and not a defect â€” state it, so the row's claim is complete rather than one-sided.
+
+### F18 â€” Note (recommendation) â€” expect at least one of `#24`'s three per-site mutants to be UNKILLABLE, and say what happens then
+All three `window.scrollTo(0, cur.scroll0)` sites write the DOCUMENT scroll, and `cur.scroll0` comes from
+`env.scrollY()`, which is always 0 now that both `#home` and `#browse` are fixed own-scroll views (the
+reasoning recorded at css:146-149). So each call is effectively `window.scrollTo(0, 0)`, and its removal is
+observable only through the harness's `window.scrollTo` call recorder (app-harness.js:266), not through any
+effect. Splitting `#24` into three entries will therefore produce three mutants whose killability depends
+entirely on whether a cell asserts the RECORDED CALL at that specific site â€” and the recovery site
+(app.js:445) has no such cell today. **A surviving mutant turns the sweep red with no instruction
+attached.** Say in Â§7.3 what the correct response is: either a cell that asserts the call at that site, or
+deletion of the vestigial call, or an explicit registration as known-inert â€” but not silent re-merging of
+the anchors, which would restore the false green the split exists to remove.
+
+## Coverage â€” the M1 re-stress (F8-F18)
+
+- **F8** (blocking) â€” gates M1PARKRANGE, the cause-level cell. Verified by running the cell as specified
+  against the POST-FIX stylesheet and confirming it FAILS on `z-index: 0` (it must pass), and by adding
+  `inset: 0` to `#home.parked` and confirming the allow-list form FAILS while the denylist form passes.
+- **F9** (blocking) â€” gates M1WRITERSET. Verified by running the derivation as specified over `js/` at
+  HEAD and confirming the registered set accounts for EVERY derived site, with the scoping rule stated
+  before the baseline rather than inferred from it.
+- **F10** (blocking) â€” no new cell; a claim-calibration defect plus a named residual. Verified by the
+  absence of "by construction" from the four places that currently assert it (Identities row, Invariants
+  (iii), Â§4.3, handoff) and by scroll anchoring appearing in R-writer-enum as a non-textual mover routed
+  to device/judgment.
+- **F11, F12** â€” no CI surface; two corrections inside the derivation's own statement (a formula, a
+  cascade reason). Verified by reading Â§4.1 and the Â§1 record row.
+- **F13** â€” no CI surface; a hedge on the headline/Status magnitude and one recorded fact (M1 is
+  unobserved). Verified against Â§4.1's own [UD] and the probe's `ghostY=0` case.
+- **F14** â€” no new cell; a registration detail that MUTUNIQ will catch mechanically once it lands, named
+  so it is not discovered as a red sweep.
+- **F15** â€” no CI surface; one cell name dropped from one ledger row.
+- **F16** â€” no CI surface; the sweep-reading rule for a two-cell mutant declaration.
+- **F17** â€” no CI surface; a source comment, the R-M1-flash observable, and a one-sided Composition claim.
+- **F18** â€” no new cell unless the answer chosen is "add one"; a stated response to an expected surviving
+  mutant.
+
+### Prediction â€” where this breaks in execution if built as written
+
+1. **M1PARKRANGE lands red on `z-index` and is repaired by deletion** (F8). Brunel writes the cell, it
+   fails on the very fix it is meant to lock, the second clause goes, and `inset: 0` becomes a silent way
+   to re-add the defect â€” the cause-level cell reduced to a single denylist assertion.
+2. **M1WRITERSET lands red on seven unregistered `scrollTo` sites and is repaired by narrowing the
+   pattern** (F9). `scrollIntoView` leaves the derivation, and the residual R-writer-enum calls the highest
+   value target for the next strike is the one the gate stops looking at.
+3. **"By construction" survives into the subsystem record** (F10), and the next session reads the writer
+   set as closed. A home refresh that re-renders the carousels while home holds an offset moves that offset
+   with nothing in `js/` to derive, and the gate is green over it.
+4. **The device pass reads a small measured loss as the fix having failed** (F13). Nothing records that M1
+   was never observed and that the bound is conditional on offset retention, so a before-reading that shows
+   the full `scrollTop` â€” the outcome the [UD] admits â€” is read as falsifying the derivation rather than as
+   the overflow channel the fix already closes.
+
+### Verdict â€” M1 re-stress: TEMPER (F8/F9/F10 blocking; the derivation and both deletions are sound)
+
+The V3 derivation HOLDS. Every link is in the shipped stylesheet, the cascade reading is correct where my
+own F4(b) was wrong, and the one load-bearing step nobody had checked â€” that no `#home` descendant sizes
+off the box height, so `scrollHeight` really is identical parked and active â€” is verified rather than
+assumed. `body.has-player`, a zero notch inset and a mid-park player transition all compose as claimed.
+The magnitude claim is right in its BOUND (at most `var(--safe-top) + 51px`, saturating rather than
+scaling with depth) and wrong in one printed FORMULA (F11), and it is stated more confidently than the
+[UD] premise underneath it warrants (F13). Both deletions are correct and the trade is the right one:
+`overflow: hidden` goes because keeping it would leave the whole fix resting on the single engine claim
+this campaign has already been wrong about twice, and because deleting it adds no input, scroll, clipping
+or warmth surface the active box does not already have; `top: 0` alone would be the looser change. The
+closure-by-removal argument is structural and holds, and both witness rejections are correct against
+shipped source.
+
+What is not yet safe is the coverage half, in the same place as every previous round: **M1PARKRANGE cannot
+pass on the fix it exists to lock (F8), M1WRITERSET's stated baseline is red at HEAD and its cheap repair
+removes the pattern that covers the plan's own named residual (F9), and the invariant those two cells carry
+is worded "by construction" when a live, textless mover of `#home.scrollTop` exists (F10).** All three are
+cheap, all three are the campaign's own generator â€” a claim credited to a crossing nothing drove â€” and all
+three are better found here than in the sweep. The two disclosed M2 edits are faithful to F1 and harmless;
+keeping them was right. M2 stays FORGE'd. The red `--page-bg` gradient (css:41) is untouched. Flash C is
+out.
+
+**The 4th Loki strike should PROCEED, and (iii) is the right plane â€” with a sharper target than the plan
+gives it.** The design half has no deferred write left to attack, so the interleaving plane is genuinely
+empty; but the DERIVATION plane is not, and within it (iii) is where the campaign's own lesson still has
+somewhere to land. The strike does not need to wait on F8/F9/F10 â€” none of them touches the derivation.
+Two concrete inputs for it, from this pass: **scroll anchoring is a mover of `#home.scrollTop` that
+requires no API call at all** (`overflow-anchor` unset anywhere in `css/app.css`, so `auto` on `#home`;
+`home-screen.js:52/76-77/118-120` and app.js:1436-1437 change home's content height under a live offset),
+which is strictly harder for M1WRITERSET to see than the `scrollIntoView`/focus/dynamic-target cases the
+plan lists; and the descendant-scroll cases the plan does list have NO shipped call site into `#home`'s
+subtree (the only `.focus()` calls are debug.js:432 and debug.js:571, on a textarea appended to
+`document.body`), so a strike aimed only at those is likely to return a held stone. Plane (i) is closed by
+this pass; plane (ii)'s short-library route is already named in the plan and its `overflow:hidden`-discard
+route is device-owed, not executable. **Aim the strike at (iii), and at scroll anchoring first.**
+
+VERDICT: TEMPER
