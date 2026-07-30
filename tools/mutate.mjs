@@ -825,6 +825,13 @@ const MUTATIONS = [
   // M2ALIGN's `from` is the POST-FIX line, so it could not be registered until the M2 fix
   // itself landed (registering it against the pre-fix `46px` line would either rot the
   // anchors gate or be refused as a no-op). One occurrence in js/swipe.js.
+  // PLAN-swipe-declone.md Stage 1 deleted this cell's original designated killer,
+  // test/ghost-clone-geometry.test.js, along with the retired HOME-source path it drove
+  // (plan §12 item 16) — but the `53px` constant this mutation targets stays load-bearing
+  // for the still-live browse->browse ghost until Stage 2 (plan §12 item 5), so the
+  // mutation was left with no killer. test/ghost-clone-alignment.test.js restores a
+  // browse->browse-scoped guard for the interim; DELETE both it and this entry together
+  // with the constant in Stage 2 (plan §12 items 5, 16, 17).
   { name: 'M2ALIGN: the ghost builder reverts to the vestigial in-flow 46px, misaligning the clone content-top from the real fixed-inset content-top (-> M2ALIGN aligned-value test)',
     file: 'js/swipe.js',
     from: "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '53px';",
