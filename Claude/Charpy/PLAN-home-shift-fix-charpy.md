@@ -955,3 +955,324 @@ this pass; plane (ii)'s short-library route is already named in the plan and its
 route is device-owed, not executable. **Aim the strike at (iii), and at scroll anchoring first.**
 
 VERDICT: TEMPER
+
+---
+
+## RE-STRESS after the 4th KILL's reversal and the 5th strike's HELD_STONE â€” plan HEAD `8d47465` (2026-07-29)
+
+Scope: the one-deletion M1 (Â§4.1 calibration, Â§4.2's restated three-axis INVARIANT P and THE REVERSAL,
+Â§7.1/Â§7.4's two-polarity M1PARKRANGE, Â§7.5's re-derived writer-set baseline, Â§7.3's five non-unique
+anchors, Â§8's new risk rows, Â§9's `R-M1-anchor`), plus whether the 5th strike is ingested. **M2's
+mechanism stays FORGE'd and its two disclosed text edits stay adjudicated faithful â€” not re-opened.**
+Flash C out; the red `--page-bg` gradient (css:41) untouched; read-only throughout.
+
+**âš ï¸ MY OWN Â§B CALL WAS FALSIFIED BY EXECUTION, and I record it before anything else.** I wrote *"`top: 0`
+alone would be the looser change, not the tighter one. Delete both."* The 4th strike executed the
+counterexample in real Blink: a non-none `transform` on a scroll container suppresses every scroll-anchoring
+adjustment, `overflow: hidden` un-suppresses it, so the two-deletion park stops anchoring and produces a
+measured **âˆ’80px reveal jump where shipped code measures 0px**. My Â§B stressed five axes (input paths,
+user-scroll paths, `overflow-x` parity, the warm-cover purpose, the retention [UD]) and every one of those
+readings still holds â€” the error was that **anchoring participation was not an axis I had, and I concluded
+"no new surface" from a survey I had no reason to believe was complete.** The second error is worse and is
+shared with the plan: I filed an engine claim as device-owed when a desktop Blink â€” the engine of a shipped
+target â€” answers it in minutes. The correction I take forward: *"I found no new surface"* is only as strong
+as the enumeration behind it, and an engine question is executable before it is device-owed. Â§4.2's THE
+REVERSAL states this accurately and I have no correction to it.
+
+### A. The third axis, with it now on the table â€” the one-deletion form satisfies P, and the reversal is sound rather than deferential
+
+**Axis by axis, each now with execution behind it rather than argument:**
+- **Axis (i) â€” scroll range, container status, content width, block padding.** Closed by the `top: 0`
+  deletion alone and **independently of `overflow`**, exactly as Â§4.2 claims. The 5th strike's control (c)
+  measured parked `clientHeight`/`scrollHeight`/`maxScroll` byte-equal to active on both content sizes with
+  the 71px delta gone, and shipped clamping âˆ’71 where the fix holds. My own source verification from the
+  previous pass (the cascade, CSS 2.1 Â§10.6.4, and the check that no `#home` descendant sizes off the box
+  height) is now corroborated numerically. **Held.**
+- **Axis (ii) â€” anchoring participation.** Preserved by retaining `overflow: hidden`. The 5th strike ran the
+  exact adopted fourth form: 520/520 with a **0px** reveal jump, identical to shipped, **with the
+  two-deletion form measuring âˆ’80px in the same run** â€” so the instrument demonstrably sees the fracture it
+  hunts, which is the property that makes a HELD_STONE worth anything. Anchor *selection* matched active on
+  all six mutation shapes at exact integers. **Held.**
+- **Paint position and input inertness** â€” the only two things P permits the park to change â€” are unchanged
+  by a `top` deletion on a box translated `-101vw` at `z-index: 0` with `pointer-events: none`. **Held.**
+
+**Is `overflow: hidden` genuinely load-bearing, or is there a cleaner lever the plan skipped?** I looked for
+one and there is none. `overflow-anchor` is the spec's own lever and it is **executed not-a-repair** â€” the
+4th strike added `overflow-anchor: none` to the park rule and the âˆ’80px jump survived, because the shipped
+behaviour requires anchoring to RUN while parked and `none` is a second way of stopping it; and there is no
+inverse, because `auto` is already the default and the suppression sits outside the spec's text, so no
+spec-level property can force participation back on. The plan's disposition (Â§8 R-writer-enum's last
+bullet: closed, not open) is correct and correctly reasoned. **So `overflow: hidden` is the empirically
+found counterweight and there is no cleaner one.** The reversal is sound on its own merits, not by deference
+to the strike: I can reconstruct why the two-deletion form must fail from the isolated mechanism, and the
+plan's Â§4.2 statement of it matches what was executed.
+
+**And `overflow`'s requirement is stronger than the plan claims â€” it is not Blink-only.** Â§4.2 and Â§7.4
+Tier 0 ground the requirement entirely in the Blink anchoring quirk. But the declaration's **value** is also
+what keeps the parked box a scroll container at all, and that is spec-mandated and cross-engine: CSS
+Overflow 3 gives `hidden` a scroll container and explicitly denies one to `clip`. A non-scroll-container
+parked box has no scroll offset, so a value replacement breaks **axis (i)** on WebKit too â€” the very axis M1
+exists to fix, on the only platform that ships. The plan states neither this nor its consequence (F20).
+
+### B. `R-M1-anchor` â€” the observable can fail, but the row has no reachability witness (F21)
+
+The row states a real, failable observable (the watched content sits at the same viewport position across
+the ghostâ†’real swap; a jump is visible) and it is correctly engine-scoped: WebKit implements no anchoring,
+so an iOS-primary pass reports clean regardless â€” which the plan names as how every gate in this campaign
+missed this. Â§9's closing "engine coverage is a REQUIREMENT of this gate, not a detail" is the right
+structural response. **The conflict with R-M1-cause is handled on one side only:** R-M1-cause requires no
+intervening re-render and now carries an instrument for it (count `renderCarousel`/`renderDownloaded` and
+discard any bracketed pair); R-M1-anchor requires *exactly one* intervening re-render and carries only a
+statement that the passes must not be merged. The engine split (iOS vs Android) does most of the separation
+work, so the merge hazard is small â€” the unwitnessed positive condition is the real gap, and it is F21.
+
+### C. The two-polarity cell â€” the relaxation guards are strong on removal and narrowing, and absent on replacement
+
+Â§7.4 carries five independent guards against Tier 0 being quietly relaxed: the polarity is called out in
+prose as unusual; acceptance test (5) is the polarity test with a REQUIRED-naming message; test (6) refuses
+the one-axis narrowing on the no-variant rule; Â§4.2's RECOMMENDATION explicitly carves `overflow: hidden`
+out of the "delete the restating declarations" cleanup; and Â§10 step 3(b) requires a source comment at the
+edit site saying it is required and why. Â§306 also settles the distinguishability question head-on â€” Tier 0
+is deliberately not folded into anti-vacuity guard (ii), because "someone removed the anchoring
+counterweight" and "the park itself is gone" must fail separately. The three failure reasons stay
+distinguishable and each has a named message. **On the question asked â€” can an author satisfy half the
+cell? â€” yes, and the guard that catches it is not an acceptance test.** A cell built as a pure allow-list
+passes tests (1)-(4) and fails only (5) and (6), both of which are disciplines the same author writes. The
+structural catch is **registered mutant M1PARKRANGE-b surviving the sweep**, which is only readable once
+Â§7.3's remedy makes the sweep name the killing cell â€” so Â§10's step-1 sequencing is load-bearing for this
+cell specifically, not just for the repo generally (F26). **What no guard covers is a value REPLACEMENT**
+(F20): every one of the five is keyed to removal or narrowing.
+
+### D. F9's re-derived baseline â€” complete against S1-S4 as far as I can independently derive, and it caught what I missed
+
+I re-derived over `js/` and reproduce the plan's 14 entries exactly: Class A's five `scrollTop` assignments
+(nav.js:140, nav.js:147, browse.js:228, browse.js:658, debug.js:533), Class B's four element call sites
+(browse.js:845 `scrollIntoView`, browse.js:860 and 862 calling it, virtuallist.js:304 through the injected
+seam), Class C's five `window` sites (app.js:445, 1203, 1228, and the 1174/1186 replacement-and-restore of
+the API itself). Everything else my grep surfaces is a READ (browse.js:71/252/654/656, app.js:1316/1323,
+app.js:2934, scrollbar.js:58/60, swipe.js:289/290, the virtuallist internals) or an S2 horizontal site
+(swipe.js:217, app.js:2889). **`js/vendor/eruda.js` is the one my own previous derivation missed** â€” my grep
+did surface the file and reported its match as an omitted long line, and I did not follow it up. The plan's
+lesson stands as stated: running the derivation beats writing the baseline, and the miss demonstrates it.
+
+**S1-S4 are the right boundaries.** Each excludes by a stated decision rather than by pattern convenience:
+S3 registers the `window` class instead of dropping `scrollTo` (which was exactly the cheap repair that
+would have blinded the gate), S2 registers the horizontal sites rather than filtering them, and S4 puts the
+non-textual remainder outside the gate *by construction* with a named residual. The `android/build/assets`
+and `.claude/worktrees` exclusions are correct and non-obvious â€” a glob over the build output would
+double-count every entry. The both-directions comparison (unregistered-derived FAILS, rotted-registered
+FAILS) is what stops the inventory growing monotonically, and Â§7.5's five stated "cannot cover" items are
+the honest bound rather than a shrunk one. **Entry 6's caveat is the right call** â€” registering a site whose
+target is resolved by a runtime-built selector, and saying the derivation cannot prove the target, puts S4's
+boundary inside the registered set where it is visible.
+
+**The `js/vendor/**` exclusion is sound in direction and keyed to the wrong invariant (F25).** Failing the
+gate if the directory gains a second file is a clever structural guard on the exclusion's *stated reason*
+("it is one vendored console") â€” but that reason is falsified equally by an in-place `eruda.js` upgrade,
+which a file-count check cannot see. Low risk in fact (eruda writes inside its own injected overlay), so
+this is a Note, not a blocker.
+
+### E. The 5th strike is not ingested (F19), and its one new fact is not folded (F20)
+
+The strike committed at `8d47465`; the plan's last content commit precedes it. So the plan still routes work
+to a gate that has already returned: Â§1's authority table has **no row for
+`STRIKE-home-shift-m1-adopted.md`**, Â§8's gate-rigor status describes the 5th strike as pending, Â§382 orders
+"the 5th strike FIRST, then the re-stress", Â§404 lists "does the EXACT adopted form anchor like shipped?" as
+"the one open question that can still change the fix", and Â§405's Next owner is "Loki â€” ONE narrow 5th
+strike". All five are stale, and the plan's own three predictions for that strike are now answered green.
+
+### F19 â€” Structural (defect) â€” the 5th strike is absent from the plan's authority table and from its sequencing, so the plan routes to a gate that has already returned HELD_STONE
+`Claude/Loki/STRIKE-home-shift-m1-adopted.md` (HEAD `8d47465`) executed all three questions Â§8 set for it â€”
+(1) the adopted form anchors like shipped (520/520, 0px, against âˆ’80px for the two-deletion form in the same
+run), (2) anchor selection matches active on all six mutation shapes, (3) the geometry table shows a zero
+`clientHeight` delta and no park clamp â€” and returned HELD_STONE with four controls green including a
+same-run reproduction of the kill row. **None of that is in the plan.** Â§1's defining-records table, which
+is the plan's authority ledger and the first thing a downstream seat reads, has rows for the 1st through 4th
+strikes and none for the 5th; Â§8's gate-rigor status, Â§382's ordering, Â§404's open question (1) and Â§405's
+Next owner all still describe it as the pending gate. A reader of the plan alone concludes the fix's only
+fix-changing question is open and commissions a sixth strike on a closed plane â€” and, worse, cannot tell
+that Â§8's stated condition *"if (1) fails, the fix has no admissible form left in this plan's scope and M1
+returns to design"* has been discharged. **Required: add the 5th strike as a defining-records row with its
+verdict and the three executed results; move question (1) from Open to CLOSED-by-execution; update the
+gate-rigor status, Â§382's ordering and Â§405's Next owner to reflect that both gates have now run.** This is
+D1 and the HEAD-holds-current-truth rule: the plan is materially stale on its own authority table while
+carrying a PLAN_READY status.
+
+### F20 â€” Structural (defect) â€” the strike's `overflow: clip` finding and its explicit directive to Â§7.4 are un-folded, and Tier 0's rationale is framed Blink-only when the requirement is cross-engine
+The strike's Â§6 recorded a third perturbation beyond its commission: **`overflow: clip` for `overflow:
+hidden` BREAKS the axis twice over** â€” in-park `scrollTop` collapses to 0 (the box is no longer a scroll
+container), anchoring blacks out, and the reveal jumps âˆ’80px, i.e. the killed two-deletion behaviour returns
+wearing a "modern CSS" edit; the strike notes the offset resurfaces at reveal, so `scrollTop` *looks*
+preserved after un-park while the reveal still jumped, which makes it harder to diagnose than the form it
+replaces. The strike states the consequence as a directive: *"Consequence for Â§7.4: Tier 0's required-present
+entry must stay literal on `overflow: hidden`."* **The word `clip` appears nowhere in the plan** (its one
+occurrence, Â§3 line 91, is unrelated M2 prose about clone clipping). Four separable gaps:
+
+- **(a) Tier 0 rejects `clip` mechanically but never says so.** As specified Tier 0 requires the longhands
+  `overflow-x: hidden` and `overflow-y: hidden` *with this value*, so `clip` fails on value inequality â€” the
+  cell does go red. But `clip` is named nowhere, there is no acceptance test for it (the six stop at the
+  one-axis narrowing), and **the failure message specified for test (5) is "naming `overflow` and saying it
+  is REQUIRED"** â€” which is actively misleading for a `clip` edit, because the declaration *is* present. An
+  author who sees `overflow: clip` present and a red saying `overflow` is required reads the cell as buggy,
+  and the cheapest repair is to widen Tier 0 to "a clipping overflow value is present" â€” which admits the
+  killed form. **Required: name `clip` explicitly as inadmissible, add it as acceptance test (7), and
+  specify a distinct failure message for a wrong VALUE versus an absent declaration.**
+- **(b) The requirement is framed as Blink-only, which invites its deletion on the primary platform.**
+  Tier 0's "Why required" cites only the executed Blink anchoring chain, and Â§9 says WebKit implements no
+  anchoring. Together those read as: this declaration buys nothing on iOS. That is a false and very
+  reachable inference. **`overflow`'s value is also what makes the parked box a scroll container**, and CSS
+  Overflow 3 mandates that cross-engine â€” so a non-scroll-container value collapses the in-park offset and
+  breaks **axis (i)** on WebKit as well, defeating the fix on the platform that ships. **Required: state the
+  cross-engine, spec-grounded half of the reason beside the Blink-measured half**, so the requirement does
+  not read as dead weight wherever anchoring is absent.
+- **(c) There is an approving in-repo precedent for exactly the fatal edit, sixty lines below the park
+  rule.** `css/app.css:161-165` carries `.app { overflow-x: clip; }` under a comment arguing *for* `clip`
+  over `hidden` on the ground that **"clip doesn't make .app a scroll container or a containing block"** â€”
+  the very property that is fatal on `#home.parked`. A future editor tidying this file has a documented
+  house argument pushing them toward the killed edit, and Â§10 step 3(b)'s required source comment currently
+  covers only *why `overflow: hidden` is required*, not *why the `clip` reasoning at css:165 does not
+  transfer*. **Required: extend the step-3(b) comment to say `clip` is not a substitute and why**, in the
+  same rule the next editor is reading.
+- **(d) Every existing guard is keyed to removal or narrowing, none to replacement.** M1PARKRANGE-b mutates
+  a *deletion*; test (6) mutates a *narrowing*; Â§4.2's carve-out warns against *sweeping it up*. A value
+  replacement passes through all of them and is caught only by Tier 0's value comparison â€” which is the one
+  guard (a) shows is most likely to be relaxed. The mutant set should carry the replacement shape too.
+
+### F21 â€” Structural (defect) â€” `R-M1-anchor` is the only coverage for INVARIANT P's third axis and has no reachability witness, so it can report clean for the wrong reason
+The protocol is a race: open with a cached library so the background revalidate is in flight, scroll to
+mid-range, begin a homeâ†’Books swipe, **"and abort it while the revalidate lands and repaints the
+carousels."** Nothing in the row confirms the repaint actually landed inside the park window. If the
+revalidate resolves before the swipe starts or after the reveal, the observable is 0px â€” a **pass, for the
+environment's reason rather than the fix's.** That is precisely the defect class this plan spends Â§7.2 on
+("a no-write oracle is satisfied perfectly by a fixture that never arrives") and makes **mandatory** for
+both write-observation cells; the one row carrying an axis no CI cell can cover is the one place the
+requirement is not imposed. It is also the campaign's own generator in its purest form â€” a claim credited to
+a crossing nothing drove â€” on the row the 4th KILL exists to have created.
+
+**Required: give the row the mirror of the instrument R-M1-cause already has.** R-M1-cause counts
+`renderCarousel`/`renderDownloaded` executions between its two readings and **discards** any pair that
+brackets one; R-M1-anchor must **require** exactly that bracket â€” confirm at least one carousel repaint
+executed between the park and the reveal, from the PBDebug CACHE/`onFresh` logging cited one row above, and
+discard any run that does not. Without it the row cannot distinguish "the parked box absorbed the mutation"
+from "no mutation arrived", and a clean report is unfalsifiable. Two supporting notes: the strike's
+`onFresh` (home-screen.js:124) is the right mutator to drive because it is the highest-frequency one in the
+first seconds of a cached open, and the strike's clean-hands note â€” that a straddling-block shrink jumps
+âˆ’80px in *every* state including active shipped code â€” means the row must also state which mutation shape it
+is driving, or a tester who happens to shrink a straddling block will read a park-independent engine
+behaviour as a regression.
+
+### F22 â€” Weak (defect) â€” Â§4.2's reason that "the transform cannot be given up" is under-argued, and as written it hands a future editor a route back to the killed form
+Â§4.2 justifies the transform's permanence with *"the transform is what puts the box off-screen, so it is the
+one park effect that cannot be given up."* That is not sufficient on its own: `left: -101vw` / `right:
+101vw` would also put the box off-screen with no transform at all, and a box with no transform is not in the
+suppressing state, so an editor following the plan's own logic can conclude that swapping the transform for
+inset offsets makes `overflow: hidden` unnecessary â€” reopening the two-deletion form by a different door,
+and doing it while believing they are applying Â§4.2. **The load-bearing reasons are elsewhere in the plan
+and are not invoked here:** the parked box's off-screen placement must be a compositing transform rather
+than a layout offset because the `#home` layer contract (css:104-112) is what keeps the reveal from
+demoting the layer â€” the abort-flash saga â€” and because Â§2 STAYS forbids shipping a variant of a
+device-confirmed form (the `translateZ(0)`-for-`will-change` substitution flashed on device on exactly that
+kind of spec argument). **State those two reasons at Â§4.2 instead of the off-screen one**, so the axis-(ii)
+argument rests on the constraint that actually pins the transform.
+
+### F23 â€” Weak (defect) â€” the non-unique-anchor counts contradict each other in three places
+Â§7.3's heading and lead are correct at **five** ("FIVE NON-UNIQUE ANCHORS â€¦ Five of five anchors inspected â€¦
+two already-live registrations and three this plan is about to register"), but the same paragraph then
+reasons from **"at a 3-of-3 rate"** and **"these three entries"** / **"Re-anchoring the three"**, Â§267's list
+header reads **"Re-anchor all three"** over four bullets covering five anchors, and Â§403's Decisions line
+states **"three of three anchors inspected were non-unique."** The five-count is the right one (`#24`, `#42`,
+M1NOWRITE's `resetScroll: false`, and both M1PARKRANGE mutants). The rate is load-bearing prose â€” it is the
+evidence for making disambiguating context the default form and for sequencing the remedy first â€” so a stale
+denominator weakens the argument it exists to carry. StandardsDocument Â§7 within-document scrub: fix all
+four occurrences. (Â§370's "two registered mutations are non-unique" is correct and should stay â€” its scope
+is the already-live registrations only.)
+
+### F24 â€” Note (recommendation) â€” fold the strike's two robustness rows, which NARROW `R-M1-anchor-quirk` from a vague obligation to a one-value check
+The strike executed two further perturbations of the adopted form and both HELD at 0px:
+`translate3d(-101vw,0,0)` substituted for `translateX(-101vw)` (robust to the transform function form) and
+`will-change: auto` with the hint removed (**`will-change` is not load-bearing for anchoring**). Its
+conclusion: *"The drift surface for R-M1-anchor-quirk is narrowed: the transform's function form and
+`will-change` are not load-bearing; the `overflow` VALUE is."* R-M1-anchor-quirk currently describes the
+whole equivalence as driftable, which makes its standing re-measurement obligation open-ended and therefore
+likely to be skipped. Folding the narrowing turns it into a single cheap check on one declaration's value,
+and it is worth recording separately that `will-change`'s retention is now justified **only** by the
+`.256` device-validated flash form (Â§2 STAYS) and not by the anchoring axis â€” so nobody later defends it
+with the wrong reason.
+
+### F25 â€” Note (recommendation) â€” S1's `js/vendor/**` exclusion guards addition but not replacement
+The guard "the gate must FAIL if `js/vendor/` gains a second file" correctly ties the exclusion to its
+stated reason ("it is one vendored console"), but that reason is falsified just as completely by an in-place
+`eruda.js` upgrade that adds scroll writes, which a file-count check cannot see. Either pin the exclusion to
+the file's identity (a recorded size or hash, or the vendored version string) or state that content drift is
+accepted, with the reason (eruda injects and writes inside its own overlay, never into `#home`) â€” the same
+standard Â§7.5 already applies to every baseline entry's "cannot reach `#home`" line.
+
+### F26 â€” Note (recommendation) â€” say which guard actually catches a half-built M1PARKRANGE
+A cell built as a pure allow-list â€” the natural reading of "M1PARKRANGE is the permission cell" â€” passes
+acceptance tests (1)-(4) and fails only (5) and (6), which are disciplines written by the same author who
+omitted Tier 0. The guard that catches it structurally is **registered mutant M1PARKRANGE-b surviving the
+sweep**, and that is only readable once Â§7.3's remedy makes the sweep name the killing cell. Worth stating
+at Â§7.4, because it means Â§10's step-1 sequencing is load-bearing for this cell in particular and not only
+for the repo's mutation results in general.
+
+## Coverage â€” the post-reversal re-stress (F19-F26)
+
+- **F19** (blocking) â€” no CI surface; a defining-records and sequencing correction. Verified by the 5th
+  strike appearing as an authority row with its verdict, and by Â§404's question (1) reading CLOSED.
+- **F20** (blocking) â€” gates M1PARKRANGE. Verified by a seventh acceptance test: with `overflow` REPLACED by
+  `clip` the cell must FAIL with a wrong-VALUE message distinct from the absent-declaration message; and by
+  the step-3(b) source comment naming `clip` and why css:165's reasoning does not transfer.
+- **F21** (blocking) â€” gates `R-M1-anchor`, which is the sole coverage for INVARIANT P's third axis.
+  Verified by the row requiring a counted carousel repaint bracketed between the park and the reveal, and by
+  naming the mutation shape it drives.
+- **F22, F23** â€” no CI surface; a substituted justification at Â§4.2 and a four-place count scrub.
+- **F24, F25, F26** â€” no CI surface; a narrowed drift surface, an exclusion keyed to identity rather than
+  count, and a stated guard attribution.
+
+### Prediction â€” where this breaks in execution if built as written
+
+1. **Someone writes `overflow: clip` in the park rule** (F20), reading css:165's approving comment as house
+   style. Tier 0 goes red with a message saying `overflow` is REQUIRED while the declaration is plainly
+   present, the red is read as a cell defect, Tier 0 is widened to "a clipping value is present", and the
+   âˆ’80px reveal jump ships â€” the killed form returning through the one door no guard watches.
+2. **`R-M1-anchor` reports clean on the first Android pass** (F21) because the revalidate landed outside the
+   park window, the axis the 4th KILL exists to protect is recorded as device-confirmed, and the next
+   regression on it starts a fresh investigation with a green gate in the record.
+3. **A sixth strike is commissioned on the adopted form** (F19), because the plan's own Open-questions list
+   still names it as the one question that can change the fix.
+4. **An editor swaps the transform for inset offsets and deletes `overflow: hidden`** (F22), following
+   Â§4.2's stated reason correctly to the two-deletion behaviour, and the abort flash returns alongside it.
+
+### Verdict â€” post-reversal re-stress: TEMPER (F19/F20/F21 blocking; the fix's SHAPE is now settled and nothing here touches it)
+
+The one-deletion form is right, and it is the best-evidenced design this campaign has produced. Axis (i) is
+closed by the `top: 0` deletion and measured byte-equal; axis (ii) is closed by retaining `overflow: hidden`
+and measured 0px against âˆ’80px for the retired form in the same run; the reversal reasoning holds on its own
+merits rather than by deference â€” I looked for a cleaner lever on anchoring participation and there is none,
+because `overflow-anchor: none` is executed not-a-repair and the suppression sits outside the spec, so no
+spec property can force participation back on. Â§4.1's calibration is now the most honest section in the
+plan: the geometry is executed-exact, the retention [UD] is explicitly HALF-settled with the WebKit branch
+named as a channel this fix deliberately leaves open, and the pre-emptive naming of the two ways a device
+log will be misread is exactly right. Â§7.4's inversion to an allow-list is correct and its Tier 0 polarity
+is well defended against the two failure modes it anticipates. Â§7.5's baseline is complete against a stated
+rule and caught a file my own derivation missed.
+
+**The three blockers are all about LOCKING and OBSERVING the fix, not about whether it is right.** The plan
+has not ingested the gate that cleared it (F19), so it routes to a completed strike and reads its settled
+question as open. The strike's one free finding â€” `overflow: clip` breaks the axis twice over, with an
+explicit directive to Â§7.4 â€” is un-folded (F20), and that is the serious one: it is a live re-break path on
+the single load-bearing declaration, the requirement is framed Blink-only when its value is cross-engine
+and spec-mandated, every existing guard watches removal and narrowing rather than replacement, and the repo
+carries an approving argument for the fatal edit sixty lines below the rule. And the device row that is the
+*only* coverage for the axis the 4th KILL opened has no reachability witness (F21), so it can report clean
+for the environment's reason â€” the campaign's own generator, on the row created to close it. All three are
+cheap; none requires a design change.
+
+**The sequencing the coordinator names is correct and I would not change it:** the tooling remedy first
+(every mutation result, M1PARKRANGE-b included, is unreadable until it lands and F26 makes that specifically
+load-bearing for this cell), then the red cells, then the CSS edit and the M2 measurement. **No sixth strike
+is warranted** â€” the design plane is closed by execution on all three axes, and F19-F21 are review-owned
+corrections rather than promises to break. M2 stays FORGE'd. The red `--page-bg` gradient (css:41) is
+untouched. Flash C is out.
+
+VERDICT: TEMPER
