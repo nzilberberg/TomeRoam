@@ -435,9 +435,11 @@ mutations: `#24` ("abort stops restoring the starting scroll") has 3 occurrences
 the very lines M1 touches; makers must re-anchor it per-site.
 
 **M1 RE-DERIVED → CSS-ONLY, and Charpy TEMPER #2 (2026-07-29, plan `afe54b8`, casebook `5526fd9`).** Rather than
-build Loki's ownership witness, Vitruvius attacked the CAUSE (V3 above) — so **M1 is now TWO CSS DELETIONS:
-remove `top: 0` and `overflow: hidden` from `#home.parked`** under **INVARIANT P** (*parking `#home` may change
-only where the box paints and whether it takes input — never its scroll range or scroll-container status*);
+build Loki's ownership witness, Vitruvius attacked the CAUSE (V3 above) — so **M1 became CSS-ONLY: at this
+point TWO deletions, `top: 0` and `overflow: hidden`, from `#home.parked`** (⚠️ **the SECOND deletion was later
+KILLED by the 4th strike — M1 is now ONE deletion; see the 4th-strike paragraph below**) under **INVARIANT P**
+(*parking `#home` may change only where the box paints and whether it takes input — never its scroll range or
+scroll-container status*; since restated over a THIRD axis, below);
 `will-change: transform` retained verbatim in both rules. **No restore, NO DEFERRED WRITE — so all three Loki
 kill classes are unreachable by CONSTRUCTION** (no record to go stale K1, no gate to mis-scope K2, no reveal
 ownership to prove K3). On Loki's own K3 interleaving the finalize makes no scroll write, so the Home tap's
@@ -450,7 +452,9 @@ restore back, promote W-B with the bump inside `setView` — but re-derive the l
 **Charpy verdict: design half SOUND** (derivation holds; **delete BOTH** — the `overflow` deletion adds no new
 surface since a `hidden` box is already a scroll container already scrolled by `scrollIntoView`/focus reveal,
 `overflow-x` computes to `auto` in both states, and covers-warm rests on being painted, not on overflow;
-`top: 0` alone is the LOOSER change). **3 blocking coverage defects (F8/F9/F10):** **F8** `M1PARKRANGE`
+`top: 0` alone is the LOOSER change). ⛔ **That "delete BOTH" call is FALSIFIED BY EXECUTION — do not re-cite it**
+(4th strike, below): the review stressed every axis then on the table and the axis that mattered, scroll-anchoring
+participation, was on no one's table. **3 blocking coverage defects (F8/F9/F10):** **F8** `M1PARKRANGE`
 **cannot pass on the fix it exists to lock** — its second clause demands every retained declaration be absent
 from `#home` or byte-identical, but `.parked` keeps `z-index: 0` vs `#home`'s `z-index: 20` (and §4.2 says keep
 it); dropping that clause is the cheap repair but it is the only half that stops `inset: 0` re-adding the
@@ -472,6 +476,42 @@ line 118 carries, over-stating the short-library case) → **4th Loki strike, re
 highest-value plane** (it moves the observable with NO API call and is demonstrably live); the descendant-scroll
 cases the plan lists have no shipped call site into `#home`'s subtree, so a strike aimed only there likely
 returns a held stone → Curie + Brunel.
+
+**⭐⭐ HOME-SHIFT M1 — LOKI KILL #4 (2026-07-29), `STRIKE-home-shift-m1-derivation.md` (`f63414a`), and the fix
+NARROWED TO ONE DELETION (plan `0925e7f`, plan gate exit 0). The strike VALIDATED the derivation and killed only
+the SECOND deletion.** Executed in a real Blink engine (HeadlessChrome 150, the Android WebView APK's engine
+family), controls green first. **HELD, numerically exact:** the whole V3 cascade — parked `clientHeight` = active
++ 71px (`safe+51` with the vars pinned), the bottom-of-range clamp of exactly 71px surviving the un-park,
+mid-range park losing zero, the short-library clamp (649 → 578 pre-fix, zero post-fix) — plus the [UD] retention
+premise's **Blink branch: an `overflow: hidden` box RETAINS its offset.** **BROKE:** **a non-none `transform` on a
+scroll container SUPPRESSES every Blink scroll-anchoring adjustment, and `overflow: hidden` UN-SUPPRESSES it**
+(isolated: transform alone on- and off-screen suppresses; `pointer-events`, `z-index`, `overflow: hidden` alone
+are each anchoring-inert). So the SHIPPED park anchors identically to an active home and the two-deletion park
+anchors not at all → a home content mutation landing mid-park (`onFresh` background revalidate,
+home-screen.js:124 — the highest-frequency mutator in the first seconds of every cached open) then abort →
+**measured −80px reveal jump where shipped code measures 0px.** `overflow-anchor: none` in the park rule is
+executed **NOT a repair** (the jump survives it) — it is a second way of stopping anchoring, not of restoring it.
+**Vitruvius response, all folded:** (1) **the fix is now ONE deletion — `top: 0` goes, `overflow: hidden` STAYS**,
+reclassified from vestigial to LOAD-BEARING (the park cannot drop its transform, so `overflow: hidden` is the
+counterweight that keeps anchoring running); the reversal of Charpy's "delete both" is recorded traceably in the
+plan §4.2. (2) **INVARIANT P restated over THREE axes** — paint position + input inertness only; never the scroll
+range, the scroll-container status, the content width, the block padding, **or scroll-anchoring participation.**
+(3) **`M1PARKRANGE` gains Tier 0 — `overflow-x/y: hidden` REQUIRED PRESENT**, the first cell in this campaign with
+INVERTED polarity (it must FAIL on removal AND on a narrowing to one axis), plus a second mutant, six acceptance
+tests, and both anti-vacuity guards kept. Cell count stays SIX; mutants become SEVEN. (4) **New device row
+R-M1-anchor** (mid-park mutation → abort → reveal, **Android WebView/Blink ONLY** — WebKit implements no scroll
+anchoring, so iOS cannot exhibit it and an iOS-primary pass reports clean regardless). ⛔ **NO CI cell can cover
+this axis — jsdom implements no anchoring; a second §7.2 prohibition now forbids writing one.** (5) **The price
+is stated, not hidden: keeping `overflow: hidden` leaves the retention [UD] OPEN on WebKit** (R-M1-retention) — if
+iOS discards the offset on the flip, M1 is not fixed there, and re-adding the second deletion is NOT an admissible
+answer. ⭐ **Durable lesson (the 4th strike's own):** *an engine-behaviour claim a unit harness cannot execute is
+NOT thereby device-owed — a real desktop engine sits between the harness and the device, and "the same in both
+states" claims are exactly what it kills cheaply.* Also: the plan NAMED anchoring as the sharp target and then
+reasoned past it — naming a residual is not driving it. **NEXT: ONE narrow 5th Loki strike on the EXACT adopted
+form** (transform + `overflow: hidden` without `top: 0` was never executed — a variant of a validated form is not
+validated; the strike's instrument is reproducible from its own §3) → **Charpy re-stress of this revision** (its
+own call was falsified, and the mixed-polarity cell is new) → Curie + Brunel. **Not gated by either: the M2 half,
+the §7.3 tooling remedy, and the five cells other than M1PARKRANGE.**
 
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
