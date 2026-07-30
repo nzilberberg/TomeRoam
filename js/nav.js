@@ -47,20 +47,16 @@ const Nav = (() => {
     npOpen = v === 'nowplaying';
     const optOpen = v === 'options';
     const subOpen = isSub(v);
-    // The Options hub and its sub-screens are FILMSTRIP PEERS of home/browse, not
-    // additive overlays (PLAN-swipe-declone.md retires the old "hiding the tall view
-    // shrinks the document, which trips iOS 26's fixed-layer displacement" rationale
-    // that used to justify leaving the view underneath live — see css: #options for
-    // why the displacement concern does not actually apply to a position:fixed view).
-    // Whichever view is showing is parked/hidden exactly as on a real home<->browse
-    // switch, so nothing live sits behind #options/a sub. Only Now Playing stays
-    // additive — see css: .nowplaying for why NP alone still needs to paint over a
-    // live view underneath.
-    if (!npOpen) {
+    // NP, the Options hub and its sub-screens are ADDITIVE overlays: they paint over
+    // whatever tall screen is showing, and the page underneath is NOT touched. Hiding
+    // the tall view shrinks the document, and a short (~viewport-sized) document is
+    // what trips iOS 26's ~50pt fixed-layer displacement (the black-band / Options-bar
+    // saga — a 1-2px token overflow does NOT count as tall). Only real screen switches
+    // (home/browse) swap the in-flow views.
+    if (!npOpen && !optOpen && !subOpen) {
       $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
       const browseEl = $('browse');
-      // The shown→hidden edge: going to a non-browse view (home, Options, or a sub)
-      // while #browse is shown.
+      // The shown→hidden edge: going to a non-browse view (home) while #browse is shown.
       if (v !== 'browse' && !browseEl.classList.contains('hidden')) {
         // Deactivate Browse's virtual controller BEFORE display:none lands — a hidden box
         // measures zero, so the anchor must be captured now (from real geometry). Re-entry
@@ -71,10 +67,10 @@ const Nav = (() => {
       // The `.266` stable-height probe (PLAN-stableheight-probe.md) that once pinned `.app`
       // min-height here is RETIRED (PLAN-browse-decouple.md §7, superseding
       // PLAN-stableheight-probe.md): active #browse is now a position:fixed own-scroll view
-      // (css: #browse) that never drives the document height, so hiding it on →home (or on
-      // →options/a sub, both also position:fixed) cannot collapse the document and there is
-      // nothing for the browser to clamp — the Books→Home scroll-clamp flash the probe
-      // discriminated is removed BY CONSTRUCTION, with no per-transition pin to set or clear.
+      // (css: #browse) that never drives the document height, so hiding it on →home cannot
+      // collapse the document and there is nothing for the browser to clamp — the
+      // Books→Home scroll-clamp flash the probe discriminated is removed BY CONSTRUCTION,
+      // with no per-transition pin to set or clear.
       browseEl.classList.toggle('hidden', v !== 'browse');
     }
     // Leave the settings overlays' hidden state untouched when going TO NowPlaying so
@@ -142,12 +138,9 @@ const Nav = (() => {
     // scrollLeft on their own; re-setting it would fire a scroll-snap correction (the
     // "oh wait, let me scroll over" animation).
     if (!desc || desc.v === 'home') { setView('home'); setNavActive('home'); if (resetScroll) $('home').scrollTop = 0; return; }
-    // The Options hub + its sub-screens are filmstrip PEERS of home/browse (setView
-    // parks/hides whichever view was underneath, same as a real home<->browse switch)
-    // — but the document itself never scrolls either way, because #home/#browse/
-    // #options/the subs are all position:fixed and none of them drives it. Only their
-    // own panel gets a scroll reset. Sub-screens keep the Options tab lit ("inside
-    // Options").
+    // The Options hub + its sub-screens are additive overlays (like NP): no document
+    // scroll changes — the page underneath stays exactly as it was. Only their own
+    // panel resets. Sub-screens keep the Options tab lit ("inside Options").
     if (desc.v === 'options' || isSub(desc.v)) {
       setView(desc.v); setNavActive('options');
       if (render) d.renderScreen(desc.v);

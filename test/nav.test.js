@@ -81,37 +81,6 @@ test('browse parks Home (painted, not display:none — covers stay decoded)', ()
   // (the home-scoped `home-tall` toggle is retired in Stage 6i — no body class to assert here)
 });
 
-test('Options parks the real Home underneath it (class-state fact, not a paint fact)', () => {
-  // Options is now a filmstrip PEER of home/browse: nothing live may sit behind it.
-  // This asserts the CLASS STATE setView() drives (parked/hidden), not the paint —
-  // whether the background actually holds still is device-owed (no layout in jsdom).
-  Nav.applyScreen({ v: 'home' });
-  assert.equal($('home').classList.contains('parked'), false, 'home starts un-parked');
-  Nav.applyScreen({ v: 'options' });
-  assert.ok($('home').classList.contains('parked'), 'Home must be parked once Options is showing');
-});
-
-test('Options parks the real Browse underneath it (class-state fact, not a paint fact)', () => {
-  Nav.applyScreen({ v: 'books' });
-  assert.equal(hidden('browse'), false, 'browse starts shown');
-  Nav.applyScreen({ v: 'options' });
-  assert.equal(hidden('browse'), true, 'Browse must be hidden once Options is showing');
-});
-
-test('a settings sub-screen parks the real Browse underneath it too', () => {
-  Nav.applyScreen({ v: 'books' });
-  assert.equal(hidden('browse'), false, 'browse starts shown');
-  Nav.applyScreen({ v: 'downloads' });
-  assert.equal(hidden('browse'), true, 'Browse must be hidden once a settings sub is showing');
-});
-
-test('Now Playing leaves Browse live underneath it — NP alone stays additive', () => {
-  Nav.applyScreen({ v: 'books' });
-  assert.equal(hidden('browse'), false, 'browse starts shown');
-  Nav.applyScreen({ v: 'nowplaying' });
-  assert.equal(hidden('browse'), false, 'NP must not park/hide the view it covers');
-});
-
 test('applyScreen renders the destination, and render:false reconciles visibility only', () => {
   rendered.length = 0;
   Nav.applyScreen({ v: 'buffering' });

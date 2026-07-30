@@ -1143,32 +1143,3 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   regardless of value; the safety property under test is unchanged. Fail-proof verified by
   execution (green, mutate, both cells red on their intended assertions, restore, green).
   Shard 2's and shard 5's full 13-mutation ranges each swept 0 uncaught, 0 unapplied, 0 stale.
-
-- Options hub and its sub-screens are filmstrip peers of home/browse, not additive overlays —
-  2026-07-30, build `2026-07-30.277`. User device report: Now Playing and Options (+ subs) still
-  showed a moving background after Stage 1 made them real movers. `js/nav.js` `setView()`'s
-  park/hide guard now runs for Options and every settings sub as well as home/browse
-  (`if (!npOpen)` replaces `if (!npOpen && !optOpen && !subOpen)`), so the underlying view is
-  parked/hidden exactly as on a real screen switch. `background: var(--page-bg)` removed from
-  `#options` and from `#downloads, #general, #playback, #buffering, #diagnostics` in
-  `css/app.css`; body::before's fixed copy shows through undisturbed. The old "hiding the tall
-  view shrinks the document, which trips iOS 26's fixed-layer displacement" rationale that
-  justified the additive model is FALSE for these two: both were already `position: fixed` and
-  never drove document height, so parking the view beneath them cannot collapse the document —
-  the `.app` runway (css:75) is what seats the fixed bars, unaffected either way.
-
-- Now Playing stays an additive overlay; the underlying view is deliberately NOT parked beneath
-  it — 2026-07-30, build `2026-07-30.277`. Unlike Options/the settings subs, NP is not parked or
-  hidden underneath (nav.js leaves the prior view exactly as it was, for the instant swipe-back
-  reveal) and it must stay opaque: NP also covers the fixed topbar (z30), transport (z35) and
-  navbar (z40), which #options sits under, so a transparent NP would show all three through it,
-  not just the view beneath. This is recorded at the `.nowplaying` CSS rule so it is not
-  "consistency-fixed" into transparency alongside Options later.
-
-- `test/page-bg-single-painter.test.js` re-keyed to the new split — 2026-07-30, build
-  `2026-07-30.277`. Transparent selectors: `#home`, `#browse`, `#options`, the settings-panel
-  group. Opaque selectors: `.nowplaying` only. Both directions proven by execution: the suite
-  reddens against the unmodified source (before the fix) on the "#options still has a
-  background" assertion, and reddens again (after the fix) when `.nowplaying`'s background is
-  temporarily stripped and restored — proving the designated assertions in both directions, not
-  merely that the suite passes.
