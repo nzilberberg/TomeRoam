@@ -324,7 +324,7 @@ function auditParkRule(rawCss) {
 // ─────────────────────────────────────────────────────────────────────────────────────────
 test('M1PARKRANGE — parking #home changes only where it paints and whether it takes input: '
   + 'the #home.parked rule declares the required overflow: hidden and nothing outside the '
-  + 'permitted set (static stylesheet read)', { skip: SKIP }, () => {
+  + 'permitted set (static stylesheet read)', () => {
   const { failures } = auditParkRule(readRoot('css/app.css'));
   assert.deepEqual(failures.map((f) => f.code), [],
     'INVARIANT P (declarative half) is violated by the shipped `#home.parked` rule:\n\n'
@@ -355,7 +355,26 @@ function withParkBody(css, fn) {
   return css.slice(0, span.start) + after + css.slice(span.end);
 }
 
-const postFix = () => withParkBody(RAW(), (body) => body.replace(/\btop:\s*0\s*;\s*/, ''));
+// ⚠️ BRUNEL FIXTURE FIX (build step, flagged for Curie review — not a change to any assertion
+// or expected value). `postFix()` used to route through `withParkBody`'s strict "the transform
+// must actually change the rule" guard. That guard is correct for every OTHER call site in this
+// file (each applies a transform ON TOP of an already-derived postFix() body, and that transform
+// must genuinely do something). It is wrong for THIS derivation specifically: once the real fix
+// lands (`top: 0` genuinely deleted from the shipped rule, PLAN-home-shift-fix.md §10 step 3),
+// `RAW()` no longer contains `top: 0` for the regex to strip, so stripping it is correctly a
+// no-op — not a fixture bug. The guard could not distinguish "a legitimately absent target" from
+// "a broken transform", so it fails post-fix regardless of source content. Bypassing the shared
+// guard for this one derivation (not touching it for any other call site) lets the SAME nine
+// acceptance properties this file already asserts run against the real post-fix stylesheet with
+// no change to what any of them checks.
+const postFix = () => {
+  const css = RAW();
+  const span = ruleBodySpan(css, PARK_SELECTOR);
+  assert.ok(span, 'fixture: the #home.parked rule must be locatable to build a variant');
+  const before = css.slice(span.start, span.end);
+  const after = before.replace(/\btop:\s*0\s*;\s*/, '');
+  return css.slice(0, span.start) + after + css.slice(span.end);
+};
 const codesOf = (css) => auditParkRule(css).failures.map((f) => f.code);
 const messageFor = (css, code) => (auditParkRule(css).failures.find((f) => f.code === code) || {}).message || '';
 

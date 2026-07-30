@@ -94,9 +94,38 @@ body.has-player .app { padding-bottom: calc(var(--nav-pad) + 190px); }
    decoded cover images so they flash/re-decode when home is shown again. Fixed +
    translateX keeps it out of the document flow (document height comes from the
    active in-flow view) and off-screen, while staying rendered so the covers stay
-   warm. pointer-events:none so it never intercepts taps on the active view. */
+   warm. pointer-events:none so it never intercepts taps on the active view.
+
+   (a) INVARIANT P: parking #home may change only WHERE THE BOX PAINTS and WHETHER
+   IT TAKES INPUT — never its scroll range, its scroll-container status, its content
+   width, its block-direction padding, or whether the engine's scroll-anchoring
+   machinery operates on the box. No `top`/`bottom` are declared here so both insets
+   cascade from the base #home rule below (or from body.has-player #home), which is
+   what keeps the parked box's geometry IDENTICAL to the active box rather than a
+   separately-maintained restatement of it. `.browsepage.parked` (css:86) does NOT
+   share this invariant: a `.browsepage` is an IN-FLOW element with no `bottom`
+   inset of its own to inherit, so parking it needs its own `top: 0` to size it —
+   the two park rules diverge for that reason, not by oversight.
+
+   (b) `overflow: hidden` is REQUIRED, not vestigial, on TWO independent grounds:
+   (1) cross-engine — it is what keeps this box a SCROLL CONTAINER (CSS Overflow 3);
+   a non-scroll-container box has no scroll offset to preserve at all. (2) Blink-
+   measured — this rule necessarily carries a non-none `transform` (the park IS the
+   transform), and a non-none transform SUPPRESSES every Blink scroll-anchoring
+   adjustment on a scroll container; `overflow: hidden` UN-SUPPRESSES it. Removing
+   it measured a -80px reveal jump on a mid-park content mutation where shipped
+   code measures 0px (Claude/Loki/STRIKE-home-shift-m1-derivation.md).
+
+   (c) `overflow: clip` is NOT a substitute for `hidden` here, even though css:161-
+   165 below recommends `clip` over `hidden` for `.app`. That argument ("clip
+   doesn't make .app a scroll container") is CORRECT for `.app`, which must NOT be
+   a scroll container, and INVERTED here: `#home.parked` MUST remain one. `clip` is
+   executed to break this fix twice over — the box stops being a scroll container
+   (the in-park offset collapses cross-engine) AND Blink's anchoring blacks out
+   (the reveal jumps -80px again) — see
+   Claude/Loki/STRIKE-home-shift-m1-adopted.md §6. */
 #home.parked {
-  position: fixed; top: 0; left: 0; right: 0;
+  position: fixed; left: 0; right: 0;
   max-width: 640px; margin: 0 auto; padding-left: 16px; padding-right: 16px;   /* MATCH .app content width */
   transform: translateX(-101vw);   /* fully off-screen (own layer keeps it painted) */
   overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;
@@ -161,7 +190,10 @@ body.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); p
    the direction (forward = from the right, back = from the left). `.app` clips the
    off-screen pane with overflow-x:clip (NOT hidden — clip doesn't make .app a scroll
    container or a containing block, so the document scroll + fixed overlays are
-   untouched). The fixed overlays (#player/#nowplaying/#navbar) are OUTSIDE .app. */
+   untouched). The fixed overlays (#player/#nowplaying/#navbar) are OUTSIDE .app.
+   This argument is SCOPED TO `.app`: it does not transfer to #home.parked (css:98),
+   which must REMAIN a scroll container and therefore keeps overflow:hidden — see
+   the comment there for why `clip` is inadmissible on that rule specifically. */
 .app { overflow-x: clip; }
 @keyframes navInRight { from { transform: translateX(100%); } to { transform: none; } }
 @keyframes navInLeft  { from { transform: translateX(-100%); } to { transform: none; } }
