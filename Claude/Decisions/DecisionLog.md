@@ -1128,8 +1128,18 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   cell) was swept; #101 was the sole orphan. Both the new test and the `53px` constant are
   scheduled for deletion together in Stage 2 (`PLAN-swipe-declone.md` §12 items 5, 16).
 
-- Mutation #98 (M1NAVWINS) found uncaught, unrelated to Stage 1 — 2026-07-30, OPEN. Discovered
-  while verifying CI shard 2 was clean alongside the M2ALIGN fix; reproduced on a clean `cf48e03`
-  checkout, so it is pre-existing and independent of Stage 1's test deletions. Traces to
-  `PLAN-home-shift-fix.md`, an earlier and separate stage. Not fixed — out of scope for the
-  M2ALIGN session; needs its own investigation.
+- Mutation #98 (M1NAVWINS) CORRECTED — 2026-07-30, build `2026-07-30.276`, commit `011111f`.
+  SUPERSEDES the entry originally logged at this date: "pre-existing, unrelated to Stage 1" was
+  WRONG — a control run confirmed CAUGHT at `1577a0e` (the commit immediately before Stage 1)
+  and UNCAUGHT from `cf48e03` (Stage 1) onward, so Stage 1 broke it. CAUSE: the mutant restored
+  `cur.ghostY` after the abort finalize; Stage 1 narrows app-ghost-building to browse->browse
+  only, so `cur.from.v === 'home'` and `cur.ghostY != null` became mutually exclusive by
+  construction (`d.ghostY` is never set for a home-source gesture, `js/app.js:556-563`) — the
+  mutant's guard was an unsatisfiable conjunction; it applied cleanly but its write could never
+  execute. The test fixture still drove the exact interleaving it always had; the mutant itself
+  went inert, not the cell. FIX: re-derived the mutant to restore `cur.scroll0` instead — the
+  one captured-scroll field still populated on every gesture including home-source, and a
+  genuine write the same two designated tests' oracles (M1NOWRITE, M1NAVWINS) still catch
+  regardless of value; the safety property under test is unchanged. Fail-proof verified by
+  execution (green, mutate, both cells red on their intended assertions, restore, green).
+  Shard 2's and shard 5's full 13-mutation ranges each swept 0 uncaught, 0 unapplied, 0 stale.

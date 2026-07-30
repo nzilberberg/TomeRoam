@@ -663,10 +663,27 @@ constant are scheduled for deletion together in Stage 2 (`PLAN-swipe-declone.md`
 5, 16). Full battery green (`tools/hooks/run-checks.mjs`), committed `020c2d9`, not yet
 pushed.
 
+**Mutation #98 (M1NAVWINS) CORRECTED, build `2026-07-30.276`.** ⚠️ SUPERSEDES this session's own
+earlier claim that #98 was "pre-existing" — that was wrong; a control run confirmed CAUGHT at
+`1577a0e` (immediately before Stage 1) and UNCAUGHT from `cf48e03` onward, so Stage 1 broke a
+second shard, not one. CAUSE: the M1NAVWINS mutant restored `cur.ghostY` after the abort
+finalize; Stage 1 narrows app-ghost-building to browse→browse only, so `cur.from.v === 'home'`
+and `cur.ghostY != null` became mutually exclusive by construction (`d.ghostY` is never set for
+a home-source gesture, `js/app.js:556-563`) — the mutant's own guard was an unsatisfiable
+conjunction, applying cleanly but never executing its write. The test fixture in
+`test/home-abort-writes.test.js` still drove the exact interleaving it always had; the mutant
+went inert, not the cell. FIX: re-derived the mutant (`tools/mutate.mjs`) to restore
+`cur.scroll0` instead — the one captured-scroll field still populated on every gesture
+including home-source — a genuine write the same two designated tests (M1NOWRITE, M1NAVWINS)
+still catch regardless of value; the safety property under test is unchanged, only the field a
+reintroduced restore would plausibly reach for. Fail-proof confirmed by execution: green →
+mutate #98 → both cells red on their intended assertions (`Got [0]`) → restore → both green.
+Shard 2's and shard 5's full 13-mutation ranges each swept 0 uncaught, 0 unapplied, 0 stale.
+Full battery green, committed `011111f`, not yet pushed.
+
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |
 |---|---|---|---|
-| mutation #98 (M1NAVWINS) uncaught | — | Found while verifying CI shard 2 alongside the M2ALIGN fix (build `.275`), reproduced on a clean `cf48e03` checkout — pre-existing, unrelated to Stage 1's deletions. Traces to `PLAN-home-shift-fix.md` (an earlier, separate stage): the mutation reverts the retired reveal-time `cur.ghostY` restore, and neither designated test (M1NAVWINS window-B, M1NOWRITE) reddens. Needs its own investigation — not fixed here, out of this session's scope. | `Claude/Plans/PLAN-home-shift-fix.md` |
 | SW surprise-auto-update | — | warm-foreground: waiting worker self-activates (`userApply=false`) → reload with no tap; the `.74` fix is incomplete + shipped-unverified. **Instrument what activates the waiting worker before editing sw.js** (`.1`–`.6`/`.20`/`.74` graveyard). | DecisionLog (OPEN) |
 | iOS lock-screen play-from-paused | med | AVAudioSession PLATFORM limit, not web-fixable (WebKit #198277 / Apple DevForums 762582); `.99` mitigates (defer + auto-resume on unlock); true fix = native audio. | `[[tomeroam-lockscreen-resume-kill-bug]]` |
 | resume plays nothing (1st tap dead) | med | download-index restore race → a downloaded book streams; cold-relay stream stalls with no retry (stall ≠ error). Fix = `Downloads.whenReady()` gate. | `[[tomeroam-resume-stream-race-bug]]` |
