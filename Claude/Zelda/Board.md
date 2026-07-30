@@ -378,6 +378,48 @@ class (an un-reddenable cell reports UNCAUGHT) but only after the build; that ge
 **Unpushed stack** (bench, on top of pushed `d5b4532`): build `.267` + the campaign manifest + the
 campaign-completion pre-commit gate + all home-shift plan/casebook/strike commits through `8cebe7d`.
 
+**HOME-SHIFT M1 — LOKI KILL #3 (2026-07-29), `STRIKE-home-shift-m1-final.md` (`1ff4abd`). The fix would
+INTRODUCE a regression shipped code does not have.** Executed + control-validated (2 controls passed first;
+clamp-independent, so jsdom's missing clamp is irrelevant): home@500 → swipe home→books → abort (340ms
+`settleTimer` armed) → at ~150ms **tap Home**. The touchstart is refused by the `begin()` gate (app.js:385,
+pane-owning) and disturbs nothing, but the CLICK runs `goHome`→`navTo({v:'home'})`, whose **same-view
+replace-top branch (app.js:140-143) calls `applyScreen(desc)` with DEFAULTS** — sweeping the settling ghost
+(`resetSwipeStyles`, nav.js:131/114), un-parking home, writing the deliberate fresh-nav `scrollTop = 0`
+(nav.js:140). Home is correctly revealed at 0. At 340ms the finalize fires anyway — the identity guard
+(app.js:1257) checks only `cur !== session` and nav.js touches neither — reads `dest` fresh (app.js:793),
+enters the no-hold abort branch (app.js:1227), and the source gate passes LEGITIMATELY (`cur.from.v==='home'`,
+`ghostY=500`) → **home lurches 0→500, clobbering the user's fresh navigation.** Shipped code is stable at 0.
+⭐ **ROOT SHAPE common to all three kills: M1 is a write deferred ~340ms into a SHARED observable, and nothing
+verifies the gesture still OWNS the reveal it writes into.** Loki's direction (a real invariant, not another
+enumerated patch): a **one-bit reveal-ownership witness** at finalize — the gesture's own swept pane
+(`cur.movers[0].el` detached ⟺ an external `applyScreen` intervened) or a nav epoch sampled at `settle()`;
+either also covers the popstate route (app.js:1287). Device-owed: the paint realization of the ~190ms
+wrong-scroll window; the tap window is ~200ms post-lift (before `transitionend`), after which the sweep pins
+the finalize to the 340ms timer. Blast radius: **no coverage cell drives a home-source abort with a mid-settle
+Home tap**, and the M1SUPCROSS fixture's ordering is producible only by a click-WITHOUT-touchstart tap (a real
+finger's touchstart triggers the recovery first) — for the test author.
+**USER DECISION (2026-07-29): KEEP M1+M2 TOGETHER — no device build until BOTH are clean.** (Offered a split
+shipping the FORGE'd, never-killed M2 alone — the leading, scroll-independent diagnosis of the reported
+symptom — for a fast device read; the user chose one combined build instead. So M2 stays benched behind M1's
+hardening, and the reported shift stays device-unverified until both land.)
+**Charpy TEMPER on the coverage half (`5d27739`) — 3 blocking mechanics defects, all owed to makers:**
+**F3** `mutate.mjs:745` is `src.replace(from,to)` = FIRST OCCURRENCE ONLY with no uniqueness check, so the
+plan's two byte-identical `cur.from.v === 'home'` gates would mutate one site twice and report a FALSE GREEN.
+**F4** the clamp-shim spec is wrong 3 ways — `MutationObserver` is ASYNC (measured) while M1SUPERSEDE/M1SUPCROSS
+drive a second touch in the SAME synchronous run, so M1SUPERSEDE would still pass with the restore removed
+BEHIND a shim that looks like the fix; the CAUSE is mis-stated (`overflow:hidden` boxes ARE programmatically
+scrollable — the real clamp is `.parked` dropping the `bottom` inset, css:98-102, leaving no scroll range, so
+keying a shim to computed `overflow` is the one way this altitude could mask real behaviour); and the
+clamp-of-a-write-while-parked half is unmodelled though the design's "the write clamps to 0 → harmless" claim
+rests on it. **F5** the write oracle is unscoped in 2 of 3 statements and cites the wrong mechanism
+(`scrollTop` needs `Object.defineProperty`, not the function-property `scrollTo` recorder). Charpy CONFIRMED:
+two cells per site is right (2 distinct gate statements, 2 routes, opposite oracles), both fixtures reach their
+sites, per-site mutants right, V2 holds, and a harness-level clamp shim masks NO existing test (whole `test/`
+tree swept). ⛔ See [[tomeroam-maintainability-gates]] for the LIVE F3 fallout found by auditing all 93
+mutations: `#24` ("abort stops restoring the starting scroll") has 3 occurrences and has been mutating the
+**supersession recovery** (app.js:445), NOT either abort restore (1203/1228) — a live false-green candidate on
+the very lines M1 touches; makers must re-anchor it per-site.
+
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
 `0049a13` four-key), five gesture scenarios, byte-identical behavioral traces; `np-locked` unlock fired
