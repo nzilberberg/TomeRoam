@@ -681,6 +681,31 @@ mutate #98 → both cells red on their intended assertions (`Got [0]`) → resto
 Shard 2's and shard 5's full 13-mutation ranges each swept 0 uncaught, 0 unapplied, 0 stale.
 Full battery green, committed `011111f`, not yet pushed.
 
+**Options/subs de-additived, moving-background fix, build `2026-07-30.277`.** User device report:
+Now Playing and Options (+ its sub-screens) still showed a moving background after Stage 1's
+de-cloning made them real movers. FIX (`js/nav.js` `setView()`): the park/hide guard that already
+parks Home and hides Browse on a real screen switch now also runs for Options and every settings
+sub — `if (!npOpen)` replaces `if (!npOpen && !optOpen && !subOpen)` — so nothing live sits behind
+them. `css/app.css`: `background: var(--page-bg)` removed from `#options` and from
+`#downloads, #general, #playback, #buffering, #diagnostics`; both rules' comments rewritten to
+retire the old "additive overlay, iOS-26 displacement" rationale (verified false: both were always
+`position: fixed` and never drove document height — the `.app` runway, css:75, is what seats the
+fixed bars). `.nowplaying` is UNCHANGED and keeps its background — it is the one screen still
+required to obscure the fixed topbar/transport/navbar it paints over, not merely the view beneath
+it; the comment there now records this so it isn't "consistency-fixed" into transparency later.
+Confirmed via `test/fixtures/swipe-plan-spec.mjs` that `browse→browse` remains the only cloned
+transition; every overlay pair (NP, Options, every sub, in both directions) was already
+`real-source`/`real-destination`, so no clone work was needed here. `test/page-bg-single-painter.test.js`
+re-keyed (transparent: `#home`/`#browse`/`#options`/the settings-panel group; opaque: `.nowplaying`
+only) and `test/nav.test.js` gained four cells (Options parks Home, Options parks Browse, a sub
+parks Browse, NP leaves Browse live) — all proven red-then-green by execution, including the
+opposite-direction proof (temporarily stripping `.nowplaying`'s background reddened the two
+intended assertions, then restored). Full battery 788/789 pass, 1 pre-existing device-only skip
+(unrelated Loki keeper cell), 0 fail. **DEVICE-OWED:** whether the background visually holds still
+under Options (jsdom has no paint/layout), and whether iOS bar-seating survives now that the view
+beneath Options is genuinely parked — if the nav bar displaces or a black band appears, the
+documented fallback is to revert the parking, not to repaint a background back on.
+
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |
 |---|---|---|---|

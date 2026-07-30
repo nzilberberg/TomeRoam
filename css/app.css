@@ -204,10 +204,17 @@ body.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); p
 .view.nav-in-right { animation: navInRight .26s cubic-bezier(.22,.61,.36,1) both; }
 .view.nav-in-left  { animation: navInLeft  .26s cubic-bezier(.22,.61,.36,1) both; }
 @media (prefers-reduced-motion: reduce) { .view.nav-in-right, .view.nav-in-left { animation: none; } }
-/* Options = additive overlay, same iOS-26 reasoning as Now-Playing: a fixed
-   panel with its own scroller painted over the UNTOUCHED tall screen (hiding
-   the tall view shrinks the document, which displaces the fixed nav bar).
-   z 25: covers page content, stays under topbar(30)/transport(35)/navbar(40). */
+/* Options is a filmstrip PEER of #home/#browse (PLAN-swipe-declone.md retires the
+   "additive overlay, same iOS-26 reasoning as Now-Playing" rationale this comment
+   used to carry): nav.js's setView() parks/hides whichever view is underneath when
+   Options shows, exactly as a real home<->browse switch does, so #options declares
+   no background of its own (below) and body::before's fixed copy shows through
+   undisturbed. The iOS-26 fixed-bar-displacement concern that motivated the old
+   additive model never actually applied here: #options is position:fixed and was
+   never in the document's flow, so it never drove document height either way —
+   the retained `.app` runway (css:75) is what seats the fixed bars, unaffected by
+   whether the view under #options is parked. z 25: covers page content, stays
+   under topbar(30)/transport(35)/navbar(40). */
 #options {
   /* Inset the scroll box between the two fixed bars so the scrollbar's range of
      motion is confined to bottom-of-topbar → top-of-transport (was top:0→navbar,
@@ -217,9 +224,6 @@ body.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); p
   bottom: calc(var(--nav-h) + var(--nav-pad));       /* top of the nav bar (no transport) */
   z-index: 25;
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  /* nav.js's setView(): #options is an ADDITIVE overlay that paints over a live,
-     un-parked page underneath, so (unlike #home/#browse) it needs its own background. */
-  background: var(--page-bg);
   padding: 14px max(16px, calc((100% - 608px) / 2)) 40px;
 }
 /* When the transport is showing (.player is 106px tall, pinned just above the nav
@@ -506,8 +510,13 @@ body.has-player #options { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); 
   position: fixed; inset: 0; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;
   overscroll-behavior: none;   /* never chain a bounce to the document */
   display: flex; flex-direction: column;
-  /* nav.js's setView(): NP is an ADDITIVE overlay that paints over a live,
-     un-parked page underneath, so it needs its own background. */
+  /* NP stays an ADDITIVE overlay — unlike #options/the settings subs (above), it is
+     deliberately NOT parked/hidden underneath: nav.js's setView() leaves whichever
+     view was live exactly where it was, and NP must paint over it because NP also
+     covers the fixed topbar (z30), transport (z35) and navbar (z40) that #options
+     sits UNDER — a transparent NP would show all three through it, not just the
+     view. Do not strip this background to "match" #options/the subs: NP is not
+     their peer, it is the one screen still required to obscure what's beneath it. */
   background: var(--page-bg);
   /* Full-bleed: content owns the whole height; close = swipe right / back.
      The pill keeps a small 5px margin off the physical screen edge. */
@@ -770,10 +779,11 @@ input.dl-src { --buffer: var(--downloaded); }
 .pbmodal-btn.danger { background: #b4462f; color: #fff; }
 
 /* Options SUB-SCREENS (General/Playback/Buffering/Downloads/Diagnostics). Same
-   additive-overlay model as #options (fixed panel with its own scroller painted over
-   the untouched tall screen, so the fixed nav bar can't be displaced — the iOS-26
-   reasoning). z 26: one above #options so a sub-screen filmstrips ON TOP of it, still
-   under topbar(30)/transport(35)/navbar(40). Only one is ever open at a time. */
+   filmstrip-peer model as #options (above): nav.js's setView() parks/hides the view
+   underneath, so these declare no background of their own either — body::before's
+   fixed copy shows through undisturbed. z 26: one above #options so a sub-screen
+   filmstrips ON TOP of it, still under topbar(30)/transport(35)/navbar(40). Only one
+   is ever open at a time. */
 #downloads, #general, #playback, #buffering, #diagnostics {
   /* Scroll box inset between the two fixed bars — scrollbar confined to
      bottom-of-topbar → top-of-transport (see the #options note above). */
@@ -782,9 +792,6 @@ input.dl-src { --buffer: var(--downloaded); }
   bottom: calc(var(--nav-h) + var(--nav-pad));       /* top of the nav bar (no transport) */
   z-index: 26;
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  /* nav.js's setView(): these sub-screens are ADDITIVE overlays that paint over a
-     live, un-parked page underneath, so they need their own background. */
-  background: var(--page-bg);
   padding: 14px max(16px, calc((100% - 608px) / 2)) 40px;
 }
 body.has-player #downloads, body.has-player #general, body.has-player #playback,
