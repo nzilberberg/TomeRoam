@@ -647,9 +647,26 @@ A–Z strip on a transformed `#browse`, untested in the `browse→*` direction).
 per-page `.browsepage` scrollers, the full §12 deletion list (`ghostApp` itself, `dropPanes`, the
 capture block, the `.nav-ghost` sweeps), the gate's temporary exception removed.
 
+**Mutation #101 (M2ALIGN) orphan CLOSED, build `2026-07-30.275`.** CI run `30565401541` on
+`cf48e03` (Stage 1) went red on mutation-sweep shard 5: Stage 1 deleted
+`test/ghost-clone-geometry.test.js` because it drove the retired HOME-source ghost path —
+correct, that path is gone — but left mutation #101 registered against the `53px`
+`#library` constant, which stays load-bearing for the still-live browse→browse ghost until
+Stage 2. New `test/ghost-clone-alignment.test.js` restores a browse→browse-scoped guard
+(derives both candidate aligned values from `css/app.css`, asserts neither is the vestigial
+`46px`); fail-proof run (green → mutate #101 → red on the intended assertion → restore →
+green) confirmed by execution. Shard 5's full 13-mutation range now sweeps 0 uncaught, 0
+unapplied, 0 stale. Swept every mutation whose designated test Stage 1 touched
+(`ghost-clone-geometry.test.js`, `swipe-stage6f.test.js`, the home-source GHOSTSCROLL cell)
+— all have live killers; #101 was the sole orphan. Both the new test and the `53px`
+constant are scheduled for deletion together in Stage 2 (`PLAN-swipe-declone.md` §12 items
+5, 16). Full battery green (`tools/hooks/run-checks.mjs`), committed `020c2d9`, not yet
+pushed.
+
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |
 |---|---|---|---|
+| mutation #98 (M1NAVWINS) uncaught | — | Found while verifying CI shard 2 alongside the M2ALIGN fix (build `.275`), reproduced on a clean `cf48e03` checkout — pre-existing, unrelated to Stage 1's deletions. Traces to `PLAN-home-shift-fix.md` (an earlier, separate stage): the mutation reverts the retired reveal-time `cur.ghostY` restore, and neither designated test (M1NAVWINS window-B, M1NOWRITE) reddens. Needs its own investigation — not fixed here, out of this session's scope. | `Claude/Plans/PLAN-home-shift-fix.md` |
 | SW surprise-auto-update | — | warm-foreground: waiting worker self-activates (`userApply=false`) → reload with no tap; the `.74` fix is incomplete + shipped-unverified. **Instrument what activates the waiting worker before editing sw.js** (`.1`–`.6`/`.20`/`.74` graveyard). | DecisionLog (OPEN) |
 | iOS lock-screen play-from-paused | med | AVAudioSession PLATFORM limit, not web-fixable (WebKit #198277 / Apple DevForums 762582); `.99` mitigates (defer + auto-resume on unlock); true fix = native audio. | `[[tomeroam-lockscreen-resume-kill-bug]]` |
 | resume plays nothing (1st tap dead) | med | download-index restore race → a downloaded book streams; cold-relay stream stalls with no retry (stall ≠ error). Fix = `Downloads.whenReady()` gate. | `[[tomeroam-resume-stream-race-bug]]` |

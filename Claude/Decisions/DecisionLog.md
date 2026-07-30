@@ -1111,3 +1111,25 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   their single remaining value, execute the plan's full §12 deletion list (`ghostApp` itself,
   `dropPanes`, the capture-recording block, the `.nav-ghost` sweeps), and remove the gate's temporary
   browse→browse exception.
+
+- Mutation #101 (M2ALIGN) orphan CLOSED — 2026-07-30, build `2026-07-30.275`, commit `020c2d9`.
+  CI run `30565401541` on `cf48e03` found mutation-sweep shard 5 red: Stage 1
+  (`PLAN-swipe-declone.md`) deleted `test/ghost-clone-geometry.test.js` because it drove the
+  retired HOME-source ghost path, but the `53px` `#library` constant it also guarded stays
+  load-bearing for the still-live browse→browse ghost until Stage 2, leaving mutation #101
+  registered with no designated killer. RESOLUTION: restored a minimal browse→browse-scoped
+  guard (`test/ghost-clone-alignment.test.js`) rather than de-registering the mutation, because
+  the constant it defends is still live production code — an unguarded live constant is a
+  coverage hole this project's own discipline treats as the shape of the founding defect. The
+  guard derives both candidate aligned values from `css/app.css` rather than hardcoding a
+  number. Fail-proof verified by execution (green at HEAD, red on the intended assertion after
+  applying #101, green again after `--restore`). Every mutation whose designated test Stage 1
+  touched (`ghost-clone-geometry.test.js`, `swipe-stage6f.test.js`, the home-source GHOSTSCROLL
+  cell) was swept; #101 was the sole orphan. Both the new test and the `53px` constant are
+  scheduled for deletion together in Stage 2 (`PLAN-swipe-declone.md` §12 items 5, 16).
+
+- Mutation #98 (M1NAVWINS) found uncaught, unrelated to Stage 1 — 2026-07-30, OPEN. Discovered
+  while verifying CI shard 2 was clean alongside the M2ALIGN fix; reproduced on a clean `cf48e03`
+  checkout, so it is pre-existing and independent of Stage 1's test deletions. Traces to
+  `PLAN-home-shift-fix.md`, an earlier and separate stage. Not fixed — out of scope for the
+  M2ALIGN session; needs its own investigation.
