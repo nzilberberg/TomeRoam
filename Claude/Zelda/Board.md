@@ -376,7 +376,8 @@ device. ⭐ **Vitruvius's cross-cutting observation: all three failures this cam
 coverage cell credited with a crossing its fixture never drove.** The existing mutation sweep does catch that
 class (an un-reddenable cell reports UNCAUGHT) but only after the build; that generator is still live.
 **Unpushed stack** (bench, on top of pushed `d5b4532`): build `.267` + the campaign manifest + the
-campaign-completion pre-commit gate + all home-shift plan/casebook/strike commits through `8cebe7d`.
+campaign-completion pre-commit gate + all home-shift plan/casebook/strike commits through `2b51030`
+(**36 commits ahead of `origin/main`**, reconciled 2026-07-29).
 
 **HOME-SHIFT M1 — LOKI KILL #3 (2026-07-29), `STRIKE-home-shift-m1-final.md` (`1ff4abd`). The fix would
 INTRODUCE a regression shipped code does not have.** Executed + control-validated (2 controls passed first;
@@ -512,6 +513,33 @@ form** (transform + `overflow: hidden` without `top: 0` was never executed — a
 validated; the strike's instrument is reproducible from its own §3) → **Charpy re-stress of this revision** (its
 own call was falsified, and the mixed-polarity cell is new) → Curie + Brunel. **Not gated by either: the M2 half,
 the §7.3 tooling remedy, and the five cells other than M1PARKRANGE.**
+
+**⭐ HOME-SHIFT — BOTH REMAINING GATES RAN AND CLEARED; THE PLAN IS NOW CLEARED TO BUILD (2026-07-29, plan HEAD
+`2b51030`).** **Loki 5th strike = HELD STONE** (`Claude/Loki/STRIKE-home-shift-m1-adopted.md`, `8d47465`) on the
+EXACT adopted one-deletion form, which the 4th strike had never executed (it ran active, shipped park, and the
+two-deletion park — the adopted fourth state was inferred): in real Blink (HeadlessChrome 150, the Android
+WebView engine family), controls green first, the adopted park measured a **0px reveal delta on the 4th strike's
+own kill scenario where the retired two-deletion form measured −80px in the same run**, exact-integer
+anchor-selection parity with the active box across a six-shape mutation matrix, and clamp-free geometry at every
+depth (`clientHeight`/`scrollHeight`/`maxScroll` all equal to active — the 71px delta gone). **Charpy
+post-reversal re-stress = TEMPER** (`Claude/Charpy/PLAN-home-shift-fix-charpy.md`, `e1f2866`) with **no sixth
+strike warranted**; its eight findings **F19–F26 are all folded** across `68f86d3`/`5b7b98f`/`7a8dab3`/`61ed56b`/
+`2b51030` — the `overflow: clip` inadmissibility directive + its `css/app.css:161-165` cross-reference, Tier 0
+dual-grounded (scroll-container per CSS Overflow 3 = cross-engine, plus the Blink anchoring un-suppression), a
+third M1PARKRANGE mutant for a wrong VALUE (cells stay SIX, mutants 7→**EIGHT**), a mandatory **counted repaint
+witness** on device row R-M1-anchor (an unwitnessed clean run is discarded, not recorded), and the status/
+sequencing/handoff reconciled to BUILD. **Design plane CLOSED BY EXECUTION on all three axes; no open question
+can change the fix's shape and nothing waits on a reviewer or an adversary.** **NEXT, in the reviewer-endorsed
+order:** (1) the **§7.3 mutation-tooling remedy** — uniqueness hard error + disambiguation field + anchors-gate
+check + the sweep naming its killing cell + the MUTUNIQ cell + re-anchoring the two live non-unique mutations
+(`#24` into three per-site entries, `#42` onto a function-naming anchor); it is first because no mutation result
+in this repo is readable until it lands, and `M1PARKRANGE-b`/`-c` surviving the sweep is the only structural
+guard against a half-built allow-list cell. (2) **Curie** — six red cells, eight mutants. (3) **Brunel** — M2's
+measured clone constant + M1's ONE deletion (`top: 0` out of `#home.parked`, `overflow: hidden` KEPT) with the
+three-part park comment. One commit, one build number, one device pass (standing user decision). **The device
+gate spans TWO engines and a pass on one does not clear it:** R-M1-cause + R-M1-retention + R-M1-flash are
+iOS/WebKit; **R-M1-anchor is Android WebView/Blink ONLY** (WebKit implements no scroll anchoring, so an
+iOS-primary pass reports clean regardless — the reason every earlier gate missed the 4th strike's fracture).
 
 **Loki gate (2026-07-26): HELD STONE on parity — but ONE open conformance finding.** Strike
 `Claude/Loki/STRIKE-swipe-stage5-narrowing.md`: executed differential probe (parent `f6d6985` five-key vs
