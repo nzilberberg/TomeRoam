@@ -605,6 +605,16 @@ dead-ends, and the 8 environment traps → `[[tomeroam-swipe-repaint-saga]]` (RE
 SWIPE / VIRTUALIZER / browse.js). 🔴 A RED test gradient (`--page-bg`) is still live in `css/app.css`
 — remove once background movement is confirmed fixed.
 
+**Build .273 (2026-07-30) — the moving-background root cause found and fixed, device-unconfirmed:**
+`js/swipe.js`'s ghost wrapper (`ghostWrap()`) painted its own copy of `--page-bg` (`GHOST_BG`) onto a
+`will-change:transform` layer that then gets translated during every swipe except books→home — the
+one CSS-invisible painter test/page-bg-single-painter.test.js's CSS-only audit could not see. The
+wrapper no longer paints a background (transparent; `GHOST_BG` removed); a new sibling test
+(`test/page-bg-js-painter.test.js`) scans `js/**` so a JS-painted page background reddens going
+forward. **Untested for content bleed-through** (jsdom has no layout/paint) — a device check of an
+app-ghost transition between a short outgoing snapshot and a taller destination is the residue before
+the red `--page-bg` gradient above can be removed.
+
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |
 |---|---|---|---|
