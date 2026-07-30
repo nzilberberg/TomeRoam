@@ -1219,7 +1219,12 @@
         // compared AGAINST — "covers reload on every transition" and "covers reload
         // only on aborts" call for completely different fixes.
         reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'), cover);
-        if (commit) applyScreen(dest, { render: false });   // dest already rendered live → reconcile only
+        // dest already rendered live → reconcile only. Home keeps whatever scroll it showed
+        // during the drag (resetScroll:false) — a committed swipe is not a fresh navigation,
+        // and #home is a scroll-neutral park (css:98), so there is nothing to restore, only
+        // nothing to clobber. Every other destination is unaffected: a fresh navbar Home tap
+        // (navTo → applyScreen(desc), no opts) still resets to top (app.js:418-423 parity).
+        if (commit) applyScreen(dest, dest.v === 'home' ? { render: false, resetScroll: false } : { render: false });
         else {
           // Aborted → restore the current screen (re-render only if the declared
           // finalization decision is 'rerender', i.e. browse→browse) + put back the
