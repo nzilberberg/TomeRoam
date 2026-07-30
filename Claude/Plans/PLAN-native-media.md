@@ -80,4 +80,4 @@ This same fork governs iOS. **Recommendation: evaluate Capacitor first** (it col
 3. **iOS (Mac-gated): AVPlayer relocation** reusing the bridge contract; resolve downloads storage.
 4. ExoPlayer / full-native only if the adapter approach proves unreliable per the triggers above.
 
-Related memory: `[[tomeroam-lockscreen-resume-kill-bug]]` (the diagnosis + research verdict), `[[tomeroam-code-review-refactor]]` (the PlaybackController extraction), `[[plexbooks-companion-pwa]]` (the WebView shell + the earlier hybrid discussion).
+Related memory: `[[tomeroam-lockscreen-resume-kill-bug]]` (the diagnosis + research verdict), `[[tomeroam-code-review-refactor]]` (the PlaybackController extraction), `[[tomeroam-companion-pwa]]` (the WebView shell + the earlier hybrid discussion).

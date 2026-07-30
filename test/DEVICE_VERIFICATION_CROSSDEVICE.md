@@ -79,7 +79,7 @@ test it came from.
 Pull reports afterwards from `Desktop\TomeRoam`:
 
 ```
-TOKEN=$(grep -m1 '^token:' /c/ProgramData/Lyrion/prefs/plugin/plexbooks.prefs | sed "s/^token:[[:space:]]*//" | tr -d " '\"\r")
+TOKEN=$(grep -m1 '^token:' /c/ProgramData/Lyrion/prefs/plugin/tomeroambridge.prefs | sed "s/^token:[[:space:]]*//" | tr -d " '\"\r")
 "C:/Users/nzilb/tools/node-dist/node.exe" tools/tail-log.mjs --reports --token "$TOKEN"
 ```
 

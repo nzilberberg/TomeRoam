@@ -661,7 +661,15 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
 - **"Delete all downloads":** deferred by user (`.119`); a real data-loss gap (removing the iOS icon destroys everything silently), not a space issue.
 - **Tombstone compaction:** the last unbuilt reset piece; low urgency → `[[tomeroam-reset-tombstone-plan]]`.
 - **Records/memory hygiene (deferred 2026-07-20, not urgent):** (1) **Slim the memory hub** `tomeroam-rebrand` to repo-underivable content only (footguns / verified facts / architecture rationale / identity) and demote its cache-value — tactical status and "standing intent" that is really decisions — to pointers; it is ~60% source / ~40% cache and the cache half will drift like the old status board did. (2) **Run a `consolidate-memory` pass** — three stale/over-broad items surfaced just by being touched this session (the deploy-rule "docs bump" over-broadening, the hub-maintenance OPEN-list, the drifted status board), which signals rot being trusted at session start. Principle to apply: memory holds only what `git log` + `Board.md` + `DecisionLog.md` cannot derive.
-- **Plugin activation:** staged plugin changes need an admin `install-plexbooks.bat` reinstall (resume-playlist rename, Presence mesh, PlexDb read-only) to activate LMS→app cold resume. The app is unaffected until then; app-only users never need it.
+- **Plugin activation:** the LMS plugin was **renamed to "TomeRoam Bridge" (2026-07-29)** — repo
+  `nzilberberg/TomeRoamBridge` (private, fresh history), tree `Desktop\TomeRoamBridge-src\TomeRoamBridge\`.
+  Staged plugin changes still need an **admin reinstall** (resume-playlist rename, Presence mesh, PlexDb
+  read-only) to activate LMS→app cold resume, and that deploy is now also the rename deploy: it must remove
+  the superseded plugin directory (or LMS loads both) and migrate the old prefs file to
+  `tomeroambridge.prefs`, or every setting including the Plex token is lost. **Exact paths and the full
+  ordered procedure live in the private plugin records** (`tomeroam-bridge-plugin` memory) — deliberately
+  not restated here, since this repo is public and the superseded name is being retired from it. The app is
+  unaffected until the deploy runs; app-only users never need it.
 
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
