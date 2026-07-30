@@ -615,6 +615,38 @@ forward. **Untested for content bleed-through** (jsdom has no layout/paint) — 
 app-ghost transition between a short outgoing snapshot and a taller destination is the residue before
 the red `--page-bg` gradient above can be removed.
 
+**Swipe-declone Stage 1 BUILT GREEN (2026-07-30), build `2026-07-30.274` — bench, not pushed, review
+gates deliberately waived by the user for this stage.** `Claude/Plans/PLAN-swipe-declone.md`
+(ratified `ed19791`). CAUSE: `ghostApp()` cloned `.app` and stripped every id, so the copy's
+id-keyed `position:fixed` inset rule stopped matching and the copy laid out in normal flow — a
+different box than the real view; the 7px gap (patched with the 53px constant), the second moving
+background (fixed at `.273`), and the reported swipe-start heading reflow are that one non-identity
+seen three ways. `constructionPlanFor`'s `outgoing` narrows from "in-flow source, non-home
+destination" to `fromKind==='browse' && toKind==='browse'` — home→browse, home→overlay and
+browse→overlay now move the REAL view element directly; only browse→browse still clones (Stage 2
+removes that too). `showAppView` stops parking `#home` mid-drag (deferred to commit via the existing
+`applyScreen`→`Nav.setView` path; never on abort). Pre-build real-engine measurement (headless
+Chrome, plan §15 R1/R2): a real fixed mover shows zero content-top/font-size delta under transform,
+a fixed mover at `translateX(±innerWidth)` does not extend `scrollWidth`, and the filmstrip's two
+movers are edge-to-edge with zero overlap for the whole live drag — no clipping replacement needed.
+R1 could not settle the reported heading-resize symptom itself (suspected WebKit font boosting,
+invisible to Blink) — **stays device-owed**; if it survives on device the hypothesis is falsified,
+and `text-size-adjust` is explicitly not the fallback. Deleted (not migrated):
+`test/ghost-clone-geometry.test.js` (M2ALIGN) and `test/swipe-stage6f.test.js` (its whole premise is
+the rule this stage reverses); `ghostApp`'s dead home-source offset branch + its `fromKind`
+parameter, with their designated test. The 53px constant stays (still load-bearing for the live
+browse→browse ghost) until Stage 2. Scrubbed a false `#home` CSS comment (claimed an opaque
+background occludes `#browse`; `#home` has none). New: `test/no-view-clone-gate.test.js`
+(NOAPPCLONE, built now rather than deferred to Stage 2 per instruction — an unresolvable clone
+receiver fails rather than passing; two registered exceptions, the NP pill and a dated temporary
+allowance for the browse→browse clone Stage 2 must remove) and
+`test/swipe-declone-stage1.test.js` (NOGHOSTINFLOW + HOMESTAYSLIVE, every mutant proven
+red-then-green). Full suite 783/782/0-fail/1-skip (pre-existing device-only); `hooks:check` all
+green. Full decision detail → DecisionLog. **DEVICE-OWED:** the heading-reflow symptom (R-E); R3 (the
+A–Z strip on a transformed `#browse`, untested in the `browse→*` direction). **Stage 2, not built:**
+per-page `.browsepage` scrollers, the full §12 deletion list (`ghostApp` itself, `dropPanes`, the
+capture block, the `.nav-ghost` sweeps), the gate's temporary exception removed.
+
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |
 |---|---|---|---|

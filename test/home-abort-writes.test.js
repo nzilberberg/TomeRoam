@@ -38,9 +38,11 @@
 // REACHABILITY GUARDS ARE MANDATORY (§7.2). A no-write oracle is satisfied perfectly by a
 // fixture that never arrives — the exact defect shape this campaign keeps producing. Both
 // cells assert the abort actually happened, and M1NAVWINS additionally witnesses the aborted
-// gesture's own `ghostY` through the ghost clone's `translateY(-500px)` while the pane is
-// still mounted (the SYNCHRONOUS alternative named in §7.2, chosen over the 500ms reveal-FLASH
-// line so no third interval is opened at all).
+// gesture's own scrolled offset while it is still settling (the SYNCHRONOUS alternative named
+// in §7.2, chosen over the 500ms reveal-FLASH line so no third interval is opened at all).
+// Stage 1 (PLAN-swipe-declone.md §5.1) makes the real #home the outgoing mover directly (no
+// owned-pane ghost is built for home->browse any more), so that witness is #home's OWN
+// scrollTop plus its inline swipe transform, not a ghost clone's translateY.
 //
 // ⚠️ GREEN AT HEAD BY DESIGN — both are REGRESSION LOCKS over behaviour shipped code already
 // has, not red cells. Shipped code passes `resetScroll: false` on the abort finalize and has
@@ -140,16 +142,21 @@ test('M1NOWRITE — a home-source abort→home reveal performs ZERO writes to #h
     const rec = armRecorder(h, 500);
 
     await abortForwardFromHome(h);
-    // ── REACHABILITY GUARD (1), sampled BEFORE the advance because runFinalize drops the
-    // panes: the outgoing ghost captured the seeded offset, so the gesture genuinely ran from
-    // a SCROLLED home rather than from the top — where M1 contributes nothing at all, and
-    // which is the only in-app datum this campaign already had.
-    const ghost = h.document.querySelector('.nav-ghost');
-    assert.ok(ghost, 'fixture sanity: a home-source abort must have built an outgoing app-ghost');
-    assert.equal(ghost.firstElementChild.style.transform, 'translateY(-500px)',
-      'fixture sanity: the ghost clone must be content-translated by -#home.scrollTop, which '
-      + 'witnesses that the aborted gesture carried ghostY=500 — otherwise this cell could pass '
-      + 'over a gesture that started at the top');
+    // ── REACHABILITY GUARD (1), sampled BEFORE the advance because runFinalize clears the
+    // swipe transforms: Stage 1 (PLAN-swipe-declone.md §5.1) makes the REAL #home the
+    // outgoing mover directly (no owned-pane ghost is built for home->browse any more), so
+    // the witness that the gesture genuinely went live is #home's own inline swipe
+    // transform, not a ghost's translateY — and #home.scrollTop stays at the seeded 500
+    // throughout, because the real element carries its own scroll instead of a captured
+    // ghostY. This is the same fixture-sanity property the old ghost witness proved: the
+    // gesture ran from a SCROLLED home rather than from the top, where M1 contributes
+    // nothing at all.
+    assert.ok(rec.read() === 500, 'fixture sanity: #home.scrollTop must still read the seeded 500 '
+      + 'mid-gesture — the real element carries its own scroll, so there is no separate ghostY to lose');
+    assert.notEqual(h.$('home').style.transform, '',
+      'fixture sanity: the aborted gesture must have moved the real #home element (Stage 1: home is '
+      + 'the outgoing mover directly) — an empty transform means the drag never went live and this '
+      + `cell could pass over a gesture that never started. Got '${h.$('home').style.transform}'`);
 
     // ── WINDOW B — the clock advance that fires the 340ms settleTimer and runs runFinalize.
     const beforeB = rec.mark();
@@ -204,15 +211,19 @@ test('M1NAVWINS — an external navigation landing during a home-source abort se
     el.scrollTop = 500;                       // the fixture's OWN setup write
 
     await abortForwardFromHome(h);
-    // ── REACHABILITY GUARD, sampled while the settling ghost is STILL MOUNTED — which is
-    // exactly the state the interleaving requires: `settle()` has run synchronously off the
-    // lift (so `finishing` is true and the 340ms settleTimer is armed) but `runFinalize` has
-    // not, so the panes are still up and the abort has not yet been logged.
-    const ghost = h.document.querySelector('.nav-ghost');
-    assert.ok(ghost, 'fixture sanity: the settling ghost must still be mounted before the Home tap');
-    assert.equal(ghost.firstElementChild.style.transform, 'translateY(-500px)',
-      'fixture sanity: the aborted gesture must have carried ghostY=500 — the value a '
+    // ── REACHABILITY GUARD, sampled while the gesture is still SETTLING — `settle()` has run
+    // synchronously off the lift (so `finishing` is true and the 340ms settleTimer is armed)
+    // but `runFinalize` has not, so the abort has not yet been logged. Stage 1
+    // (PLAN-swipe-declone.md §5.1) makes the real #home the outgoing mover directly (no
+    // owned-pane ghost for home->browse any more), so the witness is #home's OWN scrollTop —
+    // still 500, because the real element carries its own scroll rather than a captured
+    // ghostY — plus its own inline swipe transform, proving the drag genuinely went live.
+    assert.equal(el.scrollTop, 500,
+      'fixture sanity: #home.scrollTop must still read the seeded 500 while settling — the value a '
       + 're-introduced restore would write onto the freshly reset home');
+    assert.notEqual(h.$('home').style.transform, '',
+      'fixture sanity: the aborted gesture must have moved the real #home element while settling — '
+      + `an empty transform means the drag never went live. Got '${h.$('home').style.transform}'`);
 
     // Arm the recorder HERE: window A is the external navigation step, and the seed above must
     // not be counted as a production write.
@@ -234,9 +245,14 @@ test('M1NAVWINS — an external navigation landing during a home-source abort se
       'the interleaved Home tap must write EXACTLY ONE 0 — the user\'s own deliberate reset '
       + 'through the real shipped listener. Zero writes here means the tap never reached '
       + `applyScreen's home branch and this cell is testing nothing. Got ${JSON.stringify(windowA)}`);
-    assert.equal(h.document.querySelector('.nav-ghost'), null,
-      'fixture sanity: the external navigation must have SWEPT the settling ghost — that sweep is '
-      + 'what detaches the transitionend anchor and makes the 340ms timer the guaranteed finalize');
+    // Stage 1 (PLAN-swipe-declone.md §5.1): there is no ghost to sweep any more (#home was
+    // never a pane to begin with) — what the external navigation must still do is reset the
+    // real #home's in-flight swipe transform (Nav.resetSwipeStyles, called at the top of
+    // every applyScreen), which is what detaches the transitionend anchor and makes the
+    // 340ms timer the guaranteed finalize.
+    assert.equal(h.$('home').style.transform, '',
+      'fixture sanity: the external navigation must have reset the real #home\'s in-flight swipe '
+      + 'transform');
 
     // ── WINDOW B — the clock advance that fires the settleTimer and runs runFinalize.
     const beforeB = writes.length;

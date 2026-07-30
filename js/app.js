@@ -481,8 +481,20 @@
       // that's the OUTGOING screen of THIS swipe (back from Options → tracks): there
       // it's the mover that must slide out, so hiding it makes it vanish mid-drag.
       for (const s of ['options', ...SETTINGS_SUBS]) if (!d || d.from.v !== s) $(s).classList.add('hidden');
+      // Stage 1 (PLAN-swipe-declone.md §5.1): this branch used to also park #home here,
+      // synchronously, mid-drag. That was harmless while the outgoing was always an
+      // app-ghost (the real #home was never a mover to begin with). Since a home->browse
+      // gesture now moves the REAL #home directly (constructionPlanFor's outgoing is
+      // 'real-source'), parking it here would apply #home.parked's `translateX(-101vw)`
+      // to the live outgoing mover before the drag has moved a single pixel — the most
+      // visible possible regression (plan §9 ordering requirement 2). The park is
+      // deferred to commit: `applyScreen` → `Nav.setView` already parks #home exactly
+      // when the destination is not home (nav.js), and never runs at all on an abort
+      // (the reveal's `applyScreen(dest)` call passes the ORIGINAL home descriptor) — so
+      // no new park call is needed here, only the removal of this premature one.
+      // Symmetric to Stage 6i's 'home-host' branch, which does not hide #browse either.
       if (desc.v === 'home') { $('home').classList.remove('parked'); $('browse').classList.add('hidden'); }
-      else { $('browse').classList.remove('hidden'); $('home').classList.add('parked'); if (render) Browse.render(desc); }
+      else { $('browse').classList.remove('hidden'); if (render) Browse.render(desc); }
     }
 
     // Build the sliding "movers": {el, base}; during the drag transform =

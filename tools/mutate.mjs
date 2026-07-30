@@ -116,14 +116,17 @@ const RECOVERY_RENDER_ALWAYS_FALSE = "        applyScreen(currentDesc(), { rende
 const F1_ORPHAN_RESETSCROLL_TO = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: false, keepGhosts: cur ? true : undefined });";
 
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
+// Stage 1 (PLAN-swipe-declone.md §5.1) retires the `fromKind` argument along with
+// ghostApp's HOME-source branch (browse->browse is the only caller left), so this anchor
+// re-points at the now-bare `ghostApp()` call — same F7a ordering intent, new text.
 const S5_ORDER_FROM = [
   "    if (plan.outgoing === 'app-ghost') {",
-  '      const g = ghostApp(fromKind);',
+  '      const g = ghostApp();',
 ].join('\n');
 const S5_ORDER_TO = [
   "    if (plan.outgoing === 'app-ghost') {",
   '      env.renderDestination(dest, destinationHost);',
-  '      const g = ghostApp(fromKind);',
+  '      const g = ghostApp();',
 ].join('\n');
 const S5_NPPILL_FROM = [
   "      doc.querySelectorAll('.np-pill-float').forEach((n) => n.remove());",
@@ -594,28 +597,44 @@ const MUTATIONS = [
       from: "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
       to:   "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: true });",
     } },
-  // ── SWIPE stage 6f: outgoing app-ghost for in-flow→overlay (PLAN-swipe-stage6f.md) ──
-  // The single production edit is the outgoing decision value in constructionPlanFor.
-  // Reverting it to the pre-6f rule (keyed off destination browse only, instead of
-  // "destination not home") re-opens the hole the five stage-6f red cells were authored
-  // against: in-flow->overlay again borrows the real #browse/#home as the outgoing mover.
-  { name: 'stage6f: constructionPlanFor outgoing reverts to the pre-6f rule, keyed off destination browse only (-> SIbrowse/SIhome/GHOST commit+abort/MODEL)',
+  // ── SWIPE stage 6f: outgoing app-ghost for in-flow→overlay — SUPERSEDED by Stage 1 ──
+  // (PLAN-swipe-declone.md §5.1, 2026-07-30). Stage 6f's own rule ("ghost every in-flow
+  // source going to a non-home destination") is exactly what Stage 1 narrows away: only
+  // browse->browse still ghosts, because every view is already its own position:fixed
+  // inset own-scroll box and the ghost bought nothing for the others (the 7px gap, the
+  // 53px patch, and the reported swipe-start reflow were the id-stripped clone's cost of
+  // it). test/swipe-stage6f.test.js (SIbrowse/SIhome/GHOST/MODEL/REVEAL) is DELETED, not
+  // migrated — its cells assert the opposite of Stage 1's rule. This entry is repurposed
+  // as Stage 1's own NOGHOSTINFLOW mutant (plan §14): reverting the narrowed condition
+  // back to the wider one re-opens exactly the hole Stage 1 closes.
+  { name: 'stage1 NOGHOSTINFLOW: constructionPlanFor outgoing reverts to the wider pre-declone rule, ghosting every in-flow source to a non-home destination (-> NOGHOSTINFLOW test)',
     file: 'js/swipe.js',
-    from: [
-      "    const outgoing = c.fromKind === 'overlay' ? 'real-source'",
-      "      : (c.toKind === 'home' ? 'real-source' : 'app-ghost');",
-    ].join('\n'),
+    from: "    const outgoing = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'app-ghost' : 'real-source';",
     to: [
       "    const outgoing = c.fromKind === 'overlay' ? 'real-source'",
-      "      : (c.toKind === 'browse' ? 'app-ghost' : 'real-source');",
+      "      : (c.toKind === 'home' ? 'real-source' : 'app-ghost');",
     ].join('\n') },
-  // REVEAL's dedicated mutant (plan §9): route the browse→overlay ABORT reveal through
-  // the paint-gated hold instead of the plain dropPanes() path. Widening the abort-hold
-  // condition to fire on every abort (not just a browse->browse rerender) makes the
-  // browse→overlay abort hold its ghost past finalize awaiting a paint frame.
-  { name: 'stage6f REVEAL: the browse→overlay abort reveal is routed through the paint-gated hold instead of the plain no-hold path (-> REVEAL no-hold test)',
-    from: "        if (!commit && cur.finPlan.abortRender === 'rerender') {",
-    to:   "        if (!commit) {" },
+  // Stage 1's other cell, HOMESTAYSLIVE (plan §14): mutant-a re-parks #home INSIDE the
+  // mid-drag render (showAppView's browse branch) again — the exact premature park this
+  // stage removes (plan §9 ordering requirement 2) — which reddens the mid-drag
+  // "never parked while live" assertion. mutant-b (the finalize commit path no longer
+  // parking #home) is the EXISTING "stage6i ABORT" mutation below (nav.js's
+  // `setView`), which already forces #home to never park at all and so also reddens
+  // HOMESTAYSLIVE's post-commit assertion — one mutation, two designated killers.
+  { name: 'stage1 HOMESTAYSLIVE-a: showAppView re-parks #home inside the mid-drag render, before the gesture commits (-> HOMESTAYSLIVE mid-drag test)',
+    file: 'js/app.js',
+    from: "      else { $('browse').classList.remove('hidden'); if (render) Browse.render(desc); }",
+    to:   "      else { $('browse').classList.remove('hidden'); $('home').classList.add('parked'); if (render) Browse.render(desc); }" },
+  // REVEAL's dedicated mutant (stage 6f, plan §9) is DE-REGISTERED, not repurposed: it
+  // widened the abort-hold condition to fire on every abort, not just a browse->browse
+  // rerender, and its designated killer was test/swipe-stage6f.test.js's REVEAL test
+  // (browse→overlay), deleted above. The anchor text (js/app.js's
+  // `if (!commit && cur.finPlan.abortRender === 'rerender')`) is UNCHANGED by Stage 1 —
+  // finalization is out of this stage's scope — so the underlying guard (a non-browse-
+  // browse abort must never enter the paint-gated hold path) is UNDEFENDED by any
+  // registered mutation until either a new designated test is authored or Stage 2 deletes
+  // the branch outright (it collapses to a constant when abortRender itself retires,
+  // plan §12 item 8). Flagged as a residual, not silently dropped.
   // ── SWIPE stage 6h: commit→home scroll-settle cover-drop gate — RETIRED (Stage 6i,
   // PLAN-swipe-noswap-home.md §5/§7/§12): →home was the gate's only consumer, and a
   // fixed, never-reflowing #home no longer causes the scroll-collapse snap the gate
@@ -658,7 +677,7 @@ const MUTATIONS = [
       '        }',
       '        // Stage 6i (PLAN-swipe-noswap-home.md §5/§12): the commit→home held-reveal branch',
     ].join('\n') },
-  { name: 'stage6i ABORT: setView stops re-parking #home when the target view is not home (-> ABORT parked-after test; also DP.browse-home)',
+  { name: 'stage6i ABORT: setView stops re-parking #home when the target view is not home (-> ABORT parked-after test; also DP.browse-home; also stage1 HOMESTAYSLIVE post-commit test — Stage 1, PLAN-swipe-declone.md, relies on this SAME toggle to park #home at commit, since showAppView no longer parks it mid-drag)',
     file: 'js/nav.js',
     from: "    $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)",
     to:   "    $('home').classList.toggle('parked', false);   // mutated: #home never re-parks" },
@@ -678,14 +697,13 @@ const MUTATIONS = [
     file: 'js/scrollbar.js',
     from: "    if (t && t.id === 'home') return 'home';",
     to:   "    if (false && t && t.id === 'home') return 'home';" },
-  // RE-ANCHORED (browse-decouple, PLAN-browse-decouple.md §6 B6): the single-line home/else
-  // ternary gained a browse branch and became three lines; same mutation intent (a HOME
-  // source reverts to window.scrollY), new anchor. Independent of the browse-decouple's own
-  // GHOSTSCROLL mutation below, which drops the BROWSE branch instead.
-  { name: 'stage6i GHOSTSCROLL: the outgoing app-ghost reverts to reading window.scrollY for a HOME source (-> GHOSTSCROLL equals-500 test)',
-    file: 'js/swipe.js',
-    from: "      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0)\n        : fromKind === 'browse' ? (doc.getElementById('browse').scrollTop || 0)\n        : (env.scrollY() || 0);",
-    to:   "      const ghostY = fromKind === 'browse' ? (doc.getElementById('browse').scrollTop || 0)\n        : (env.scrollY() || 0);" },
+  // stage6i GHOSTSCROLL (HOME source) is DE-REGISTERED, not re-anchored: Stage 1
+  // (PLAN-swipe-declone.md §5.1) narrows the ghost-building case to browse->browse alone,
+  // so `ghostApp` can never be reached with a HOME source again — the branch this mutant
+  // targeted is deleted from js/swipe.js along with the retired `fromKind` parameter, and
+  // its designated test (test/swipe-stage6i.test.js's home-source GHOSTSCROLL) is deleted
+  // with it (not migrated — there is no home-source ghost left to assert on). The
+  // browse-source form survives as the entry below.
   { name: 'stage6i HOMEFIXED: the active #home rule drops position:fixed/overflow-y (-> HOMEFIXED source-text test)',
     file: 'css/app.css',
     from: '#home {\n  position: fixed; left: 0; right: 0;',
@@ -704,10 +722,15 @@ const MUTATIONS = [
     file: 'js/scrollbar.js',
     from: "    if (t && t.id === 'browse') return 'browse';",
     to:   "    if (false && t && t.id === 'browse') return 'browse';" },
+  // RE-ANCHORED (Stage 1, PLAN-swipe-declone.md §5.1): `ghostApp` is now reachable ONLY
+  // with a browse source (the HOME branch and the `fromKind` parameter are retired — see
+  // the de-registered stage6i GHOSTSCROLL note above), so the ternary collapses to one
+  // line. Same mutation intent (a browse source reverts to reading window.scrollY),
+  // simpler anchor.
   { name: 'browse-decouple GHOSTSCROLL: the outgoing app-ghost reverts to reading window.scrollY for a BROWSE source (-> GHOSTSCROLL equals-500 test)',
     file: 'js/swipe.js',
-    from: "      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0)\n        : fromKind === 'browse' ? (doc.getElementById('browse').scrollTop || 0)\n        : (env.scrollY() || 0);",
-    to:   "      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0)\n        : (env.scrollY() || 0);" },
+    from: "      const ghostY = doc.getElementById('browse').scrollTop || 0;",
+    to:   "      const ghostY = env.scrollY() || 0;" },
   { name: 'browse-decouple STRIPEXCLUDE: the .alphaindex exclusion is dropped from the ghost clone (-> STRIPEXCLUDE no-strip test)',
     file: 'js/swipe.js',
     from: "      clone.querySelectorAll('.alphaindex').forEach((n) => n.remove());",

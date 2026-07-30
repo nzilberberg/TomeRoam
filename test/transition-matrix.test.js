@@ -76,14 +76,17 @@ test('the SETTINGS-SUB half of the registry is derived from nav.js, not hand-lis
 // stated in prose, independently of any implementation — a hand-error in the spec fails
 // here before it can propagate. (Production is checked against the spec separately in
 // test/swipe-transition.test.js.)
-test('the frozen spec builds a pane exactly when the GHOST rule says (SNAPSHOT retired, Stage 6i)', async () => {
+test('the frozen spec builds a pane exactly when the GHOST rule says (Stage 1, PLAN-swipe-declone.md)', async () => {
   const spec = await loadSpec();
   const wrong = [];
   for (const c of spec.STRUCTURAL_CASES) {
-    //   GHOST iff source is not an overlay AND destination is NOT home. The home-
-    //   snapshot incoming outcome is RETIRED (Stage 6i, PLAN-swipe-noswap-home.md): a
-    //   →home reveal never builds an owned pane, so GHOST is the only pane-building rule.
-    const expectGhost = c.from !== 'overlay' && c.to !== 'home';
+    //   GHOST iff source AND destination are BOTH browse (Stage 1, PLAN-swipe-declone.md
+    //   §5.1 — narrowed from stage 6f's "source not overlay, destination not home": every
+    //   view is already its own position:fixed inset own-scroll box, so only the one pair
+    //   sharing a single real host, #browse, still needs a stand-in). The home-snapshot
+    //   incoming outcome is RETIRED (Stage 6i, PLAN-swipe-noswap-home.md): a →home reveal
+    //   never builds an owned pane, so GHOST is the only pane-building rule.
+    const expectGhost = c.from === 'browse' && c.to === 'browse';
     const ec = c.expectedConstruction;
     if ((ec.outgoing === 'app-ghost') !== expectGhost) wrong.push(`${c.from}->${c.to} ghost`);
     if (spec.paneOf(ec) !== expectGhost) wrong.push(`${c.from}->${c.to} pane`);

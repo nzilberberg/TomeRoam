@@ -1,7 +1,9 @@
 # Subsystem Contract — Swipe / Reveal
 
 Addendum to the Durable Engineering Contract (§5 template). Describes the CURRENT
-architecture; revise per §6/§7 when it changes. Plan of record: `Claude/Plans/PLAN-swipe-reveal.md`.
+architecture; revise per §6/§7 when it changes. Plan of record: `Claude/Plans/PLAN-swipe-reveal.md`;
+current active plan: `Claude/Plans/PLAN-swipe-declone.md` (Stage 1 built 2026-07-30, Stage 2 not
+built — retires the owned-pane clone from every transition but browse→browse, then from that too).
 Deep saga + traps: cross-session memory `tomeroam-swipe-repaint-saga`.
 
 **1. Purpose and boundaries.** The horizontal edge-swipe navigation gesture and its
@@ -46,7 +48,10 @@ browse→nowplaying/home→nowplaying) the OUTGOING is now an owned-pane app-gho
 untransformed, never removed — and the new outgoing ghost is disposed once per exit through the
 existing owned-pane paths (`dropPanes` on the plain no-hold finalize; `disposeOwnedPanes(session,
 'superseded')` on supersession, stage 6e; the orphan sweep). One-line decision-value flip in
-`constructionPlanFor` (js/swipe.js); js/app.js UNTOUCHED. **Stage 6g (`#home` permanent compositing layer,
+`constructionPlanFor` (js/swipe.js); js/app.js UNTOUCHED. **Stage 1 of PLAN-swipe-declone.md
+(2026-07-30) NARROWS this back down** — see the dedicated paragraph below; the in-flow→overlay
+family this stage 6f paragraph describes is CURRENT TRUTH ONLY for the historical record, not for
+HEAD after 2026-07-30. **Stage 6g (`#home` permanent compositing layer,
 2026-07-27):** `#home`'s browser compositing layer is now a PERMANENT resource, not a per-park one. An
 unconditional stylesheet rule `#home { transform: translateZ(0); }` (css/app.css) holds the layer open for
 `#home`'s whole lifetime; the more-specific `#home.parked { transform: translateX(-101vw) }` re-expresses the
@@ -76,6 +81,20 @@ scroll recorder/restore, `playingTrackY`, the custom scrollbar, and the outgoing
 offset source) re-home to `#browse.scrollTop`. The `.266` stable-height probe (nav.js) that once
 pinned `.app` min-height on `→home` is retired — a fixed `#browse` cannot collapse the document,
 so there is nothing to pin against.
+
+**Swipe-declone Stage 1 (PLAN-swipe-declone.md, 2026-07-30) SUPERSEDES Stage 6f's in-flow→overlay
+outgoing decision.** `ghostApp()` cloned `.app` and stripped every id, so the copy's id-keyed
+`position:fixed` inset rule stopped matching and the copy laid out in a different box than the real
+view — the CAUSE of the 7px gap, the second moving background, and the reported swipe-start heading
+reflow. `constructionPlanFor`'s `outgoing` narrows from stage 6f's "an in-flow source going to any
+non-home destination" to `fromKind==='browse' && toKind==='browse'` — the ONE remaining pair whose
+source and destination share the single real `#browse` host. home→browse, home→overlay and
+browse→overlay now move their REAL view element (borrowed-real) directly; the owned-pane app-ghost
+this section's stage-6f/6f paragraphs describe is now built ONLY for browse→browse. `showAppView`
+(js/app.js) also stops parking `#home` synchronously inside the mid-drag render — the park is
+deferred to commit (the existing `applyScreen`→`Nav.setView` toggle, unchanged) and never happens on
+an abort. Stage 2 (not built) removes the clone from browse→browse too, at which point `ghostApp`,
+`dropPanes`, the capture-recording block and the `.nav-ghost` sweeps are all deleted outright.
 
 **8. Resource owner.** The gesture session (`d`/`cur`). Stage 3 stamped the session id;
 resource-handle ownership (settle rAF stored on the session, cancelled in finalize) landed at
@@ -195,7 +214,11 @@ browse→nowplaying modifier) flipped from `real-source` to `app-ghost` in `swip
 generated inventories (`docs/transition-matrix.generated.txt`, `docs/swipe-model.generated.txt`)
 regenerated (the in-flow→overlay pairs move from no-pane to a pane; the concrete pane count rose
 27→62). The app.js mirrored-region fingerprints in the model are UNCHANGED, which proves app.js was
-not touched. **Stage 6g (2026-07-27):** the `#home` permanent-promotion invariant (§18) has a SOURCE-TEXT
+not touched. **Swipe-declone Stage 1 (2026-07-30) REVERSES this and goes further:** `home→overlay`
+and `browse→overlay` flip back to `real-source` (undoing stage 6f), and `home→browse` — `app-ghost`
+since stage 4's original wider rule, never touched by 6f — ALSO flips to `real-source` in
+`swipe-plan-spec.mjs`; only `browse→browse` still returns `app-ghost`. Both generated inventories
+were regenerated again. **Stage 6g (2026-07-27):** the `#home` permanent-promotion invariant (§18) has a SOURCE-TEXT
 oracle, `test/home-layer-invariant.test.js` — it reads the TEXT of `css/app.css` (jsdom cannot compute a
 stylesheet transform) and asserts the base `#home` rule carries a persistent layer-promoting transform and
 that no `{#home, #home.parked}` cascade resolution lands `#home` on `none` (cell PROMO). It is a source-text
@@ -225,7 +248,12 @@ outgoing is an owned-pane app-ghost and the real view stays in flow, untransform
 or demoted from a compositing layer by the swipe. This is the OUTGOING half of the §7-step-6
 structural fix for the in-flow→overlay family ONLY — the INCOMING real-`#browse` transform
 (browse→browse headline, home→browse, overlay→browse) and the browse→home outgoing transform are
-still open (§22/§23). **Stage 6g (2026-07-27)** adds the REVEAL-SCOPED structural invariant for `#home`:
+still open (§22/§23). **SUPERSEDED (Swipe-declone Stage 1, 2026-07-30):** this invariant now holds
+ONLY for browse→browse. home→overlay, browse→overlay and home→browse move their real element
+directly instead — the opposite of "never a mover" — because every view is already its own
+`position:fixed` inset own-scroll box and a copy bought nothing on those three transitions (it cost
+the id-stripped clone's own geometry divergence, the reported cause of this campaign's three
+symptoms). See the Stage 1 paragraph in §7. **Stage 6g (2026-07-27)** adds the REVEAL-SCOPED structural invariant for `#home`:
 no un-park / reveal transition — any transition that removes `.parked` from `#home` to make it the active
 view — leaves `#home` on `transform: none`. The unconditional base `translateZ(0)` holds across the parked↔
 un-parked cascade (the more-specific `#home.parked` transform wins while parked; the base rule applies the
@@ -300,7 +328,12 @@ real-in-flow-view transform on in-flow→overlay transitions (a structural step 
 but does NOT fix the compositor flash. The flash is compositor-level and invisible to CI/local
 instrumentation; its confirmation is device-only and downstream; and the ghost-teardown/layer-demotion
 suspect remains open on device — finalize yanks a full-viewport composited ghost in one frame (Loki
-observation). Structural-green (no swipe transform on the real view) is not a flash fix. **Stage 6g note
+observation). Structural-green (no swipe transform on the real view) is not a flash fix.
+**Swipe-declone Stage 1 note (2026-07-30):** 6f's in-flow→overlay ghost is ITSELF now superseded —
+home→overlay and browse→overlay move their real element again, so the "no swipe transform on the
+real view" property no longer holds for them at all (see §18). The ghost-teardown flash suspect Loki
+named is correspondingly moot for those two transitions (there is no ghost to tear down); it remains
+live only for browse→browse, unaffected by this stage. **Stage 6g note
 (2026-07-27):** one flash CAUSE is now addressed — the home→books ABORT flash was the `#home` un-park DEMOTE
 (removing `.parked` dropped `#home`'s compositing layer → iOS re-raster). Keeping `#home` a permanent layer
 (§7/§18) eliminates that demote. This is DEVICE-CONFIRMED for the `will-change` probe form (build `.256`
@@ -357,7 +390,10 @@ adding a screen kind or a parameterized descriptor family; a synchronous rewrite
 `env.renderDestination` (reopens §14's residual). **Stage 6f (2026-07-27)** opened the STRUCTURAL-FIX
 axis (never transform the real in-flow view) with its first slice — the in-flow→overlay OUTGOING is
 now an owned-pane app-ghost, so the real `#browse`/`#home` is never a mover on browse→overlay/
-home→overlay (and their NP members). It rests on an ENUMERATED precondition: all seven overlay kinds
+home→overlay (and their NP members). **SUPERSEDED (Swipe-declone Stage 1, 2026-07-30): the opposite is
+now true — home→overlay and browse→overlay move their real element directly; the ENUMERATED overlay-
+background precondition below is now moot for this axis** (there is no ghost for those transitions to
+exclude an overlay from). It rests on an ENUMERATED precondition: all seven overlay kinds
 (`options`, `nowplaying`, `general`, `playback`, `buffering`, `downloads`, `diagnostics`) paint an
 opaque `background: var(--page-bg)` over their own rect (css/app.css, verified at HEAD). A kind-level
 `constructionPlanFor` flip cannot exclude a single overlay, so any change to an overlay's background,

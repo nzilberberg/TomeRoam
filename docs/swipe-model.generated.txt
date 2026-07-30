@@ -55,9 +55,9 @@ before this document is trusted again. Never update a pinned constant alone.
      js/app.js:140   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
      js/app.js:141   else navStack.push(desc);
      js/app.js:164   navStack.push({ v }); fwdStack.length = 0;
-     js/app.js:790   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
-     js/app.js:791   else navStack.push(fwdStack.pop());
-     js/app.js:1370  navStack = [{ v: 'home' }];
+     js/app.js:802   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:803   else navStack.push(fwdStack.pop());
+     js/app.js:1382  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------
@@ -67,10 +67,10 @@ before this document is trusted again. Never update a pinned constant alone.
    same semantic descriptor          books() -> books()                      pane=yes abort=rerender back=UNREACHABLE
    same parameterized identity       authorBooks(A) -> authorBooks(A)        pane=yes abort=rerender back=reachable
    browse -> home                    books() -> home()                       pane=no  abort=none     back=reachable
-   home -> browse                    home() -> books()                       pane=yes abort=none     back=reachable
+   home -> browse                    home() -> books()                       pane=no  abort=none     back=reachable
    overlay -> overlay                general() -> options()                  pane=no  abort=none     back=reachable
    overlay -> browse                 options() -> books()                    pane=no  abort=none     back=reachable
-   browse -> overlay                 books() -> nowplaying()                 pane=yes abort=none     back=reachable
+   browse -> overlay                 books() -> nowplaying()                 pane=no  abort=none     back=reachable
    nowplaying -> files (new-forward)  nowplaying() -> files(A)                pane=no  abort=none     back=reachable
    malformed payload                 authorBooks(—) -> books()               REJECTED source malformed-descriptor:authorBooks-without-author
    malformed payload                 books() -> files(—)                     REJECTED destination malformed-descriptor:files-without-book

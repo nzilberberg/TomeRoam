@@ -163,7 +163,9 @@ test('movers carry the external {element,ownership,slot} shape, not the producti
       `${which} mover must NOT emit the production el/base/own keys — L3 owns that mapping`);
     assert.equal(m.slot, which, `${which} mover slot must be "${which}"`);
   }
-  assert.equal(c.movers.outgoing.ownership, 'owned-pane', 'home->browse outgoing is an app-ghost owned-pane');
+  // Stage 1 (PLAN-swipe-declone.md §5.1): home->browse no longer builds an owned pane —
+  // the real #home is the outgoing mover directly. Only browse->browse still ghosts.
+  assert.equal(c.movers.outgoing.ownership, 'borrowed-real', 'home->browse outgoing is the real #home');
   assert.equal(c.movers.incoming.ownership, 'borrowed-real', 'home->browse incoming is the real #browse');
 });
 
@@ -200,10 +202,13 @@ test('an app-ghost capture carries ghostY; a browse→home transition builds no 
 });
 
 // ── F4a — driven with NO ambient DOM; the pane is built in env.document ──────────────
+// Stage 1 (PLAN-swipe-declone.md §5.1) narrows the ghost-building case to browse->browse
+// alone, so this fixture drives books->authors rather than home->books to keep exercising
+// an owned pane at all.
 test('buildConstruction runs with no ambient document/window and builds the pane in env.document', () => {
   const ctx = mkEnv();
   // withPoisonedAmbient throws on any global document/window/Element/getComputedStyle read.
-  const c = build(desc('home'), desc('books'), ctx);
+  const c = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ctx);
   assert.equal(ctx.doc.querySelectorAll('.nav-ghost').length, 1,
     'the owned-pane ghost is mounted into env.document.body, reached only through env');
   assert.ok(c.movers.outgoing.element, 'the outgoing mover carries the built element');
@@ -251,9 +256,11 @@ test('the outgoing pane is mounted before env.renderDestination is ever called',
 // build fixes (test/page-bg-single-painter.test.js's single-painter rule — body::before,
 // fixed, never moving — was violated by this wrapper's own copy riding the transform).
 // See js/swipe.js ghostWrap() for the reasoning and the device-owed residue.
+// Stage 1 (PLAN-swipe-declone.md §5.1) narrows the ghost-building case to browse->browse
+// alone (home->books no longer builds one) — books->authors is the fixture that still does.
 test('the ghost wrapper carries no background declaration of its own', () => {
   const ctx = mkEnv();
-  const c = build(desc('home'), desc('books'), ctx);
+  const c = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ctx);
   const wrap = ctx.doc.querySelector('.nav-ghost');
   assert.ok(wrap, 'the ghost wrapper is built');
   assert.ok(!/background/i.test(wrap.style.cssText),
@@ -265,7 +272,7 @@ test('the ghost wrapper carries no background declaration of its own', () => {
 
 test('the nav-ghost wrapper carries its full fixed/clipped/non-interactive contract', () => {
   const ctx = mkEnv();
-  build(desc('home'), desc('books'), ctx);
+  build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ctx);
   const css = ctx.doc.querySelector('.nav-ghost').style.cssText;
   for (const decl of ['position: fixed', 'inset: 0px', 'overflow: hidden',
     'pointer-events: none', 'will-change: transform']) {
@@ -298,8 +305,11 @@ test('the NP pill decoration is cloned, stripped, classed, and slotted by endpoi
 });
 
 // ── freezeArt — data-art stripped BEFORE the clone connects to the live document ─────
-test('the app-ghost recipe strips data-art before the clone is mounted, for both a browse-family and a home source', () => {
-  // browse source (books->authors builds a ghost of .app while browse is showing).
+// Stage 1 (PLAN-swipe-declone.md §5.1) retires the HOME-source half of this test: a
+// home->browse gesture no longer builds an owned pane at all (the real #home is the
+// outgoing mover directly), so there is no home-source ghost left to strip data-art
+// from. browse->browse is the one remaining case that still clones .app.
+test('the app-ghost recipe strips data-art before the clone is mounted, for a browse-family source', () => {
   const browseCtx = mkEnv();
   addCovers(browseCtx.doc, browseCtx.doc.querySelector('.app'), 3);
   build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), browseCtx);
@@ -307,15 +317,4 @@ test('the app-ghost recipe strips data-art before the clone is mounted, for both
   assert.ok(browseImgs.length > 0, 'the ghost clones the covers');
   assert.equal([...browseImgs].filter((i) => i.hasAttribute('data-art')).length, 0,
     'the app-ghost clone must have every img[data-art] stripped, so a cloned cover cannot re-trigger the art loader');
-
-  // home source (home->browse builds a ghost of .app while home is showing — Stage 6i:
-  // browse→home no longer builds ANY owned pane, so a home-as-SOURCE ghost is the only
-  // remaining owned-pane path that touches #home's own content; home-snapshot is retired).
-  const homeCtx = mkEnv();
-  addCovers(homeCtx.doc, homeCtx.doc.getElementById('home'), 3);
-  build(desc('home'), desc('books'), homeCtx);
-  const homeImgs = homeCtx.doc.querySelectorAll('.nav-ghost img.cover');
-  assert.ok(homeImgs.length > 0, 'the home-source ghost clones #home\'s covers');
-  assert.equal([...homeImgs].filter((i) => i.hasAttribute('data-art')).length, 0,
-    'the home-source app-ghost clone must have every img[data-art] stripped too');
 });

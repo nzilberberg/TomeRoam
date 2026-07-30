@@ -290,8 +290,7 @@ test('AB.noclobber-home — a home->browse ABORT does NOT re-render #browse (ren
       `fixture sanity: the forward swipe was home->browse and aborted — got ${settles(h).at(-1)}`);
     assert.equal(holds(h).length, hBefore,
       'a home->browse abort must NOT take the browse-host re-render/held branch — the home source (#home) is '
-      + `not the browse host, so abortRender is 'none'. A mutation keying abortRender on outgoing==='app-ghost' `
-      + `reddens HERE (home->browse's outgoing IS an app-ghost, unlike overlay->browse). holds delta=${holds(h).length - hBefore}`);
+      + `not the browse host, so abortRender is 'none'. holds delta=${holds(h).length - hBefore}`);
     assert.ok(scrollCalls(h).length > sBefore, 'but the abort must still restore the starting scroll');
   } finally { h.dispose(); }
 });

@@ -35,7 +35,11 @@
 // app.js until stages 6/7. Stage 6i (PLAN-swipe-noswap-home.md) later retires snapshotHome
 // entirely: active #home becomes a position:fixed own-scroll view that is un-parked as the
 // real incoming mover, so a →home reveal needs no snapshot — ghostApp is now the sole
-// owned-pane recipe.
+// owned-pane recipe. Stage 1 of PLAN-swipe-declone.md narrows ghostApp's OWN invocation
+// further still: every view is already its own position:fixed inset own-scroll box, so
+// only browse->browse (the one pair sharing a single real host, #browse) still needs a
+// stand-in — home->browse, home->overlay and browse->overlay move their real element
+// directly instead of cloning it.
 const Swipe = (() => {
   'use strict';
 
@@ -115,11 +119,19 @@ const Swipe = (() => {
   // constructionPlanFor — what start() must BUILD. Immutable. No default branch; an
   // unhandled classification THROWS (plan §3.3).
   //   outgoing         'app-ghost'        freeze the source as a ghost (owned-pane) —
-  //                                        an in-flow source (home/browse) going to any
-  //                                        non-home destination (browse or overlay), so
-  //                                        the real in-flow view is never a mover
+  //                                        Stage 1 (PLAN-swipe-declone.md §5.1) narrows
+  //                                        this to the ONE case whose source and
+  //                                        destination still share the real #browse host:
+  //                                        fromKind==='browse' && toKind==='browse'. Every
+  //                                        view is already its own position:fixed inset
+  //                                        own-scroll box, so every other pair moves its
+  //                                        real element directly instead of covering it
+  //                                        with a copy.
   //                    'real-source'      move the real source element (borrowed-real):
-  //                                        an overlay, or an in-flow view going to home
+  //                                        an overlay, an in-flow view going to home
+  //                                        (Stage 6i), or (Stage 1) an in-flow view going
+  //                                        to browse or to an overlay — anything that is
+  //                                        not the browse->browse case above
   //   incoming         'real-destination' the real overlay element, the real #browse
   //                                        with the destination rendered into it, or
   //                                        (Stage 6i, PLAN-swipe-noswap-home.md) the
@@ -140,14 +152,19 @@ const Swipe = (() => {
     if (KINDS.indexOf(c.fromKind) === -1) {
       throw new Error('Swipe.constructionPlanFor: unhandled source kind "' + c.fromKind + '"');
     }
-    // outgoing is an app-ghost iff the source is in-flow (not overlay) AND the
-    // destination is NOT home (stage 6f: widened from "destination is browse" to
-    // include in-flow->overlay, so the real in-flow view is never a mover on those
-    // transitions too; in-flow->home stays real-source — Stage 6i, PLAN-swipe-noswap-
-    // home.md option (a) — the real #browse/overlay outgoing mover is what keeps its
-    // covers warm across an abort, so it is never ghosted).
-    const outgoing = c.fromKind === 'overlay' ? 'real-source'
-      : (c.toKind === 'home' ? 'real-source' : 'app-ghost');
+    // outgoing is an app-ghost iff the transition shares the #browse host on BOTH ends
+    // (fromKind==='browse' && toKind==='browse') — Stage 1, PLAN-swipe-declone.md §5.1,
+    // narrowing stage 6f's wider "in-flow source, non-home destination" rule. That
+    // browse->browse case is the one pair whose source and destination are the SAME real
+    // element, so the outgoing page needs a stand-in while the live host is overwritten
+    // for the incoming render (Stage 2 removes even this, once each browse page owns its
+    // own scroller). Every other pair — home->browse, home->overlay, browse->overlay,
+    // in-flow->home (Stage 6i), overlay->* — moves its real element directly: every view
+    // is already its own position:fixed inset own-scroll box already sitting in the DOM,
+    // so covering it with a copy bought nothing (plan §3 audit) and cost the ghost's own
+    // id-stripped, differently-laid-out geometry (the 7px gap, the 53px patch, the
+    // reported swipe-start reflow).
+    const outgoing = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'app-ghost' : 'real-source';
     let incoming, renderDestination;
     if (c.toKind === 'overlay') { incoming = 'real-destination'; renderDestination = 'none'; }
     // Stage 6i (PLAN-swipe-noswap-home.md §4): active #home is a position:fixed
@@ -262,21 +279,22 @@ const Swipe = (() => {
       wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;pointer-events:none;will-change:transform;';
       return wrap;
     }
-    // A ghost of the current app-view (minus the shared topbar), shifted up by the current
-    // scroll to match what's on screen. Used app-view↔app-view (the real view is re-rendered
-    // for the destination). `fromKind` selects the offset SOURCE (Stage 6i, PLAN-swipe-
-    // noswap-home.md §9 L5, Loki KILL; the browse-decouple, PLAN-browse-decouple.md §6 B6,
-    // does the same for browse): a HOME source's own vertical scroll lives on #home.scrollTop
-    // and a BROWSE source's on #browse.scrollTop (both fixed own-scroll views, not the
-    // document), so each must read ITS offset from its own element — window.scrollY is
-    // always 0 for a fixed #home/#browse and would build the ghost at top (the 500px
-    // jump-to-top Loki's counterexample found). Both feed the SAME whole-clone
-    // content-translate; the clone is a static id-stripped content tree, never a scroll
-    // container, so the offset is carried by the transform, not by a clone scrollTop (a
-    // clone's #home/#browse id is stripped, so `overflow-y:auto` never applies to it — a
-    // scrollTop write on the clone would be inert). Returns
-    // { wrap, capture:{ ghostY, animSync, animRes } }.
-    function ghostApp(fromKind) {
+    // A ghost of the current #browse (minus the shared topbar), shifted up by the current
+    // scroll to match what's on screen. Stage 1 (PLAN-swipe-declone.md §5.1) narrows this
+    // recipe's own invocation to the ONE remaining owned-pane case, browse->browse — every
+    // other transition (home->browse, home->overlay, browse->overlay, in-flow->home) now
+    // moves its real element directly (constructionPlanFor above), so a HOME source can
+    // never reach this function any more; the `fromKind` parameter and its home-offset
+    // branch are retired with it (the browse-decouple, PLAN-browse-decouple.md §6 B6,
+    // established the browse-offset branch this collapses to). The offset is always
+    // #browse.scrollTop (a fixed own-scroll view, not the document — window.scrollY is
+    // always 0 for it and would build the ghost at top, the 500px jump-to-top Loki's
+    // counterexample found). Feeds the whole-clone content-translate; the clone is a
+    // static id-stripped content tree, never a scroll container, so the offset is carried
+    // by the transform, not by a clone scrollTop (a clone's #browse id is stripped, so
+    // `overflow-y:auto` never applies to it — a scrollTop write on the clone would be
+    // inert). Returns { wrap, capture:{ ghostY, animSync, animRes } }.
+    function ghostApp() {
       const clone = doc.querySelector('.app').cloneNode(true);
       // Align the clone's content-top to the REAL active view's content-top
       // (calc(var(--safe-top) + 51px) [#home top, css:128] + 14px [#home padding-top, css:131]),
@@ -285,7 +303,11 @@ const Swipe = (() => {
       // in normal flow, so --safe-top cancels: (51 + 14) - 12 = 53. Measured against the real
       // layout in a live engine (Brunel, PLAN-home-shift-fix.md §3): with this value the clone's
       // first rendered content lands at the identical viewport-Y as the real #home/#browse, at
-      // safe-top 0 and at a simulated notch, with zero delta (-> M2ALIGN aligned-value test).
+      // safe-top 0 and at a simulated notch, with zero delta. Still load-bearing for the
+      // browse->browse ghost this recipe now exclusively builds; its dedicated CI cell
+      // (M2ALIGN, test/ghost-clone-geometry.test.js) drove the retired HOME-source path
+      // and was deleted rather than migrated (PLAN-swipe-declone.md §12 item 16) — this
+      // constant is scheduled for deletion with the rest of ghostApp in Stage 2.
       const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '53px';
       clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
       const tb = clone.querySelector('.topbar'); if (tb) tb.remove();
@@ -299,9 +321,7 @@ const Swipe = (() => {
       clone.querySelectorAll('.alphaindex').forEach((n) => n.remove());
       freezeArt(clone);
       clone.style.margin = '0 auto';
-      const ghostY = fromKind === 'home' ? (doc.getElementById('home').scrollTop || 0)
-        : fromKind === 'browse' ? (doc.getElementById('browse').scrollTop || 0)
-        : (env.scrollY() || 0);
+      const ghostY = doc.getElementById('browse').scrollTop || 0;
       clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
       const wrap = ghostWrap();
       wrap.appendChild(clone);
@@ -334,7 +354,7 @@ const Swipe = (() => {
   function buildConstruction(from, dest, env) {
     const classification = classifyTransition({ from, to: dest });
     const plan = constructionPlanFor(classification);
-    const { fromKind, sourceHost, destinationHost } = classification;
+    const { sourceHost, destinationHost } = classification;
     const { ghostApp, npPillClone } = paneBuilders(env);
     const mover = (element, ownership, slot) => ({ element, ownership, slot });
 
@@ -352,7 +372,7 @@ const Swipe = (() => {
     // →home now builds NO owned pane at all — `capture` is a single object or null).
     let capture = null, outgoing, incoming, decoration = null;
     if (plan.outgoing === 'app-ghost') {
-      const g = ghostApp(fromKind);
+      const g = ghostApp();
       outgoing = mover(g.wrap, 'owned-pane', 'outgoing');
       capture = g.capture;
     } else {

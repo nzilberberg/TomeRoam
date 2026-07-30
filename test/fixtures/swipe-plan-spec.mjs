@@ -29,8 +29,11 @@
 export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options' };
 
 // The eight structural transitions (home->home is not a transition). Each expectation
-// mirrors js/swipe.js constructionPlanFor() as of stage 6i (PLAN-swipe-noswap-home.md):
-//   outgoing 'app-ghost' iff the SOURCE is not an overlay AND the DESTINATION is NOT home
+// mirrors js/swipe.js constructionPlanFor() as of Stage 1 (PLAN-swipe-declone.md §5.1):
+//   outgoing 'app-ghost' iff the SOURCE AND DESTINATION are BOTH browse (narrowed from
+//     stage 6f's wider "source not overlay, destination not home" — every view is
+//     already its own position:fixed inset own-scroll box, so only the one pair sharing
+//     a single real host, #browse, still needs a stand-in)
 //   incoming 'real-destination' ALWAYS — the home-snapshot outcome is RETIRED (Stage 6i):
 //     a →home reveal un-parks the real fixed #home as the incoming mover instead
 //   renderDestination 'browse-host' iff the DESTINATION is browse
@@ -53,11 +56,11 @@ export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options
 // expectedConstruction/expectedFinalization, and the per-pair host proof in swipe-transition.test.js
 // is `{ todo }` until then. Its presence here must NOT be read as "the hosts are verified".
 export const STRUCTURAL_CASES = [
-  { from: 'home',    to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
-  { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
+  { from: 'home',    to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
+  { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
   { from: 'browse',  to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'home-host',   decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'home' } },
   { from: 'browse',  to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'rerender' }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
-  { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
+  { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
   { from: 'overlay', to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'home-host',   decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'home' } },
   { from: 'overlay', to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'browse-host' } },
   { from: 'overlay', to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'overlay' } },
@@ -182,7 +185,7 @@ export const MODIFIER_CASES = [
   {
     name: 'Now Playing as destination (browse->overlay) carries an incoming-based pill',
     input: { from: { v: 'books' }, to: { v: 'nowplaying' } },
-    expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'none',
+    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',
       decorations: [NP_DECORATION.destination] },
   },
   {

@@ -144,10 +144,16 @@ body.has-player .app { padding-bottom: calc(var(--nav-pad) + 190px); }
    the document (removes flash hypothesis (i), plan §3). Same inset-scroll-box model as
    #options/#downloads below: confined between the fixed topbar and navbar, with its own
    overflow-y:auto sized to its DYNAMIC content (a conditional Downloads carousel can make
-   it taller than the viewport — correction 1). An opaque background so it fully occludes
-   #browse during the browse→home filmstrip (two real movers, §3); #browse carries no
-   z-index of its own (below — PLAN-browse-decouple.md §3), so #home's z20 still paints
-   above it in the root stacking context, below every additive overlay.
+   it taller than the viewport — correction 1). #home declares NO background of its own
+   (scrubbed 2026-07-30, PLAN-swipe-declone.md §1: an earlier version of this comment
+   claimed an opaque background occludes #browse during the browse→home filmstrip, which
+   was false at HEAD even before this plan). What actually keeps the filmstrip clean is
+   that its two movers never occupy the same screen space at once (real-engine-measured,
+   PLAN-swipe-declone.md §15 R2: sharing one drag delta with a fixed base offset keeps
+   them edge-to-edge, zero gap or overlap, for the whole live drag) — z-index is only
+   load-bearing at the instant of a settle/commit, where #browse carries no z-index of
+   its own (below — PLAN-browse-decouple.md §3), so #home's z20 still paints above it in
+   the root stacking context, below every additive overlay.
    overscroll-behavior:contain bounds the retained runway's possible phantom
    document double-scroll (§8 A2, device gate
    R1(c)). 6g's will-change disposition under a permanently-fixed #home is device-gated,

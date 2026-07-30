@@ -1062,3 +1062,52 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   promise holds and TRANSFERS to the built code, Poirot-verified the three structural properties, so no
   re-strike), Curie RED, Brunel BUILD_GREEN, Poirot SHIP, Mendeleev ADEQUATE; completion gate COMPLETE.
   Ratified plan `Claude/Plans/PLAN-swipe-stage6h.md`; build target `11fc190`.
+
+- Swipe-declone Stage 1 (retire the clone from three of the four remaining ghost transitions)
+  IMPLEMENTED — 2026-07-30, build `2026-07-30.274`. The user directed the plan-review/test-author
+  gates be waived for this build (a full day of ceremony already spent; the stage deletes machinery
+  rather than adding it) — Charpy, Loki, Poirot and Mendeleev did not run on this stage; Brunel built
+  and self-verified against the plan's own coverage matrix. CAUSE (`Claude/Plans/PLAN-swipe-declone.md`
+  §1): `ghostApp()` clones `.app` and strips every id, so the copy's `#home`/`#browse` loses its
+  id-keyed `position:fixed` inset rule and lays out in normal flow — a different box than the real
+  view. `js/swipe.js`'s `constructionPlanFor` narrows `outgoing` from "an in-flow source going to any
+  non-home destination" to `fromKind==='browse' && toKind==='browse'`: home→browse, home→overlay and
+  browse→overlay now move their REAL view element directly; only browse→browse still clones (every
+  view is already its own fixed inset own-scroll box, so a copy bought nothing on the other three
+  transitions). `js/app.js`'s `showAppView` stops parking `#home` synchronously mid-drag on the
+  browse-destination branch — the park is deferred to commit via the existing `applyScreen` →
+  `Nav.setView` path (unchanged) and never happens on abort (the reveal returns to the original `home`
+  descriptor). Pre-build measurement in a real engine (headless Chrome over a static server, plan
+  §15 R1/R2): a real `#home` translated by the swipe shows zero content-top/font-size delta at rest
+  vs. mid-transform (transforms do not affect layout or font metrics); a fixed mover at
+  `translateX(±innerWidth)` does not extend `document.scrollingElement.scrollWidth`; the two filmstrip
+  movers are edge-to-edge with zero gap or overlap for the entire live drag (they share one delta with
+  a fixed base-offset separation) — no wrapper-clipping replacement was needed for R-A. R1 could not
+  confirm or deny the reported carousel-heading-resize symptom itself: that is suspected WebKit font
+  boosting, which Blink does not implement, so it stays device-owed (plan §15 R-E) — if it survives on
+  device, the hypothesis is falsified and the cause is elsewhere; `text-size-adjust` is explicitly not
+  a fallback. DELETED (not migrated): `test/ghost-clone-geometry.test.js` (M2ALIGN — policed the now-
+  retired home-source ghost's alignment) and `test/swipe-stage6f.test.js` (its whole premise, ghosting
+  every in-flow→overlay transition, is the rule this stage reverses). `ghostApp`'s home-source offset
+  branch and its `fromKind` parameter are dead by construction once only browse→browse reaches it, and
+  were removed with their designated test (swipe-stage6i.test.js's GHOSTSCROLL, home-source variant).
+  The 53px `#library` compensation constant and its derivation comment STAY — still load-bearing for
+  the still-live browse→browse ghost — scheduled for deletion with the rest of `ghostApp` in Stage 2.
+  Scrubbed a false `#home` CSS comment claiming an opaque background occludes `#browse` during the
+  browse→home filmstrip (`#home` declares no background at all; the plan found this false at HEAD
+  independent of this stage). NEW: `test/no-view-clone-gate.test.js` (NOAPPCLONE) — built now rather
+  than deferred to Stage 2, per explicit instruction — scans first-party `js/**` for a clone whose
+  receiver resolves to a view host (an unresolvable receiver fails rather than passing silently); two
+  registered exceptions, the Now Playing pill and a dated, explicitly temporary allowance for the
+  browse→browse clone that Stage 2 must remove. `test/swipe-declone-stage1.test.js` adds NOGHOSTINFLOW
+  (unit, all eight structural cases) and HOMESTAYSLIVE (integration, three cases: never parked while
+  live, parked only at commit, never parked after abort); every new/changed mutation was applied and
+  proven to redden the intended assertion, then restored. Full suite 783/782/0-fail/1-skip (the one
+  skip is the pre-existing device-only KEEPER guard, unrelated). Ratified plan
+  `Claude/Plans/PLAN-swipe-declone.md`, ratified at `ed19791`. DEVICE-OWED: the heading-reflow
+  reported symptom itself (R-E, above); R3 (the A–Z strip riding a transformed `#browse` on a
+  `browse→*` drag, already shipping on `→home`, untested in this new direction). Stage 2 (not built):
+  make each `.browsepage` its own fixed inset own-scroll box, collapse `outgoing`/`abortRender` to
+  their single remaining value, execute the plan's full §12 deletion list (`ghostApp` itself,
+  `dropPanes`, the capture-recording block, the `.nav-ghost` sweeps), and remove the gate's temporary
+  browse→browse exception.

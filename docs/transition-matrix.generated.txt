@@ -12,15 +12,15 @@ registry: 12 screens, 132 ordered pairs
 CONSTRUCTION PLAN by kind (from the frozen spec; abort is frozen finalization data)
   from     to        outgoing      incoming          render       pane   abort
   -------  --------  ------------  ----------------  -----------  -----  --------
-  home     browse    app-ghost     real-destination  browse-host  yes    none
-  home     overlay   app-ghost     real-destination  none         yes    none
+  home     browse    real-source   real-destination  browse-host  no     none
+  home     overlay   real-source   real-destination  none         no     none
   browse   home      real-source   real-destination  home-host    no     none
   browse   browse    app-ghost     real-destination  browse-host  yes    rerender
-  browse   overlay   app-ghost     real-destination  none         yes    none
+  browse   overlay   real-source   real-destination  none         no     none
   overlay  home      real-source   real-destination  home-host    no     none
   overlay  browse    real-source   real-destination  browse-host  no     none
   overlay  overlay   real-source   real-destination  none         no     none
 
-concrete pairs building a pane: 51 of 132
+concrete pairs building a pane: 12 of 132
 concrete pairs re-rendering on abort: 12
 concrete pairs carrying the NP pill: 22

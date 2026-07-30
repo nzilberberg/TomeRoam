@@ -19,8 +19,12 @@
 // ⚠️ DEVICE-OWED, NOT HERE. The carousel flash R1(a), bar stability R1(b), nested-scroll R1(c),
 // the L5 on-screen zero-jump R1(d), and the browse→home abort cover-warmth/no-demote R1(e) are
 // PAINTS jsdom cannot see. They are device gates, NOT CI cells (the vacuously-green-harness
-// scar). GHOSTSCROLL asserts only the SOURCE the ghost offset is READ FROM (#home.scrollTop),
-// never the on-screen position.
+// scar).
+//
+// GHOSTSCROLL (originally: the outgoing app-ghost of a scrolled HOME source reads its offset
+// from #home.scrollTop, not window.scrollY) is RETIRED by Stage 1 of PLAN-swipe-declone.md: a
+// home->books gesture no longer builds an owned pane at all, so there is no home-source ghost
+// left to assert on. See the note in place of the deleted test, below.
 const { test } = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
@@ -252,53 +256,14 @@ test('SCROLLBAR — surfaceKind recognises the fixed own-scroll #home as a suppo
       'surfaceKind(#home) must return a supported (non-null) surface kind so the indicator draws on the fixed own-scroll home; got null');
   });
 
-// ─────────────────────────────────────────────────────────────────────────────────────────
-// GHOSTSCROLL (§10, integration — Loki's promoted probe) — the outgoing app-ghost of a SCROLLED
-// HOME source derives its whole-clone content-translate offset from HOME'S OWN scroll
-// (#home.scrollTop), not window.scrollY. This is the CI-checkable SOURCE branch of Loki's
-// counterexample; the on-screen zero-jump is a paint (device-owed, R1(d)) and is NOT asserted here.
+// GHOSTSCROLL (the outgoing app-ghost of a scrolled HOME source reading #home.scrollTop, not
+// window.scrollY) is RETIRED, not migrated: Stage 1 (PLAN-swipe-declone.md §5.1) narrows the
+// ghost-building case to browse->browse alone, so home->books no longer builds an owned pane
+// at all (`ghostApp` can no longer be reached with a HOME source — js/swipe.js's `fromKind`
+// parameter and its home-offset branch were removed with it). The browse-source form of this
+// same property is `test/swipe-construction.test.js`'s "an app-ghost capture carries ghostY"
+// test, unaffected by this narrowing.
 //
-// RED AT HEAD (confirmed): ghostApp reads env.scrollY() (window.scrollY) for the offset, so with
-// #home.scrollTop=500 / window.scrollY=0 the captured ghostY is 0 and the clone is translated to
-// translateY(0px) — the "equals 500" source assertion reddens.
-// MUTATION (§10): for a home source read the offset from window.scrollY instead of
-// #home.scrollTop → the captured offset is 0 → the equals-500 source assertion reddens.
-//
-// Faithful to the §7-recipe seam (swipe-construction.test.js): env.document is a fresh JSDOM of
-// the REAL index.html; the ghost is built through env, not an ambient document.
-// ─────────────────────────────────────────────────────────────────────────────────────────
-function mkGhostEnv(homeScrollTop) {
-  const dom = new JSDOM(readRoot('index.html'));
-  const doc = dom.window.document;
-  // The running app shows the library and #browse; index.html ships them hidden, which the
-  // ghost's .hidden/.parked prune would strip whole. Un-hide so the home clone has real content.
-  const lib = doc.getElementById('library'); if (lib) lib.classList.remove('hidden');
-  const browse = doc.getElementById('browse'); if (browse) browse.classList.remove('hidden');
-  doc.getElementById('home').scrollTop = homeScrollTop;   // HOME scrolled within its OWN scroller
-  const env = {
-    document: doc,
-    scrollY: () => 0,   // the DOCUMENT is at the top — the fixed-#home state Loki's counterexample sits in
-    sourceEl: (host, v) => doc.getElementById(v === 'home' ? 'home' : 'browse'),
-    navPill: () => doc.querySelector('.np-actions'),
-    renderDestination: (dest, host) => doc.getElementById('browse'),
-  };
-  return { env, doc };
-}
-
-test('GHOSTSCROLL — the outgoing app-ghost of a scrolled HOME source reads #home.scrollTop, not window.scrollY', () => {
-    const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
-    const { env, doc } = mkGhostEnv(500);
-    // home→books: an in-flow home source going to browse builds an outgoing app-ghost.
-    const c = Swipe.buildConstruction({ v: 'home' }, { v: 'books' }, env);
-    assert.ok(c.capture, 'fixture: home→books builds an app-ghost with a capture');
-    assert.equal(c.capture.ghostY, 500,
-      'the ghost offset SOURCE for a HOME source must be #home.scrollTop (500), not window.scrollY (0) — the Loki 500px jump-to-top source');
-    // The same offset is carried by the whole-clone content-translate (translateY(-offset)).
-    const clone = doc.querySelector('.nav-ghost').firstElementChild;
-    assert.equal(clone.style.transform, 'translateY(-500px)',
-      'the app-ghost clone must be content-translated by -#home.scrollTop so it shows home at its own scroll, not home-at-top');
-  });
-
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // HOMEFIXED (§6 / §3, SOURCE-TEXT) — the active #home is a position:fixed own-scroll view. This
 // is the second enforcing test named by the PL-swipe-6i-home-fixed-ownscroll policy-ledger entry.
