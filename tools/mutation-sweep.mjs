@@ -121,6 +121,7 @@ const SOURCE_TEXT_GATES = {
   'swipe-model.test.js': 'fingerprints js/app.js regions (end, begin, navTo, nav-relation); a mutation inside one changes the hash by construction',
   'transition-matrix.test.js': 'fingerprints the js/app.js transition-branch region, same reason',
   'no-mutbak-gate.test.js': 'asserts the no-mutbak check exits 0 on a CLEAN repo; the sweep applies a mutation that leaves a *.mutbak backup, so the repo is never clean mid-sweep and this fails for EVERY mutation — the same false-CAUGHT class as the anchors gate',
+  'scroll-writer-set.test.js': 'derives every textual vertical-scroll writer in js/ and pins each registered site BY ITS SOURCE TEXT (both directions, so the inventory cannot rot); any mutation that edits one of those 14 lines makes it fail by construction — MEASURED: it appeared as `killed by` on mutation #93 (browse-decouple RESTORE), which has nothing to do with the writer-set invariant. Its own mutant is registered benignAlone for the same reason, and its ability to fail is carried by the SELFTEST inside the file (PLAN-home-shift-fix.md §7.5)',
 };
 
 function behaviourTests() {
@@ -192,8 +193,13 @@ try {
     const res = run(['--test', ...behaviourTests()]);
     // `# TODO` lines are KNOWN-RED tests, expected to fail — they are not evidence that
     // a mutation was caught, and counting them would make every mutation look caught.
-    const failures = (res.stdout.match(/^not ok .*$/gm) || [])
-      .filter((l) => !/#\s*TODO/i.test(l)).length;
+    // The SAME filtered lines are also the KILLING CELLS (PLAN-home-shift-fix.md §7.3):
+    // a bare failure COUNT cannot be read against a mutation's declared expected
+    // killer, so the sweep names which test(s) actually reddened, not merely how many.
+    const failLines = (res.stdout.match(/^not ok .*$/gm) || [])
+      .filter((l) => !/#\s*TODO/i.test(l));
+    const failures = failLines.length;
+    const killers = failLines.map((l) => l.replace(/^not ok \d+\s*-\s*/, '').trim());
     restore();
     const benign = MUTATIONS[i].benignAlone;
     if (failures === 0 && benign) {
@@ -209,6 +215,15 @@ try {
       console.log(`#${i}  caught (${failures}) but flagged benignAlone — STALE FLAG`);
     } else {
       console.log(`#${i}  caught (${failures} failing) — ${MUTATIONS[i].name}`);
+      // Named beside `caught` so a result can be read against the expected killing
+      // cell each coverage-model entry declares (in its `name`, e.g. "-> I7 test") —
+      // this sweep does not parse or compare that declaration itself (no gate reads
+      // it yet; PLAN-home-shift-fix.md §7.3/Brunel Local ⭐: nothing here scans a
+      // mutation's own name/comment text as evidence, which would let a name that
+      // merely MENTIONS a cell masquerade as proof it killed one). It prints what
+      // ACTUALLY reddened; comparing that against the declared expectation is a
+      // human — or a future campaign-gate.mjs — reading, not this script's job.
+      for (const k of killers) console.log(`       killed by: ${k}`);
     }
   }
 } finally {

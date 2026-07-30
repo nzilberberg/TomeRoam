@@ -151,6 +151,18 @@ const S5_UNHIDE_FROM = [
 ].join('\n');
 const S5_UNHIDE_TO = '          return el;';
 
+// ── PLAN-home-shift-fix.md §7.1 — the two MUTUNIQ anchors target THIS FILE, so they are
+// assembled from pieces rather than written as literals. A verbatim literal would make the
+// anchor occur TWICE in its own target (once as real code, once as this registration's own
+// `from` string) and the uniqueness check would correctly refuse it — the self-poisoning shape
+// §7.3 warns about, where a check that scans text collides with the text ABOUT that check.
+// Assembling the string keeps the source containing exactly one contiguous copy: the code.
+const MUTUNIQ_GUARD_FROM = '  if (occurrences > 1 && part.' + 'occurrence == null) {';
+const MUTUNIQ_GUARD_TO = '  if (false && occurrences > 1 && part.occurrence == null) {';
+const MUTUNIQ_APPLY_FROM = '  byFile.set(f, src.slice(0, resolved.index) + to + src.'
+  + 'slice(resolved.index + from.length));';
+const MUTUNIQ_APPLY_TO = '  byFile.set(f, src.replace(from, to));';
+
 const MUTATIONS = [
   { name: 'MS pause -> audio.pause() direct (bypasses userPause)',
     from: "ms.setActionHandler('pause', () => userPause());",
@@ -267,8 +279,42 @@ const MUTATIONS = [
   { name: 'swipe: supersession stops releasing the old target listeners (-> I20 stale-callback test)',
     from: "releaseGesture();   // never leave a dead gesture's listeners on a stale node",
     to: '/* mutated: listeners left bound */' },
-  { name: 'swipe: abort stops restoring the starting scroll (-> I7)',
-    from: 'window.scrollTo(0, cur.scroll0);', to: '/* mutated: no scroll restore */' },
+  // RE-ANCHORED (PLAN-home-shift-fix.md §7.3, MUTUNIQ): `window.scrollTo(0,
+  // cur.scroll0);` occurs THREE times in js/app.js (the supersession recovery at 445,
+  // the held abort path at 1203, the no-hold abort path at 1228) and this single entry
+  // anchored on the bare line, so first-occurrence-wins always mutated the RECOVERY —
+  // the intended ABORT sites (either path) were never mutated and their restore had
+  // never been proven able to fail. Split into three per-site entries, each anchored
+  // with enough surrounding context to be unique on its own.
+  { name: 'swipe: supersession recovery stops restoring the session-start scroll (-> I20 test)',
+    // Unique via the `if (cur)` guard: only the recovery site inlines this scroll
+    // restore behind an `if (cur)` check — both abort sites are bare (they run inside
+    // an outer commit/abort branch that already established `cur`).
+    from: '        if (cur) window.scrollTo(0, cur.scroll0);',
+    to: '        /* mutated: no scroll restore */' },
+  { name: 'swipe: held abort stops restoring the starting scroll (-> I7 test)',
+    // Unique via the following mark('restored') — only the held-abort path (the
+    // `abortRender === 'rerender'` branch) reports that mark immediately after the
+    // scroll restore.
+    from: [
+      '          window.scrollTo(0, cur.scroll0);',
+      "          mark('restored');",
+    ].join('\n'),
+    to: [
+      '          /* mutated: no scroll restore */',
+      "          mark('restored');",
+    ].join('\n') },
+  { name: 'swipe: no-hold abort stops restoring the starting scroll (-> AB.noclobber-overlay / AB.noclobber-home tests)',
+    // Unique via the preceding applyScreen statement — only the no-hold abort branch
+    // pairs this scroll restore with that exact resetScroll:false applyScreen call.
+    from: [
+      "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });",
+      '          window.scrollTo(0, cur.scroll0);',
+    ].join('\n'),
+    to: [
+      "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });",
+      '          /* mutated: no scroll restore */',
+    ].join('\n') },
   { name: 'swipe: abort mutates the nav stack like a commit (-> I11 abort test)',
     from: ABORT_STACK_FROM, to: ABORT_STACK_TO },
   // DEFENCE IN DEPTH — each half alone was MEASURED insufficient, so both must go or
@@ -338,10 +384,22 @@ const MUTATIONS = [
     file: 'js/swipe.js',
     from: "  const PARAM_REQUIRED = { authorBooks: 'author', files: 'book' };",
     to:   '  const PARAM_REQUIRED = {}; // mutated: no malformed rejection' },
+  // RE-ANCHORED (PLAN-home-shift-fix.md §7.3, MUTUNIQ): the bare `if
+  // (KINDS.indexOf(c.fromKind) === -1) {` line is SHARED with finalizationPlanFor's own
+  // guard (js/swipe.js:180), so this entry's `caught` was legitimate by SOURCE ORDER
+  // only (constructionPlanFor's copy comes first) — any new branch added above line 140
+  // would migrate the mutant to the wrong function silently. Anchored on the following
+  // throw line instead, which names the function and is unique to constructionPlanFor.
   { name: 'swipe4 F6: constructionPlanFor absorbs a bad fromKind instead of throwing (-> source-kind test)',
     file: 'js/swipe.js',
-    from: '    if (KINDS.indexOf(c.fromKind) === -1) {',
-    to:   '    if (false && KINDS.indexOf(c.fromKind) === -1) {' },
+    from: [
+      '    if (KINDS.indexOf(c.fromKind) === -1) {',
+      `      throw new Error('Swipe.constructionPlanFor: unhandled source kind "' + c.fromKind + '"');`,
+    ].join('\n'),
+    to: [
+      '    if (false && KINDS.indexOf(c.fromKind) === -1) {',
+      `      throw new Error('Swipe.constructionPlanFor: unhandled source kind "' + c.fromKind + '"');`,
+    ].join('\n') },
   { name: 'swipe4 F7: construction plan carries a stray field, exact-keys must catch it (-> 132-pair test)',
     file: 'js/swipe.js',
     from: '    return Object.freeze({ outgoing, incoming, renderDestination, decorations });',
@@ -467,7 +525,11 @@ const MUTATIONS = [
   // ── SWIPE stage 6d BC-1 (Mendeleev AUDIT-swipe-stage6d): the finalizationPlanFor
   // unhandled-kind guards shipped without a mutant, so making them inert left the suite
   // green. Anchored on the UNIQUE throw line (the bare `if (KINDS.indexOf(c.fromKind) === -1)`
-  // is shared with constructionPlanFor's own guard, so it would mutate the wrong function).
+  // is shared with constructionPlanFor's own guard, so anchoring on the bare line alone
+  // would mutate the wrong function). The sibling swipe4 F6 entry above anchored on
+  // precisely that shared line for a long time, which the uniqueness check below now
+  // catches mechanically — a non-unique `from` is refused at registration rather than
+  // relying on a reader noticing the collision by inspection.
   // Each makes its guard body a no-op, so an unhandled kind falls through to the abortRender
   // ternary and silently answers 'none' instead of throwing → reddens the new throw test in
   // test/swipe-transition.test.js. Same `void 0` shape as swipe4 F3.
@@ -676,6 +738,84 @@ const MUTATIONS = [
     file: 'js/nav.js',
     from: "        if (d.browseWillHide) d.browseWillHide();\n      }",
     to:   "        if (d.browseWillHide) d.browseWillHide();\n        const appEl = document.querySelector('.app');\n        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';\n      }" },
+
+  // ── PLAN-home-shift-fix.md §7.1 — the home→books SCROLL SHIFT campaign (M1/M2).
+  // EVERY anchor below carries disambiguating context FROM THE START, because six of six
+  // anchors inspected in this campaign were non-unique: in this repo an anchor is assumed
+  // non-unique until the tool proves otherwise (§7.3), so surrounding context is the DEFAULT
+  // form for a new entry rather than a fallback for the cases someone notices.
+  //
+  // M1PARKRANGE carries THREE mutants because the cell asserts an ABSENCE (`top`), a PRESENCE
+  // (`overflow`) and an exact VALUE (`hidden`, not `clip`), and no single mutant exercises all
+  // three. -b and -c differ ONLY in their `to` and are deliberately SEPARATE entries: the two
+  // reds they must produce are textually different messages (absent vs wrong-value), and a
+  // combined entry could be killed by the wrong one.
+  { name: 'M1PARKRANGE-a: #home.parked re-adds the vestigial top: 0, making the parked box taller than the active box by safe+51px so the browser clamps scrollTop at every park (-> M1PARKRANGE park-recipe test)',
+    file: 'css/app.css',
+    from: '  max-width: 640px; margin: 0 auto; padding-left: 16px; padding-right: 16px;   /* MATCH .app content width */',
+    to:   '  max-width: 640px; margin: 0 auto; padding-left: 16px; padding-right: 16px;   /* MATCH .app content width */\n  top: 0;' },
+  // ⚠️ -b/-c's anchor WITHOUT the `will-change: transform;` tail occurs TWICE — the first
+  // occurrence is `.browsepage.parked` (css:90), a DIFFERENT element this plan does not touch,
+  // so a bare anchor would mutate a rule no cell watches and print `caught` over a mutant
+  // M1PARKRANGE never saw. The tail is what makes it unique to `#home.parked` (css:102).
+  { name: 'M1PARKRANGE-b: #home.parked DELETES the required overflow: hidden — cross-engine the parked box stops being a scroll container, and in Blink a transformed box without it stops participating in scroll anchoring (measured -80px reveal jump vs shipped 0px) (-> M1PARKRANGE Tier-0 ABSENT red)',
+    file: 'css/app.css',
+    from: '  overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;',
+    to:   '  pointer-events: none; z-index: 0; will-change: transform;' },
+  { name: 'M1PARKRANGE-c: #home.parked REPLACES overflow: hidden with overflow: clip, executed to break the fix twice over (the in-park offset collapses to 0 AND the reveal jumps -80px again) (-> M1PARKRANGE Tier-0 WRONG-VALUE red, which must be textually distinct from -b)',
+    file: 'css/app.css',
+    from: '  overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;',
+    to:   '  overflow: clip; pointer-events: none; z-index: 0; will-change: transform;' },
+  // ADDITIVE: a second textual writer of #home.scrollTop appears. Injected into the nav
+  // NON-home branch, which the abort fixtures never reach (that branch runs only when
+  // desc.v !== 'home'), so this reddens the inventory gate ALONE — no behaviour cell can
+  // claim it and the attribution stays single-celled.
+  { name: 'M1WRITERSET: a SECOND textual writer of #home.scrollTop is injected into the nav non-home branch (-> M1WRITERSET unregistered-derived-site red)',
+    file: 'js/nav.js',
+    from: '      if (resetScroll) $(desc.v).scrollTop = 0;',
+    to:   "      if (resetScroll) $(desc.v).scrollTop = 0;\n      if (resetScroll) $('home').scrollTop = 0;   /* mutated: a second #home writer */",
+    // NOT "benign" in the two-part sense — this flag is the registry's only way to declare
+    // "expected to survive the sweep", and the reason here is structural rather than
+    // behavioural: the ONLY cell that can catch a second textual writer is
+    // test/scroll-writer-set.test.js, which is a SOURCE_TEXT_GATE excluded from the sweep
+    // (it pins 14 source lines by text, so it fails by construction under any mutation that
+    // edits one — MEASURED as a false `killed by` on #93). Its ability to fail is carried by
+    // the SELFTEST inside that file plus the manual proof recorded in
+    // Claude/Curie/RED-home-shift-fix.md. If a BEHAVIOUR test ever starts catching this, the
+    // sweep reports STALE FLAG and this excuse must be re-derived, which is the property that
+    // stops the flag outliving its reason.
+    benignAlone: 'its only killing cell (scroll-writer-set.test.js) is a SOURCE_TEXT_GATE excluded from the sweep; proven able to fail by that file\'s SELFTEST and by the manual apply recorded in Claude/Curie/RED-home-shift-fix.md' },
+  // ⚠️ The bare substring `resetScroll: false` occurs FIVE times in js/app.js, and the FIRST
+  // (app.js:1201, the HELD abort path) is a path the M1NOWRITE fixture never enters —
+  // abortRender is 'none' for home→browse, so control reaches the no-hold branch. The unique
+  // `render: cur.finPlan.abortRender === 'rerender', ` prefix is what pins app.js:1227.
+  { name: "M1NOWRITE: the abort finalize passes resetScroll: true, so nav.js's home branch writes 0 over the offset the park preserved (-> M1NOWRITE zero-writes-in-window-B red)",
+    from: "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });",
+    to:   "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: true });" },
+  // ADDITIVE DESIGN-REVERT: the retired restore has no shipped text, so a fabricated `from`
+  // would be refused by both the applier and the anchors gate. Both halves anchor on real text
+  // and the edit genuinely changes it.
+  { name: 'M1NAVWINS: the retired reveal-time cur.ghostY restore is re-introduced after the abort finalize, clobbering an interleaved Home tap 340ms later (-> M1NAVWINS window-B red AND M1NOWRITE — BOTH must redden; if only one does, the other is MASKED and that is a finding, not a caught)',
+    from: "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);",
+    to:   "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);\n          if (cur.from.v === 'home' && cur.ghostY != null) $('home').scrollTop = cur.ghostY;   /* mutated: the retired restore */" },
+  // MUTUNIQ carries TWO mutants for the same reason M1PARKRANGE carries three: one mutant
+  // cannot exercise both a REFUSAL and a correct-site APPLICATION. -a is the plan's declared
+  // mutant; -b is added by the test author because the cell's own specification includes "and
+  // that it then applies to the intended occurrence only", which -a does not exercise at all.
+  // NOTE -a's other killer (the resolveAnchor fixture test) lives in mutation-anchors.test.js,
+  // which is a SOURCE_TEXT_GATE excluded from the sweep — so test/mutation-applier.test.js is
+  // what makes -a sweepable at all.
+  { name: 'MUTUNIQ-a: the anchor uniqueness check is disabled, so a non-unique `from` is silently applied to the FIRST occurrence and a cell is credited with a site it never reached (-> MUTUNIQ applier-refusal test)',
+    file: 'tools/mutate.mjs', from: MUTUNIQ_GUARD_FROM, to: MUTUNIQ_GUARD_TO },
+  { name: 'MUTUNIQ-b: the applier reverts to first-occurrence src.replace, so a DISAMBIGUATED entry mutates the wrong site while every registration-time check stays green (-> MUTUNIQ intended-occurrence test)',
+    file: 'tools/mutate.mjs', from: MUTUNIQ_APPLY_FROM, to: MUTUNIQ_APPLY_TO },
+  // M2ALIGN's `from` is the POST-FIX line, so it could not be registered until the M2 fix
+  // itself landed (registering it against the pre-fix `46px` line would either rot the
+  // anchors gate or be refused as a no-op). One occurrence in js/swipe.js.
+  { name: 'M2ALIGN: the ghost builder reverts to the vestigial in-flow 46px, misaligning the clone content-top from the real fixed-inset content-top (-> M2ALIGN aligned-value test)',
+    file: 'js/swipe.js',
+    from: "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '53px';",
+    to:   "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '46px';" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
@@ -683,6 +823,100 @@ const MUTATIONS = [
 // when you run it by hand, but nobody runs all eleven by hand, so the rot is
 // invisible until someone needs the mutation and finds it dead.
 export { MUTATIONS, DEFAULT_FILE };
+
+// ── Anchor UNIQUENESS ────────────────────────────────────────────────────────────────
+// The applier below is `src.replace(from, to)` — a literal-STRING pattern, so
+// `String.prototype.replace` rewrites the FIRST occurrence only. Nothing previously
+// checked that `from` occurred exactly once: a `from` that occurs twice mutates
+// whichever site sits first in the file, dies to whatever cell reaches THAT site, and
+// reports `caught` while the entry's actually-intended site is never touched and its
+// cell is never proven able to fail. An audit of this table found SIX of six inspected
+// anchors non-unique (PLAN-home-shift-fix.md §7.3) — assume an anchor here is
+// non-unique until this check proves otherwise, not the other way around.
+//
+// `resolveAnchor` is the ONE place this is decided, exported so the CLI apply step
+// below and test/mutation-anchors.test.js run the IDENTICAL check — two independent
+// implementations of "is this anchor unique" are exactly how one could drift and
+// start trusting an anchor the other has already refused.
+//
+// Disambiguation is something an ENTRY DECLARES, never something this function
+// infers or guesses at:
+//   - `count: N`      — an explicit assertion of the total number of times `from`
+//                        occurs in its target file. Valid whether the true count is 1
+//                        or more; if the actual count differs, the declaration has
+//                        gone STALE (the surrounding source moved since it was
+//                        written) and the entry is refused. The repair is to
+//                        re-derive the count against the CURRENT text, never to bump
+//                        the number to match without re-checking what changed.
+//   - `occurrence: N` — selects the Nth (1-indexed) occurrence of `from` as the one
+//                        this entry mutates, for an anchor that is shared by more
+//                        than one site for a real, permanent reason (not fixable by
+//                        lengthening `from`, e.g. two rules that legitimately
+//                        share a declaration).
+// Neither field is needed when `from` is naturally unique — the default, and by far
+// the common case: a `from` carrying enough surrounding context to be unique is the
+// default FORM of a new entry, not a fallback reached only when someone happens to
+// notice a collision.
+function countOccurrences(src, needle) {
+  let count = 0, idx = 0;
+  for (;;) {
+    idx = src.indexOf(needle, idx);
+    if (idx === -1) break;
+    count++;
+    idx += needle.length;
+  }
+  return count;
+}
+
+function findNthOccurrence(src, needle, n) {
+  let idx = 0;
+  for (let k = 1; k <= n; k++) {
+    idx = src.indexOf(needle, idx);
+    if (idx === -1) return -1;
+    if (k === n) return idx;
+    idx += needle.length;
+  }
+  return -1;
+}
+
+// Resolves WHERE a part's `from` applies in `src` (already CRLF-normalised to LF, same
+// as `from`), or explains why it cannot. `label` identifies the part in error text
+// (e.g. "#12 [js/app.js] some mutation name"). Returns:
+//   { index, occurrences }                 — success; `index` is the offset to replace at.
+//   { index: -1, occurrences, error }      — refused; `error` is the message to print.
+// occurrences is always returned (including on failure) so a caller — the anchors gate
+// in particular — can tell an ANCHOR NOT FOUND (occurrences === 0, a different, already
+// -handled failure) apart from a non-uniqueness refusal.
+function resolveAnchor(src, part, label) {
+  const from = part.from.replace(/\r\n/g, '\n');
+  const occurrences = countOccurrences(src, from);
+  if (occurrences === 0) {
+    return { index: -1, occurrences, error: `ANCHOR NOT FOUND for ${label}` };
+  }
+  if (part.count != null && part.count !== occurrences) {
+    return { index: -1, occurrences,
+      error: `STALE COUNT for ${label}: declared count:${part.count} but the anchor `
+        + `occurs ${occurrences} time(s) in the current source — re-derive the count `
+        + `against the current text, do not bump the number without re-checking what `
+        + `changed around it` };
+  }
+  if (occurrences > 1 && part.occurrence == null) {
+    return { index: -1, occurrences,
+      error: `NON-UNIQUE ANCHOR for ${label}: \`from\` occurs ${occurrences} times in `
+        + `its target file. This tool will never guess which one is intended — `
+        + `disambiguate with a longer \`from\` (the default fix) or declare an `
+        + `explicit \`occurrence: N\` selecting which occurrence this entry means` };
+  }
+  const wantOccurrence = part.occurrence != null ? part.occurrence : 1;
+  if (!Number.isInteger(wantOccurrence) || wantOccurrence < 1 || wantOccurrence > occurrences) {
+    return { index: -1, occurrences,
+      error: `OUT OF RANGE for ${label}: declared occurrence:${wantOccurrence} but the `
+        + `anchor occurs ${occurrences} time(s)` };
+  }
+  return { index: findNthOccurrence(src, from, wantOccurrence), occurrences };
+}
+
+export { countOccurrences, findNthOccurrence, resolveAnchor };
 
 // Everything below is the CLI. Guarded so importing this file does not apply a
 // mutation to the working tree as a side effect of a test run.
@@ -736,13 +970,16 @@ for (const part of parts) {
     if (!fs.existsSync(bak)) fs.copyFileSync(f, bak);
     byFile.set(f, fs.readFileSync(bak, 'utf8').replace(/\r\n/g, '\n'));   // PRISTINE, LF
   }
-  const from = part.from.replace(/\r\n/g, '\n');
   const src = byFile.get(f);
-  if (!src.includes(from)) {
-    console.error(`ANCHOR NOT FOUND for #${i} in ${f} — mutation NOT applied`);
+  const label = `#${i} [${f}] ${m.name}`;
+  const resolved = resolveAnchor(src, part, label);
+  if (resolved.index === -1) {
+    console.error(resolved.error + ' — mutation NOT applied');
     process.exit(1);
   }
-  byFile.set(f, src.replace(from, part.to.replace(/\r\n/g, '\n')));
+  const from = part.from.replace(/\r\n/g, '\n');
+  const to = part.to.replace(/\r\n/g, '\n');
+  byFile.set(f, src.slice(0, resolved.index) + to + src.slice(resolved.index + from.length));
 }
 for (const [f, src] of byFile) fs.writeFileSync(f, src);
 console.log(`applied #${i} [${FILE}]: ${m.name}`);

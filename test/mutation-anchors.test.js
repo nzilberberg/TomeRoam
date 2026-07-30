@@ -72,3 +72,102 @@ test('no mutation is a no-op — every one changes the source it claims to chang
   assert.deepEqual(noops, [],
     `these mutations change nothing and would report a false pass: ${noops.join(', ')}`);
 });
+
+// GATE — no registered anchor may be NON-UNIQUE without an explicit disambiguation.
+//
+// WHY. The applier is `src.replace(from, to)` — a literal-STRING pattern, so it
+// rewrites the FIRST occurrence of `from` only. A `from` that occurs more than once in
+// its target file therefore mutates whichever site sits first in source order, dies to
+// whatever cell reaches THAT site, and reports `caught` while the entry's actually-
+// intended site is never touched — the cell it names never proves anything. An audit
+// of this table (PLAN-home-shift-fix.md §7.3) found SIX of six inspected anchors
+// non-unique this way, including two registrations that had been silently testing the
+// wrong site for some time. This is the REGISTRATION-time half of that fix: the rot
+// test above catches an anchor that stopped matching; this one catches an anchor that
+// matches in more than one place. `tools/mutate.mjs`'s `resolveAnchor` is the single
+// shared implementation of the check — both this gate and the CLI apply step call it,
+// so there is exactly one place uniqueness is decided, not two that can drift apart.
+test('no registered mutation anchor is non-unique without an explicit disambiguation', async () => {
+  const mod = await import(pathToFileURL(path.join(ROOT, 'tools', 'mutate.mjs')).href);
+  const { MUTATIONS, DEFAULT_FILE, resolveAnchor } = mod;
+
+  const lf = (s) => s.replace(/\r\n/g, '\n');
+  const cache = new Map();
+  const readFile = (rel) => {
+    if (!cache.has(rel)) cache.set(rel, lf(fs.readFileSync(path.join(ROOT, rel), 'utf8')));
+    return cache.get(rel);
+  };
+
+  const ambiguous = [];
+  MUTATIONS.forEach((m, i) => {
+    for (const part of [m, m.also].filter(Boolean)) {
+      const file = part.file || m.file || DEFAULT_FILE;
+      const label = `#${i} [${file}] ${m.name}`;
+      const resolved = resolveAnchor(readFile(file), part, label);
+      // occurrences === 0 (an ANCHOR NOT FOUND / rotted anchor) is the OTHER test's
+      // job above — reporting it here too would double-count the same failure under
+      // two different messages.
+      if (resolved.index === -1 && resolved.occurrences !== 0) ambiguous.push(resolved.error);
+    }
+  });
+
+  assert.deepEqual(ambiguous, [],
+    'these mutations anchor on text that is not unique in its target file (or whose '
+    + 'declared count has drifted since it was written), so the applier could silently '
+    + 'mutate the wrong site and credit a cell that never reached it. Disambiguate with '
+    + 'a longer `from`, or an explicit `occurrence`/`count`:\n  ' + ambiguous.join('\n  '));
+});
+
+// Proves the gate above CAN fail — not merely that it currently reports zero. Exercises
+// resolveAnchor directly against in-memory fixtures (never touching real source files),
+// so this is a structural test of the shared function itself rather than a scan of any
+// project text — the discipline this file's own gates depend on (a check that reads
+// free text for a pattern which also appears in the documentation ABOUT that pattern
+// poisons itself; a synthetic fixture has no such text to collide with).
+test('resolveAnchor refuses a non-unique anchor and accepts one that disambiguates', async () => {
+  const mod = await import(pathToFileURL(path.join(ROOT, 'tools', 'mutate.mjs')).href);
+  const { resolveAnchor } = mod;
+
+  const src = 'alpha\nfoo();\nbeta\nfoo();\ngamma\n';
+  const firstFoo = src.indexOf('foo();');
+  const secondFoo = src.indexOf('foo();', firstFoo + 1);
+
+  // A bare anchor occurring twice, with no disambiguation, is refused outright — this
+  // is the failure this gate exists to produce, and it must actually fire.
+  const bare = resolveAnchor(src, { from: 'foo();', to: 'bar();' }, 'fixture-bare');
+  assert.strictEqual(bare.index, -1);
+  assert.strictEqual(bare.occurrences, 2);
+  assert.match(bare.error, /NON-UNIQUE ANCHOR/);
+
+  // An explicit `occurrence` selects exactly that site, not the first one — proves the
+  // disambiguation is HONOURED, not merely accepted.
+  const second = resolveAnchor(src, { from: 'foo();', to: 'bar();', occurrence: 2 }, 'fixture-occurrence');
+  assert.strictEqual(second.index, secondFoo);
+  assert.strictEqual(second.occurrences, 2);
+
+  // An `occurrence` outside the real range is refused, not silently clamped.
+  const outOfRange = resolveAnchor(src, { from: 'foo();', to: 'bar();', occurrence: 3 }, 'fixture-range');
+  assert.strictEqual(outOfRange.index, -1);
+  assert.match(outOfRange.error, /OUT OF RANGE/);
+
+  // A declared `count` that no longer matches the source is refused as STALE — this is
+  // what would have caught a registered anchor whose surrounding code changed shape
+  // without anyone re-deriving the declaration.
+  const stale = resolveAnchor(src, { from: 'foo();', to: 'bar();', count: 1 }, 'fixture-stale-count');
+  assert.strictEqual(stale.index, -1);
+  assert.match(stale.error, /STALE COUNT/);
+
+  // A naturally-unique anchor needs no disambiguation at all and applies cleanly — the
+  // common case, unaffected by any of the above.
+  const unique = resolveAnchor(src, { from: 'beta', to: 'BETA' }, 'fixture-unique');
+  assert.strictEqual(unique.index, src.indexOf('beta'));
+  assert.strictEqual(unique.occurrences, 1);
+
+  // A missing anchor is still reported as ANCHOR NOT FOUND, not NON-UNIQUE — the two
+  // failure modes must stay distinguishable so the anchors-gate above does not
+  // double-count a rotted anchor as an ambiguity finding too.
+  const missing = resolveAnchor(src, { from: 'nope();', to: 'x' }, 'fixture-missing');
+  assert.strictEqual(missing.index, -1);
+  assert.strictEqual(missing.occurrences, 0);
+  assert.match(missing.error, /ANCHOR NOT FOUND/);
+});

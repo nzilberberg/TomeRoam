@@ -273,7 +273,15 @@ const Swipe = (() => {
     // { wrap, capture:{ ghostY, animSync, animRes } }.
     function ghostApp(fromKind) {
       const clone = doc.querySelector('.app').cloneNode(true);
-      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '46px';
+      // Align the clone's content-top to the REAL active view's content-top
+      // (calc(var(--safe-top) + 51px) [#home top, css:128] + 14px [#home padding-top, css:131]),
+      // replacing the vestigial pre-6i in-flow 46px. `.app`'s own padding-top (calc(--safe-top +
+      // 12px), css:75) is NOT stripped from the clone (only ids are removed) and DOES contribute
+      // in normal flow, so --safe-top cancels: (51 + 14) - 12 = 53. Measured against the real
+      // layout in a live engine (Brunel, PLAN-home-shift-fix.md §3): with this value the clone's
+      // first rendered content lands at the identical viewport-Y as the real #home/#browse, at
+      // safe-top 0 and at a simulated notch, with zero delta (-> M2ALIGN aligned-value test).
+      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '53px';
       clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
       const tb = clone.querySelector('.topbar'); if (tb) tb.remove();
       clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());
