@@ -1,28 +1,30 @@
-// PAGE-BG-SINGLE-PAINTER -- the page background paints from exactly one source.
+// PAGE-BG-SINGLE-PAINTER -- --page-bg is painted by body::before plus exactly the
+// additive overlays; the filmstrip peers stay transparent.
 //
-// THE DEFECT (user-diagnosed, on-device swipe report): `--page-bg` is a
-// radial-gradient sized and centred relative to EACH ELEMENT'S OWN BOX. Six
-// selectors painted it independently -- `body::before` (fixed, inset:0, the one
-// keeper that never moves) plus five panel rules (#home, #browse, #options,
-// .nowplaying, and the settings-subs group) -- so each panel rendered the
-// gradient at a different scale/origin, and the panel copies moved WITH the
-// panels during a swipe. Screens "filmstrip" adjacent, never stacked (a settled
-// design choice), so no panel needs its own background to occlude another --
-// every panel can be fully transparent.
+// THE MODEL (nav.js's setView(), the source of truth for this split): #home and
+// #browse are filmstrip PEERS -- when one shows, the other is parked off-screen,
+// never stacked underneath, so neither needs its own background to occlude the
+// other. NP, #options, and the settings sub-screens (#downloads, #general,
+// #playback, #buffering, #diagnostics) are ADDITIVE OVERLAYS: they paint over
+// whatever tall screen is showing and the page underneath is NOT touched -- that
+// page is live, not parked, so an overlay left transparent would show it through.
 //
-// THE FIX: only `body::before` paints `--page-bg`. The five panel rules drop the
-// declaration entirely -- NOT a flat-colour substitute, which papers over the
-// motion instead of removing it (explicitly rejected).
-//
-// RED AT HEAD (confirmed by inspection before this fix): six selectors declare
-// `background: var(--page-bg)` -- body::before, #home, #browse, #options,
-// .nowplaying, and `#downloads, #general, #playback, #buffering, #diagnostics`.
+// TWO DEFECTS THIS GUARDS, IN OPPOSITE DIRECTIONS:
+//  - A filmstrip peer (#home/#browse) regains its own `background: var(--page-bg)`:
+//    the gradient is sized/centred to that panel's own box, so it renders at a
+//    different scale/origin than body::before's copy and moves WITH the panel
+//    during a swipe (the original, user-diagnosed defect).
+//  - An additive overlay LOSES its `background: var(--page-bg)`: the live page
+//    underneath shows through the overlay instead of being covered (the
+//    regression this file's prior version encoded as "no panel may have a
+//    background," which was wrong for the three overlays).
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { readRoot, selectorsFor } = require('./dom-fixture.js');
 
-const PANEL_SELECTORS = [
-  '#home', '#browse', '#options', '.nowplaying',
+const TRANSPARENT_SELECTORS = ['#home', '#browse'];
+const OPAQUE_SELECTORS = [
+  '#options', '.nowplaying',
   '#downloads, #general, #playback, #buffering, #diagnostics',
 ];
 
@@ -41,23 +43,37 @@ function ruleBody(css, selector) {
   return null;
 }
 
-test('PAGE-BG-SINGLE-PAINTER -- body::before is the ONLY selector that paints --page-bg', () => {
+test('PAGE-BG-SINGLE-PAINTER -- exactly body::before + the additive overlays paint --page-bg', () => {
   const css = readRoot('css/app.css');
-  const painters = selectorsFor(css, 'background: var(--page-bg)');
-  assert.deepEqual(painters, ['body::before'],
-    'exactly one selector may paint --page-bg (the fixed, never-moving body::before '
-    + `keeper) -- found: ${JSON.stringify(painters)}`);
+  const painters = selectorsFor(css, 'background: var(--page-bg)').slice().sort();
+  const expected = ['body::before', ...OPAQUE_SELECTORS].slice().sort();
+  assert.deepEqual(painters, expected,
+    'exactly body::before (the fixed, never-moving base keeper) and the additive '
+    + `overlays may paint --page-bg -- expected: ${JSON.stringify(expected)}, `
+    + `found: ${JSON.stringify(painters)}`);
 });
 
-test('PAGE-BG-SINGLE-PAINTER -- no panel substitutes a flat-colour background in its place', () => {
+test('PAGE-BG-SINGLE-PAINTER -- the filmstrip peers #home and #browse declare no background', () => {
   const css = stripComments(readRoot('css/app.css'));
-  for (const sel of PANEL_SELECTORS) {
+  for (const sel of TRANSPARENT_SELECTORS) {
     const body = ruleBody(css, sel);
     assert.ok(body != null, `fixture: a \`${sel}\` rule must exist in css/app.css`);
     assert.doesNotMatch(body, /(?:^|;)\s*background(-color)?\s*:/,
-      `\`${sel}\` must declare no background property at all (fully transparent so `
-      + 'body::before shows through) -- a flat-colour substitute was explicitly '
-      + `rejected as papering over the motion rather than removing it. Rule body: ${body}`);
+      `\`${sel}\` is a filmstrip peer (nav.js parks the other one off-screen) and must `
+      + 'declare no background property at all, so body::before\'s fixed copy shows '
+      + `through undisturbed. Rule body: ${body}`);
+  }
+});
+
+test('PAGE-BG-SINGLE-PAINTER -- each additive overlay declares its own --page-bg background', () => {
+  const css = stripComments(readRoot('css/app.css'));
+  for (const sel of OPAQUE_SELECTORS) {
+    const body = ruleBody(css, sel);
+    assert.ok(body != null, `fixture: a \`${sel}\` rule must exist in css/app.css`);
+    assert.match(body, /(?:^|;)\s*background\s*:\s*var\(--page-bg\)\s*;/,
+      `\`${sel}\` is an additive overlay (nav.js's setView(): paints over a live, `
+      + 'un-parked page underneath) and must declare `background: var(--page-bg)` so '
+      + `the page beneath does not show through. Rule body: ${body}`);
   }
 });
 
