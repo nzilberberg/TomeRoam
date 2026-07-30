@@ -121,6 +121,7 @@ const SOURCE_TEXT_GATES = {
   'swipe-model.test.js': 'fingerprints js/app.js regions (end, begin, navTo, nav-relation); a mutation inside one changes the hash by construction',
   'transition-matrix.test.js': 'fingerprints the js/app.js transition-branch region, same reason',
   'no-mutbak-gate.test.js': 'asserts the no-mutbak check exits 0 on a CLEAN repo; the sweep applies a mutation that leaves a *.mutbak backup, so the repo is never clean mid-sweep and this fails for EVERY mutation — the same false-CAUGHT class as the anchors gate',
+  'scroll-writer-set.test.js': 'derives every textual vertical-scroll writer in js/ and pins each registered site BY ITS SOURCE TEXT (both directions, so the inventory cannot rot); any mutation that edits one of those 14 lines makes it fail by construction — MEASURED: it appeared as `killed by` on mutation #93 (browse-decouple RESTORE), which has nothing to do with the writer-set invariant. Its own mutant is registered benignAlone for the same reason, and its ability to fail is carried by the SELFTEST inside the file (PLAN-home-shift-fix.md §7.5)',
 };
 
 function behaviourTests() {

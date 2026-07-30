@@ -151,6 +151,18 @@ const S5_UNHIDE_FROM = [
 ].join('\n');
 const S5_UNHIDE_TO = '          return el;';
 
+// ── PLAN-home-shift-fix.md §7.1 — the two MUTUNIQ anchors target THIS FILE, so they are
+// assembled from pieces rather than written as literals. A verbatim literal would make the
+// anchor occur TWICE in its own target (once as real code, once as this registration's own
+// `from` string) and the uniqueness check would correctly refuse it — the self-poisoning shape
+// §7.3 warns about, where a check that scans text collides with the text ABOUT that check.
+// Assembling the string keeps the source containing exactly one contiguous copy: the code.
+const MUTUNIQ_GUARD_FROM = '  if (occurrences > 1 && part.' + 'occurrence == null) {';
+const MUTUNIQ_GUARD_TO = '  if (false && occurrences > 1 && part.occurrence == null) {';
+const MUTUNIQ_APPLY_FROM = '  byFile.set(f, src.slice(0, resolved.index) + to + src.'
+  + 'slice(resolved.index + from.length));';
+const MUTUNIQ_APPLY_TO = '  byFile.set(f, src.replace(from, to));';
+
 const MUTATIONS = [
   { name: 'MS pause -> audio.pause() direct (bypasses userPause)',
     from: "ms.setActionHandler('pause', () => userPause());",
@@ -726,6 +738,77 @@ const MUTATIONS = [
     file: 'js/nav.js',
     from: "        if (d.browseWillHide) d.browseWillHide();\n      }",
     to:   "        if (d.browseWillHide) d.browseWillHide();\n        const appEl = document.querySelector('.app');\n        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';\n      }" },
+
+  // ── PLAN-home-shift-fix.md §7.1 — the home→books SCROLL SHIFT campaign (M1/M2).
+  // EVERY anchor below carries disambiguating context FROM THE START, because six of six
+  // anchors inspected in this campaign were non-unique: in this repo an anchor is assumed
+  // non-unique until the tool proves otherwise (§7.3), so surrounding context is the DEFAULT
+  // form for a new entry rather than a fallback for the cases someone notices.
+  //
+  // M1PARKRANGE carries THREE mutants because the cell asserts an ABSENCE (`top`), a PRESENCE
+  // (`overflow`) and an exact VALUE (`hidden`, not `clip`), and no single mutant exercises all
+  // three. -b and -c differ ONLY in their `to` and are deliberately SEPARATE entries: the two
+  // reds they must produce are textually different messages (absent vs wrong-value), and a
+  // combined entry could be killed by the wrong one.
+  { name: 'M1PARKRANGE-a: #home.parked re-adds the vestigial top: 0, making the parked box taller than the active box by safe+51px so the browser clamps scrollTop at every park (-> M1PARKRANGE park-recipe test)',
+    file: 'css/app.css',
+    from: '  max-width: 640px; margin: 0 auto; padding-left: 16px; padding-right: 16px;   /* MATCH .app content width */',
+    to:   '  max-width: 640px; margin: 0 auto; padding-left: 16px; padding-right: 16px;   /* MATCH .app content width */\n  top: 0;' },
+  // ⚠️ -b/-c's anchor WITHOUT the `will-change: transform;` tail occurs TWICE — the first
+  // occurrence is `.browsepage.parked` (css:90), a DIFFERENT element this plan does not touch,
+  // so a bare anchor would mutate a rule no cell watches and print `caught` over a mutant
+  // M1PARKRANGE never saw. The tail is what makes it unique to `#home.parked` (css:102).
+  { name: 'M1PARKRANGE-b: #home.parked DELETES the required overflow: hidden — cross-engine the parked box stops being a scroll container, and in Blink a transformed box without it stops participating in scroll anchoring (measured -80px reveal jump vs shipped 0px) (-> M1PARKRANGE Tier-0 ABSENT red)',
+    file: 'css/app.css',
+    from: '  overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;',
+    to:   '  pointer-events: none; z-index: 0; will-change: transform;' },
+  { name: 'M1PARKRANGE-c: #home.parked REPLACES overflow: hidden with overflow: clip, executed to break the fix twice over (the in-park offset collapses to 0 AND the reveal jumps -80px again) (-> M1PARKRANGE Tier-0 WRONG-VALUE red, which must be textually distinct from -b)',
+    file: 'css/app.css',
+    from: '  overflow: hidden; pointer-events: none; z-index: 0; will-change: transform;',
+    to:   '  overflow: clip; pointer-events: none; z-index: 0; will-change: transform;' },
+  // ADDITIVE: a second textual writer of #home.scrollTop appears. Injected into the nav
+  // NON-home branch, which the abort fixtures never reach (that branch runs only when
+  // desc.v !== 'home'), so this reddens the inventory gate ALONE — no behaviour cell can
+  // claim it and the attribution stays single-celled.
+  { name: 'M1WRITERSET: a SECOND textual writer of #home.scrollTop is injected into the nav non-home branch (-> M1WRITERSET unregistered-derived-site red)',
+    file: 'js/nav.js',
+    from: '      if (resetScroll) $(desc.v).scrollTop = 0;',
+    to:   "      if (resetScroll) $(desc.v).scrollTop = 0;\n      if (resetScroll) $('home').scrollTop = 0;   /* mutated: a second #home writer */",
+    // NOT "benign" in the two-part sense — this flag is the registry's only way to declare
+    // "expected to survive the sweep", and the reason here is structural rather than
+    // behavioural: the ONLY cell that can catch a second textual writer is
+    // test/scroll-writer-set.test.js, which is a SOURCE_TEXT_GATE excluded from the sweep
+    // (it pins 14 source lines by text, so it fails by construction under any mutation that
+    // edits one — MEASURED as a false `killed by` on #93). Its ability to fail is carried by
+    // the SELFTEST inside that file plus the manual proof recorded in
+    // Claude/Curie/RED-home-shift-fix.md. If a BEHAVIOUR test ever starts catching this, the
+    // sweep reports STALE FLAG and this excuse must be re-derived, which is the property that
+    // stops the flag outliving its reason.
+    benignAlone: 'its only killing cell (scroll-writer-set.test.js) is a SOURCE_TEXT_GATE excluded from the sweep; proven able to fail by that file\'s SELFTEST and by the manual apply recorded in Claude/Curie/RED-home-shift-fix.md' },
+  // ⚠️ The bare substring `resetScroll: false` occurs FIVE times in js/app.js, and the FIRST
+  // (app.js:1201, the HELD abort path) is a path the M1NOWRITE fixture never enters —
+  // abortRender is 'none' for home→browse, so control reaches the no-hold branch. The unique
+  // `render: cur.finPlan.abortRender === 'rerender', ` prefix is what pins app.js:1227.
+  { name: "M1NOWRITE: the abort finalize passes resetScroll: true, so nav.js's home branch writes 0 over the offset the park preserved (-> M1NOWRITE zero-writes-in-window-B red)",
+    from: "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });",
+    to:   "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: true });" },
+  // ADDITIVE DESIGN-REVERT: the retired restore has no shipped text, so a fabricated `from`
+  // would be refused by both the applier and the anchors gate. Both halves anchor on real text
+  // and the edit genuinely changes it.
+  { name: 'M1NAVWINS: the retired reveal-time cur.ghostY restore is re-introduced after the abort finalize, clobbering an interleaved Home tap 340ms later (-> M1NAVWINS window-B red AND M1NOWRITE — BOTH must redden; if only one does, the other is MASKED and that is a finding, not a caught)',
+    from: "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);",
+    to:   "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);\n          if (cur.from.v === 'home' && cur.ghostY != null) $('home').scrollTop = cur.ghostY;   /* mutated: the retired restore */" },
+  // MUTUNIQ carries TWO mutants for the same reason M1PARKRANGE carries three: one mutant
+  // cannot exercise both a REFUSAL and a correct-site APPLICATION. -a is the plan's declared
+  // mutant; -b is added by the test author because the cell's own specification includes "and
+  // that it then applies to the intended occurrence only", which -a does not exercise at all.
+  // NOTE -a's other killer (the resolveAnchor fixture test) lives in mutation-anchors.test.js,
+  // which is a SOURCE_TEXT_GATE excluded from the sweep — so test/mutation-applier.test.js is
+  // what makes -a sweepable at all.
+  { name: 'MUTUNIQ-a: the anchor uniqueness check is disabled, so a non-unique `from` is silently applied to the FIRST occurrence and a cell is credited with a site it never reached (-> MUTUNIQ applier-refusal test)',
+    file: 'tools/mutate.mjs', from: MUTUNIQ_GUARD_FROM, to: MUTUNIQ_GUARD_TO },
+  { name: 'MUTUNIQ-b: the applier reverts to first-occurrence src.replace, so a DISAMBIGUATED entry mutates the wrong site while every registration-time check stays green (-> MUTUNIQ intended-occurrence test)',
+    file: 'tools/mutate.mjs', from: MUTUNIQ_APPLY_FROM, to: MUTUNIQ_APPLY_TO },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
