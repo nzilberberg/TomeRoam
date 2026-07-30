@@ -116,13 +116,6 @@ const RECOVERY_RENDER_ALWAYS_FALSE = "        applyScreen(currentDesc(), { rende
 const F1_ORPHAN_RESETSCROLL_TO = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: false, keepGhosts: cur ? true : undefined });";
 
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
-const S5_GHOSTBG_FROM = [
-  '    const GHOST_BG = (() => {',
-  "      try { return win.getComputedStyle(doc.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)'; }",
-  "      catch { return 'var(--bg)'; }",
-  '    })();',
-].join('\n');
-const S5_GHOSTBG_TO = "    const GHOST_BG = getComputedStyle(doc.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)';";
 const S5_ORDER_FROM = [
   "    if (plan.outgoing === 'app-ghost') {",
   '      const g = ghostApp(fromKind);',
@@ -477,13 +470,10 @@ const MUTATIONS = [
   { name: 'swipe5 F7a: the destination render runs BEFORE the outgoing ghost is built (-> outgoing-before-render test)',
     file: 'js/swipe.js',
     from: S5_ORDER_FROM, to: S5_ORDER_TO },
-  { name: 'swipe5 F8: GHOST_BG reads an ambient getComputedStyle, not env\'s (-> ghost-background-through-env test)',
-    file: 'js/swipe.js',
-    from: S5_GHOSTBG_FROM, to: S5_GHOSTBG_TO },
   { name: 'swipe5 navGhost: the ghost wrapper sits ABOVE the persistent bars (z>=30) (-> nav-ghost contract test)',
     file: 'js/swipe.js',
-    from: "      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';",
-    to:   "      wrap.style.cssText = 'position:fixed;inset:0;z-index:99;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';" },
+    from: "      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;pointer-events:none;will-change:transform;';",
+    to:   "      wrap.style.cssText = 'position:fixed;inset:0;z-index:99;overflow:hidden;pointer-events:none;will-change:transform;';" },
   { name: 'swipe5 npPill: npPillClone stops removing the stale float (-> NP pill recipe test)',
     file: 'js/swipe.js',
     from: S5_NPPILL_FROM, to: S5_NPPILL_TO },

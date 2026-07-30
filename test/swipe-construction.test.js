@@ -244,17 +244,21 @@ test('the outgoing pane is mounted before env.renderDestination is ever called',
     + 'browse->browse ghost would snapshot the POST-render #browse (the flash guard, plan §6 step 5)');
 });
 
-// ── F8 / navGhost — GHOST_BG resolves fresh through env; the wrapper contract holds ──
-test('the ghost background resolves through env.getComputedStyle, not an ambient or cached read', () => {
+// ── navGhost — the wrapper paints no background of its own (build .272 fix) ──────────
+// F8 (GHOST_BG, resolved through env.getComputedStyle per gesture) is RETIRED along with
+// the wrapper's own background paint: the prior version of this test asserted the wrapper
+// "carries a resolved page background", which encoded the moving-background defect this
+// build fixes (test/page-bg-single-painter.test.js's single-painter rule — body::before,
+// fixed, never moving — was violated by this wrapper's own copy riding the transform).
+// See js/swipe.js ghostWrap() for the reasoning and the device-owed residue.
+test('the ghost wrapper carries no background declaration of its own', () => {
   const ctx = mkEnv();
   const c = build(desc('home'), desc('books'), ctx);
   const wrap = ctx.doc.querySelector('.nav-ghost');
   assert.ok(wrap, 'the ghost wrapper is built');
-  const css = wrap.style.cssText;
-  // Resolved through env.document.defaultView.getComputedStyle (ambient getComputedStyle is
-  // poisoned during the call); a top-level/cached read would have thrown.
-  assert.ok(/background\s*:/.test(css) && !/background\s*:\s*;/.test(css),
-    'the wrapper carries a resolved page background');
+  assert.ok(!/background/i.test(wrap.style.cssText),
+    `the wrapper must declare no background at all, so the fixed body::before copy shows `
+    + `through undisturbed instead of a second, moving copy — cssText: ${wrap.style.cssText}`);
   assert.ok(c.movers.outgoing.element.classList.contains('nav-ghost')
     || c.movers.outgoing.element === wrap, 'the outgoing owned-pane element IS the nav-ghost wrapper');
 });

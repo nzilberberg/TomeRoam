@@ -200,13 +200,6 @@ const Swipe = (() => {
   function paneBuilders(env) {
     const doc = env.document;
     const win = doc.defaultView;
-    // The page background, resolved FRESH per gesture (never cached at module load), so a
-    // mid-session theme change cannot leave it stale (plan §7, F8). Same try/catch →
-    // var(--bg) fallback as the original app-side reader.
-    const GHOST_BG = (() => {
-      try { return win.getComputedStyle(doc.documentElement).getPropertyValue('--page-bg').trim() || 'var(--bg)'; }
-      catch { return 'var(--bg)'; }
-    })();
     // Clones must NOT re-trigger the art loader: strip data-art so loaded covers still show
     // via their copied src while unloaded ones stay as the skeleton.
     const freezeArt = (root) => root.querySelectorAll('img[data-art]').forEach((i) => i.removeAttribute('data-art'));
@@ -251,10 +244,22 @@ const Swipe = (() => {
     }
     // The fixed full-viewport pane both snapshot builders mount into (beneath the persistent
     // bars, clipped, non-interactive, transform-capable — the .nav-ghost contract, navGhost).
+    // TRANSPARENT BY DESIGN (build .272 fix): the wrapper used to paint its own copy of
+    // --page-bg (GHOST_BG, resolved fresh per gesture) here, which made a second, moving
+    // page background — this project's single-page-background rule (test/page-bg-single-
+    // painter.test.js) says exactly one painter exists, body::before, fixed and never
+    // moving. Leaving this wrapper transparent lets that fixed layer show through in any
+    // area the cloned content doesn't cover, instead of riding along with the transform.
+    // ⚠️ DEVICE-OWED, NOT HERE (established pattern elsewhere in this file, e.g. swipe-
+    // stage6f/6e/6i's flash notes): jsdom has no layout/paint, so nothing here can confirm
+    // the destination never peeks through a gap in the outgoing clone during the animation
+    // (e.g. a shorter outgoing snapshot against a taller destination). Untested by this
+    // change; a device check of app-ghost transitions between differently-sized destination
+    // panes closes that residue.
     function ghostWrap() {
       const wrap = doc.createElement('div');
       wrap.className = 'nav-ghost';
-      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;background:' + GHOST_BG + ';pointer-events:none;will-change:transform;';
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;pointer-events:none;will-change:transform;';
       return wrap;
     }
     // A ghost of the current app-view (minus the shared topbar), shifted up by the current
