@@ -51,9 +51,18 @@
 // js/app.js:1227 (five occurrences of that substring in the file, and the FIRST is the held
 // path this fixture never enters — so the entry anchors on the unique
 // `render: cur.finPlan.abortRender === 'rerender', ` prefix); M1NAVWINS's is an ADDITIVE
-// design-revert appending the retired `cur.ghostY` restore after that same `applyScreen`.
-// M1NAVWINS's mutant must redden BOTH cells — if only one reddens, the other is MASKED over
-// that crossing, which is a finding to route rather than a `caught` to accept (§7.1).
+// design-revert appending a retired restore after that same `applyScreen`. RE-DERIVED (Stage
+// 1, PLAN-swipe-declone.md §5.1): the original mutant restored `cur.ghostY`, but Stage 1
+// narrows app-ghost-building to browse->browse only, so `d.ghostY` is now NEVER set for a
+// home-source gesture (app.js:556-563) and that guard became an unsatisfiable conjunction —
+// the mutant applied cleanly but its write could never execute (CI shard 2, mutation #98,
+// found UNCAUGHT from build cf48e03 onward; CAUGHT at the pre-Stage-1 parent). The mutant now
+// restores `cur.scroll0` instead — the one captured-scroll field still available on every
+// gesture including home-source — which is the same class of plausible mistake (confusing the
+// window-scroll restore on the line above for a signal #home needs restoring too) and is a
+// genuine write the oracle below still catches regardless of value. M1NAVWINS's mutant must
+// redden BOTH cells — if only one reddens, the other is MASKED over that crossing, which is a
+// finding to route rather than a `caught` to accept (§7.1).
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { boot } = require('./app-harness.js');

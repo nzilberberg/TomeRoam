@@ -808,9 +808,30 @@ const MUTATIONS = [
   // ADDITIVE DESIGN-REVERT: the retired restore has no shipped text, so a fabricated `from`
   // would be refused by both the applier and the anchors gate. Both halves anchor on real text
   // and the edit genuinely changes it.
-  { name: 'M1NAVWINS: the retired reveal-time cur.ghostY restore is re-introduced after the abort finalize, clobbering an interleaved Home tap 340ms later (-> M1NAVWINS window-B red AND M1NOWRITE — BOTH must redden; if only one does, the other is MASKED and that is a finding, not a caught)',
+  // RE-DERIVED (Stage 1, PLAN-swipe-declone.md §5.1 — the gate the CI shard-2 regression from
+  // build cf48e03 traced to): the original mutant restored `cur.ghostY`, which Loki's own
+  // strike documented as meaning "an app-ghost was built for this gesture" (`cur.ghostY !=
+  // null` <=> `toKind !== 'home'` pre-declone, STRIKE-home-shift-m1-restrike.md I-A). Stage 1
+  // narrows app-ghost-building to browse->browse ONLY, so for any `cur.from.v === 'home'`
+  // gesture `c.capture` is now ALWAYS null (js/swipe.js constructionPlanFor's
+  // `fromKind==='browse' && toKind==='browse'` ternary makes the two conjuncts
+  // `cur.from.v==='home'` and `cur.ghostY != null` mutually exclusive BY CONSTRUCTION) — so
+  // `d.ghostY` is never set for a home-source gesture (app.js:556-563) and the retired
+  // restore's guard is now an unsatisfiable conjunction: the mutant applies cleanly but its
+  // injected write can never execute, so CI's mutation-sweep (shard 2, index 98) found it
+  // UNCAUGHT — confirmed by control: CAUGHT at 1577a0e (pre-Stage-1), UNCAUGHT from cf48e03
+  // onward. The safety property this cell defends (the abort finalize's no-hold branch must
+  // write NOTHING to #home.scrollTop, so an external nav's reveal is never clobbered) is
+  // unchanged and still real; only the FIELD a reintroduced restore would plausibly reach for
+  // has changed. `cur.scroll0` is the one remaining captured-scroll field available on EVERY
+  // gesture including home-source (app.js:468, `window.scrollY || 0` at arm time) — restoring
+  // it here is the same class of mistake (confusing the window-scroll restore two lines above
+  // for a signal that #home also needs restoring), and it is a genuine write the oracle
+  // catches regardless of value (§7.2: "no NON-ZERO write" would be a weaker, wrong oracle;
+  // this project's own doctrine already rejects it).
+  { name: 'M1NAVWINS: a re-introduced restore writes the captured window scroll (cur.scroll0) onto #home.scrollTop after the abort finalize, clobbering an interleaved Home tap 340ms later (-> M1NAVWINS window-B red AND M1NOWRITE — BOTH must redden; if only one does, the other is MASKED and that is a finding, not a caught)',
     from: "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);",
-    to:   "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);\n          if (cur.from.v === 'home' && cur.ghostY != null) $('home').scrollTop = cur.ghostY;   /* mutated: the retired restore */" },
+    to:   "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);\n          if (cur.from.v === 'home') $('home').scrollTop = cur.scroll0;   /* mutated: the retired restore, re-derived */" },
   // MUTUNIQ carries TWO mutants for the same reason M1PARKRANGE carries three: one mutant
   // cannot exercise both a REFUSAL and a correct-site APPLICATION. -a is the plan's declared
   // mutant; -b is added by the test author because the cell's own specification includes "and
