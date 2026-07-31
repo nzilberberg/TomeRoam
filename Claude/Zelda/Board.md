@@ -721,7 +721,21 @@ vanishing mid-snap and popping back ~⅓s later. This is also the candidate repr
 sighted-once pop-in — **that sighting stays MATCHING BUT UNCONFIRMED until this reads; do not write
 it off as explained.**
 
-**Still open in this campaign:** r2's successor stages — A1b (NP parks/hides beneath itself), A2
+**Stage A1b plan review — TEMPER, 2026-07-31** (`Claude/Charpy/PLAN-one-screen-type-A1b-charpy.md`).
+§5.3 was added in `8e9b4b6`, AFTER the plan review at `e979a41`, so the plan header's
+"PLAN_READY — reviewed" never covered it. The mechanism is sound (every NP open/close path traced;
+the abort really does reconcile, and no close path needs the exemption for an instant reveal), but
+six Structural findings gate the build. **The load-bearing one: the plan's claim that "additivity was
+never among the reasons given for NP's uniqueness" is FALSE** — `PROBE-np-uniqueness.md` §4.2 marks
+the settings-loop guard **load-bearing** and carries it into §8's thirteen, and the governing
+DecisionLog entry incorporates those thirteen by reference. A1b may still be right (§5.3.2's
+close-path table genuinely refutes the probe's stated reason), but it deletes a ratified
+load-bearing item and must say so and supersede the probe, not assert the mark away. Also: the plan
+cites NP's background as its distinguishing property, which the DecisionLog forbids in as many
+words. **Not re-opened:** `showAppView`'s sweep — §5.3.5's proof is sound, KEEP stands, verified.
+
+**Still open in this campaign:** r2's successor stages — A1b (NP parks/hides beneath itself, **plan
+TEMPER'd — findings owed before step 8**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`.
