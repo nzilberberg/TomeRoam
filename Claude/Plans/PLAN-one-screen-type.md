@@ -59,10 +59,20 @@ comment in HEAD) are folded as corrections. **§5.3.5 is corrected outright: `sh
 LIVE and is KEPT** — its live case is the `overlayFilmstrip` window, not Now Playing, proven by
 running it, and A1b provably cannot kill it.
 
-Five stages, each independently shippable and independently device-testable. A1 (shipped) makes the
-settings screens exclusive and transparent. **A1-fix repairs the mid-drag reconcile.** **A1b makes Now
-Playing park the page beneath it.** A2 removes the now-dead stacking. B retires the `overlay`
-classification for everything but Now Playing.
+**The A1-fix was struck and KILLED** (`Claude/Loki/STRIKE-one-screen-type.md`, 2026-07-31, executed
+with controls green). Its predicate guards **drag liveness** where the resource is **session-scoped**:
+`d` is nulled at finger-up (`js/app.js:618`) while the session still owns and animates the movers
+through settle, so a pending filmstrip net firing in that gap hides the *committed* destination
+mid-snap and it pops back in at the fallback finalize. **Stage A1-fix-r2** (§5.4) replaces the
+predicate with the session-ownership form. §5.4a records why the derivation missed it — suppression is
+per-firing, not a transfer of duty — and names the pattern on its **second instance**: a guard and the
+value it protects scoped to different lifetimes.
+
+Six stages, each independently shippable and independently device-testable. A1 (shipped) makes the
+settings screens exclusive and transparent. A1-fix (shipped, `.282`) suppressed the reconcile during
+the live drag. **A1-fix-r2 corrects the predicate to the ownership lifetime.** **A1b makes Now Playing
+park the page beneath it.** A2 removes the now-dead stacking. B retires the `overlay` classification
+for everything but Now Playing.
 
 ## Index
 
@@ -510,27 +520,88 @@ same uncancelled reconcile reaches NP transitions, which are the app's most freq
 it first means A1b's device gate reads against a clean baseline, exactly as A1b precedes A2 for the
 same reason.
 
-**The invariant the fix must satisfy.** *A pending `overlayFilmstrip` reconcile must not change the
-visibility or the transform of an element that a live gesture owns as a mover.* The reconciliation
-duty is not lost when it is skipped: **the gesture's own finalize `applyScreen` is a superset** — on
-commit it runs `applyScreen(dest, {render:false})` and on abort `applyScreen(currentDesc(), …)`, and
-both run `resetSwipeStyles` (clearing the filmstrip's inline transform and transition) followed by
-`setView`. So skipping is safe, not merely cheaper.
+**⚠️ THE SHIPPED FORM OF THIS FIX WAS KILLED. The invariant below is the RESTATED one; the
+superseded wording and why it failed are in §5.4a.** The shipped `.282` predicate
+`gestureLive() === !!d && d.live` (`js/app.js:213`) guards the wrong lifetime and is replaced, not
+supplemented.
 
-**Recommended design, with the alternative named** (U11 — two designs satisfy the invariant, so the
-choice is stated rather than dictated):
+**The invariant the fix must satisfy (restated on the correct lifetime).** *A pending
+`overlayFilmstrip` reconcile must not change the visibility or the transform of an element that a
+gesture **session** owns as a mover — for the whole of that ownership, which begins when the gesture
+goes LIVE and ends when the session releases ownership at finalize (or at the reveal drop), NOT when
+the drag handle is nulled at finger-up.*
 
-- **Recommended: make `reconcile` a no-op while a gesture session is live.** One condition at one
-  site. `js/nav.js` reads the world only through injected deps, so this is an injected predicate
-  (`d.gestureLive()`), consistent with the module's existing contract and with `d.browseWillHide`.
-  It is self-healing: if no gesture goes live the reconcile runs exactly as today.
-- **Admissible: cancel the pending `finish` when the gesture goes live.** Store the timeout id and a
-  listener-remover and retire both at one resolver — the idiom Stage 6b already established for
-  `settleTimer`/`revealFrames`/`revealTimer`.
-  **⚠️ If this design is taken, cancel at GO-LIVE (`start()`), never at ARM (`begin()`).** A gesture
-  that arms and never locks releases through `end()`'s `if (!cur.live)` return **without** calling
-  `applyScreen`, so cancelling at arm strands the filmstrip mid-transform with nothing scheduled to
-  clear it. This trap is why the recommendation is the predicate.
+**The ownership signal, derived from source rather than chosen.** `js/app.js:216-226` states the
+lifetime in its own words: "`session` is the single object that owns one gesture's whole lifecycle
+(arm → drag → settle → finalize → reveal) … `d` remains the ACTIVE-DRAG handle (nulled at `end()` so
+`move()`/`touchstart` see 'no drag in progress'); `session` outlives it through the settle/finalize
+phase, where the captured `cur` IS this same object." The boundaries are explicit in code, and they
+are exactly the boundaries the guard needs:
+
+| Moment | Source | `session` | `session.live` |
+|---|---|---|---|
+| Arm | `session = d` (`js/app.js:479`) | set | `false` |
+| Go live | `d.live = true` in `start()` | set (same object) | **`true`** |
+| Vertical-intent abandon | `sessionDone(d)` (`js/app.js:598`) | **null** | — |
+| Armed release (never locked) | `sessionDone(cur)` (`js/app.js:619`) | **null** | — |
+| Finger-up on a live drag | `const cur = d; d = null;` (`js/app.js:618`) — `session` untouched | **set** | **`true`** |
+| Finalize / reveal drop | `sessionDone(cur)` (`js/app.js:1262`, `:893`) | **null** | — |
+| Supersession hard reset | `session = null` (`js/app.js:456`), then re-armed | null → set | — |
+
+`sessionDone` is `if (session === s) session = null` (`js/app.js:250`). Nothing sets `.live` back to
+false, so it stays true on the session object for the whole settle phase.
+
+**Therefore the predicate is `!!session && session.live`** — and it ends exactly when ownership ends,
+neither earlier nor later:
+
+- **not earlier** — `session` survives `end()`'s `d = null`, so the settle window (the fracture) is
+  covered;
+- **not later** — `sessionDone` nulls it at finalize/reveal-drop, so a reconcile arriving afterward
+  runs normally, as it should;
+- **and the arm trap stays closed** — during the armed phase `session.live` is `false`, so the
+  reconcile is **not** suppressed and discharges normally. This is why `!!session` **alone is wrong**:
+  it would suppress during the armed phase, and an armed gesture that lifts without locking returns
+  through `js/app.js:619` having consumed the net, stranding the filmstrip mid-transform with nothing
+  scheduled to clear it. The shipped second cell pins that trap and must stay green.
+
+**One variable, one lifetime.** `finishing || (d && d.live)` also covers the window and is admissible,
+but it is **not recommended**: `finishing` is `begin()`'s re-entrancy gate, whose meaning Stage 6c
+already narrowed once (to admit a live pane-less session), so overloading it as an ownership signal
+couples this guard to a gate that has changed under it before. `session` is the object the stage-3
+comments *designate* as the owner; reading ownership off the owner is the durable form.
+
+**Naming goes with it.** `gestureLive` becomes the wrong concept the moment the predicate changes —
+rename it (`gestureOwnsMovers`, or equivalent) along with the injected dep. A predicate whose name
+survives its meaning is the staleness class this plan has already corrected three times.
+
+### 5.4a Why the first fix failed — and the pattern, now on its second instance
+
+**What held.** The superset argument's factual half is **true**: every live-gesture path does
+discharge the reconciliation duty — the settle finalize, supersession's hard reset ending in
+`applyScreen`, and the throw path's `finally`. No path was found where a gesture that went live ends
+without an `applyScreen`-equivalent.
+
+**What the derivation missed.** **Suppression is per-firing, not a transfer of the duty.** A firing
+suppressed while live is consumed harmlessly; *the same pending timer fired 100ms later, in the settle
+gap, is not suppressed* — and it does not run the duty early, it runs `applyScreen` against the
+**pre-commit** `currentDesc()` while the session's movers are mid-animation. So the superset half was
+true and was never the load-bearing half. §5.4 analysed one boundary of the suppression window (arm vs
+live) carefully enough to ship a cell for it, and never asked about the other boundary (live vs
+settling).
+
+**The seed was in the invariant's own wording** — "an element that a **live gesture** owns as a
+mover". Ownership is session-scoped and outlives liveness by the entire settle phase, and
+`js/app.js`'s own stage-3 comments say so. **The fact was in the artifact, cited in this plan, and not
+consulted by the derivation.**
+
+**⚠️ This is the second instance of one pattern, and it is named here so it is not met a third time
+from a new side: a guard and the value it protects scoped to different lifetimes.** The M1 campaign
+was the first. The durable form: **a guard's predicate is derived from the lifetime of the resource it
+protects, never from the phase in which the defect was first observed.** The A1-fix guarded the phase
+Poirot's probe happened to drive. The check that catches it is mechanical and cheap — *name the
+resource, find where its ownership begins and ends in source, and confirm the predicate's truth
+boundaries coincide with those two points* — which is the table above, and which this plan should have
+produced the first time.
 
 **And the false claim goes with it.** `js/nav.js:102`'s "NEVER called during an active drag" is
 deleted or corrected in the same commit. Leaving it is worse after the fix than before: it would then
@@ -1005,6 +1076,18 @@ Removing machinery is the point of this plan. It is not complete until each of t
     stage's duration, and leaving a known-wrong claim in HEAD "because it is going away anyway" is the
     habit this plan's §1 records twice.
 
+**Stage A1-fix-r2 (§5.4) — the replacement, and the second false absolute**
+
+32. **The claim at `js/nav.js:110`, shipped by A1-fix itself** — "so this reset never lands on an
+    element a live gesture owns as a mover." **Executed-false in the sense that matters**: it lands on
+    *session*-owned movers mid-settle. A1-fix retired one false absolute (`:102`) and shipped a
+    narrower one in its place; r2 must not repeat the move. The replacement states the **ownership**
+    lifetime and its two boundaries (goes live → `sessionDone` at finalize/reveal-drop), so a future
+    reader can check it against `js/app.js:216-226` rather than take it on faith.
+33. **The predicate `gestureLive` and its injected dep name** — replaced, not extended. The name
+    outlives its meaning the moment the body reads `session` instead of `d`, and a predicate named for
+    the wrong concept is how the next reader re-derives the wrong lifetime.
+
 **js/nav.js — Stage A1b (this is the stage's whole product change; it is pure subtraction)**
 
 25. **The `if (!npOpen)` guard on the park/hide block (`js/nav.js:51`)** — the block runs
@@ -1047,7 +1130,10 @@ the settings screens' geometry, padding, scrollers and `scrollbar-width: none` m
 | 6 | **One adversarial strike, aimed per §16.4** — a reachable interleaving in which `env.renderDestination` or `Nav.overlayFilmstrip` un-hides a settings screen while `#home` is un-parked or `#browse` un-hidden, **and a frame is painted in that state**. Supersession and an abort interleaved with a button-nav are the likeliest carriers. **Not** the no-background claim, which is settled by reading (§16.4). | the adversary |
 | 6a | Author the `FILMSTRIPDRAG` red cell (§14). Red at HEAD — it must reproduce F1 on shipped code before the fix exists. | the test author |
 | 6b | **Stage A1-fix build — the shipped defect (§5.4), ahead of A1b.** Make `overlayFilmstrip`'s reconcile a no-op while a gesture session is live (or cancel the pending `finish` at go-live, never at arm). Delete or correct `js/nav.js:102`'s false invariant. Scope the three exclusivity universals to *at rest* (§12 item 30). Correct or mark the superseded clause at `js/nav.js:71-72` (§12 item 31). Bump the build number. | the builder |
-| 6c | **Device gate A1-fix.** Tap `‹ Back` on a settings sub-screen and immediately edge-swipe, within the ~240ms filmstrip window; repeat toward Home and toward Books. The destination must track the finger for the whole drag instead of appearing only at release. | the user |
+| 6c | **Device gate A1-fix (RUN, clean — but narrower than it looked).** Tap `‹ Back` on a settings sub-screen and immediately edge-swipe; the destination must track the finger. It drove **held** drags, which release *after* the net is consumed — exactly the case the shipped fix handles — so it could not see the settle-window fracture. Recorded as narrow, not as wrong. | the user |
+| 6d | Author the third `FILMSTRIPDRAG` cell — the post-release settle window (§14, window three). **Red at HEAD against the shipped `.282` predicate**, which is mutant NATURAL-c. | the test author |
+| 6e | **Stage A1-fix-r2 build.** Replace the predicate with the session-ownership form (`!!session && session.live`, §5.4) — a replacement, not an addition — and rename `gestureLive` and its injected dep to name ownership rather than liveness. Correct `js/nav.js:110`'s claim, which is false in the sense that matters (the reset does land on session-owned movers mid-settle). Bump the build number. | the builder |
+| 6f | **Device gate A1-fix-r2 — the FLICK form, which 6c could not see.** Tap `‹ Back` on a settings sub-screen (or a hub row for the forward variant), then edge-**flick** and **release with commit roughly 125–340ms after the tap**, toward Books and toward Home. **A held drag cannot exercise this band** — release must land inside it. Watch for the committed destination vanishing mid-snap and popping back in about a third of a second later. **This is also the candidate repro for the user's unconfirmed pop-in** (§15 R-I). | the user |
 | 7 | Author the Stage-A1b red cells: `NPPARKS`, `NPRECONCILE`, and the `PEERFINALIZE` update (its third assertion moves from the NP close to the NP abort, §5.3.4). Red at HEAD. | the test author |
 | 8 | **Stage A1b build.** `js/nav.js`: delete both `if (!npOpen)` guards (`:51`, `:73`) so the park/hide block and the six-way loop run unconditionally; delete the exemption comment (`:71-72`) and correct the A1-era "NP alone stays an additive overlay" fragment (`:48-50`). **Nothing else in product source** — `npOpen` the variable, the `hidden` toggle and the `np-locked` toggle all stay. **In tests and tooling it is not "nothing else": execute §6a's casualty table** — de-register mutant `#104`, re-point `#106`, retire `NPUNTOUCHED`'s two class-state cells (their subject moves to `NPPARKS`) and keep its source-scan cell. Bump the build number. | the builder |
 | 9 | **Device gate A1b — the NP-close path is what this is for.** Open NP from Home, from Books and from a settings screen; close each by swipe and by back. Abort an NP-back swipe and an NP→chapter-list swipe, then swipe again — the accumulation in §5.3.1 must be gone and no more than one screen may ever be visible beside NP. **Then the honest question: does closing NP back to Books re-decode the covers, and does the restore flash?** (§15 R-H.) | the user |
@@ -1059,6 +1145,21 @@ the settings screens' geometry, padding, scrollers and `scrollbar-width: none` m
 | 15 | Build the classification gate to §16.2. | the builder |
 | 16 | Audit the suite: every deleted or inverted assertion accounted for, no dimension left bare by the deletions. | the coverage auditor |
 | 17 | Update `Claude/Subsystems/swipe-reveal.md` (the §23 overlay-background trigger, now answered), the board and the decision log; HEAD-wide scrub of "additive overlay" in records and comments that describe the settings screens **and Now Playing**. | the assistant |
+
+**Where A1-fix-r2 sits, and why — RULED, not defaulted: its own increment, ahead of A1b.** The
+standing reason to separate has been "two mechanisms, two device readings", and the tempting
+counter-argument here is that r2 is a one-line predicate change in the same file region A1b touches.
+**Size is not the criterion; the device reading is.** Three reasons, and the third is decisive.
+(i) The reading r2 needs is the *flick band* (step 6f) — a specific release window on the filmstrip
+path. A1b's reading is NP round trips. Bundled, a user seeing something wrong on an NP swipe could not
+attribute it to the parking change or to the predicate, which is exactly the confound the standing
+rule exists to prevent. (ii) r2 is a **correction to shipped code**, and the gate that passed it (6c)
+was narrower than it looked; a correction whose first gate missed the defect earns its own gate in the
+form that can see it. (iii) **A1b widens this defect's reach** — once `setView('nowplaying')` parks and
+hides, the same settle-window reconcile reaches NP round trips, the app's most frequent transition. So
+shipping A1b on top of a known-broken predicate makes the defect both worse and harder to attribute.
+That is the same ordering argument that put A1-fix ahead of A1b, and it applies with more force now
+that the defect is executed rather than predicted.
 
 **Where A1b sits, and why: immediately after A1 and BEFORE A2 and B.** Three reasons, in order of
 weight. (i) It is a **live, user-visible regression on a shipped build** — three screens rendering
@@ -1093,7 +1194,7 @@ a trade.
 ONEPAGE | at most one of the six settings screens is ever without the hidden class and applying any settings screen hides the other five including the hub under its own sub-screen | unit drive Nav applyScreen over each of the six settings screen names in turn against the real index fixture and after each assert exactly one of the six lacks the hidden class and that it is the applied one | NATURAL restore the hub-stays-mounted rule so options is unhidden whenever a sub is applied which makes two of the six visible and reddens the exactly-one assertion expected killing cell ONEPAGE | unit nav screen-state against the real index fixture
 PEERPARK | entering any settings screen parks home and hides browse exactly as entering browse does and the browse controller deactivation hook fires on the shown to hidden edge before the hidden class lands | unit apply books then apply options against the real index fixture with a recording browseWillHide dep and assert home carries parked and browse carries hidden and the hook fired exactly once and observed browse still unhidden at the moment it ran | TWO mutants because one cannot exercise both edges. NATURAL-a restore the settings exemption in the park guard so home is not parked and browse is not hidden which reddens both class assertions. NATURAL-b move the browseWillHide call after the hidden toggle which reddens the observed-unhidden assertion. expected killing cell for BOTH is PEERPARK | unit nav screen-state against the real index fixture
 PEERFINALIZE | the narrowed park guard is correct on the GESTURE-FINALIZE path and not only on the button-nav path so a committed home to settings gesture leaves home parked and a committed browse to settings gesture leaves browse hidden with the browse deactivation hook fired exactly once while browse was still un-hidden and an aborted settings to browse gesture does the same after the mid-drag render already un-hid browse | integration boot the app harness with a recording browse deactivation dep and drive three real gestures to completion — commit home to options then commit books to options then abort options to books — and after each assert the home parked class and the browse hidden class and the hook call count and the hidden state observed at the moment the hook ran | TWO mutants. NATURAL-a restore the settings exemption in the park guard so neither home is parked nor browse hidden at finalize which reddens the class assertions on all three gestures. NATURAL-b move the browse deactivation call after the hidden toggle which reddens the observed-un-hidden assertion. expected killing cell for BOTH is PEERFINALIZE | integration app harness over the real shipped gesture listeners
-FILMSTRIPDRAG | a pending overlayFilmstrip reconcile does not hide or un-transform an element a live gesture owns as a mover so a drag started inside the filmstrip window keeps its destination visible for the whole gesture instead of having it appear only at release | integration boot the app harness with fake timers and drive the real closeSub filmstrip then arm and lock a real edge gesture toward a browse destination inside the window then advance past the 340ms net and assert while the finger is still down that the incoming mover does not carry the hidden class and still carries a non-empty inline transform and that both remain true across a further move | TWO mutants. NATURAL-a remove the live-gesture condition from the reconcile so the pending finish runs during the drag which reddens the not-hidden assertion. NATURAL-b have the condition test armed rather than live so a gesture that arms without locking strands the filmstrip transform which reddens the transform assertion on the release path | integration app harness over the real shipped filmstrip and gesture listeners
+FILMSTRIPDRAG | a pending overlayFilmstrip reconcile does not hide or un-transform an element a gesture SESSION owns as a mover across all three windows of that ownership — during the live drag and during the post-release settle phase before finalize — while an armed-only gesture that never locks still discharges the pending reconcile so the filmstrip is never stranded mid-transform | integration boot the app harness with fake timers and drive the real closeSub filmstrip three ways. window one arm and lock and hold and advance past the net and assert the incoming mover is not hidden and keeps its inline transform. window two arm without locking then release and assert the reconcile ran and no transform is stranded. window three arm and lock and RELEASE with commit before the net is due then advance past the net but not past the settle finalize and assert the committed incoming mover is still not hidden and both movers keep their settle transforms and the session still owns them then advance past finalize and assert no hidden to shown flip occurred | THREE mutants. NATURAL-a remove the ownership condition so the pending finish runs during the live drag which reddens window one. NATURAL-b make the condition test armed rather than live which strands the filmstrip transform and reddens window two. NATURAL-c restore the shipped drag-liveness form of the predicate so it reads the nulled drag handle instead of the session which stops suppressing after release and reddens window three | integration app harness over the real shipped filmstrip and gesture listeners
 NPPARKS | entering Now Playing parks home and hides browse and hides all six settings screens exactly as entering any other screen does and fires the browse deactivation hook once on the shown to hidden edge while browse is still un-hidden | unit against the real index fixture apply books then apply nowplaying with a recording browse deactivation dep and assert home carries parked and browse carries hidden and all six settings screens carry hidden and nowplaying does not and the hook fired once observed with browse still un-hidden then repeat entering from options and from home | TWO mutants. NATURAL-a restore the npOpen guard on the park and hide block so home is not parked and browse is not hidden which reddens those assertions. NATURAL-b restore the npOpen guard on the six-way settings loop so a settings screen stays un-hidden under Now Playing which reddens the six-hidden assertion | unit nav screen-state against the real index fixture
 NPRECONCILE | an aborted Now Playing gesture reconciles what the gesture un-hid so screens cannot accumulate underneath Now Playing across repeated aborts which is the mechanism that produced the three-screen render | integration boot the app harness and from Now Playing drive a back-swipe to home and abort it then a forward-swipe to the chapter list and abort it then assert after each abort that exactly one screen element besides nowplaying lacks both the hidden and the parked class and that the count does not grow across the two aborts | NATURAL restore either npOpen guard so the finalize applyScreen for a nowplaying current no longer re-parks and re-hides which lets the un-park from the first abort and the un-hide from the second both persist and reddens the count assertion on the second abort | integration app harness over the real shipped gesture listeners
 NOSETTINGSBG | the page background variable is painted by exactly the fixed body pseudo-element and the Now Playing rule and by no other screen rule so every screen but Now Playing is transparent | gate read the shipped stylesheet and assert the set of selectors declaring the page background variable is exactly the body pseudo-element and the Now Playing selector and separately assert each of home browse options and the five-sub group declares no background property at all | TWO mutants. NATURAL-a re-add the page background to the options rule so the painter set gains a seventh member and the transparent assertion reddens. NATURAL-b delete the Now Playing background so the painter set loses its only screen and the painter-set assertion reddens. expected killing cell for BOTH is NOSETTINGSBG | gate source scan over the shipped stylesheet
@@ -1235,6 +1336,44 @@ This is the honest cost of A1b and the reason step 9 exists.
 **Neither hazard is a reason to keep the exemption.** The exemption's cost is a defect the user
 photographed; these are two regressions that may or may not appear and that have named, pre-designed
 answers. But they are why A1b ships on its own with its own gate rather than riding with A2.
+
+**R-I — the settle-window pop-in, and the user's unconfirmed sighting.** The killed `.282` predicate
+puts the committed destination `display: none` for 125–340ms mid-snap and then restores it at the
+fallback finalize — **hidden→shown with no gesture: a pop-in**. The user reported *"I thought I saw a
+screen do an inappropriate pop in but until I can get that to repro again it's not worth chasing."*
+**The signature matches on all three axes and it is NOT confirmed:** the observable is a screen
+arriving late and popping in; the trigger is a narrow 125–340ms release band behind a settings
+back/forward tap, which is naturally unreproducible by deliberate repetition; and it self-heals at
+finalize, leaving nothing to inspect. Against it: gate 6c drove *held* drags and read clean, which is
+exactly the case the shipped fix handles. **Step 6f's flick form is the repro to try, and it is the
+only way to confirm or exclude it.** Do not record the sighting as explained until that gate reads.
+
+**Un-prosecuted planes — recorded so they are not mistaken for cleared.** One strike returns one
+executed counterexample; these were identified and deliberately not driven:
+
+- **Abort variant of the same interleaving** — reconcile and finalize both apply `'options'`, so the
+  snap animation is destroyed and the retreating mover vanishes early, but the *end state* is right.
+  Milder, same mechanism, same fix; not separately driven.
+- **Forward variant** (`openSub` hub-row tap, then an immediate back-flick) — same mechanism with the
+  panes reversed. Step 6f drives it on device; no CI cell is proposed for it separately.
+- **The real-browser dual-listener tick** — the filmstrip's `finish` and the settle's `finalize` are
+  both `transitionend` listeners on the **same element** (`#options`), so a completing settle
+  transition fires both in one tick, `finish` first. **Visually benign** (no frame between them), but
+  the reconcile's side effects still run first: `options.scrollTop = 0` and a spurious
+  `browseWillHide`. Noted only; jsdom cannot exercise it.
+- **A second-order casualty of the fracture, un-prosecuted:** the mid-settle reconcile fires
+  `d.browseWillHide()` → `Browse.deactivate()` on the very destination the commit is about to show,
+  and the commit finalize runs `render: false`, which **never re-activates it**. A committed
+  destination page left with a deactivated virtual controller is a real reachable state; its
+  user-visible cost was not driven. The r2 predicate closes the path that produces it, which is why no
+  separate fix is planned — but if r2 is ever narrowed, this returns with it.
+- **W44's async refresh handlers** (`js/app.js:2642`, `:3144`, `:3237`) — they call `applyScreen`
+  outside any gesture guard and exclude `'options'` but **not** the five sub-screens. **A third writer
+  of this same class**, flagged by the A1 review as worth a look and not driven by the strike. It is
+  not in this plan's scope and no stage here touches it; recorded because two writers of this class
+  have now produced defects and the third is unguarded.
+- **Supersession** — `begin()`'s hard reset ends in a full `applyScreen`, so it is self-healing. Held
+  under strike, matching the plan review's reading.
 
 **Prior scars this plan is exposed to.** The swipe and screen machinery has invalidated verifications
 through environment traps before (memory `tomeroam-swipe-repaint-saga`, eight of them), and a
