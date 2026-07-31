@@ -68,11 +68,20 @@ predicate with the session-ownership form. §5.4a records why the derivation mis
 per-firing, not a transfer of duty — and names the pattern on its **second instance**: a guard and the
 value it protects scoped to different lifetimes.
 
+**Stage A1-fix-r2 is SHIPPED** — build `2026-07-31.284` (plan §13 step 6e): the predicate is replaced,
+not supplemented, with `!!session && session.live` and renamed `gestureOwnsMovers` (with its injected
+dep). All three `FILMSTRIPDRAG` windows are green; the settle-window mutant (`FILMSTRIPDRAG-c`, #113)
+is registered and killed by its declared cell, and the two rotting anchors (`#111`, `#112`) are
+re-transcribed and pass the anchors gate. `js/nav.js`'s two rewritten invariant comments (the
+`resetSwipeStyles` header and the `overlayFilmstrip` header) now state ownership on the session's
+lifetime, not the drag's. **Device gate step 6f (the flick-release band, ~125–340ms after the tap) is
+owed** — CI proves the mechanism in jsdom; the look on glass is the device's.
+
 Six stages, each independently shippable and independently device-testable. A1 (shipped) makes the
 settings screens exclusive and transparent. A1-fix (shipped, `.282`) suppressed the reconcile during
-the live drag. **A1-fix-r2 corrects the predicate to the ownership lifetime.** **A1b makes Now Playing
-park the page beneath it.** A2 removes the now-dead stacking. B retires the `overlay` classification
-for everything but Now Playing.
+the live drag. **A1-fix-r2 (shipped, `.284`) corrects the predicate to the ownership lifetime.** **A1b
+makes Now Playing park the page beneath it.** A2 removes the now-dead stacking. B retires the
+`overlay` classification for everything but Now Playing.
 
 ## Index
 

@@ -953,9 +953,9 @@ const MUTATIONS = [
     from: "        if (d.browseWillHide) d.browseWillHide();\n      }\n      // The `.266` stable-height probe",
     to:   "      }\n      // The `.266` stable-height probe" },
 
-  // ── PLAN-one-screen-type.md §14 — the FILMSTRIPDRAG cell (Stage A1-fix, plan §5.4).
+  // ── PLAN-one-screen-type.md §14 — the FILMSTRIPDRAG cell (Stage A1-fix / A1-fix-r2, plan §5.4).
   //
-  // The two mutants below are registered in THIS commit (step 6b) — the build that introduces the
+  // FILMSTRIPDRAG-a and FILMSTRIPDRAG-b were registered at step 6b — the build that introduced the
   // live-gesture condition they anchor on. They could not be registered earlier (step 6a): a `from`
   // that does not occur reddens test/mutation-anchors.test.js with ANCHOR NOT FOUND, and at step 6a
   // neither js/nav.js's `d.gestureLive()` guard nor js/app.js's `gestureLive` predicate existed yet.
@@ -968,13 +968,28 @@ const MUTATIONS = [
   //              locking suppresses the reconcile and strands the filmstrip mid-transform.
   //              -> FILMSTRIPDRAG arm-vs-live trap cell (the cleared-transform assertion)
   //
-  // The chosen design is the RECOMMENDED predicate form (plan §5.4 U11), not the admissible cancel
-  // form: js/nav.js's overlayFilmstrip reconcile calls the injected `d.gestureLive()`, wired in
-  // js/app.js to a small `gestureLive` function returned by bindSwipeBack() that reads the same
-  // module-scoped gesture-session variable `d` (app.js) that `start()` sets `.live = true` on. So
-  // NATURAL-a mutates js/nav.js's reconcile (removes the guard) and NATURAL-b mutates js/app.js's
-  // `gestureLive` predicate itself (tests existence instead of `.live`) — two different files, one
-  // per condition, per the plan's "one condition at one site" design.
+  // The design shipped at step 6b was the RECOMMENDED predicate form (plan §5.4 U11), not the
+  // admissible cancel form: js/nav.js's overlayFilmstrip reconcile calls an injected predicate,
+  // wired in js/app.js to a small function returned by bindSwipeBack() that read the same
+  // module-scoped gesture-session variable `d` (app.js) that `start()` sets `.live = true` on. That
+  // predicate keyed suppression to DRAG LIVENESS rather than to the lifetime of the resource it was
+  // protecting — the gesture SESSION's ownership of the movers — and an adversarial strike KILLED it
+  // (Claude/Loki/STRIKE-one-screen-type.md): `d` is nulled at end() while `session` still owns and
+  // animates the movers through the whole settle/finalize phase, so a pending reconcile firing in
+  // that gap ran unsuppressed. Step r2b (plan §13 step 6e) REPLACES the predicate with the
+  // session-ownership form (`!!session && session.live`, plan §5.4) and RENAMES it — and its
+  // injected dep — from `gestureLive` to `gestureOwnsMovers` (plan §5.4, "naming goes with it"),
+  // per Claude/Curie/RED-one-screen-type-settle.md §7:
+  //   NATURAL-c  restore the shipped .282 DRAG-LIVENESS form, so suppression again ends at
+  //              finger-up instead of at finalize/reveal-drop.
+  //              -> FILMSTRIPDRAG settle-window cell (the not-hidden/transform + no-flip assertions)
+  // The rename rots both existing anchors — they anchor on `gestureLive` text the repair replaces —
+  // so FILMSTRIPDRAG-a and FILMSTRIPDRAG-b are RE-TRANSCRIBED below, not merely left in place, and
+  // NATURAL-c is a new entry. NATURAL-a still mutates js/nav.js's reconcile (removes the guard);
+  // NATURAL-b and NATURAL-c both mutate js/app.js's `gestureOwnsMovers` predicate itself, to the two
+  // wrong forms the plan's boundary table names (§5.4 boundary table: `!!session` alone traps the
+  // armed phase; `!!d && d.live` reopens the settle-window gap) — one condition at one site, per the
+  // plan's design.
   //
   // Also registered here (unrelated NATURAL) is the mutant below, which proves the trap cell can fail TODAY
   // rather than only after the build. The trap cell is a PRESERVATION cell — green at HEAD by
@@ -997,21 +1012,40 @@ const MUTATIONS = [
   // FILMSTRIPDRAG-a (plan §14 NATURAL-a) — restore the shipped-at-A1 reconcile: no live-gesture
   // guard, so the pending finish runs unconditionally and hides the INCOMING MOVER mid-drag. Anchor
   // is naturally unique: overlayFilmstrip is the only site that builds a `reconcile` closure.
+  // Re-transcribed at step r2b: the injected dep is renamed from `gestureLive` to
+  // `gestureOwnsMovers` along with the predicate it reads (plan §5.4, "naming goes with it").
   { name: 'one-screen-type FILMSTRIPDRAG-a: overlayFilmstrip\'s reconcile loses its live-gesture guard, so the pending finish runs unconditionally and hides the INCOMING MOVER in the middle of a live drag (-> FILMSTRIPDRAG live-drag cell, the not-hidden/transform assertions)',
     file: 'js/nav.js',
-    from: '    const reconcile = () => {\n      if (d.gestureLive && d.gestureLive()) return;   // a live gesture owns these movers; its own finalize will reconcile them\n      applyScreen(d.currentDesc(), { render: false });\n    };',
+    from: '    const reconcile = () => {\n      if (d.gestureOwnsMovers && d.gestureOwnsMovers()) return;   // the gesture session still owns these movers; its own finalize will reconcile them\n      applyScreen(d.currentDesc(), { render: false });\n    };',
     to:   '    const reconcile = () => applyScreen(d.currentDesc(), { render: false });' },
 
   // FILMSTRIPDRAG-b (plan §14 NATURAL-b) — the trap. Widen the predicate to test ARMED (a session
   // exists) rather than LIVE (the session has gone live), so an armed-but-not-locked gesture also
   // suppresses the pending reconcile. Its own end() then releases through the `if (!cur.live)`
   // return WITHOUT ever calling applyScreen, so nothing is left to discharge the filmstrip's
-  // reconciliation duty and it is stranded mid-transform. Anchor is naturally unique: `gestureLive`
-  // is defined at exactly one place in js/app.js.
-  { name: 'one-screen-type FILMSTRIPDRAG-b: the gestureLive predicate tests ARMED (a session exists) rather than LIVE, so an armed-but-not-locked gesture also suppresses the pending reconcile, and that gesture releases without ever calling applyScreen — stranding the filmstrip mid-transform (-> FILMSTRIPDRAG arm-vs-live trap cell, the cleared-transform and re-hidden-sub assertions)',
+  // reconciliation duty and it is stranded mid-transform. Anchor is naturally unique:
+  // `gestureOwnsMovers` is defined at exactly one place in js/app.js. Re-transcribed at step r2b
+  // against the repaired predicate (plan §5.4/§5.4a): the anchor is now the session-ownership form,
+  // and the ARMED-vs-LIVE widening this mutant tests is expressed on `session` rather than on `d`.
+  { name: 'one-screen-type FILMSTRIPDRAG-b: the gestureOwnsMovers predicate tests ARMED (a session exists) rather than LIVE (the session has gone live), so an armed-but-not-locked gesture also suppresses the pending reconcile, and that gesture releases without ever calling applyScreen — stranding the filmstrip mid-transform (-> FILMSTRIPDRAG arm-vs-live trap cell, the cleared-transform and re-hidden-sub assertions)',
     file: 'js/app.js',
-    from: '    const gestureLive = () => !!d && d.live;',
-    to:   '    const gestureLive = () => !!d;   /* mutated: armed counts as live */' },
+    from: '    const gestureOwnsMovers = () => !!session && session.live;',
+    to:   '    const gestureOwnsMovers = () => !!session;   /* mutated: armed counts as live */' },
+
+  // FILMSTRIPDRAG-c (plan §14 NATURAL-c, registered at step r2b per
+  // Claude/Curie/RED-one-screen-type-settle.md §7) — restore the shipped .282 DRAG-LIVENESS form of
+  // the predicate, so the guard reads the nulled drag handle instead of the session. `d` is nulled
+  // at end() while `session` still owns and animates the movers through the settle/finalize phase
+  // (Claude/Loki/STRIKE-one-screen-type.md, KILL), so this mutant reopens exactly that gap: a
+  // pending reconcile that fires after finger-up but before finalize is not suppressed, and runs
+  // applyScreen against the pre-commit descriptor — hiding the committed incoming mover mid-snap and
+  // wiping both settle transforms. Anchor is naturally unique: `gestureOwnsMovers` is defined at
+  // exactly one place in js/app.js (the same anchor FILMSTRIPDRAG-b re-transcribes to, mutated here
+  // to a different wrong form).
+  { name: 'one-screen-type FILMSTRIPDRAG-c: the gestureOwnsMovers predicate is restored to the shipped .282 DRAG-LIVENESS form, so it guards the drag handle\'s lifetime instead of the session\'s, and a pending reconcile that fires after finger-up but before finalize is not suppressed — the committed incoming mover is hidden mid-snap and both settle transforms are wiped (-> FILMSTRIPDRAG settle-window cell)',
+    file: 'js/app.js',
+    from: '    const gestureOwnsMovers = () => !!session && session.live;',
+    to:   '    const gestureOwnsMovers = () => !!d && d.live;   /* mutated: guards the DRAG HANDLE\'s lifetime, not the SESSION\'s */' },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

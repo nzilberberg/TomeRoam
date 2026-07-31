@@ -105,9 +105,12 @@ const Nav = (() => {
   // swipe that gets interrupted mid-flight can never leave an element stuck
   // offscreen/half-transformed and corrupt later swipes (the "erratic after a
   // while" bug). applyScreen DOES run during a drag: overlayFilmstrip's pending
-  // reconcile is the one path that calls it while a gesture session exists. But that
-  // reconcile is a no-op whenever the gesture is LIVE (see overlayFilmstrip below), so
-  // this reset never lands on an element a live gesture owns as a mover.
+  // reconcile is the one path that calls it while a gesture session exists. That
+  // reconcile is a no-op for the WHOLE of a gesture session's ownership of the movers
+  // it is animating — from go-live through the settle/finalize phase, not merely
+  // while a drag is active (see overlayFilmstrip below; PLAN-one-screen-type.md
+  // §5.4a) — so this reset lands on a session-owned mover only after that session
+  // has released it.
   function resetSwipeStyles(keepGhosts) {
     if (!keepGhosts) document.querySelectorAll('.nav-ghost').forEach((n) => n.remove());
     document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone
@@ -169,20 +172,27 @@ const Nav = (() => {
   // together they cover the viewport for the whole slide, so the base never flashes.
   // Matches the swipe-back filmstrip. dir: 'fwd' (toV enters from the right) | 'back'
   // (toV enters from the left). Reconciles via applyScreen when it lands (which
-  // clears these inline styles) — UNLESS a swipe gesture is LIVE when the reconcile
-  // fires, in which case it is a no-op (Stage A1-fix, PLAN-one-screen-type.md §5.4).
+  // clears these inline styles) — UNLESS a gesture SESSION still owns these movers
+  // when the reconcile fires, in which case it is a no-op (Stage A1-fix-r2,
+  // PLAN-one-screen-type.md §5.4/§5.4a).
   // A pending reconcile must not change the visibility or transform of an element a
-  // live gesture owns as a mover: the gesture's own commit/abort applyScreen is a
-  // strict superset of this reconcile (both run resetSwipeStyles then setView), so
-  // skipping here loses nothing — a gesture that goes live always finalizes through
-  // that call. A gesture that only ARMS and never locks releases without any
-  // applyScreen call, but d.gestureLive() reads false for that whole armed-only
-  // window (it reports LIVE, not merely armed), so this reconcile still runs on that
+  // gesture session owns as a mover, for the WHOLE of that ownership — beginning when
+  // the gesture goes LIVE and ending when the session releases at finalize or the
+  // reveal drop, NOT when the drag handle is nulled at finger-up (a live gesture's
+  // session still owns and animates its movers through the settle phase after
+  // finger-up; guarding drag liveness instead of session ownership left that gap
+  // unsuppressed and was KILLED, Claude/Loki/STRIKE-one-screen-type.md). The gesture's
+  // own commit/abort applyScreen is a strict superset of this reconcile (both run
+  // resetSwipeStyles then setView), so skipping here loses nothing — a gesture that
+  // goes live always finalizes through that call, at or after the point ownership
+  // ends. A gesture that only ARMS and never locks releases without any applyScreen
+  // call, but d.gestureOwnsMovers() reads false for that whole armed-only window (a
+  // session is not yet LIVE while merely armed), so this reconcile still runs on that
   // path and discharges the duty.
   function overlayFilmstrip(fromV, toV, dir) {
     const fromEl = overlayEl(fromV), toEl = overlayEl(toV);
     const reconcile = () => {
-      if (d.gestureLive && d.gestureLive()) return;   // a live gesture owns these movers; its own finalize will reconcile them
+      if (d.gestureOwnsMovers && d.gestureOwnsMovers()) return;   // the gesture session still owns these movers; its own finalize will reconcile them
       applyScreen(d.currentDesc(), { render: false });
     };
     if (REDUCED || !fromEl || !toEl) { reconcile(); return; }

@@ -203,14 +203,6 @@
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
   function bindSwipeBack() {
     let d = null, finishing = false;
-    // The injected predicate js/nav.js's overlayFilmstrip reads (Stage A1-fix,
-    // PLAN-one-screen-type.md §5.4): true only once a gesture has gone LIVE (start()
-    // sets d.live), never merely while it is ARMED. That distinction is load-bearing —
-    // an armed-but-not-locked gesture releases through end()'s `if (!cur.live)` return
-    // WITHOUT ever calling applyScreen, so a predicate that also counted "armed" as
-    // live would suppress overlayFilmstrip's pending reconcile with nothing left to
-    // discharge it, stranding the filmstrip mid-transform.
-    const gestureLive = () => !!d && d.live;
     // revealWatch is DELIBERATELY module-scoped, not a session resource: a new reveal
     // flushes the PREVIOUS session's watch (reportReveal below), so it must outlive its
     // session. Moving it onto `session` would sever that cross-session flush. (It is a
@@ -241,6 +233,21 @@
     // so a superseded gesture is tied to its id and two sequential gestures show
     // distinct ids.
     let session = null, sessionSeq = 0;
+    // The injected predicate js/nav.js's overlayFilmstrip reads (Stage A1-fix-r2,
+    // PLAN-one-screen-type.md §5.4/§5.4a): true for the WHOLE of a gesture SESSION's
+    // ownership of the movers it is animating — beginning when the gesture goes LIVE
+    // (start() sets d.live) and ending when the session releases at finalize or the
+    // reveal drop (sessionDone below), NOT when the drag handle `d` is nulled at
+    // finger-up (end()). The earlier form read `!!d && d.live`: `d` is nulled at
+    // finger-up while `session` still owns and animates the movers through the whole
+    // settle/finalize phase, so that form left a pending reconcile unsuppressed for
+    // the entire settle window — an executed counterexample
+    // (Claude/Loki/STRIKE-one-screen-type.md, KILL). `!!session` alone is also wrong:
+    // it would suppress during the ARMED phase, before the gesture has gone live, and
+    // an armed-but-not-locked gesture releases through end()'s `if (!cur.live)` return
+    // WITHOUT ever calling applyScreen — a predicate that suppressed there would leave
+    // nothing to discharge the reconcile, stranding the filmstrip mid-transform.
+    const gestureOwnsMovers = () => !!session && session.live;
     // Relinquish ownership: clear `session` iff it is still the given session, so a
     // completed gesture's endpoint can never null a NEWER gesture that has since armed.
     // This is what makes IDLE mean "no active owner" rather than "the last gesture" —
@@ -1310,7 +1317,7 @@
     // History stays at one entry, so a popstate is only a stray OS gesture — re-anchor
     // and keep the current in-memory screen (never navigate away → never reload).
     window.addEventListener('popstate', () => { try { history.replaceState({ v: 'app' }, ''); } catch {} applyScreen(currentDesc()); });
-    return { gestureLive };
+    return { gestureOwnsMovers };
   }
   // Pull-to-refresh — Home only, from the very top. A downward drag reveals a
   // spinner; releasing past the threshold refreshes. Vertical + top-gated so it
@@ -2881,7 +2888,7 @@
       byId: $, isSignedIn: () => Plex.isSignedIn(), updatePlayerUI,
       renderScreen, renderNowPlaying, renderBrowse: (desc) => Browse.render(desc),
       currentDesc, browseWillHide: () => Browse.deactivate(),
-      gestureLive: () => !!swipeApi && swipeApi.gestureLive(),
+      gestureOwnsMovers: () => !!swipeApi && swipeApi.gestureOwnsMovers(),
     });
     Browse.init({
       mount: $('browse'), fmt,

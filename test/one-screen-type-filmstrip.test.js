@@ -59,14 +59,6 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const { boot } = require('./app-harness.js');
 
-// SKIP-PENDING-BUILD for the THIRD cell only. The first two are green at HEAD and stay unskipped;
-// the third is RED at HEAD `.282` for the settle-window gap, so it carries a skip to keep the
-// pre-commit battery green (this project does not use --no-verify). The builder removes the skip at
-// step r2b, confirms it is red, and builds to green. No assertion may be weakened to green it.
-const SKIP_SETTLE = 'SKIP-PENDING-BUILD — RED at build .282 until the A1-fix predicate is re-scoped '
-  + 'from drag liveness (!!d && d.live) to SESSION ownership (!!session && session.live), plan '
-  + '§5.4/§5.4a step r2b. Claude/Curie/RED-one-screen-type-settle.md';
-
 // RED-FIRST. The live-drag cell failed at HEAD for the defect above (confirmed red by the test
 // author, Claude/Curie/RED-one-screen-type-filmstrip.md) before overlayFilmstrip's reconcile was
 // made a no-op while a gesture session is live (plan §5.4 / step 6b). No assertion was weakened
@@ -281,7 +273,7 @@ async function flickBackToBooks(h, gapMs) {
 test('FILMSTRIPDRAG — the SETTLE window: a pending overlayFilmstrip reconcile that fires after '
   + 'finger-up but before finalize must not hide or un-transform the COMMITTED movers the session '
   + 'still owns, and no hidden→shown flip may occur at finalize',
-{ skip: SKIP_SETTLE }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     await toSubThenBack(h);
