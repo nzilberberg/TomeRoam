@@ -64,6 +64,10 @@ function defaultSteps() {
     // verdict) before it can land. No-ops when no manifest is staged. (Closes: a "COMPLETE"
     // manifest committed while the build gate's verdict was unfiled.)
     ['campaign-gates', [join(ROOT, 'tools', 'hooks', 'campaign-complete-check.mjs')]],
+    // A stage BUILD LOG may not land without a manifest binding it to its gate list. Without a
+    // manifest every gate is optional by default and skipping one leaves no trace — Stage A1b
+    // reached the build queue never plan-reviewed, under a plan header that claimed otherwise.
+    ['stage-manifest', [join(ROOT, 'tools', 'hooks', 'stage-has-manifest-check.mjs')]],
     // The retired product name (a third-party trademark) must not re-enter this
     // PUBLIC repo. Mechanized because it relapsed in a records commit whose own
     // purpose was to remove it — the deploy notes named the old paths in order to
