@@ -952,6 +952,38 @@ const MUTATIONS = [
     file: 'js/nav.js',
     from: "        if (d.browseWillHide) d.browseWillHide();\n      }\n      // The `.266` stable-height probe",
     to:   "      }\n      // The `.266` stable-height probe" },
+
+  // ── PLAN-one-screen-type.md §14 — the FILMSTRIPDRAG cell (Stage A1-fix, plan §5.4).
+  //
+  // ⚠️ NEITHER OF §14's TWO FILMSTRIPDRAG MUTANTS CAN BE REGISTERED AT STEP 6a, and the reason is
+  // mechanical: both anchor on the live-gesture CONDITION the A1-fix build introduces, which does
+  // not occur in js/nav.js yet. A `from` that does not occur reddens test/mutation-anchors.test.js
+  // with ANCHOR NOT FOUND. Both are specified verbatim, with their expected killing cells, in
+  // Claude/Curie/RED-one-screen-type-filmstrip.md for registration in the step-6b build commit —
+  // the same build-time registration Stage A1 used for six of its nine, for the same reason:
+  //   NATURAL-a  remove the live-gesture condition from the reconcile, so the pending finish runs
+  //              during the drag.  -> FILMSTRIPDRAG live-drag cell (the not-hidden assertion)
+  //   NATURAL-b  make the condition test ARMED rather than LIVE, so a gesture that arms without
+  //              locking suppresses the reconcile and strands the filmstrip mid-transform.
+  //              -> FILMSTRIPDRAG arm-vs-live trap cell (the cleared-transform assertion)
+  //
+  // What CAN be registered now is the mutant below, which proves the trap cell can fail TODAY
+  // rather than only after the build. The trap cell is a PRESERVATION cell — green at HEAD by
+  // construction, because it asserts what must NOT change — so without a registered mutant its
+  // ability to fail rests on nothing.
+  //
+  // The 340ms net is the ONLY scheduler that reaches `finish` in jsdom (no transitionend fires
+  // there), so deleting it means the reconcile never runs at all: the outgoing pane keeps its
+  // inline translateX and the sub-screen stays un-hidden beside the hub. That is exactly the
+  // end-state the trap cell asserts against, reached by losing the net rather than by suppressing
+  // it too early — the same defect from the other side, and a real hazard in its own right (the
+  // net exists because a transitionend can be missed). The anchor is naturally unique in
+  // js/nav.js and the A1-fix touches the reconcile, not the scheduling line, so it does not rot
+  // at the build.
+  { name: 'one-screen-type FILMSTRIPDRAG: overlayFilmstrip loses its 340ms reconcile safety net, so a missed transitionend leaves the filmstrip un-reconciled — the outgoing pane keeps its inline transform and the sub-screen stays un-hidden (-> FILMSTRIPDRAG arm-vs-live trap cell)',
+    file: 'js/nav.js',
+    from: '    setTimeout(finish, 340);                                      // safety net',
+    to:   '    /* mutated: the 340ms reconcile safety net is deleted */' },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

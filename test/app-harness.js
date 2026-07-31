@@ -618,6 +618,15 @@ function boot(opts = {}) {
     put('VirtualList', real('../js/virtuallist.js'));
     put('Browse', real('../js/browse.js'));
   }
+  // opts.realOptions — swap the stubbed OptionsScreen for the REAL js/options-screen.js.
+  // The stub's `init: noop` throws away the ONE thing the hub does: wiring each shipped
+  // `.hubrow[data-sub]` button to app.js's openSub(v). Without it there is no path from a
+  // test into a settings SUB-screen at all, so `closeSub` — and therefore the real
+  // `Nav.overlayFilmstrip` its ‹ Back fires — is unreachable through production code, and a
+  // cell about the filmstrip window would have to call overlayFilmstrip by hand. The real
+  // module is a pure view (js/options-screen.js: bind rows → openSub, render() a no-op), so
+  // this adds wiring and no behaviour. DEFAULT OFF, so every existing test is unaffected.
+  if (opts.realOptions) put('OptionsScreen', real('../js/options-screen.js'));
   put('PBLogic', real('../js/logic.js'));
   put('Settings', real('../js/settings.js'));
   put('Playback', real('../js/playback.js'));
@@ -751,9 +760,18 @@ function boot(opts = {}) {
         e.touches = (type === 'touchend' || type === 'touchcancel') ? [] : [t];
         return e;
       };
+      // Returns the dispatched event so a test can read `defaultPrevented`. That is the
+      // only NON-INVASIVE way to observe that a gesture is ARMED but not yet live: app.js's
+      // move() calls ev.preventDefault() on the first move of an armed session and THEN
+      // returns early while the movement is still under the 8px lock threshold, so a
+      // prevented sub-threshold move proves a session exists without starting one. Without
+      // it, an armed-phase cell cannot tell "armed, correctly idle" from "begin() rejected
+      // and there was never a gesture at all" — and would pass vacuously.
       const fire = (type, x, y) => {
         if (!target) throw new Error('touch.' + type + ' with no gesture started');
-        target.dispatchEvent(ev(type, x, y));
+        const e = ev(type, x, y);
+        target.dispatchEvent(e);
+        return e;
       };
       return {
         /** Begin a gesture on a real element (selector or node). x/y are viewport px. */
@@ -765,9 +783,9 @@ function boot(opts = {}) {
           fire('touchstart', x, y);
           return target;
         },
-        move(x, y) { fire('touchmove', x, y); },
-        end(x, y) { fire('touchend', x, y); target = null; },
-        cancel(x, y) { fire('touchcancel', x, y); target = null; },
+        move(x, y) { return fire('touchmove', x, y); },
+        end(x, y) { const e = fire('touchend', x, y); target = null; return e; },
+        cancel(x, y) { const e = fire('touchcancel', x, y); target = null; return e; },
         /** The node the gesture is bound to — for asserting it really got detached. */
         target: () => target,
       };
