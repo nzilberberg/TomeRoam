@@ -25,7 +25,7 @@ device-owed set are long; the product change is not.
   "callee_ranges":[],
   "affected_contracts":["test/fixtures/swipe-plan-spec.mjs:58","test/page-bg-single-painter.test.js:25","test/page-bg-js-painter.test.js:4","test/nav.test.js:36","test/swipe-declone-stage1.test.js:70","test/swipe-stage6d.test.js:148","docs/transition-matrix.generated.txt:12","docs/swipe-model.generated.txt:62"],
   "staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Zelda/Board.md","Claude/Decisions/DecisionLog.md"],
-  "blocking_questions":["ONEPAGE","PEERPARK","PEERFINALIZE","NOSETTINGSBG","NPUNTOUCHED","OVERLAYISNP","KINDPLAN"]} -->
+  "blocking_questions":["ONEPAGE","PEERPARK","PEERFINALIZE","NPPARKS","NPRECONCILE","NOSETTINGSBG","NPUNTOUCHED","OVERLAYISNP","KINDPLAN"]} -->
 
 Status: **PLAN_READY — reviewed (TEMPER), findings folded.** Plan review
 `Claude/Charpy/PLAN-one-screen-type-charpy.md` returned TEMPER with two Structural findings, both now
@@ -36,9 +36,21 @@ F3–F9 are folded as corrections (§5.1 scope, §5.2 stacking, §8 ordering, §
 §11.3 fixture-header constraint). The review's own re-aiming of the adversarial strike is adopted in
 §16.4. Next: one adversarial strike, then the build.
 
-Three stages, each independently shippable and independently device-testable. A1 makes the screens
-exclusive and transparent (this alone closes the reported defect). A2 removes the now-dead stacking.
-B retires the `overlay` classification for everything but Now Playing.
+**Stage A1 is SHIPPED** — commit `c4cfd7e`, build `2026-07-30.280`, CI green, device-confirmed
+("Options screens seem to work as one would expect"). The reported two-screens-through-each-other
+render is gone and A1 is not revisited.
+
+**Stage A1b is added, 2026-07-31, and is the next stage.** A1's transparency exposed a pre-existing
+defect it did not cause: Now Playing is the last screen still exempt from parking what is beneath it,
+so an aborted NP gesture leaves screens un-hidden and they accumulate — photographed twice on device
+as three-plus screens rendering through each other mid-swipe. §5.3 derives the mechanism, shows the
+exemption buys nothing any close path needs, and removes it. **This does not re-open the user's
+decision: NP keeps its background, `inset: 0`, `z-index: 60` and its coverage of the bars; additivity
+was never among the reasons given for its uniqueness** (S4, §5.3).
+
+Four stages, each independently shippable and independently device-testable. A1 (shipped) makes the
+settings screens exclusive and transparent. **A1b makes Now Playing park the page beneath it.** A2
+removes the now-dead stacking. B retires the `overlay` classification for everything but Now Playing.
 
 ## Index
 
@@ -46,7 +58,7 @@ B retires the `overlay` classification for everything but Now Playing.
 2. Applicability
 3. How `.browsepage` peers actually work — derived from source
 4. Exact scope boundary — MOVES / STAYS / SPLIT / DEFERRED
-5. Target design — what Options becomes
+5. Target design — what Options becomes, and (5.3) Now Playing parking the page beneath it
 6. Contract change
 7. Value and ownership ledger
 8. Ordering
@@ -172,14 +184,24 @@ own (Stage B).
 **STAYS, and is not touched by any stage.** `.nowplaying` — every declaration, its geometry, its
 `z-index: 60`, its `inset: 0`, its `background: var(--page-bg)`, its `display: flex` column layout,
 its retained native scrollbar, its touchmove bounce guard, `body.np-locked`, the navbar takeover, the
-pill and the pill clone. The additive branch that keeps a settings screen mounted **under NP** for
-the back-reveal (`js/nav.js:82`) — that branch is what makes NP's uniqueness work and it survives
-verbatim. `showAppView`'s stale-settings sweep (`js/app.js:483`) — it is **not** dead after this
-plan; its remaining live case is precisely the NP one (NP opened from Options, then swiped to the
-chapter list). Each settings screen's inset geometry, padding, own scroller, `scrollbar-width: none`
+pill and the pill clone, the `npOpen` module flag and its six playback-UI consumers, and the
+`$('nowplaying')` hidden toggle. Each settings screen's inset geometry, padding, own scroller, `scrollbar-width: none`
 membership and entry-time `scrollTop = 0` reset. `overlayFilmstrip` (`js/nav.js:175-194`) and both
 its call sites. `Nav.SETTINGS_SUBS`, `isSub`, `overlayEl`, `viewElFor`, `renderScreen`, every hub row
 and every back button. The `#home.parked` recipe and `.browsepage.parked`.
+
+**MOVED OUT OF "STAYS" AT STAGE A1b — recorded as a correction, not a silent change.** An earlier
+draft of this section listed two things as permanently retained. A1b changes both, and saying so
+plainly is cheaper than leaving a reader to find the contradiction:
+
+- **The `if (!npOpen)` exemption was described as "what makes NP's uniqueness work", surviving
+  verbatim. That was wrong.** §5.3.2 is the derivation: NP's uniqueness is its background, `inset: 0`,
+  `z-index: 60` and its coverage of the bars — the exemption provides none of them — and every
+  NP-close path restores its own destination without it. A1b deletes it (§12 items 25–28).
+- **`showAppView`'s stale-settings sweep (`js/app.js:483`) was listed as "not dead — its live case is
+  the NP one."** A1b hides the settings screens when NP opens, so that case may no longer be
+  reachable. It is **not** deleted here: §5.3.5 routes it to the code reviewer to prove dead or keep,
+  because asserting deadness from a reading is precisely how a live guard gets removed.
 
 **SPLIT across the seam.** `NAV.isOverlay` — its **name** and its **only consumer** separate in
 Stage B. It stays a pure name-check in `js/nav.js`, but the thing it identifies stops being "an
@@ -212,9 +234,19 @@ painter set of `--page-bg` is exactly `body::before` and `.nowplaying`.
 **Invariant S3 — entering a settings screen is a screen switch.** It parks `#home` and hides
 `#browse`, exactly as entering Browse does. Nothing live remains behind it.
 
-**Invariant S4 — Now Playing is unchanged in every respect.** No declaration of `.nowplaying`, no
-`np-locked` rule, no pill, no `js/nav.js:82` branch and no NP-only branch anywhere is added, removed
-or re-timed by any stage.
+**Invariant S4 — Now Playing keeps every property the decision names.** Its `background:
+var(--page-bg)`, its `inset: 0`, its `z-index: 60`, its coverage of the topbar (z30) and transport
+(z35), its full-bleed geometry, its flex-column internal layout, its retained native scrollbar, its
+touchmove bounce guard, `body.np-locked`, the navbar takeover, the pill and the pill clone — every one
+of the thirteen load-bearing differences `PROBE-np-uniqueness.md` §8 itemises — are untouched by every
+stage. **Stage A1b removes exactly one thing from Now Playing and nothing else: its exemption from
+parking the screen beneath it.** That exemption is not on the probe's list of load-bearing differences
+and is not among the reasons the decision gives for NP's uniqueness (§5.3).
+
+**Invariant S5 — every screen parks or hides what is beneath it, without exception.** After Stage A1b
+there is no screen for which entering it leaves another screen live underneath. This is what "all
+screens are the same type" means operationally, and Now Playing is the last screen that does not
+satisfy it.
 
 ### 5.1 Host element, per-page elements, show/hide mechanism
 
@@ -310,6 +342,108 @@ and an isolated fallback (§15 R-F)**, even though the DOM-order argument above 
 The topbar (30), transport (35) and navbar (40) all still paint above: `auto` is below every one of
 them, the same relationship `#browse` already has and the same conclusion `PROBE-np-uniqueness.md`
 §7.3 reaches for the inset screens.
+
+### 5.3 Stage A1b — Now Playing parks the page beneath it
+
+**The defect, and that it is not A1's.** A1 shipped at `c4cfd7e` (build `2026-07-30.280`), device-
+confirmed: the reported two-screens-through-each-other render is gone. It exposed a second, older
+defect. Two device screenshots show **three or more screens visible at once during an NP swipe** — NP
+beside Home, with Books carousel cards present, and stray text fragments between the cards from a
+further layer. **This is pre-existing structure that A1's transparency made visible; A1 did not create
+it.** Before A1 the settings screens were opaque and masked the stack; now only `body::before` and
+`.nowplaying` paint, so every un-hidden screen shows through every other.
+
+**⛔ This does not re-open the user's decision, and must not be treated as doing so.** NP stays unique
+in exactly the ways the decision states and `PROBE-np-uniqueness.md` derives: its own background,
+`inset: 0`, `z-index: 60`, covering the topbar and the transport. **Additivity was never among them.**
+The probe's §8 list of thirteen load-bearing differences does not include the park exemption, and the
+exemption's own comment (`js/nav.js:71-72`) justifies it as a *state convenience* — "so whichever one
+was underneath stays for the NP-back reveal" — not as a visual requirement. S4 is unchanged in
+substance; only the exemption goes.
+
+**5.3.1 — The precise mechanism, derived rather than inferred.** `js/nav.js:51` and `js/nav.js:73`
+both guard on `if (!npOpen)`, so **opening NP parks nothing and hides nothing**: `#home` keeps
+whatever park state it had, `#browse` keeps whatever hidden state it had, and a settings screen keeps
+whatever hidden state it had. That alone does not stack three screens, because the park/hide block
+keeps `#home` and `#browse` mutually exclusive. The stacking comes from a second fact:
+
+> **`env.renderDestination` and `showAppView` un-park and un-hide screens *during a gesture*, and when
+> that gesture ends on NP the reconcile that would undo it is skipped.**
+
+`js/app.js:532` removes `parked` from `#home`; `js/app.js:497` removes `hidden` from `#browse`;
+`js/app.js:536` removes `hidden` from a settings screen. On **abort**, finalize calls
+`applyScreen(currentDesc())` — which for an NP source is `setView('nowplaying')` — and **both blocks
+are skipped, so nothing is put back.** Each aborted NP swipe therefore *leaves one more screen
+un-hidden*, and they accumulate:
+
+1. On Home, open NP. Swipe NP→back; `renderDestination(dest, 'home')` un-parks `#home`. Abort. `#home`
+   is now permanently un-parked beneath NP.
+2. Swipe NP→forward (the chapter list, `js/app.js:463`); `showAppView` un-hides `#browse` and renders
+   the files page. Abort. `#browse` is now also un-hidden.
+3. If a settings screen was showing when NP opened, it is un-hidden too.
+
+Three or four mutually-transparent screens, exactly as photographed — the fragments between the
+carousel cards being the layer below. **NP's own opaque background hides all of it at rest; the
+screenshots are mid-swipe, when NP has translated away and uncovered the stack.**
+
+**5.3.2 — What the two exemptions actually buy. Traced at every NP-close path; the answer is one
+thing, and it is not the stated one.**
+
+| Close path | What restores the previous screen today | Does it need the exemption? |
+|---|---|---|
+| Swipe back to Home | `env.renderDestination(dest, 'home')` removes `parked` from `#home` (`js/app.js:532`) | **No.** The destination is un-parked by the gesture itself. |
+| Swipe back to Browse | `showAppView(dest, true)` removes `hidden` from `#browse` and re-renders (`js/app.js:497`) | **No.** Same. |
+| Swipe back to a settings screen | `env.renderDestination` removes `hidden` from the real overlay element (`js/app.js:536`) | **No.** Same. |
+| Swipe forward NP→chapter list | `showAppView` un-hides and renders `#browse` (`js/app.js:463`, `:497`) | **No.** |
+| Button/back close (`goBack`) | `applyScreen(prev)` → `setView(prev)` runs the full park/hide/show, then renders | **No.** |
+| Navbar tab from NP | `navTo` → `applyScreen` — same as above | **No.** |
+
+**Every close path already restores its own destination without the exemption.** The stated benefit —
+"stays for the NP-back reveal" — is supplied by `renderDestination`/`applyScreen` in every case, so
+the exemption is not load-bearing for correctness on any of them.
+
+**What it does genuinely buy, stated precisely so it is not lost:** `#browse` staying un-hidden while
+NP is open keeps its **decoded cover bitmaps warm**. If NP hides `#browse`, iOS drops them
+(`css/app.css:78-85`, the measured reason `.parked` exists) and closing NP back to Books may
+re-decode. That is a real cost, it is the *only* real cost found, and it is the same R-B class this
+plan already carries with the same named fallback (a `#browse.parked` recipe, §4 DEFERRED). `#home` is
+parked, not hidden — parked means **painted** — so it costs nothing. Settings screens carry no covers.
+
+**Nothing else requires the exemption.** I checked the six `npOpen()` consumers in `js/app.js`
+(`:1758`, `:2201`, `:2334`, `:2336`, `:2374`, `:2464`) — every one gates a live playback-UI re-render,
+none reads or writes screen visibility. `js/app.js:2321-2322`'s "removing it changed page height" note
+concerns the **transport** `#player` being removed from the DOM, not a screen being hidden, and no
+stage touches it.
+
+**5.3.3 — What replaces it.** Both guards are deleted, so `setView('nowplaying')` runs the same
+park/hide as every other screen: `#home` parked, `#browse` hidden (firing `d.browseWillHide` on the
+shown→hidden edge), all six settings screens hidden, `#nowplaying` un-hidden. Closing NP is then
+unchanged in mechanism — every path in the 5.3.2 table already restores its destination — and gains
+one property it lacks: **an aborted NP gesture now reconciles**, because `applyScreen(nowplaying)` at
+finalize re-parks and re-hides whatever the gesture un-hid. The accumulation in 5.3.1 becomes
+impossible by construction rather than by nobody exercising it.
+
+**5.3.4 — Interaction with A1's `browseWillHide` edges.** The set changes in two ways, both stated so
+`PEERFINALIZE` is updated rather than silently left describing the old world:
+
+- **A new edge is added — opening NP while Browse is showing.** `setView('nowplaying')` now crosses
+  `js/nav.js:55`'s shown→hidden test with `#browse` un-hidden, so the hook fires. This is the fourth
+  edge and it must be enumerated in §9/§10 and covered.
+- **Edge 3 relocates rather than disappearing.** §9's edge 3 was "closing NP back to a settings screen
+  after an `NP→files` abort left `#browse` un-hidden." After A1b that abort's own
+  `applyScreen(nowplaying)` hides `#browse` itself, so the hook fires **at the abort**, not later at
+  the NP close — by which time `#browse` is already hidden and the edge test is false.
+  **`PEERFINALIZE` needs updating, not replacing:** its third assertion moves from the NP-close to the
+  NP-abort, and the new `NPPARKS` cell covers the opening edge. Left unchanged, that assertion would
+  pass vacuously against a hook that no longer fires there.
+
+**5.3.5 — One deletion candidate this creates, routed rather than asserted.** `showAppView`'s
+stale-settings sweep (`js/app.js:483`) was retained by §4 because its one live case was the NP path.
+After A1b, NP hides the settings screens on open, so that case may no longer be reachable — but "may"
+is not "is": the sweep also runs on gesture paths where a settings screen is the source and is
+deliberately preserved by the `d.from.v !== s` guard. **It is not deleted by this stage.** It is
+routed to the code reviewer as a candidate with this note attached, because asserting deadness from a
+reading rather than proving it is exactly how a live guard gets removed.
 
 ## 6. Contract change
 
@@ -496,13 +630,19 @@ or `matchMedia` call is added anywhere.
   2. **Abort of a `settings→browse` gesture.** `showAppView` has already un-hidden and re-rendered
      `#browse` mid-drag (`js/app.js:496-497`), so the aborting `setView(settings)` hides it again and
      fires the hook. Covered by `PEERFINALIZE`.
-  3. **Closing Now Playing back to a settings screen after an `NP→files` abort left `#browse`
-     un-hidden.** The same new edge on a second path. Covered by `PEERFINALIZE`'s third assertion.
+  3. **An `NP→files` abort that left `#browse` un-hidden.** Covered by `PEERFINALIZE`'s third
+     assertion. **Stage A1b relocates this edge**: before A1b the hook fires later, when NP is closed
+     back to a settings screen; after A1b the abort's own `applyScreen(nowplaying)` hides `#browse`,
+     so it fires **at the abort**. The assertion moves with it (§5.3.4) — left pointing at the NP
+     close it would pass vacuously against a hook that no longer fires there.
+  4. **Opening Now Playing while Browse is showing** — added by Stage A1b. `setView('nowplaying')`
+     now crosses the shown→hidden test at `js/nav.js:55` with `#browse` un-hidden, so the hook fires.
+     Covered by `NPPARKS`.
 
-  The behaviour is correct at all three: in every case `#browse` is genuinely un-hidden and about to be
+  The behaviour is correct at all four: in every case `#browse` is genuinely un-hidden and about to be
   hidden, so the deactivation precondition holds and the anchor is captured from real geometry before
   `display: none` lands. The point of enumerating them is that "correct" was until now an unproven
-  reading — §14's `PEERFINALIZE` is what proves it.
+  reading — §14's `PEERFINALIZE` and `NPPARKS` are what prove it.
 - **`d.isSignedIn`** (`js/nav.js:93`) — gates the navbar's `hidden` toggle. **UNTOUCHED**; no stage
   reads or writes it.
 - **`d.updatePlayerUI`** (`js/nav.js:94`) — the trailing reconcile that runs after every `setView`,
@@ -545,7 +685,7 @@ or `matchMedia` call is added anywhere.
   at most two (a sub plus its hub, `js/nav.js:83`) to exactly one. The removed member is the hub kept
   under its own child; the retained exception is a settings screen kept under **Now Playing**
   (`js/nav.js:82`), which is untouched.
-- **Deactivates.** `Browse.deactivate()` gains **three** trigger edges, not one — the button-nav
+- **Deactivates.** `Browse.deactivate()` gains **four** trigger edges across A1 and A1b, not one — the button-nav
   browse→settings entry, the abort of a `settings→browse` gesture, and the Now-Playing close back to a
   settings screen after an `NP→files` abort (all three enumerated in §9). Nothing owns a new handle:
   `deactivate()` is idempotent with respect to an already-inactive controller (`js/browse.js:332`
@@ -715,6 +855,28 @@ Removing machinery is the point of this plan. It is not complete until each of t
 24. **The false count in `test/swipe-stage6d.test.js:148`'s test name** ("for all 8 structural cases",
     Stage B) — it passes while asserting something untrue, which is worse than reddening. §6 item 3.
 
+**js/nav.js — Stage A1b (this is the stage's whole product change; it is pure subtraction)**
+
+25. **The `if (!npOpen)` guard on the park/hide block (`js/nav.js:51`)** — the block runs
+    unconditionally, so entering Now Playing parks `#home`, hides `#browse` and fires
+    `d.browseWillHide` exactly as entering any other screen does.
+26. **The `if (!npOpen)` guard on the six-way settings loop (`js/nav.js:73`)** — the loop runs
+    unconditionally, so entering Now Playing hides all six settings screens.
+27. **The two-line comment justifying the exemption (`js/nav.js:71-72`)** — "Leave the settings
+    overlays' hidden state untouched when going TO NowPlaying so whichever one was underneath stays
+    for the NP-back reveal." §5.3.2 shows every close path restores its own destination without it, so
+    the comment states a benefit that was not real and a mechanism that is gone.
+28. **The A1-era comment fragment naming NP as the standing exception to the peer model**
+    (`js/nav.js:48-50`, "Now Playing alone stays an additive overlay (S4)") — false after A1b.
+    Replaced by the S4/S5 statement: NP keeps its background, geometry and stacking, and parks what is
+    beneath it like every other screen.
+
+Note that §12 item 12's retained comment lines (`js/nav.js`, the `npOpen` guard's stated reason) are
+**deleted by A1b**, not kept — the guard they explain no longer exists. Item 12's invariant was "the
+retained guard carries its stated reason in source"; A1b retires the guard, which satisfies it
+vacuously and correctly. This is the one place where A1b supersedes an earlier item of this list
+rather than adding to it.
+
 **Explicitly NOT deleted, and each for a stated reason:** `js/nav.js:82`'s `if (!npOpen)` guard (it is
 the mechanism of NP's uniqueness); `js/app.js:483`'s stale-settings sweep (its live case is the NP
 one); `overlayFilmstrip` and both call sites; `Nav.SETTINGS_SUBS`, `isSub`, `overlayEl`, `viewElFor`;
@@ -733,13 +895,27 @@ the settings screens' geometry, padding, scrollers and `scrollbar-width: none` m
 | 4 | **Device gate A1.** Open Options; open each of the five subs and come back; Options from Home and from Books; swipe-back from a sub to the hub and from the hub to Books; open Now Playing from a sub and swipe back to it. **This is the step that answers the user's report** — the two-screens-through-each-other render must be gone. Watch specifically for cover re-decode returning Books→Options→Books (R-B) and for anything painting through a settings screen. | the user |
 | 5 | Review the Stage-A1 build. | the code reviewer |
 | 6 | **One adversarial strike, aimed per §16.4** — a reachable interleaving in which `env.renderDestination` or `Nav.overlayFilmstrip` un-hides a settings screen while `#home` is un-parked or `#browse` un-hidden, **and a frame is painted in that state**. Supersession and an abort interleaved with a button-nav are the likeliest carriers. **Not** the no-background claim, which is settled by reading (§16.4). | the adversary |
-| 7 | **Stage A2 build.** Delete `z-index: 25` and `z-index: 26` and their two stated causes from the comments. Bump the build number. | the builder |
-| 8 | **Device gate A2.** The same swipe set as step 4, plus commit and abort on each, watching the two drag edges for any flash or paint-order artefact. Fallback if it regresses: restore both z-index declarations alone — they are independent of A1, which stays shipped (§15 R-F). | the user |
-| 9 | Author the Stage-B red cells: `OVERLAYISNP`, `KINDPLAN`. Red at HEAD. | the test author |
-| 10 | **Stage B build.** `js/nav.js`: `isOverlay` collapses to `v === 'nowplaying'`. `js/swipe.js`: `kindOf` gains the settings test, `KINDS` gains `'settings'`, both host ternaries widen, `constructionPlanFor`'s `toKind` chain gains the settings arm. Rewrite `STRUCTURAL_CASES` to 14 rows and `REPRESENTATIVE` to four entries. Regenerate both `docs/*.generated.txt`. Re-point the `tools/mutate.mjs` host anchor. Bump the build number. | the builder |
-| 11 | Build the classification gate to §16. | the builder |
-| 12 | Audit the suite: every deleted or inverted assertion accounted for, no dimension left bare by the deletions. | the coverage auditor |
-| 13 | Update `Claude/Subsystems/swipe-reveal.md` (the §23 overlay-background trigger, now answered), the board and the decision log; HEAD-wide scrub of "additive overlay" in records and comments that describe the settings screens. | the assistant |
+| 7 | Author the Stage-A1b red cells: `NPPARKS`, `NPRECONCILE`, and the `PEERFINALIZE` update (its third assertion moves from the NP close to the NP abort, §5.3.4). Red at HEAD. | the test author |
+| 8 | **Stage A1b build.** `js/nav.js`: delete both `if (!npOpen)` guards (`:51`, `:73`) so the park/hide block and the six-way loop run unconditionally; delete the exemption comment (`:71-72`) and correct the A1-era "NP alone stays an additive overlay" fragment (`:48-50`). Nothing else — `npOpen` the variable, the `hidden` toggle and the `np-locked` toggle all stay. Bump the build number. | the builder |
+| 9 | **Device gate A1b — the NP-close path is what this is for.** Open NP from Home, from Books and from a settings screen; close each by swipe and by back. Abort an NP-back swipe and an NP→chapter-list swipe, then swipe again — the accumulation in §5.3.1 must be gone and no more than one screen may ever be visible beside NP. **Then the honest question: does closing NP back to Books re-decode the covers, and does the restore flash?** (§15 R-H.) | the user |
+| 10 | Review the Stage-A1b build, and adjudicate the `showAppView` sweep deletion candidate (§5.3.5) — prove it dead or keep it. | the code reviewer |
+| 11 | **Stage A2 build.** Delete `z-index: 25` and `z-index: 26` and their two stated causes from the comments. Bump the build number. | the builder |
+| 12 | **Device gate A2.** The same swipe set as step 4, plus commit and abort on each, watching the two drag edges for any flash or paint-order artefact. Fallback if it regresses: restore both z-index declarations alone — they are independent of A1 and A1b, which stay shipped (§15 R-F). | the user |
+| 13 | Author the Stage-B red cells: `OVERLAYISNP`, `KINDPLAN`. Red at HEAD. | the test author |
+| 14 | **Stage B build.** `js/nav.js`: `isOverlay` collapses to `v === 'nowplaying'`. `js/swipe.js`: `kindOf` gains the settings test, `KINDS` gains `'settings'`, both host ternaries widen, `constructionPlanFor`'s `toKind` chain gains the settings arm. Rewrite `STRUCTURAL_CASES` to 14 rows and `REPRESENTATIVE` to four entries. Regenerate both `docs/*.generated.txt`. Re-point the `tools/mutate.mjs` host anchor. Bump the build number. | the builder |
+| 15 | Build the classification gate to §16.2. | the builder |
+| 16 | Audit the suite: every deleted or inverted assertion accounted for, no dimension left bare by the deletions. | the coverage auditor |
+| 17 | Update `Claude/Subsystems/swipe-reveal.md` (the §23 overlay-background trigger, now answered), the board and the decision log; HEAD-wide scrub of "additive overlay" in records and comments that describe the settings screens **and Now Playing**. | the assistant |
+
+**Where A1b sits, and why: immediately after A1 and BEFORE A2 and B.** Three reasons, in order of
+weight. (i) It is a **live, user-visible regression on a shipped build** — three screens rendering
+through each other during the most frequent transition in the app is worse than anything A2 or B
+addresses. (ii) **It would contaminate A2's device gate.** A2's gate asks the user to judge stacking
+and flash at the drag edges; that reading is worthless taken on a build where the NP swipe already
+renders a stack of screens through each other, and a defect found there could not be attributed. A2
+must be judged against a clean baseline. (iii) It is the same guard in the same function as A1, so
+the context is hot and the change is two deleted conditions. **A1b does not depend on A2 or B, and
+neither depends on it** — the ordering is chosen on risk and on gate cleanliness, not on dependency.
 
 **BINDING ORDERING — `PEERFINALIZE` lands at step 2, before the step-4 device gate. Not after it.**
 The device gate exercises the button-nav path, which is the path the user reports and the path
@@ -764,15 +940,22 @@ a trade.
 ONEPAGE | at most one of the six settings screens is ever without the hidden class and applying any settings screen hides the other five including the hub under its own sub-screen | unit drive Nav applyScreen over each of the six settings screen names in turn against the real index fixture and after each assert exactly one of the six lacks the hidden class and that it is the applied one | NATURAL restore the hub-stays-mounted rule so options is unhidden whenever a sub is applied which makes two of the six visible and reddens the exactly-one assertion expected killing cell ONEPAGE | unit nav screen-state against the real index fixture
 PEERPARK | entering any settings screen parks home and hides browse exactly as entering browse does and the browse controller deactivation hook fires on the shown to hidden edge before the hidden class lands | unit apply books then apply options against the real index fixture with a recording browseWillHide dep and assert home carries parked and browse carries hidden and the hook fired exactly once and observed browse still unhidden at the moment it ran | TWO mutants because one cannot exercise both edges. NATURAL-a restore the settings exemption in the park guard so home is not parked and browse is not hidden which reddens both class assertions. NATURAL-b move the browseWillHide call after the hidden toggle which reddens the observed-unhidden assertion. expected killing cell for BOTH is PEERPARK | unit nav screen-state against the real index fixture
 PEERFINALIZE | the narrowed park guard is correct on the GESTURE-FINALIZE path and not only on the button-nav path so a committed home to settings gesture leaves home parked and a committed browse to settings gesture leaves browse hidden with the browse deactivation hook fired exactly once while browse was still un-hidden and an aborted settings to browse gesture does the same after the mid-drag render already un-hid browse | integration boot the app harness with a recording browse deactivation dep and drive three real gestures to completion — commit home to options then commit books to options then abort options to books — and after each assert the home parked class and the browse hidden class and the hook call count and the hidden state observed at the moment the hook ran | TWO mutants. NATURAL-a restore the settings exemption in the park guard so neither home is parked nor browse hidden at finalize which reddens the class assertions on all three gestures. NATURAL-b move the browse deactivation call after the hidden toggle which reddens the observed-un-hidden assertion. expected killing cell for BOTH is PEERFINALIZE | integration app harness over the real shipped gesture listeners
+NPPARKS | entering Now Playing parks home and hides browse and hides all six settings screens exactly as entering any other screen does and fires the browse deactivation hook once on the shown to hidden edge while browse is still un-hidden | unit against the real index fixture apply books then apply nowplaying with a recording browse deactivation dep and assert home carries parked and browse carries hidden and all six settings screens carry hidden and nowplaying does not and the hook fired once observed with browse still un-hidden then repeat entering from options and from home | TWO mutants. NATURAL-a restore the npOpen guard on the park and hide block so home is not parked and browse is not hidden which reddens those assertions. NATURAL-b restore the npOpen guard on the six-way settings loop so a settings screen stays un-hidden under Now Playing which reddens the six-hidden assertion | unit nav screen-state against the real index fixture
+NPRECONCILE | an aborted Now Playing gesture reconciles what the gesture un-hid so screens cannot accumulate underneath Now Playing across repeated aborts which is the mechanism that produced the three-screen render | integration boot the app harness and from Now Playing drive a back-swipe to home and abort it then a forward-swipe to the chapter list and abort it then assert after each abort that exactly one screen element besides nowplaying lacks both the hidden and the parked class and that the count does not grow across the two aborts | NATURAL restore either npOpen guard so the finalize applyScreen for a nowplaying current no longer re-parks and re-hides which lets the un-park from the first abort and the un-hide from the second both persist and reddens the count assertion on the second abort | integration app harness over the real shipped gesture listeners
 NOSETTINGSBG | the page background variable is painted by exactly the fixed body pseudo-element and the Now Playing rule and by no other screen rule so every screen but Now Playing is transparent | gate read the shipped stylesheet and assert the set of selectors declaring the page background variable is exactly the body pseudo-element and the Now Playing selector and separately assert each of home browse options and the five-sub group declares no background property at all | TWO mutants. NATURAL-a re-add the page background to the options rule so the painter set gains a seventh member and the transparent assertion reddens. NATURAL-b delete the Now Playing background so the painter set loses its only screen and the painter-set assertion reddens. expected killing cell for BOTH is NOSETTINGSBG | gate source scan over the shipped stylesheet
 NPUNTOUCHED | applying Now Playing leaves whichever settings screen was showing exactly as it was so the back reveal still finds it and Now Playing keeps its own background and its own stacking | unit apply options then apply nowplaying against the real index fixture and assert nowplaying is unhidden and options is still unhidden and the body carries the np-locked class and separately assert from source that the Now Playing rule still declares its inset and its z-index and its background | NATURAL narrow the npOpen guard in setView so Now Playing also hides the settings screens which reddens the still-unhidden assertion and breaks the back reveal expected killing cell NPUNTOUCHED | unit nav screen-state plus source scan
 OVERLAYISNP | the overlay screen kind has exactly one member across the whole screen registry and that member is Now Playing while every settings screen classifies as the settings kind | unit enumerate the whole registry from Nav SETTINGS_SUBS and the Swipe browse family plus home options and nowplaying then assert Nav isOverlay is true for exactly one name and that Swipe kindOf returns overlay for exactly that one name and settings for all six settings names | NATURAL restore the options term to isOverlay so the overlay kind regains a second member which reddens the exactly-one assertion and flips the kindOf result for options expected killing cell OVERLAYISNP | unit pure classification over the derived registry
 KINDPLAN | every settings endpoint yields the same construction and finalization values the overlay endpoint yielded before the split so the taxonomy change alters no decision the swipe makes and the unreachable overlay to overlay case is absent from the contract | unit call the real classifyTransition and constructionPlanFor and finalizationPlanFor over all fourteen structural cases from the rewritten frozen spec and compare every field against the hand-written expectation and separately assert the frozen spec contains no case whose source and destination are both the overlay kind | TWO mutants. NATURAL-a change the settings arm of the toKind chain to render into the browse host which reddens every settings destination row. NATURAL-b narrow the source host projection to exclude the settings kind which reddens every settings source host row. expected killing cell for BOTH is KINDPLAN | unit three-layer oracle against the frozen spec
 ```
 
-**Seven cells, twelve mutants.** Every cell asserts a **source fact, a class-state fact, a call-count
+**Nine cells, fifteen mutants.** Every cell asserts a **source fact, a class-state fact, a call-count
 or call-ordering fact, or a pure-function return** — never a rendered geometry, a paint order or a
-composited result. That is deliberate: jsdom has no layout and no paint, so a CI cell asserting that a
+composited result. **`NPPARKS` and `NPRECONCILE` are held to this strictly**: neither asserts that
+fewer screens are *visible*, that NP *covers* anything, or that the stack no longer shows through —
+those are stacking and paint, jsdom has neither, and such a cell could not fail. They assert only
+class state and a count of un-hidden elements, which is the *mechanism* behind the defect. **The
+outcome the user actually reported — no longer seeing three screens at once — is device-owed and is
+step 9's job, not CI's.** That is deliberate: jsdom has no layout and no paint, so a CI cell asserting that a
 settings screen occludes what is behind it, or that removing a z-index does not flash, **could not
 fail** and would be a false witness. Those questions are §15's, and they are device-owed. This is the
 discipline `PLAN-swipe-declone.md` §14 already recorded, applied here by not writing those cells at all.
@@ -868,6 +1051,29 @@ briefly unhidden and moving with no background of their own. They are set to the
 one synchronous block with `transition: none` before `void toEl.offsetWidth`
 (`js/nav.js:180-183`), so no frame is painted with both at rest at the same place. Device row, step 4.
 
+**R-H — closing Now Playing is the path to watch (Stage A1b). Two distinct hazards, both device-owed.**
+This is the honest cost of A1b and the reason step 9 exists.
+
+1. **Cover re-decode.** Today `#browse` stays un-hidden under NP, so its decoded cover bitmaps stay
+   warm. After A1b it is `display: none` for the duration, and iOS drops them (`css/app.css:78-85`) —
+   so closing NP back to Books may re-decode the visible rows. This is the R-B class on a **much more
+   frequent** transition: transport → NP → back is the app's most-used round trip, where
+   browse→settings is occasional. **That frequency is what makes it worth a dedicated gate rather than
+   a note.** Named fallback if it bites: the `#browse.parked` recipe already carried in §4 DEFERRED —
+   park it off-viewport like `#home` instead of hiding it, which keeps it painted. That fallback is
+   *pre-designed and not built*; building it is a decision for after the device reading, not before.
+2. **A re-render or a flash on restore where today there is none.** Closing NP now restores a screen
+   that was parked/hidden rather than one left live. The mechanism is unchanged — every close path
+   already calls the same restore (§5.3.2) — but a parked `#home` being un-parked at an NP close is
+   the **same un-park that Stage 6g identified as the home→books abort flash**, now reached from a new
+   direction. 6g's mitigation is the unconditional `will-change: transform` at `css:168`, so it
+   already applies. **Do not predict this either way**: the mitigation is present, the path is new,
+   and only the device settles it.
+
+**Neither hazard is a reason to keep the exemption.** The exemption's cost is a defect the user
+photographed; these are two regressions that may or may not appear and that have named, pre-designed
+answers. But they are why A1b ships on its own with its own gate rather than riding with A2.
+
 **Prior scars this plan is exposed to.** The swipe and screen machinery has invalidated verifications
 through environment traps before (memory `tomeroam-swipe-repaint-saga`, eight of them), and a
 device-confirmed fix has been shipped in a *variant* form and flashed (`translateZ(0)` for
@@ -931,6 +1137,16 @@ held stone there would be **mistaken for safety on the part that is actually unp
 > `#browse` is un-hidden, **and a frame is painted in that state.** Supersession of one gesture by
 > another, and an abort that interleaves with a button-nav, are the likeliest carriers — they are the
 > two paths where the reconcile that would restore the invariant has not run yet.
+
+**The notch was cut in the right place, and the device has since confirmed it — which is worth
+recording because it is rare to get the evidence.** The A1b defect (§5.3.1) is *exactly* an instance
+of this class: `env.renderDestination` and `showAppView` un-park and un-hide screens during a gesture,
+NP's exemption meant the finalize reconcile never put them back, and frames were painted in that state
+— photographed twice. The strike was aimed at "a writer outside `setView` un-hides a screen and a
+frame is painted"; that is what shipped. **Consequence for the remaining strike: A1b closes the
+NP-shaped instance by making the finalize reconcile unconditional, so the adversary should now hunt
+the class *elsewhere* — supersession, and an abort interleaved with a button-nav, on non-NP screens —
+rather than re-running the NP case, which A1b makes self-healing.**
 
 This is the right notch for three reasons. It targets the **two writers outside `setView`**, which are
 the ones the six-way loop cannot constrain (§5.1) and where this project's defects actually live. It
