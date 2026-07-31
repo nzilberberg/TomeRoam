@@ -1,0 +1,25 @@
+#!/bin/sh
+# tomeroam git commit-msg hook — runs the checks that need the COMMIT MESSAGE, which the
+# pre-commit hook cannot see (git finalizes the message after pre-commit has already run).
+# Installed via `npm run hooks:install` (sets core.hooksPath=tools/hooks). The same toggle
+# governs it as the rest:  npm run hooks:off  /  npm run hooks:on.
+# Bypass a single commit:  git commit --no-verify.
+#
+# node is recorded at install time (git config tomeroam.node) because it may not be on PATH.
+NODE="$(git config --get tomeroam.node)"
+[ -z "$NODE" ] && NODE=node
+DIR="$(dirname "$0")"
+
+# Honour the shared toggle, so `npm run hooks:off` silences this too.
+TOGGLE="$(git config --get tomeroam.hooks)"
+if [ "$TOGGLE" = "false" ] || [ "$TOGGLE" = "off" ]; then
+  exit 0
+fi
+
+# revert-keeps-records: a `git revert` of a build commit must not silently delete the records
+# that commit carried. See the script's header for the incident that earned it. This is only the
+# EARLY catch — `git revert --no-edit` fires no hooks at all, so tools/hooks/pre-push is the gate
+# that actually covers the class. Both call the same checker.
+"$NODE" "$DIR/revert-keeps-records.mjs" --msg "$1" || exit 1
+
+exit 0

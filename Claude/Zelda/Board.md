@@ -681,6 +681,67 @@ mutate #98 → both cells red on their intended assertions (`Got [0]`) → resto
 Shard 2's and shard 5's full 13-mutation ranges each swept 0 uncaught, 0 unapplied, 0 stale.
 Full battery green, committed `011111f`, not yet pushed.
 
+## 🎬 ONE SCREEN TYPE campaign (2026-07-30 → 07-31) — `.270`–`.284`
+⚠️ **This section was missing from the board until 07-31, and the cause was mechanical, not
+forgetfulness** — see "records lost to a revert" below. Do not read its earlier absence as the work
+not having happened.
+
+**The root cause, found after three band-aids.** The swipe CLONED `.app` and stripped the clone's
+ids (`js/swipe.js`), so the copy laid out differently from the original. That ONE cause produced
+THREE symptoms, each patched separately before the cause was seen: (a) a ~7px geometry gap
+"fixed" with a hand-tuned `paddingTop` constant, (b) a duplicate background that moved during the
+swipe, (c) font boosting differing between copy and original → heading resize → reflow. The user
+stopped the third patch: *"Stop cloning… When do you start looking at causes instead of
+symptoms?"* Lesson, now also a gate: **a hand-tuned constant reconciling a COPY with the ORIGINAL
+is a divergence report, not a fix** (`[[compensating-constant-is-a-cause-report]]`).
+
+**Shipped and device-confirmed:** Stage 1 de-cloning; exactly ONE page background (`body::before`,
+viewport-fixed, never moves); Options and its five settings subs demoted to ordinary peers; home
+scroll preserved on commit (the `.parked { top: 0 }` deletion — `overflow: hidden` is LOAD-BEARING,
+do not also remove it).
+
+**`.282`–`.284`, the A1-fix and its repair.** `.282` shipped a guard suppressing a filmstrip
+reconcile during a gesture, keyed to `!!d && d.live`. Loki KILLed it: `d` is nulled at `end()`
+(`js/app.js:618`) while `session` still owns and animates the movers through settle, so a reconcile
+firing 125–340ms after finger-up hid the committed destination mid-snap. `.284` (`01cbaf1`) replaces
+it with **`!!session && session.live`**, derived from a boundary table rather than guessed. Curie's
+three FILMSTRIPDRAG windows jointly admit exactly that predicate and reject both neighbours
+(`!!d && d.live` → settle window red; `!!session` alone → arm trap red). CI green, all 8 mutation
+shards.
+⭐ **The class, twice now: LIFETIME MISMATCH** — guarding the phase where a defect was OBSERVED
+instead of the lifetime of the resource being PROTECTED. The mechanical check is a boundary table:
+name the resource, find where ownership begins and ends in source, confirm the predicate's truth
+boundaries coincide. Required by the plan; it was skipped on the first pass and that is what shipped
+`.282` wrong.
+
+**DEVICE-OWED — step 6f, the flick gate.** Tap `‹ Back` on a settings sub-screen and RELEASE within
+~125–340ms, toward Books and Home. A **held** drag (what step 6c tested) structurally cannot reach
+this window, which is why every earlier device reading came back clean. Watch for the destination
+vanishing mid-snap and popping back ~⅓s later. This is also the candidate repro for the user's
+sighted-once pop-in — **that sighting stays MATCHING BUT UNCONFIRMED until this reads; do not write
+it off as explained.**
+
+**Still open in this campaign:** r2's successor stages — A1b (NP parks/hides beneath itself), A2
+(delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
+`PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
+tuned `paddingTop = '53px'`.
+**Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
+The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
+says otherwise.
+
+### ⛔ Records lost to a revert — the failed experiment, and the gate that now prevents the loss
+`6c9e7e3` ("Park Options/subs like a real screen switch; stop painting their own background",
+`.277`) made `#options` and the five settings subs transparent AND parked the view beneath them.
+**It was wrong on-device:** the Options hub and the General sub rendered THROUGH each other
+(screenshot). Reverted by `2700b5c`. **Do not retry transparency-plus-parking for the Options group
+as one step** — the later, working approach demoted them to ordinary peers instead.
+That revert also silently deleted 54 lines of records (25 board + 29 DecisionLog) that `6c9e7e3`
+had carried, because a build commit here lands code AND records together — so reverting the code
+reverts the record. A failed experiment's record is MORE valuable after the revert, not less.
+**Now gated:** `tools/hooks/revert-keeps-records.mjs` + `tools/hooks/pre-push`, proven by
+`test/revert-keeps-records.test.js`. ⚠️ The gate lives on **pre-push**, not commit-msg, because
+`git revert --no-edit` fires NO hooks at all (measured); `commit-msg` is only an early catch.
+
 ## 🐞 Open known bugs (diagnosed, not fixed)
 | Bug | Sev | One-line | Depth |
 |---|---|---|---|

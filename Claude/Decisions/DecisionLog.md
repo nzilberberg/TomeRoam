@@ -1165,3 +1165,29 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   ⇒ "All screens are one type" governs every screen EXCEPT `.nowplaying`, whose full-bleed
   geometry and stacking are the point rather than an accident. Do not "consistency-fix" NP into
   an ordinary screen; do not cite its background as its distinguishing property.
+
+- RECORDS SURVIVE A REVERT — 2026-07-31, mechanized.
+  A build commit here deliberately carries BOTH code and records (Brunel's build log, Zelda's
+  board + decision-log entries) in the one commit that lands the change. That makes `git revert`
+  asymmetric in a way nobody thinks about at revert time: reverting the CODE reverts the RECORDS.
+  `2700b5c` reverted `6c9e7e3` and took 54 lines of board + DecisionLog with it, leaving the board
+  with NO entry for the campaign it was tracking — drift that read as forgetfulness but was purely
+  mechanical. DECIDED: a revert may not delete lines under `Claude/`. The record of a failed
+  experiment is MORE valuable after the revert — it is the "we tried this, here is the device
+  evidence it fails, do not retry it" entry, and the revert is precisely when that becomes
+  permanent knowledge. Enforced by `tools/hooks/revert-keeps-records.mjs`, proven by
+  `test/revert-keeps-records.test.js` (fixture red, real artifact green).
+  ⚠️ TWO ASSUMPTIONS WERE MEASURED AND BOTH WERE WRONG, which is the transferable part:
+  (1) The gate was first written for `commit-msg` — the obvious home. `git revert --no-edit` fires
+  NO hooks at all (probed: a plain commit in the same repo fires both pre-commit and commit-msg),
+  so it would have been INERT against the exact operation it targets. The real gate is PRE-PUSH,
+  the one event every authoring path passes through. (2) Its CLI defaulted to the repo the SCRIPT
+  lives in rather than the repo git INVOKED it in, so it resolved throwaway-repo SHAs against the
+  real history, found nothing, and allowed. Both were caught only because the tests drive a REAL
+  `git revert` + REAL `git push` against throwaway repos wired to the REAL hook scripts. A
+  unit-only test would have passed against a gate that never ran — the same vacuously-green shape
+  this project keeps paying for.
+  ALSO: `manage.mjs` now chmods EVERY hook (it chmodded only `pre-commit`), all three are `100755`
+  in the INDEX so a fresh clone is gated without running `install`, and the suite asserts that mode
+  for every entry in `HOOK_SCRIPTS`. A hook git cannot execute does not fail — it silently never
+  runs.
