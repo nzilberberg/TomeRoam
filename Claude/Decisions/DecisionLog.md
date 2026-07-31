@@ -1143,3 +1143,25 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   regardless of value; the safety property under test is unchanged. Fail-proof verified by
   execution (green, mutate, both cells red on their intended assertions, restore, green).
   Shard 2's and shard 5's full 13-mutation ranges each swept 0 uncaught, 0 unapplied, 0 stale.
+
+- ONE SCREEN TYPE, with Now Playing the deliberate exception — 2026-07-30, USER DECISION.
+  The user decided, and had to repeat because it kept being re-litigated: **all screens are the
+  same type.** Options and its five settings sub-screens (`#options`, `#downloads`, `#general`,
+  `#playback`, `#buffering`, `#diagnostics`) are structurally identical to the `.browsepage`
+  peers under `#browse` (books/authors/authorBooks/files) — a hub and its detail pages — and are
+  to become that same kind: swapped one at a time, never co-visible, painting no background of
+  their own. Their present additive-overlay form is what produced a device screenshot with the
+  Options hub and the General sub-screen rendered through each other simultaneously.
+  **NOW PLAYING STAYS UNIQUE — user decision, made against derived facts, not assumed.** The
+  claim "the only thing unique about NP is its background" was tested and is FALSE
+  (`Claude/Linnaeus/PROBE-np-uniqueness.md`): the background is SHARED with `#options` and all
+  five subs, and covering the fixed topbar (z30) and transport (z35) requires THREE co-required
+  properties — `inset: 0` (css:506), `z-index: 60` (css:506) and an opaque background — any one
+  of which, removed, exposes the bars. An ordinary two-bar-inset screen at z25/z26 could not
+  cover them for two independent reasons (its box starts at the topbar's bottom edge and a
+  background paints only inside its own box; and it stacks below both bars). Thirteen further NP
+  differences are load-bearing, itemised with citations in the probe. The navbar (z40) is NOT
+  covered — it is raised to z70 chromeless because it hosts NP's pill.
+  ⇒ "All screens are one type" governs every screen EXCEPT `.nowplaying`, whose full-bleed
+  geometry and stacking are the point rather than an accident. Do not "consistency-fix" NP into
+  an ordinary screen; do not cite its background as its distinguishing property.
