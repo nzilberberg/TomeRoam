@@ -204,9 +204,11 @@ body.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); p
 .view.nav-in-right { animation: navInRight .26s cubic-bezier(.22,.61,.36,1) both; }
 .view.nav-in-left  { animation: navInLeft  .26s cubic-bezier(.22,.61,.36,1) both; }
 @media (prefers-reduced-motion: reduce) { .view.nav-in-right, .view.nav-in-left { animation: none; } }
-/* #options is a filmstrip peer of #home and #browse (PLAN-one-screen-type.md): when it
-   is shown, every other screen is parked or hidden, so it needs no background of its
-   own — body::before's fixed copy shows through undisturbed.
+/* #options is a filmstrip peer of #home and #browse (PLAN-one-screen-type.md): AT REST
+   exactly one of the six settings screens is un-hidden, so it needs no background of
+   its own — body::before's fixed copy shows through undisturbed. The deliberate
+   exception is a live filmstrip (Nav.overlayFilmstrip): both panes are briefly
+   un-hidden together so the slide has something to show.
    z 25: covers page content, stays under topbar(30)/transport(35)/navbar(40). */
 #options {
   /* Inset the scroll box between the two fixed bars so the scrollbar's range of
@@ -767,10 +769,11 @@ input.dl-src { --buffer: var(--downloaded); }
 .pbmodal-btn.danger { background: #b4462f; color: #fff; }
 
 /* Options SUB-SCREENS (General/Playback/Buffering/Downloads/Diagnostics) are filmstrip
-   peers, same as #options: when one is shown, every other screen is parked or hidden,
-   so none needs a background of its own. z 26: one above #options so a sub-screen
-   filmstrips ON TOP of it, still under topbar(30)/transport(35)/navbar(40). Only one is
-   ever open at a time. */
+   peers, same as #options: AT REST exactly one of the six settings screens is
+   un-hidden, so none needs a background of its own. The deliberate exception is a live
+   filmstrip (Nav.overlayFilmstrip), where both panes are briefly un-hidden together.
+   z 26: one above #options so a sub-screen filmstrips ON TOP of it, still under
+   topbar(30)/transport(35)/navbar(40). Only one is ever open at a time at rest. */
 #downloads, #general, #playback, #buffering, #diagnostics {
   /* Scroll box inset between the two fixed bars — scrollbar confined to
      bottom-of-topbar → top-of-transport (see the #options note above). */

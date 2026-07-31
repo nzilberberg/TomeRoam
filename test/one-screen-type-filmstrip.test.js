@@ -40,12 +40,10 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const { boot } = require('./app-harness.js');
 
-// RED-FIRST. The live-drag cell fails at HEAD for the defect above; it is committed skipped so the
-// pre-commit battery stays green (this project does not use --no-verify), and the builder removes
-// the skip to drive it red before building to green. No assertion may be weakened to green it.
-const SKIP = 'SKIP-PENDING-BUILD — RED until the A1-fix build makes overlayFilmstrip\'s pending '
-  + 'reconcile a no-op while a gesture session is live (plan §5.4 / step 6b). '
-  + 'Claude/Curie/RED-one-screen-type-filmstrip.md';
+// RED-FIRST. The live-drag cell failed at HEAD for the defect above (confirmed red by the test
+// author, Claude/Curie/RED-one-screen-type-filmstrip.md) before overlayFilmstrip's reconcile was
+// made a no-op while a gesture session is live (plan §5.4 / step 6b). No assertion was weakened
+// to green it.
 
 // REAL wall clock, captured before boot() patches setTimeout — app.js's move() resamples velocity
 // only after >8ms of REAL time, so back-to-back synthetic moves leave vx holding the wrong sign.
@@ -102,7 +100,7 @@ async function toSubThenBack(h) {
 
 test('FILMSTRIPDRAG — a pending overlayFilmstrip reconcile must not hide the INCOMING MOVER of a '
   + 'live gesture: #browse stays un-hidden and transformed with the finger still down',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     await toSubThenBack(h);

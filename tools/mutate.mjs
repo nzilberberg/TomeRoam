@@ -955,19 +955,28 @@ const MUTATIONS = [
 
   // ── PLAN-one-screen-type.md §14 — the FILMSTRIPDRAG cell (Stage A1-fix, plan §5.4).
   //
-  // ⚠️ NEITHER OF §14's TWO FILMSTRIPDRAG MUTANTS CAN BE REGISTERED AT STEP 6a, and the reason is
-  // mechanical: both anchor on the live-gesture CONDITION the A1-fix build introduces, which does
-  // not occur in js/nav.js yet. A `from` that does not occur reddens test/mutation-anchors.test.js
-  // with ANCHOR NOT FOUND. Both are specified verbatim, with their expected killing cells, in
-  // Claude/Curie/RED-one-screen-type-filmstrip.md for registration in the step-6b build commit —
-  // the same build-time registration Stage A1 used for six of its nine, for the same reason:
+  // The two mutants below are registered in THIS commit (step 6b) — the build that introduces the
+  // live-gesture condition they anchor on. They could not be registered earlier (step 6a): a `from`
+  // that does not occur reddens test/mutation-anchors.test.js with ANCHOR NOT FOUND, and at step 6a
+  // neither js/nav.js's `d.gestureLive()` guard nor js/app.js's `gestureLive` predicate existed yet.
+  // Both were specified verbatim, with their expected killing cells, in
+  // Claude/Curie/RED-one-screen-type-filmstrip.md — the same build-time registration Stage A1 used
+  // for six of its nine, for the same reason:
   //   NATURAL-a  remove the live-gesture condition from the reconcile, so the pending finish runs
   //              during the drag.  -> FILMSTRIPDRAG live-drag cell (the not-hidden assertion)
   //   NATURAL-b  make the condition test ARMED rather than LIVE, so a gesture that arms without
   //              locking suppresses the reconcile and strands the filmstrip mid-transform.
   //              -> FILMSTRIPDRAG arm-vs-live trap cell (the cleared-transform assertion)
   //
-  // What CAN be registered now is the mutant below, which proves the trap cell can fail TODAY
+  // The chosen design is the RECOMMENDED predicate form (plan §5.4 U11), not the admissible cancel
+  // form: js/nav.js's overlayFilmstrip reconcile calls the injected `d.gestureLive()`, wired in
+  // js/app.js to a small `gestureLive` function returned by bindSwipeBack() that reads the same
+  // module-scoped gesture-session variable `d` (app.js) that `start()` sets `.live = true` on. So
+  // NATURAL-a mutates js/nav.js's reconcile (removes the guard) and NATURAL-b mutates js/app.js's
+  // `gestureLive` predicate itself (tests existence instead of `.live`) — two different files, one
+  // per condition, per the plan's "one condition at one site" design.
+  //
+  // Also registered here (unrelated NATURAL) is the mutant below, which proves the trap cell can fail TODAY
   // rather than only after the build. The trap cell is a PRESERVATION cell — green at HEAD by
   // construction, because it asserts what must NOT change — so without a registered mutant its
   // ability to fail rests on nothing.
@@ -984,6 +993,25 @@ const MUTATIONS = [
     file: 'js/nav.js',
     from: '    setTimeout(finish, 340);                                      // safety net',
     to:   '    /* mutated: the 340ms reconcile safety net is deleted */' },
+
+  // FILMSTRIPDRAG-a (plan §14 NATURAL-a) — restore the shipped-at-A1 reconcile: no live-gesture
+  // guard, so the pending finish runs unconditionally and hides the INCOMING MOVER mid-drag. Anchor
+  // is naturally unique: overlayFilmstrip is the only site that builds a `reconcile` closure.
+  { name: 'one-screen-type FILMSTRIPDRAG-a: overlayFilmstrip\'s reconcile loses its live-gesture guard, so the pending finish runs unconditionally and hides the INCOMING MOVER in the middle of a live drag (-> FILMSTRIPDRAG live-drag cell, the not-hidden/transform assertions)',
+    file: 'js/nav.js',
+    from: '    const reconcile = () => {\n      if (d.gestureLive && d.gestureLive()) return;   // a live gesture owns these movers; its own finalize will reconcile them\n      applyScreen(d.currentDesc(), { render: false });\n    };',
+    to:   '    const reconcile = () => applyScreen(d.currentDesc(), { render: false });' },
+
+  // FILMSTRIPDRAG-b (plan §14 NATURAL-b) — the trap. Widen the predicate to test ARMED (a session
+  // exists) rather than LIVE (the session has gone live), so an armed-but-not-locked gesture also
+  // suppresses the pending reconcile. Its own end() then releases through the `if (!cur.live)`
+  // return WITHOUT ever calling applyScreen, so nothing is left to discharge the filmstrip's
+  // reconciliation duty and it is stranded mid-transform. Anchor is naturally unique: `gestureLive`
+  // is defined at exactly one place in js/app.js.
+  { name: 'one-screen-type FILMSTRIPDRAG-b: the gestureLive predicate tests ARMED (a session exists) rather than LIVE, so an armed-but-not-locked gesture also suppresses the pending reconcile, and that gesture releases without ever calling applyScreen — stranding the filmstrip mid-transform (-> FILMSTRIPDRAG arm-vs-live trap cell, the cleared-transform and re-hidden-sub assertions)',
+    file: 'js/app.js',
+    from: '    const gestureLive = () => !!d && d.live;',
+    to:   '    const gestureLive = () => !!d;   /* mutated: armed counts as live */' },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

@@ -203,6 +203,14 @@
   // app-view↔app-view swap freezes the outgoing one as a fixed ghost snapshot.
   function bindSwipeBack() {
     let d = null, finishing = false;
+    // The injected predicate js/nav.js's overlayFilmstrip reads (Stage A1-fix,
+    // PLAN-one-screen-type.md §5.4): true only once a gesture has gone LIVE (start()
+    // sets d.live), never merely while it is ARMED. That distinction is load-bearing —
+    // an armed-but-not-locked gesture releases through end()'s `if (!cur.live)` return
+    // WITHOUT ever calling applyScreen, so a predicate that also counted "armed" as
+    // live would suppress overlayFilmstrip's pending reconcile with nothing left to
+    // discharge it, stranding the filmstrip mid-transform.
+    const gestureLive = () => !!d && d.live;
     // revealWatch is DELIBERATELY module-scoped, not a session resource: a new reveal
     // flushes the PREVIOUS session's watch (reportReveal below), so it must outlive its
     // session. Moving it onto `session` would sever that cross-session flush. (It is a
@@ -1302,6 +1310,7 @@
     // History stays at one entry, so a popstate is only a stray OS gesture — re-anchor
     // and keep the current in-memory screen (never navigate away → never reload).
     window.addEventListener('popstate', () => { try { history.replaceState({ v: 'app' }, ''); } catch {} applyScreen(currentDesc()); });
+    return { gestureLive };
   }
   // Pull-to-refresh — Home only, from the very top. A downward drag reveals a
   // spinner; releasing past the threshold refreshes. Vertical + top-gated so it
@@ -2864,10 +2873,15 @@
     // Screen-state layer (js/nav.js): it owns what's on screen; app.js keeps the
     // stacks/intents + the gesture that drive it. renderScreen/renderNowPlaying/
     // renderBrowse are injected so Nav never reaches for a global.
+    // swipeApi is assigned below, once bindSwipeBack() runs — this closure is called
+    // only much later (mid-gesture), by which point it is set. Declared here so
+    // Nav.init's deps object can close over it without reordering setup.
+    let swipeApi = null;
     Nav.init({
       byId: $, isSignedIn: () => Plex.isSignedIn(), updatePlayerUI,
       renderScreen, renderNowPlaying, renderBrowse: (desc) => Browse.render(desc),
       currentDesc, browseWillHide: () => Browse.deactivate(),
+      gestureLive: () => !!swipeApi && swipeApi.gestureLive(),
     });
     Browse.init({
       mount: $('browse'), fmt,
@@ -2905,7 +2919,7 @@
       const t = e.target;
       if (t && t.classList && t.classList.contains('carousel')) t.dataset.sl = t.scrollLeft;
     }, { capture: true, passive: true });
-    bindSwipeBack();
+    swipeApi = bindSwipeBack();
     bindPullRefresh();
     bindBookMenu();
     // Playback speed — the speed control lives ONLY on the Now-Playing screen

@@ -68,8 +68,13 @@ const Nav = (() => {
       // with no per-transition pin to set or clear.
       browseEl.classList.toggle('hidden', v !== 'browse');
     }
-    // Leave the settings overlays' hidden state untouched when going TO NowPlaying so
-    // whichever one was underneath stays for the NP-back reveal.
+    // Leave the settings overlays' hidden state untouched when going TO NowPlaying. This
+    // is NOT what makes the NP-back reveal work — every NP-close path restores its own
+    // destination through its own setView/applyScreen call regardless of this exemption
+    // (PLAN-one-screen-type.md §5.3.2). What it actually buys: #browse stays un-hidden
+    // (not display:none) while NP is open, keeping its decoded cover bitmaps warm — the
+    // same reason #home is parked rather than hidden, below. Retired at Stage A1b, which
+    // makes Now Playing park/hide like every other screen (§5.3).
     if (!npOpen) {
       for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);
     }
@@ -99,7 +104,10 @@ const Nav = (() => {
   // reconcile point that runs after every swipe (finalize) and every nav — so a
   // swipe that gets interrupted mid-flight can never leave an element stuck
   // offscreen/half-transformed and corrupt later swipes (the "erratic after a
-  // while" bug). Safe because applyScreen is NEVER called during an active drag.
+  // while" bug). applyScreen DOES run during a drag: overlayFilmstrip's pending
+  // reconcile is the one path that calls it while a gesture session exists. But that
+  // reconcile is a no-op whenever the gesture is LIVE (see overlayFilmstrip below), so
+  // this reset never lands on an element a live gesture owns as a mover.
   function resetSwipeStyles(keepGhosts) {
     if (!keepGhosts) document.querySelectorAll('.nav-ghost').forEach((n) => n.remove());
     document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone
@@ -161,10 +169,22 @@ const Nav = (() => {
   // together they cover the viewport for the whole slide, so the base never flashes.
   // Matches the swipe-back filmstrip. dir: 'fwd' (toV enters from the right) | 'back'
   // (toV enters from the left). Reconciles via applyScreen when it lands (which
-  // clears these inline styles).
+  // clears these inline styles) — UNLESS a swipe gesture is LIVE when the reconcile
+  // fires, in which case it is a no-op (Stage A1-fix, PLAN-one-screen-type.md §5.4).
+  // A pending reconcile must not change the visibility or transform of an element a
+  // live gesture owns as a mover: the gesture's own commit/abort applyScreen is a
+  // strict superset of this reconcile (both run resetSwipeStyles then setView), so
+  // skipping here loses nothing — a gesture that goes live always finalizes through
+  // that call. A gesture that only ARMS and never locks releases without any
+  // applyScreen call, but d.gestureLive() reads false for that whole armed-only
+  // window (it reports LIVE, not merely armed), so this reconcile still runs on that
+  // path and discharges the duty.
   function overlayFilmstrip(fromV, toV, dir) {
     const fromEl = overlayEl(fromV), toEl = overlayEl(toV);
-    const reconcile = () => applyScreen(d.currentDesc(), { render: false });
+    const reconcile = () => {
+      if (d.gestureLive && d.gestureLive()) return;   // a live gesture owns these movers; its own finalize will reconcile them
+      applyScreen(d.currentDesc(), { render: false });
+    };
     if (REDUCED || !fromEl || !toEl) { reconcile(); return; }
     const w = window.innerWidth, off = dir === 'back' ? -w : w;   // incoming start edge
     toEl.classList.remove('hidden'); fromEl.classList.remove('hidden');

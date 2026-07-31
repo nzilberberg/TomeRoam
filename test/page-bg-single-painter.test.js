@@ -3,12 +3,15 @@
 //
 // THE MODEL (nav.js's setView(), the source of truth for this split). Every screen is the
 // same type: shown by removing one class, hidden by adding it, never co-visible with a
-// sibling at rest, and painting no background of its own -- setView parks #home and hides
-// every other screen before showing the one that was applied, so nothing live is ever
-// behind it and body::before's fixed, never-moving copy shows through undisturbed. Now
-// Playing is the deliberate exception: it alone stays an additive overlay, mounted over an
-// untouched settings screen for the NP-back reveal, so it alone still needs to paint its
-// own copy.
+// sibling AT REST, and painting no background of its own -- setView parks #home and hides
+// every other screen before showing the one that was applied, so AT REST nothing live is
+// behind it and body::before's fixed, never-moving copy shows through undisturbed. The
+// deliberate exception to co-visibility is a live filmstrip (Nav.overlayFilmstrip): both
+// panes are briefly un-hidden together so the slide has something to show, and a pending
+// reconcile must not disturb a live gesture's mover (Stage A1-fix, PLAN-one-screen-type.md
+// §5.4). Now Playing is the deliberate exception to painting: it alone stays an additive
+// overlay, mounted over an untouched settings screen for the NP-back reveal, so it alone
+// still needs to paint its own copy.
 //
 // IT FAILS IN BOTH DIRECTIONS, deliberately: a screen that regains a background enters the
 // painter set and reddens the equality; .nowplaying losing its background leaves the set
@@ -62,8 +65,10 @@ test('NOSETTINGSBG -- #home, #browse, #options and the five-sub group declare no
     assert.ok(body != null, `fixture: a \`${sel}\` rule must exist in css/app.css`);
     assert.doesNotMatch(body, /(?:^|;)\s*background(-color)?\s*:/,
       `\`${sel}\` is a peer screen: setView parks #home and hides every sibling before showing `
-      + 'it, so nothing live is behind it and it must declare no background property at all, '
-      + `letting body::before's fixed copy show through undisturbed. Rule body: ${body}`);
+      + 'it, so AT REST nothing live is behind it (the deliberate exception is a live '
+      + 'filmstrip, where both panes are briefly un-hidden together) and it must declare no '
+      + `background property at all, letting body::before's fixed copy show through `
+      + `undisturbed. Rule body: ${body}`);
   }
 });
 
