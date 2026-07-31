@@ -45,15 +45,10 @@ const Nav = (() => {
   function setView(v) {   // 'home' | 'browse' | 'options' | a settings sub | 'nowplaying'
     const $ = d.byId;
     npOpen = v === 'nowplaying';
-    const optOpen = v === 'options';
-    const subOpen = isSub(v);
-    // NP, the Options hub and its sub-screens are ADDITIVE overlays: they paint over
-    // whatever tall screen is showing, and the page underneath is NOT touched. Hiding
-    // the tall view shrinks the document, and a short (~viewport-sized) document is
-    // what trips iOS 26's ~50pt fixed-layer displacement (the black-band / Options-bar
-    // saga — a 1-2px token overflow does NOT count as tall). Only real screen switches
-    // (home/browse) swap the in-flow views.
-    if (!npOpen && !optOpen && !subOpen) {
+    // Every screen but Now Playing is a peer (S1–S3): parked/hidden and shown by
+    // removing one class, exactly like #home and #browse already are. Now Playing
+    // alone stays an additive overlay (S4).
+    if (!npOpen) {
       $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
       const browseEl = $('browse');
       // The shown→hidden edge: going to a non-browse view (home) while #browse is shown.
@@ -74,14 +69,9 @@ const Nav = (() => {
       browseEl.classList.toggle('hidden', v !== 'browse');
     }
     // Leave the settings overlays' hidden state untouched when going TO NowPlaying so
-    // whichever one was underneath stays for the NP-back reveal. A sub-screen is a
-    // CHILD of the hub: keep #options MOUNTED underneath it (the opaque sub-screen
-    // covers it) — otherwise the forward slide-in exposes the base view (home/browse)
-    // for the length of the animation, and swipe-back would have no hub to filmstrip
-    // to. So #options shows on Options OR any sub; each sub shows only when it's `v`.
+    // whichever one was underneath stays for the NP-back reveal.
     if (!npOpen) {
-      $('options').classList.toggle('hidden', !(optOpen || subOpen));
-      for (const s of SETTINGS_SUBS) $(s).classList.toggle('hidden', v !== s);
+      for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);
     }
     $('nowplaying').classList.toggle('hidden', !npOpen);
     document.body.classList.toggle('np-locked', npOpen);   // CSS hook: navbar button/pill swap
@@ -138,9 +128,9 @@ const Nav = (() => {
     // scrollLeft on their own; re-setting it would fire a scroll-snap correction (the
     // "oh wait, let me scroll over" animation).
     if (!desc || desc.v === 'home') { setView('home'); setNavActive('home'); if (resetScroll) $('home').scrollTop = 0; return; }
-    // The Options hub + its sub-screens are additive overlays (like NP): no document
-    // scroll changes — the page underneath stays exactly as it was. Only their own
-    // panel resets. Sub-screens keep the Options tab lit ("inside Options").
+    // The Options hub and its sub-screens are peer screens: entering one resets only
+    // its own panel, not the document scroll. Sub-screens keep the Options tab lit
+    // ("inside Options").
     if (desc.v === 'options' || isSub(desc.v)) {
       setView(desc.v); setNavActive('options');
       if (render) d.renderScreen(desc.v);

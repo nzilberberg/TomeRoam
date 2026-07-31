@@ -907,19 +907,51 @@ const MUTATIONS = [
   // setView('nowplaying') hides the settings screen Now Playing was opened over and the NP-back
   // reveal has nothing to filmstrip to.
   //
-  // ⛔ STAGE A1 MUST RE-ANCHOR THIS ENTRY, and test/mutation-anchors.test.js will BLOCK the commit
-  // until it does. A1 narrows the park guard on js/nav.js:56 to `if (!npOpen) {` — the identical
-  // text — so after the build this `from` occurs TWICE in js/nav.js and the uniqueness gate
-  // refuses it with NON-UNIQUE ANCHOR. Extend the `from` with the six-way visibility loop that
-  // follows it (whatever exact text ships), e.g.
-  //     from: "    if (!npOpen) {\n      for (const s of ['options', ...SETTINGS_SUBS])"
-  //     to:   "    if (true) {\n      for (const s of ['options', ...SETTINGS_SUBS])"
-  // That is a deliberate, mechanized stop rather than a trap: the collision is real either way,
-  // and this is the only construct in the repo that makes the builder see it.
+  // RE-ANCHORED IN THE A1 BUILD COMMIT. A1 narrowed the park guard on js/nav.js:51 to
+  // `if (!npOpen) {` — text identical to the settings-loop guard it already wrapped — so this
+  // `from` now occurs TWICE in js/nav.js. Disambiguated by extending it with the six-way
+  // visibility loop that follows the SECOND occurrence, which is the one this mutant means.
   { name: 'one-screen-type NPUNTOUCHED: the npOpen exemption is removed, so opening Now Playing hides the settings screen underneath and the NP-back reveal has nothing to return to (-> NPUNTOUCHED still-un-hidden assertion)',
     file: 'js/nav.js',
-    from: '    if (!npOpen) {',
-    to:   '    if (true) {' },
+    from: "    if (!npOpen) {\n      for (const s of ['options', ...SETTINGS_SUBS])",
+    to:   "    if (true) {\n      for (const s of ['options', ...SETTINGS_SUBS])" },
+
+  // Registered in the A1 build commit (six were deferred at authoring time — see the block above —
+  // because their anchors did not exist, or would have been no-ops, at HEAD). Each carries
+  // disambiguating context from the start per this file's own convention.
+
+  // ONEPAGE — commit 6c9e7e3's exact shape: restore the hub-stays-mounted rule after the six-way
+  // loop, so the hub is un-hidden whenever a sub is applied.
+  { name: 'one-screen-type ONEPAGE: the hub-stays-mounted rule is restored after the six-way loop, so the hub is un-hidden whenever a sub is applied (-> ONEPAGE exactly-one-unhidden assertion)',
+    file: 'js/nav.js',
+    from: "      for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);\n    }",
+    to:   "      for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);\n      $('options').classList.toggle('hidden', !(v === 'options' || isSub(v)));\n    }" },
+
+  // PEERPARK-a / PEERFINALIZE-a — restore the settings exemption in the narrowed park guard.
+  { name: 'one-screen-type PEERPARK/PEERFINALIZE-a: the settings exemption is restored in the park guard, so entering a settings screen parks nothing and hides nothing (-> PEERPARK + PEERFINALIZE class assertions)',
+    file: 'js/nav.js',
+    from: "    if (!npOpen) {\n      $('home').classList.toggle('parked', v !== 'home');",
+    to:   "    if (!npOpen && v !== 'options' && !isSub(v)) {\n      $('home').classList.toggle('parked', v !== 'home');" },
+
+  // NOSETTINGSBG-a — re-add the deleted background to #options, so the painter set regains a
+  // third member.
+  { name: 'one-screen-type NOSETTINGSBG-a: #options regains a background: var(--page-bg) declaration, so the painter set gains a member (-> NOSETTINGSBG painter-set equality)',
+    file: 'css/app.css',
+    from: '  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;\n  padding: 14px max(16px, calc((100% - 608px) / 2)) 40px;\n}\n/* When the transport is showing',
+    to:   '  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;\n  background: var(--page-bg);\n  padding: 14px max(16px, calc((100% - 608px) / 2)) 40px;\n}\n/* When the transport is showing' },
+
+  // NOSETTINGSBG-a' — the same, on the five-sub group.
+  { name: "one-screen-type NOSETTINGSBG-a': the five-sub group regains a background: var(--page-bg) declaration, so the painter set gains a member (-> NOSETTINGSBG painter-set equality)",
+    file: 'css/app.css',
+    from: '  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;\n  padding: 14px max(16px, calc((100% - 608px) / 2)) 40px;\n}\nbody.has-player #downloads',
+    to:   '  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;\n  background: var(--page-bg);\n  padding: 14px max(16px, calc((100% - 608px) / 2)) 40px;\n}\nbody.has-player #downloads' },
+
+  // PEERPARK-c — delete the browseWillHide() call entirely, so the hook never fires on the
+  // settings edges (distinct from PEERPARK/PEERFINALIZE-b, which fires it at the wrong TIME).
+  { name: 'one-screen-type PEERPARK-c: the browseWillHide() call is deleted, so the hook never fires on the settings shown->hidden edge (-> PEERPARK + PEERFINALIZE call-count assertions)',
+    file: 'js/nav.js',
+    from: "        if (d.browseWillHide) d.browseWillHide();\n      }\n      // The `.266` stable-height probe",
+    to:   "      }\n      // The `.266` stable-height probe" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

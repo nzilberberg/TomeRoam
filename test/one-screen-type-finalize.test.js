@@ -33,11 +33,6 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const { boot } = require('./app-harness.js');
 
-// SKIPPED-PENDING-BUILD — see the note in test/one-screen-type.test.js. Each cell was CONFIRMED
-// RED with the skip removed; the run and its failure text are quoted in
-// Claude/Curie/RED-one-screen-type.md. ⭐ THE BUILDER REMOVES `{ skip: SKIP }` to drive it red.
-const SKIP = 'skipped-pending-build (Stage A1) — remove the skip to drive this cell red';
-
 // REAL wall clock, captured before boot() patches setTimeout — move() resamples velocity only
 // after >8ms of REAL time (the same reason every other swipe suite keeps its own).
 const realSetTimeout = global.setTimeout;
@@ -87,7 +82,7 @@ async function fwdSwipeCommit(h) {
 }
 
 test('PEERFINALIZE — a COMMITTED home→settings gesture leaves #home parked at finalize',
-  { skip: SKIP }, async () => {
+  async () => {
     const h = boot({ fakeTimers: true });
     try {
       await settle(h);
@@ -109,7 +104,7 @@ test('PEERFINALIZE — a COMMITTED home→settings gesture leaves #home parked a
 
 test('PEERFINALIZE — edge 1 at finalize: a COMMITTED browse→settings gesture hides #browse and '
   + 'fires browseWillHide exactly once, while #browse was still un-hidden',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true });
   try {
     await settle(h);
@@ -138,16 +133,14 @@ test('PEERFINALIZE — edge 1 at finalize: a COMMITTED browse→settings gesture
 
 test('PEERFINALIZE — edge 2: an ABORTED settings→browse gesture re-hides the #browse that the '
   + 'mid-drag render un-hid, firing browseWillHide once while it was still un-hidden',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true });
   try {
     await settle(h);
     h.tap('.navbtn[data-nav="books"]'); await settle(h);
     h.tap('.navbtn[data-nav="options"]'); await settle(h);
     assert.equal(isHidden(h, 'browse'), true,
-      'fixture sanity: after A1, entering Options from Books hides #browse (PEERPARK). Until the '
-      + 'build lands this assertion is the cell\'s first red, which is correct — the edge under '
-      + 'test does not exist yet');
+      'fixture sanity: entering Options from Books hides #browse (PEERPARK)');
 
     const rec = recordDeactivations(h);
     // Left-edge back-swipe options→books, retreated to the edge → ABORT. showAppView has already
@@ -177,7 +170,7 @@ test('PEERFINALIZE — edge 2: an ABORTED settings→browse gesture re-hides the
 
 test('PEERFINALIZE — edge 3: closing Now Playing back to a settings screen after an NP→files '
   + 'abort left #browse un-hidden hides it and fires browseWillHide once, while it was still '
-  + 'un-hidden', { skip: SKIP }, async () => {
+  + 'un-hidden', async () => {
   const h = boot({ fakeTimers: true });
   try {
     await settle(h);

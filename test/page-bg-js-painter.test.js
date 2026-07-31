@@ -1,10 +1,10 @@
 // PAGE-BG-JS-PAINTER -- guards against a page background painted from JAVASCRIPT.
 //
 // test/page-bg-single-painter.test.js audits css/app.css only: exactly body::before (the
-// fixed, never-moving base) plus the three additive overlays may paint --page-bg. That
-// audit is BLIND to a background painted by an inline JS style assignment, because it
-// never appears in css/app.css at all -- and that is exactly how build .272's user-
-// reported "moving background" shipped and stayed green: js/swipe.js's ghostWrap() set
+// fixed, never-moving base) plus .nowplaying, the one deliberate additive overlay, may
+// paint --page-bg. That audit is BLIND to a background painted by an inline JS style
+// assignment, because it never appears in css/app.css at all -- and that is exactly how
+// build .272's user-reported "moving background" shipped and stayed green: js/swipe.js's ghostWrap() set
 // `background:' + GHOST_BG + ';'` (GHOST_BG resolved --page-bg fresh per gesture) onto a
 // `position:fixed;...;will-change:transform` wrapper that then gets translated during the
 // swipe. Six CSS painters were audited; the seventh -- the only one that moved -- was set

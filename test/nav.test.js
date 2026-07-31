@@ -33,12 +33,13 @@ Nav.init({
   browseWillHide: () => { browseHides++; browseHiddenAtDeactivate = hidden('browse'); },
 });
 
-test('a sub-screen keeps the Options hub MOUNTED underneath it (build .106)', () => {
-  // The hub is the backdrop: hiding it synchronously is what let the base view
-  // (home/browse) flash through for the length of the forward slide-in.
+test('a sub-screen HIDES the Options hub (peer screens, PLAN-one-screen-type.md Stage A1)', () => {
+  // The hub and its sub-screens are peers: showing one hides the other five,
+  // including the hub — the co-visibility build .106's comment used to bless is
+  // exactly the defect this inverted assertion now forbids.
   Nav.applyScreen({ v: 'downloads' });
   assert.equal(hidden('downloads'), false, 'the sub-screen must show');
-  assert.equal(hidden('options'), false, 'the hub must stay mounted under its child');
+  assert.equal(hidden('options'), true, 'the hub must be hidden while its sub is shown');
   assert.equal(hidden('nowplaying'), true);
   for (const s of Nav.SETTINGS_SUBS) if (s !== 'downloads') assert.equal(hidden(s), true, s + ' should be hidden');
 });

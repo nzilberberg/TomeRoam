@@ -61,14 +61,6 @@ function ruleBody(css, selector) {
   return null;
 }
 
-// SKIPPED-PENDING-BUILD. The pre-commit battery (tools/hooks/run-checks.mjs) runs the whole suite
-// and blocks on any plain failure, and this project does not use --no-verify. So every cell whose
-// behaviour does not exist yet is committed skipped, keeping the committed suite green, and each
-// was CONFIRMED RED with the skip removed — the run and its failure text are quoted in
-// Claude/Curie/RED-one-screen-type.md. ⭐ THE BUILDER REMOVES `{ skip: SKIP }` on each cell to
-// drive it red, then builds to green. No assertion is weakened to green a cell.
-const SKIP = 'skipped-pending-build (Stage A1) — remove the skip to drive this cell red';
-
 const dom = appDom();
 global.window = dom.window;
 global.document = dom.window.document;
@@ -114,8 +106,7 @@ const unhiddenOfSix = () => SIX.filter((s) => !hidden(s));
 // of the five subs leaves TWO of the six without `.hidden`.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 test('ONEPAGE — applying any settings screen leaves EXACTLY ONE of the six un-hidden, and it is '
-  + 'the applied one (the hub does not stay mounted under its own sub-screen)',
-{ skip: SKIP }, () => {
+  + 'the applied one (the hub does not stay mounted under its own sub-screen)', () => {
   const wrong = [];
   for (const v of SIX) {
     Nav.applyScreen({ v });
@@ -149,7 +140,7 @@ test('ONEPAGE — applying any settings screen leaves EXACTLY ONE of the six un-
 // entering a settings screen parks nothing, hides nothing and fires no hook.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 test('PEERPARK — entering a settings screen parks #home and hides #browse exactly as entering '
-  + 'Browse does', { skip: SKIP }, () => {
+  + 'Browse does', () => {
   Nav.applyScreen({ v: 'books' });
   assert.equal(hidden('browse'), false, 'fixture sanity: #browse is shown on Books');
   assert.equal($('home').classList.contains('parked'), true, 'fixture sanity: Books parks #home');
@@ -164,7 +155,7 @@ test('PEERPARK — entering a settings screen parks #home and hides #browse exac
 });
 
 test('PEERPARK — browseWillHide fires exactly once on the browse→settings shown→hidden edge, '
-  + 'and fires BEFORE .hidden lands on #browse', { skip: SKIP }, () => {
+  + 'and fires BEFORE .hidden lands on #browse', () => {
   Nav.applyScreen({ v: 'books' });
   hook.calls = 0; hook.hiddenWhenCalled.length = 0;
 
