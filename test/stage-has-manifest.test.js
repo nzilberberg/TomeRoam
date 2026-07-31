@@ -9,12 +9,14 @@
 // enforces a manifest's gates faithfully, but can only enforce a manifest that exists.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { unboundBuildLogs, buildGlobs } from '../tools/hooks/stage-has-manifest-check.mjs';
+import { unboundBuildLogs, buildGlobs, unclearedPreBuildGates } from '../tools/hooks/stage-has-manifest-check.mjs';
 import { declaresComplete } from '../tools/hooks/campaign-complete-check.mjs';
+import { declaredVerdicts } from '../tools/campaign/stage-gate-check.mjs';
 
 // A fixture repo root holding only Claude/Campaigns manifests. The staged-file list is injected
 // rather than produced by git staging — the git plumbing is shared with campaign-complete-check
@@ -94,6 +96,108 @@ test('declaresComplete: IN_PROGRESS defers, absent/COMPLETE asserts', () => {
     const bad = join(root, 'e.json'); writeFileSync(bad, '{ nope');
     assert.equal(declaresComplete(bad), true, 'unreadable manifest is treated as asserting COMPLETE');
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// --- the ORDER half: review must precede build -------------------------------------------
+// A manifest alone stops a stage having no gate list; it does NOT stop the stage being BUILT
+// before its review, because campaign-complete-check only fires when the manifest is flipped to
+// COMPLETE — after the fact. Stage A1b was one dispatch from being built on a plan section that
+// had never been reviewed; the review then returned TEMPER with six Structural findings.
+function orderedRoot(planReviewVerdict) {
+  const root = mkdtempSync(join(tmpdir(), 'tr-order-'));
+  mkdirSync(join(root, 'Claude', 'Campaigns'), { recursive: true });
+  mkdirSync(join(root, 'Claude', 'Charpy'), { recursive: true });
+  mkdirSync(join(root, 'Claude', 'Curie'), { recursive: true });
+  writeFileSync(join(root, 'Claude', 'Campaigns', 'c.json'), JSON.stringify({
+    campaign: 'c', stage: 'A1b', status: 'IN_PROGRESS',
+    gates: [
+      { gate: 'plan-review', owner: 'charpy', required: true, verdictArtifactGlob: 'Claude/Charpy/PLAN-c-charpy.md', acceptVerdict: ['FORGE'] },
+      { gate: 'red-suite', owner: 'curie', required: true, verdictArtifactGlob: 'Claude/Curie/RED-c.md', acceptVerdict: ['RED_SUITE_READY'] },
+      { gate: 'build', owner: 'brunel', required: true, verdictArtifactGlob: 'Claude/Brunel/c-build.md', acceptVerdict: ['BUILD_GREEN'] },
+      { gate: 'code-review', owner: 'poirot', required: true, verdictArtifactGlob: 'Claude/Poirot/c.md', acceptVerdict: ['SHIP'] },
+    ],
+  }));
+  if (planReviewVerdict) writeFileSync(join(root, 'Claude', 'Charpy', 'PLAN-c-charpy.md'), `VERDICT: ${planReviewVerdict}\n`);
+  writeFileSync(join(root, 'Claude', 'Curie', 'RED-c.md'), 'VERDICT: RED_SUITE_READY\n');
+  return root;
+}
+
+test('THE NEAR-MISS: building with the plan review UNFILED is blocked', () => {
+  const root = orderedRoot(null);
+  try {
+    const early = unclearedPreBuildGates(root, ['Claude/Brunel/c-build.md']);
+    assert.equal(early.length, 1);
+    assert.deepEqual(early[0].blocking.map((b) => b.gate), ['plan-review']);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('building with the plan review filed as TEMPER (not FORGE) is blocked', () => {
+  // Exactly what Charpy returned for A1b. A filed-but-unaccepted verdict must not read as cleared.
+  const root = orderedRoot('TEMPER');
+  try {
+    const early = unclearedPreBuildGates(root, ['Claude/Brunel/c-build.md']);
+    assert.equal(early.length, 1, 'TEMPER is a filed verdict but not an accepted one');
+    assert.match(early[0].blocking[0].status, /TEMPER/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('building after FORGE + RED_SUITE_READY is allowed', () => {
+  const root = orderedRoot('FORGE');
+  try {
+    assert.deepEqual(unclearedPreBuildGates(root, ['Claude/Brunel/c-build.md']), []);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('post-build gates (code-review) never block the build', () => {
+  // They cannot exist yet; treating them as pre-build would deadlock every stage.
+  const root = orderedRoot('FORGE');
+  try {
+    const early = unclearedPreBuildGates(root, ['Claude/Brunel/c-build.md']);
+    assert.equal(early.length, 0, 'code-review is unfiled here and must not block');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// --- the verdict READER: the gate the whole scheme rests on ------------------------------
+test('THE VACUOUS PASS: a prose mention of an accepted verdict is NOT a verdict', () => {
+  // The reader used to accept the token appearing ANYWHERE in the artifact. A reviewer writing
+  // the scheme's own phrase "verdict FORGE/TEMPER/SCRAP", or explaining why a plan is not a
+  // FORGE, thereby FILED a FORGE. Measured when found: 22 Charpy casebooks contain both FORGE and
+  // TEMPER in caps, so the plan-review gate could not fail for those stages.
+  assert.deepEqual(declaredVerdicts('Step 1 ("stress this plan; verdict FORGE/TEMPER/SCRAP") is discharged.'), []);
+  assert.deepEqual(declaredVerdicts('This is emphatically not a FORGE, and here is why.'), []);
+});
+
+test('every declaration form in live use parses', () => {
+  // All five are real conventions found in Claude/. Two of them were discovered only by running
+  // the reader against the actual artifacts — fixtures alone said it worked when it did not.
+  const cases = [
+    ['`Verdict: **RED_SUITE_READY**`', ['RED_SUITE_READY'], 'backtick code span'],
+    ['Verdict: **BUILD_GREEN** -> Poirot', ['BUILD_GREEN'], 'mixed-case label'],
+    ['- **Verdict:** SHIP.', ['SHIP'], 'bold list item'],
+    ['VERDICT: HELD_STONE', ['HELD_STONE'], 'caps inline'],
+    ['## Verdict\n\n**TEMPER.**\n', ['TEMPER'], 'heading, blank line, bolded token'],
+    ['{"verdict": "FORGE"}', ['FORGE'], 'machine-readable block'],
+  ];
+  for (const [txt, want, label] of cases) assert.deepEqual(declaredVerdicts(txt), want, label);
+});
+
+test('THE REAL ARTIFACT: Charpy\'s A1b casebook declares TEMPER, not FORGE', () => {
+  // The live file this was found on. It must report the verdict the reviewer actually gave.
+  const txt = readFileSync(join(process.cwd(), 'Claude', 'Charpy', 'PLAN-one-screen-type-A1b-charpy.md'), 'utf8');
+  assert.deepEqual(declaredVerdicts(txt), ['TEMPER']);
+});
+
+test('THE REAL ARTIFACT: every historical manifest still passes its own gate check', () => {
+  // The stricter reader must not retroactively fail work that genuinely cleared. Two earlier
+  // drafts did exactly that — seven manifests, then three — and only running this caught it.
+  const dir = join(process.cwd(), 'Claude', 'Campaigns');
+  const gate = join(process.cwd(), 'tools', 'campaign', 'stage-gate-check.mjs');
+  for (const n of readdirSync(dir).filter((f) => f.endsWith('.json'))) {
+    const m = JSON.parse(readFileSync(join(dir, n), 'utf8'));
+    if (String(m.status ?? '').toUpperCase() === 'IN_PROGRESS') continue;  // gates not yet due
+    const r = spawnSync(process.execPath, [gate, join(dir, n), process.cwd()], { encoding: 'utf8' });
+    assert.equal(r.status, 0, `${n} regressed:\n${r.stdout}${r.stderr}`);
+  }
 });
 
 test('THE REAL ARTIFACT: every existing manifest still parses and declares a build gate', () => {

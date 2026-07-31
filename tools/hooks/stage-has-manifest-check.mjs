@@ -39,6 +39,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
+import { gateResults } from '../campaign/stage-gate-check.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -55,23 +56,30 @@ export function stagedBuildLogs(repoRoot = ROOT) {
   return out.split('\n').map((s) => s.trim()).filter((f) => BUILD_LOG_RX.test(f));
 }
 
-// Every `build`-gate glob declared by any manifest, as repo-relative POSIX patterns.
-export function buildGlobs(repoRoot = ROOT) {
+// Every manifest that declares a `build` gate, with its parsed body and that gate's glob.
+// A manifest that fails to parse is skipped — it cannot bind anything, which is the safe
+// direction: an unparseable manifest must not silently satisfy the requirement.
+export function manifestsWithBuildGlobs(repoRoot = ROOT) {
   const dir = join(repoRoot, 'Claude', 'Campaigns');
   let names;
   try { names = readdirSync(dir); } catch { return []; }
-  const globs = [];
+  const out = [];
   for (const n of names) {
     if (!n.endsWith('.json')) continue;
     let m;
     try { m = JSON.parse(readFileSync(join(dir, n), 'utf8')); } catch { continue; }
     for (const g of m.gates || []) {
       if (g && g.gate === 'build' && typeof g.verdictArtifactGlob === 'string') {
-        globs.push({ manifest: 'Claude/Campaigns/' + n, glob: g.verdictArtifactGlob });
+        out.push({ path: 'Claude/Campaigns/' + n, manifest: m, glob: g.verdictArtifactGlob });
       }
     }
   }
-  return globs;
+  return out;
+}
+
+// Every `build`-gate glob declared by any manifest, as repo-relative POSIX patterns.
+export function buildGlobs(repoRoot = ROOT) {
+  return manifestsWithBuildGlobs(repoRoot).map(({ path, glob }) => ({ manifest: path, glob }));
 }
 
 // Same glob semantics as stage-gate-check.mjs: `*` is a wildcard, `.` is literal, anchored, and
@@ -81,6 +89,35 @@ function globMatches(glob, file) {
   if (dirname(glob) !== dirname(file)) return false;
   const rx = new RegExp('^' + basename(glob).replace(/[.]/g, '\\.').replace(/\*/g, '.*') + '$');
   return rx.test(basename(file));
+}
+
+// Gates that must be CLEARED BEFORE a build log may land. The scheme's order is plan-review →
+// red-suite → build → code-review → coverage-audit → adversary; the first two precede the build,
+// the rest judge it and cannot exist yet.
+//
+// WHY THIS HALF EXISTS. Requiring a manifest stops a stage having no gate list, but a manifest
+// alone does not stop a stage being BUILT before its review — campaign-complete-check only fires
+// when the manifest is flipped to COMPLETE, which is after the fact. Stage A1b was one dispatch
+// away from being built on a plan section that had never been reviewed, under a header claiming it
+// had been (Charpy F1). The review then returned TEMPER with six Structural findings, one of them
+// that the stage's central premise was false against the very probe the user's decision
+// incorporates. Building first would have meant building the wrong thing and discovering it in
+// code review — the expensive place. "Review before build" is an ORDER, and orders are checkable.
+export const PRE_BUILD_GATES = ['plan-review', 'red-suite'];
+
+// For each staged build log, the manifest binding it and any pre-build gate not yet cleared.
+export function unclearedPreBuildGates(repoRoot = ROOT, logs = null) {
+  const manifests = manifestsWithBuildGlobs(repoRoot);
+  const out = [];
+  for (const f of (logs ?? stagedBuildLogs(repoRoot)).filter((x) => BUILD_LOG_RX.test(x))) {
+    for (const { path, manifest, glob } of manifests) {
+      if (!globMatches(glob, f)) continue;
+      const results = gateResults(manifest, repoRoot);
+      const blocking = results.filter((r) => PRE_BUILD_GATES.includes(r.gate) && !r.ok);
+      if (blocking.length) out.push({ log: f, manifest: path, blocking });
+    }
+  }
+  return out;
 }
 
 // Staged build logs with no manifest binding them. Data, so a test can assert it.
@@ -97,7 +134,23 @@ export function unboundBuildLogs(repoRoot = ROOT, logs = null) {
 
 function main() {
   const unbound = unboundBuildLogs();
-  if (unbound.length === 0) return 0;
+  if (unbound.length === 0) {
+    // Bound — now check the ORDER: the gates that precede a build must already be cleared.
+    const early = unclearedPreBuildGates();
+    if (early.length === 0) return 0;
+    console.error('✗ stage-has-manifest FAILED — a stage is being BUILT before the gates that precede it are cleared:');
+    for (const e of early) {
+      console.error('  — ' + e.log + '   (' + e.manifest + ')');
+      for (const b of e.blocking) console.error('      ✗ ' + b.gate + ' [' + b.owner + '] — ' + b.status);
+    }
+    console.error('');
+    console.error('  The scheme\'s order is plan-review → red-suite → build. Building first means building the');
+    console.error('  wrong thing and finding out in code review, the expensive place. Stage A1b was one dispatch');
+    console.error('  from exactly that: its plan section had never been reviewed, under a header claiming it had,');
+    console.error('  and the review then returned TEMPER with six Structural findings.');
+    console.error('  Clear the gate above, or record an explicit `"waived": {"reason": "..."}` on it.');
+    return 1;
+  }
   console.error('✗ stage-has-manifest FAILED — a stage build log is being committed with no campaign manifest binding it:');
   for (const f of unbound) console.error('  — ' + f);
   console.error('');
