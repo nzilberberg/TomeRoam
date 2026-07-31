@@ -77,4 +77,67 @@ test('PAGE-BG-SINGLE-PAINTER -- each additive overlay declares its own --page-bg
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⛔ THE THREE TESTS ABOVE ARE SUPERSEDED BY THE ONE BELOW, AND ARE DELETED BY STAGE A1.
+//
+// NOSETTINGSBG — PLAN-one-screen-type.md §14 / §16.1. Authored red-first by the test author
+// (2026-07-30) BEFORE the Stage-A1 build; companion note Claude/Curie/RED-one-screen-type.md.
+// It lands HERE, extended in place, rather than in test/one-screen-type.test.js beside the other
+// four A1 cells, so that exactly ONE file owns the page-background contract — a second copy of
+// the same contract is the staleness class the plan's §1 records three times.
+//
+// THE MODEL AFTER A1 (js/nav.js setView, the source of truth for this split). Every screen is
+// the same type: shown by removing one class, hidden by adding it, never co-visible with a
+// sibling at rest, painting no background of its own. Now Playing is the deliberate exception —
+// it alone stays an additive overlay mounted over an untouched settings screen for the NP-back
+// reveal, so it alone still needs to paint. The legal painter set of --page-bg becomes exactly
+// `body::before` (the fixed, never-moving base keeper) and `.nowplaying`.
+//
+// IT FAILS IN BOTH DIRECTIONS, deliberately: a screen that regains a background ENTERS the
+// painter set and reddens the equality; `.nowplaying` losing its background LEAVES the set and
+// reddens the same assertion.
+//
+// ⛔ HONEST LIMIT: this proves a TEXTUAL property of css/app.css. A background painted from
+// JavaScript is outside it — that is test/page-bg-js-painter.test.js's job (whose own "three
+// additive overlays" wording is stale at HEAD and is scrubbed by Stage A1, plan §12 item 22).
+// Nothing here asserts occlusion, stacking or paint: jsdom has no layout, so such a cell could
+// not fail. Those are the plan's §15 device rows.
+//
+// SKIPPED-PENDING-BUILD: the pre-commit battery runs the whole suite and blocks on any plain
+// failure, and this project does not use --no-verify. CONFIRMED RED with the skip removed (run
+// quoted in the companion note). ⭐ STAGE A1 (the builder): DELETE the three tests above, the
+// stale "THE MODEL" header block at the top of this file, and TRANSPARENT_SELECTORS /
+// OPAQUE_SELECTORS; remove this skip. That IS plan §12 items 17-18 and §16.1.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+const A1_PAINTERS = ['body::before', '.nowplaying'];
+const A1_TRANSPARENT = ['#home', '#browse', '#options',
+  '#downloads, #general, #playback, #buffering, #diagnostics'];
+const A1_SKIP = 'skipped-pending-build (Stage A1) — remove the skip to drive this cell red';
+
+test('NOSETTINGSBG -- exactly body::before and .nowplaying paint --page-bg; no other screen '
+  + 'rule does', { skip: A1_SKIP }, () => {
+  const css = readRoot('css/app.css');
+  const painters = selectorsFor(css, 'background: var(--page-bg)').slice().sort();
+  assert.deepEqual(painters, A1_PAINTERS.slice().sort(),
+    'after Stage A1 the legal painter set of --page-bg is exactly body::before (the fixed, '
+    + 'never-moving base keeper) and .nowplaying (the one deliberate additive overlay). A '
+    + 'settings screen that still paints its own copy renders the gradient at its own box\'s '
+    + 'scale and origin and moves with it during a swipe; .nowplaying that stops painting '
+    + `exposes the settings screen it is mounted over. Expected: ${JSON.stringify(A1_PAINTERS)}, `
+    + `found: ${JSON.stringify(painters)}`);
+});
+
+test('NOSETTINGSBG -- #home, #browse, #options and the five-sub group declare no background '
+  + 'property at all', { skip: A1_SKIP }, () => {
+  const css = stripComments(readRoot('css/app.css'));
+  for (const sel of A1_TRANSPARENT) {
+    const body = ruleBody(css, sel);
+    assert.ok(body != null, `fixture: a \`${sel}\` rule must exist in css/app.css`);
+    assert.doesNotMatch(body, /(?:^|;)\s*background(-color)?\s*:/,
+      `\`${sel}\` is a peer screen: setView parks #home and hides every sibling before showing `
+      + 'it, so nothing live is behind it and it must declare no background property at all, '
+      + `letting body::before's fixed copy show through undisturbed. Rule body: ${body}`);
+  }
+});
+
 module.exports = { ruleBody };

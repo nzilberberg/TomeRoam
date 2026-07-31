@@ -857,6 +857,69 @@ const MUTATIONS = [
     file: 'js/swipe.js',
     from: "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '53px';",
     to:   "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '46px';" },
+
+  // ── PLAN-one-screen-type.md §14 — ONE SCREEN TYPE (Options and its subs become peers).
+  //
+  // ⚠️ ONLY THREE OF THIS PLAN'S NINE MUTANTS ARE REGISTERED HERE, and the reason is mechanical,
+  // not a deferral: six of them anchor on text STAGE A1 CREATES. Registering a `from` that does
+  // not occur at HEAD reddens test/mutation-anchors.test.js with ANCHOR NOT FOUND, and the three
+  // "restore the old rule" mutants (ONEPAGE, PEERPARK-a, PEERFINALIZE-a) plus NOSETTINGSBG-a
+  // would be NO-OPS at HEAD, which the no-op gate in that same file refuses. The other six are
+  // specified verbatim, with their expected killing cells, in Claude/Curie/RED-one-screen-type.md
+  // for registration in the A1 build commit — the same build-time registration the browse-decouple
+  // campaign used, for the same reason.
+  //
+  // Every anchor below carries disambiguating context FROM THE START: in this repo an anchor is
+  // assumed non-unique until the tool proves otherwise (PLAN-home-shift-fix.md §7.3 — six of six
+  // inspected were non-unique).
+
+  // Shared by PEERPARK and PEERFINALIZE (the plan's §14 "-b" mutant for both cells): hide #browse
+  // BEFORE the anchor capture instead of after it. The trailing `browseEl.classList.toggle` then
+  // re-applies the same value, so the ONLY observable change is that d.browseWillHide() now runs
+  // against a display:none box, which measures zero — exactly the defect the ordering exists to
+  // prevent. Registered at HEAD because the two lines it sits between are UNCHANGED by A1 (only
+  // the enclosing guard on js/nav.js:56 narrows), so this anchor does not rot at the build.
+  // At HEAD its live killer is test/nav.test.js's 'leaving Browse for Home deactivates the Browse
+  // controller BEFORE hiding it' (the same invariant on the home edge); once A1 unskips them,
+  // PEERPARK and PEERFINALIZE kill it on the three settings edges too.
+  { name: 'one-screen-type PEERPARK/PEERFINALIZE-b: #browse is hidden BEFORE the browseWillHide anchor capture, so Browse.deactivate measures a zero-height box (-> PEERPARK + PEERFINALIZE observed-un-hidden assertions; at HEAD, nav.test.js deactivate-before-hide)',
+    file: 'js/nav.js',
+    from: '        if (d.browseWillHide) d.browseWillHide();\n      }',
+    to:   "        browseEl.classList.toggle('hidden', true);   /* mutated: hide BEFORE the capture */\n        if (d.browseWillHide) d.browseWillHide();\n      }" },
+
+  // NOSETTINGSBG's second mutant — the OTHER direction. The cell's painter-set equality must fail
+  // when .nowplaying LOSES its background just as surely as when a settings screen regains one;
+  // a cell that only fails one way would bless deleting the one screen that must keep painting.
+  // The anchor is the .nowplaying-specific comment tail, which distinguishes it from the #options
+  // ("so (unlike #home/#browse) it needs its own background") and five-sub ("so they need their
+  // own background") copies, and which no stage touches (invariant S4).
+  // At HEAD its live killer is this file's own predecessor test, PAGE-BG-SINGLE-PAINTER; A1
+  // deletes that test in the same commit that unskips NOSETTINGSBG, so the guard is never
+  // undefended for an instant.
+  { name: 'one-screen-type NOSETTINGSBG-b: .nowplaying loses its own --page-bg background, so the one screen that must keep painting stops (-> NOSETTINGSBG painter-set equality; at HEAD, PAGE-BG-SINGLE-PAINTER)',
+    file: 'css/app.css',
+    from: '     un-parked page underneath, so it needs its own background. */\n  background: var(--page-bg);',
+    to:   '     un-parked page underneath, so it needs its own background. */' },
+
+  // NPUNTOUCHED is a PRESERVATION cell — green at HEAD by construction, because it asserts what
+  // must NOT change. This mutant is therefore the whole of its evidence that it can fail, which is
+  // why it is registered now rather than at build time: it removes the npOpen exemption, so
+  // setView('nowplaying') hides the settings screen Now Playing was opened over and the NP-back
+  // reveal has nothing to filmstrip to.
+  //
+  // ⛔ STAGE A1 MUST RE-ANCHOR THIS ENTRY, and test/mutation-anchors.test.js will BLOCK the commit
+  // until it does. A1 narrows the park guard on js/nav.js:56 to `if (!npOpen) {` — the identical
+  // text — so after the build this `from` occurs TWICE in js/nav.js and the uniqueness gate
+  // refuses it with NON-UNIQUE ANCHOR. Extend the `from` with the six-way visibility loop that
+  // follows it (whatever exact text ships), e.g.
+  //     from: "    if (!npOpen) {\n      for (const s of ['options', ...SETTINGS_SUBS])"
+  //     to:   "    if (true) {\n      for (const s of ['options', ...SETTINGS_SUBS])"
+  // That is a deliberate, mechanized stop rather than a trap: the collision is real either way,
+  // and this is the only construct in the repo that makes the builder see it.
+  { name: 'one-screen-type NPUNTOUCHED: the npOpen exemption is removed, so opening Now Playing hides the settings screen underneath and the NP-back reveal has nothing to return to (-> NPUNTOUCHED still-un-hidden assertion)',
+    file: 'js/nav.js',
+    from: '    if (!npOpen) {',
+    to:   '    if (true) {' },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
