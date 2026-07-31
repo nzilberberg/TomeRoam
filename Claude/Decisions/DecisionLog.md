@@ -1191,3 +1191,23 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   in the INDEX so a fresh clone is gated without running `install`, and the suite asserts that mode
   for every entry in `HOOK_SCRIPTS`. A hook git cannot execute does not fail — it silently never
   runs.
+
+- A BY-REFERENCE ITEM OF THE NOW-PLAYING DECISION IS SUPERSEDED — 2026-07-31, records pointer.
+  The USER DECISION at `:1147-1167` incorporates the probe's load-bearing set by reference at
+  `:1162-1163`. One member of that set is retired and one is added, by dated supersession in
+  `Claude/Linnaeus/PROBE-np-uniqueness.md` §9 (derived against HEAD `35f0005`). §9.1 retires 4.2,
+  the settings-loop guard, to `context`: `#nowplaying`'s `hidden` class has exactly one writer
+  (`js/nav.js:81`), and that same `setView` body un-hides the destination settings screen three
+  lines earlier (`js/nav.js:78-80`), so the destination is mounted at the instant Now Playing is
+  hidden whatever its state was while NP was open — the "stays mounted for the back-reveal" reason
+  is refuted at source. §9.2 promotes 1.9, the background, to load-bearing: Stage A1 removed
+  `background: var(--page-bg)` from `#options` and the five subs, so at HEAD it is declared by
+  `body::before` (`css/app.css:44`) and `.nowplaying` (`css/app.css:510`) alone, pinned by
+  `test/page-bg-single-painter.test.js:28`. §9.3 corrects the count: "thirteen" matched neither the
+  list it headed (15 groups) nor the body's marks (24); the true itemisation is 24 distinct facts.
+  THE DECISION ITSELF IS UNCHANGED AND UNCONTRADICTED — Now Playing stays unique, and the corrected
+  count under-states rather than over-states its support. Two sentences of the ratified entry are
+  now stale and are NOT rewritten here: `:1157-1158` ("the background is SHARED with `#options` and
+  all five subs") was true at `288504e` and is false at HEAD, and `:1162`'s "Thirteen" is the wrong
+  number. The three-co-required-properties derivation at `:1158-1161` holds unchanged at HEAD.
+  Amending a ratified entry is the user's call, not a deriver's.
