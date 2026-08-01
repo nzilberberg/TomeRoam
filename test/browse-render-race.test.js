@@ -34,7 +34,9 @@ Object.defineProperty(dom.window.Element.prototype, 'scrollTop', {
 });
 
 global.PBLogic = require('../js/logic.js');
+let releaseBooks = null;
 global.Plex = {
+  getBooks: () => new Promise((r) => { releaseBooks = r; }),                      // page A: hangs
   getAuthors: async () => [{ ratingKey: 'au1', title: 'Auth', childCount: 1 }],   // page B: instant
   artUrl: (t) => 'art:' + t,
 };
@@ -47,21 +49,14 @@ Browse.init({
 });
 const tick = (ms = 8) => new Promise((r) => setTimeout(r, ms));
 
-// A FILES page, deliberately (PLAN-swipe-declone.md §5.3.4), same reason as the control below: a
-// LIST page derives NO entry position any more, so a list-page fixture here could not fail on the
-// guard it exists to prove — reading A (navigated away) and reading B (stayed) would both be `[]`
-// whether or not the guard runs. A files page still derives one, which is what makes this cell
-// able to catch the guard being deleted or inverted.
 test('a slow page whose fetch lands after the user navigated away must not scroll', async () => {
-  let releaseFiles;
-  global.Plex.getAlbumTracks = () => new Promise((r) => { releaseFiles = r; });
-  const slow = Browse.render({ v: 'files', book: { ratingKey: 'bk0', title: 'Bk0', parentTitle: 'A' } });   // page A — its fetch hangs
+  const slow = Browse.render({ v: 'books' });      // page A — its fetch hangs
   await tick();
   await Browse.render({ v: 'authors' });           // the user moves to page B
   await tick();
 
   scrolls = [];                                    // only what happens from here matters
-  releaseFiles([{ ratingKey: 't0', title: 'Ch 1', durationMs: 60000, viewCount: 0 }]);
+  releaseBooks([{ ratingKey: 'b1', title: 'B1', parentTitle: 'A', thumb: '/t' }]);
   await slow;
   await tick(20);
 

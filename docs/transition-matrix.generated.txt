@@ -9,9 +9,9 @@ registry: 12 screens, 132 ordered pairs
   browse   books, authors, authorBooks, files
   overlay  options, nowplaying, general, playback, buffering, downloads, diagnostics
 
-CONSTRUCTION PLAN by kind (from the frozen spec; no finalization data — see the spec)
+CONSTRUCTION PLAN by kind (from the frozen spec; abort is frozen finalization data)
   from     to        outgoing      incoming          render       pane
-  -------  --------  ------------  ----------------  -----------  -----
+  -------  --------  ------------  ----------------  -----------  -----  --------
   home     browse    real-source   real-destination  browse-host  no
   home     overlay   real-source   real-destination  none         no
   browse   home      real-source   real-destination  home-host    no

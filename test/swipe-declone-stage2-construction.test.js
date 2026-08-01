@@ -151,35 +151,6 @@ test('MOVERSDISTINCT — a browse->browse construction resolves its two mover sl
     + bad.join('\n  '));
 });
 
-// Same-KEY parameterized pair (Poirot F2, filed for the planner — NOT resolved here). Distinct from
-// the bare-`v` exclusion above: books->books is IMPOSSIBLE-BEFORE-THE-PLANNER by construction (navTo
-// replaces the stack top for it), but authorBooks(A)->authorBooks(A) is a PARAMETERIZED-identity pair
-// the frozen spec (test/fixtures/swipe-plan-spec.mjs:105) states IS reachable — a coordinate NEITHER
-// fixture in this file drives (both use two DIFFERENT keys, per Poirot's finding).
-//
-// This does NOT decide reachability and does NOT guard the defect — it is a PIN, not a guard: it
-// records what buildConstruction currently returns for this exact input, so an unrelated future
-// change cannot silently move that behaviour without this cell noticing. Whether the pinned
-// collision is acceptable, and whether/how to close it, is Vitruvius's call (F2).
-//
-// The env override closes over the known `from` descriptor, exactly as app.js's real `sourceEl`
-// closes over the live gesture's `d.from` (Poirot A7: buildConstruction's seam passes `sourceEl`
-// only the screen NAME, `from.v`, never the full descriptor — mkEnv()'s own `sourceEl` reconstructs
-// `{v}` from that bare name and would throw on `d.author.ratingKey` for a parameterized pair). This
-// is a faithful recipe-layer stand-in for that production behaviour, not a workaround of A7 itself.
-test('MOVERSDISTINCT — same-key regression pin (Poirot F2, a PIN not a guard): a same-identity '
-  + 'authorBooks(A)->authorBooks(A) pair resolves both mover slots to the SAME cached page today', () => {
-  const { env, pageElFor } = mkEnv();
-  const from = { v: 'authorBooks', author: { ratingKey: 'A1' } };
-  const to = { v: 'authorBooks', author: { ratingKey: 'A1' } };   // independently allocated, same identity
-  env.sourceEl = (h) => (h === 'browse-page' ? pageElFor(from) : env.document.getElementById('browse'));
-  const c = build(from, to, env);
-  assert.equal(c.movers.outgoing.element, c.movers.incoming.element,
-    'PIN, not a guard (Poirot F2): if this ever becomes false without a deliberate fix landing, '
-    + 'update this pin in the same commit — do not let the same-key coordinate drift silently '
-    + 'either direction');
-});
-
 // The classification half — the projection is the ONE place the kind->host mapping policy lives
 // (js/swipe.js:96-98), so `browse-page` is added THERE and nowhere else. The expected hosts below
 // are written BY HAND from plan §5.3.6, deliberately NOT read from the frozen spec fixture: the

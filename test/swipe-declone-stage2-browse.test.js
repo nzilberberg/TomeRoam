@@ -401,25 +401,13 @@ test('LANDEDPAGESHOWS — an ABORTED browse->browse leaves the page it started o
 // EVERY gesture, not only browse->browse: takeRowHold() is unconditional in start()
 // (js/app.js:535) and dropRowHold calls endHold whenever session.hold is truthy (js/app.js:360-363).
 // So its body also runs on the four SHIPPED, device-confirmed transitions, and adding an argument
-// without saying what it means there would be a change to them made by omission.
-//
-// ⚠️ THE TWO PHASES EXERCISE DIFFERENT BRANCHES, and this cell asserts each on its own terms
-// rather than claiming one property for both (Poirot A1 — the ABORT phase was previously a false
-// witness: it claimed to drive the fallback but could not). COMMIT lands on 'home', which is never
-// a browse-page key, so `landedKey` misses the cache and endHold takes the FALLBACK branch — this
-// is the phase the mutant (dropping the cache-lookup discriminator from the fallback's guard) can
-// actually be caught on: the mutant routes the miss through the landed lookup anyway, so no page
-// is reconciled and the ONE realization the gesture gets is skipped, visible only as a CONTROLLER
-// ACTIVATION CALL COUNT. ABORT lands back on the browse source (currentDesc() reverts to it before
-// endHold runs), which is STILL CACHED, so `landedKey` HITS the cache and endHold takes the LANDED
-// branch instead — the mutant is a no-op there. The abort phase still asserts something real and
-// its own: that the source page's controller is correctly reactivated via the LANDED branch, not
-// left stranded — a property this file's other LANDEDPAGESHOWS cells (browse->browse) also cover,
-// but not for a browse->home gesture specifically.
-test('LANDEDPAGESHOWS — a browse->home gesture: COMMIT lands on no cached browse page and takes the '
-  + 'fallback (HEAD\'s activeEntry() inference); ABORT lands back on the still-cached source and '
-  + 'takes the landed branch. Both leave browse page state and controller activation exactly as '
-  + 'HEAD leaves them', async () => {
+// without saying what it means there would be a change to them made by omission. A landed
+// descriptor that names no cached browse page must run HEAD's inference UNCHANGED. The mutant
+// routes the miss through the landed lookup anyway, so no page is reconciled and the ONE
+// realization the gesture gets is skipped — visible only as a CONTROLLER ACTIVATION CALL COUNT,
+// and only if a controller exists to count. HEAD's count on browse->home is >= 1; the mutant's is 0.
+test('LANDEDPAGESHOWS — a browse->home gesture, which lands on NO browse page, leaves browse page '
+  + 'state and controller activation exactly as HEAD leaves them', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true, books: bigBooks(700) });
   try {
     h.VirtualList.setForceVirtual(true);
@@ -438,15 +426,10 @@ test('LANDEDPAGESHOWS — a browse->home gesture: COMMIT lands on no cached brow
         `fixture sanity: the live gesture must be browse->home — got ${swipeLog(h).at(-1)}`);
       if (phase === 'abort') await abortBack(h); else await commitBack(h);
 
-      const msg = phase === 'abort'
-        ? 'on a browse->home abort the started-from page\'s controller must still be activated at '
-          + 'the hold\'s release, exactly as HEAD activates it — the LANDED branch (the source is '
-          + `still cached), not the fallback. activate() calls: ${counted.n}`
-        : 'on a browse->home commit the started-from page\'s controller must still be activated at '
-          + 'the hold\'s release, exactly as HEAD activates it. A landed descriptor naming no cached '
-          + 'page (home) must fall back to HEAD\'s activeEntry() inference, not be routed through the '
-          + `landed lookup and reconcile nothing. activate() calls: ${counted.n}`;
-      assert.ok(counted.n >= 1, msg);
+      assert.ok(counted.n >= 1, `on a browse->home ${phase} the started-from page's controller must `
+        + 'still be activated at the hold\'s release, exactly as HEAD activates it. A landed '
+        + 'descriptor naming no cached page must fall back to HEAD\'s activeEntry() inference, not '
+        + `be routed through the landed lookup and reconcile nothing. activate() calls: ${counted.n}`);
       assert.equal(books.classList.contains('parked'), false,
         `a browse->home ${phase} never parks a browse page — showPage does not run on this path`);
 

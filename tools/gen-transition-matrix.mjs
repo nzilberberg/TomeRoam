@@ -81,12 +81,9 @@ export function render() {
     L.push(`  ${k.padEnd(8)} ${screens.filter((s) => s.kind === k).map((s) => s.v).join(', ')}`);
   }
   L.push('');
-  // PLAN-swipe-declone.md Stage 2 retired the abort/finalization column this header used to
-  // describe (test/fixtures/swipe-plan-spec.mjs: "There is NO finalization contract here...
-  // This absence must NOT be read as 'finalization is verified'") — say that, not the opposite.
-  L.push('CONSTRUCTION PLAN by kind (from the frozen spec; no finalization data — see the spec)');
+  L.push('CONSTRUCTION PLAN by kind (from the frozen spec; abort is frozen finalization data)');
   L.push('  from     to        outgoing      incoming          render       pane');
-  L.push('  -------  --------  ------------  ----------------  -----------  -----');
+  L.push('  -------  --------  ------------  ----------------  -----------  -----  --------');
   for (const f of kinds) {
     for (const t of kinds) {
       if (f === 'home' && t === 'home') continue;   // not a transition

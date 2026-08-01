@@ -83,12 +83,9 @@ const Swipe = (() => {
   // join the signature then. The output exposes the fields a current-slice consumer reads:
   // `fromKind`/`toKind` (constructionPlanFor), `sourceHost`/`destinationHost` (stage-5
   // buildConstruction, which reads them to resolve the real source element and the render
-  // host — plan §3, F1-r), and `decorations` (start()). §3.3 also lists sameBrowseHost. Its
-  // only planned consumer, the stage-6 abort re-render, was itself retired with the clone by
-  // PLAN-swipe-declone.md Stage 2 (finalizationPlanFor and its abortRender decision are gone),
-  // so per the no-dead-fields rule sameBrowseHost stays unemitted here with no current or
-  // planned consumer — not "reintroduced later," since the stage that was going to do so no
-  // longer exists in that form.
+  // host — plan §3, F1-r), and `decorations` (start()). §3.3 also lists sameBrowseHost, but
+  // its only consumer is the stage-6 abort re-render, so per the no-dead-fields rule it is
+  // NOT emitted here — it is reintroduced in that stage with its consumer and test.
   function classifyTransition({ from, to }) {
     const fromKind = kindOf(from.v);
     const toKind = kindOf(to.v);
