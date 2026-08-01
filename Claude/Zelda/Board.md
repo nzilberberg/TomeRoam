@@ -714,12 +714,16 @@ name the resource, find where ownership begins and ends in source, confirm the p
 boundaries coincide. Required by the plan; it was skipped on the first pass and that is what shipped
 `.282` wrong.
 
-**DEVICE-OWED — step 6f, the flick gate.** Tap `‹ Back` on a settings sub-screen and RELEASE within
-~125–340ms, toward Books and Home. A **held** drag (what step 6c tested) structurally cannot reach
-this window, which is why every earlier device reading came back clean. Watch for the destination
-vanishing mid-snap and popping back ~⅓s later. This is also the candidate repro for the user's
-sighted-once pop-in — **that sighting stays MATCHING BUT UNCONFIRMED until this reads; do not write
-it off as explained.**
+**Step 6f — SATISFIED 2026-07-31, with one recorded residual.** The user reports the app fine on a
+build ≥ `.284`, and app code is **byte-identical `.284`→`.288`** (`git diff 01cbaf1 HEAD -- js/ css/`
+is empty — every build since 10:18 that day is the same app), so the reading covers the r2 fix
+whichever build it ran on. The sighted-once pop-in has not recurred.
+⚠️ **RESIDUAL, not to be upgraded to "proven":** a pass in ordinary use may not have driven the
+deliberate fast release (tap `‹ Back` and lift inside ~125–340ms). A **held** drag structurally
+cannot reach that window at all. So the narrow timing band is **untested rather than proven clean**.
+Do not re-ask for it — the user has said the pop-in is not worth chasing without a repro. If it ever
+recurs, THAT is the repro, and this band is the first place to look.
+⇒ **A1b is no longer sequenced behind this gate.**
 
 **Stage A1b plan review round 2 — TEMPER, 2026-07-31**
 (`Claude/Charpy/PLAN-one-screen-type-A1b-charpy-r2.md`, reviewed at `57e503d`). Round 1's six
