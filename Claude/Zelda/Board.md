@@ -721,18 +721,26 @@ vanishing mid-snap and popping back ~⅓s later. This is also the candidate repr
 sighted-once pop-in — **that sighting stays MATCHING BUT UNCONFIRMED until this reads; do not write
 it off as explained.**
 
-**Stage A1b plan review — TEMPER, 2026-07-31** (`Claude/Charpy/PLAN-one-screen-type-A1b-charpy.md`).
-§5.3 was added in `8e9b4b6`, AFTER the plan review at `e979a41`, so the plan header's
-"PLAN_READY — reviewed" never covered it. The mechanism is sound (every NP open/close path traced;
-the abort really does reconcile, and no close path needs the exemption for an instant reveal), but
-six Structural findings gate the build. **The load-bearing one: the plan's claim that "additivity was
-never among the reasons given for NP's uniqueness" is FALSE** — `PROBE-np-uniqueness.md` §4.2 marks
-the settings-loop guard **load-bearing** and carries it into §8's thirteen, and the governing
-DecisionLog entry incorporates those thirteen by reference. A1b may still be right (§5.3.2's
-close-path table genuinely refutes the probe's stated reason), but it deletes a ratified
-load-bearing item and must say so and supersede the probe, not assert the mark away. Also: the plan
-cites NP's background as its distinguishing property, which the DecisionLog forbids in as many
-words. **Not re-opened:** `showAppView`'s sweep — §5.3.5's proof is sound, KEEP stands, verified.
+**Stage A1b plan review round 2 — TEMPER, 2026-07-31**
+(`Claude/Charpy/PLAN-one-screen-type-A1b-charpy-r2.md`, reviewed at `57e503d`). Round 1's six
+Structural findings (`…-A1b-charpy.md`, `35f0005`) are **all resolved** in the fold at `57e503d` and
+each was re-checked against source: the false "additivity was never among the reasons" premise is
+removed rather than softened and licensed instead by `PROBE-np-uniqueness.md` §9.1's supersession
+(re-derived independently — `js/nav.js:81` is the only writer that adds `hidden` to `#nowplaying`);
+the count is 24 distinct facts in 16 grouped entries, checked against probe §9.3's enumeration; the
+`browseWillHide` edges are five in one canonical place; §6a's casualty census is correct
+assertion-by-assertion.
+**Three new Structural findings gate the build, and one is executed.** **F14 —
+`Claude/Campaigns/one-screen-type-a1b.json`'s `plan-review` gate declares a verdict glob with no
+wildcard, so it can never read a re-review and step 1 has no reachable discharge.** Fix: widen it to
+`Claude/Charpy/PLAN-one-screen-type-A1b-charpy*.md`; `artifactsOfRecord` then selects the highest
+`-rN` (proven by running it). F15 — edge 5's "deliberately uncovered" ruling holds on its first
+ground but its second is false, and its re-open condition names `setView` when the idempotence that
+protects the edge lives at `js/virtuallist.js:251-262`. F16 — R-H hazard 3 says the aborted NP-back
+swipe newly pays a `Browse.render`; it is paid today, and what A1b adds is the teardown whose
+`dematerialize()` makes that render rebuild rows it would otherwise keep (this error originated in
+round 1's own F10). Six Weak/Note findings are sentence-level.
+**Not re-opened:** `showAppView`'s sweep — §5.3.5's proof is sound, KEEP stands, verified.
 
 **Still open in this campaign:** r2's successor stages — A1b (NP parks/hides beneath itself, **plan
 TEMPER'd — findings owed before step 8**), A2
