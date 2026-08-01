@@ -168,9 +168,33 @@ async () => {
   } finally { h.dispose(); }
 });
 
-test('PEERFINALIZE — edge 3: closing Now Playing back to a settings screen after an NP→files '
-  + 'abort left #browse un-hidden hides it and fires browseWillHide once, while it was still '
-  + 'un-hidden', async () => {
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// EDGE 3, RELOCATED BY STAGE A1b (plan §5.3.4, §6a, step 7). Authored by the test author
+// 2026-07-31; companion note Claude/Curie/RED-one-screen-type-a1b.md.
+//
+// ⚠️ THIS IS A RELOCATION, NOT A RE-POINTED ASSERTION — the cell's SUBJECT ceased to exist.
+// Edge 3 was "closing Now Playing back to a settings screen after an NP→files abort left #browse
+// un-hidden". A1b deletes setView's two `if (!npOpen)` guards, so the ABORT's own
+// applyScreen('nowplaying') hides #browse itself; by the time Now Playing is closed, #browse is
+// already hidden and js/nav.js:55's shown→hidden edge test is false. The hook fires at the ABORT
+// or nowhere. The whole scenario therefore moves to the abort, and the recorder is installed
+// BEFORE it — installed after, as the previous version did, the relocated call goes unrecorded.
+//
+// The version this replaces did not pass vacuously after A1b; it failed loudly, in four places,
+// two of which were FIXTURE SANITY and would have reddened wherever the hook assertion pointed:
+// its `isHidden('options') === false` sanity (A1b hides it by design), its "the NP→files abort
+// must leave #browse un-hidden" sanity (A1b's abort reconcile hides it), `rec.calls` 1 → 0, and
+// `hiddenWhenCalled` [false] → []. That is why this is a rewrite rather than an edit.
+//
+// ⚠️ SKIP-PENDING-BUILD, like the other two A1b cells. Confirmed RED at HEAD with the skip
+// removed. The builder removes the skip and builds to green.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+const A1B_SKIP = 'red-first Stage A1b — remove skip to run; the builder greens '
+  + '(Claude/Curie/RED-one-screen-type-a1b.md)';
+
+test('PEERFINALIZE — edge 3 RELOCATED (Stage A1b): the NP→files ABORT is where browseWillHide '
+  + 'now fires — it re-hides the #browse its own mid-drag render un-hid, once, while #browse was '
+  + 'still un-hidden', { skip: A1B_SKIP }, async () => {
   const h = boot({ fakeTimers: true });
   try {
     await settle(h);
@@ -183,39 +207,55 @@ test('PEERFINALIZE — edge 3: closing Now Playing back to a settings screen aft
     h.tap('.navbtn[data-nav="options"]'); await settle(h);
     h.tap('#player'); await settle(h);              // open Now Playing over the settings screen
     assert.equal(isHidden(h, 'nowplaying'), false, 'fixture sanity: Now Playing must be open');
-    assert.equal(isHidden(h, 'options'), false,
-      'fixture sanity: Now Playing must leave the settings screen mounted underneath — that is '
-      + 'the retained npOpen exemption NPUNTOUCHED guards');
+    // What Now Playing's entry does to the settings screen it opened over is NPPARKS's subject
+    // (A1b hides it; the exemption that kept it mounted is retired). It is deliberately NOT
+    // re-asserted here — a second copy of a live contract is the staleness class this plan's §1
+    // records three times, and asserting it here would make this cell halt on NPPARKS's claim
+    // instead of its own.
 
-    // Right-edge forward swipe NP→files, retreated → ABORT. Its mid-drag render un-hides #browse
-    // and the abort's setView('nowplaying') deliberately leaves it that way (the retained npOpen
-    // exemption), which is what sets edge 3 up.
+    // The recorder goes in BEFORE the abort — this is the whole of the relocation. Right-edge
+    // forward swipe NP→files, retreated → ABORT. Its mid-drag render un-hides #browse
+    // (js/app.js:512) and the abort's own applyScreen('nowplaying') is now what hides it again.
+    const rec = recordDeactivations(h);
     const w = h.window.innerWidth;
     h.touch.start(w - 2, 300, h.document.body);
     h.touch.move(w - 90, 302); await realSleep(12);
     h.touch.move(w - 400, 304); await realSleep(12);
+    assert.equal(isHidden(h, 'browse'), false,
+      'fixture sanity: the mid-drag destination render must have un-hidden #browse — without that '
+      + 'there is no shown→hidden edge for the abort to cross and this cell drives nothing');
     h.touch.move(w - 30, 306); await realSleep(12);
     h.touch.end(w - 10, 306);
     await settle(h); await h.clock.advance(700); await settle(h);
     assert.match(settles(h).at(-1) || '', /abort fwd nowplaying→files/,
       `fixture sanity: the NP→files swipe must have ABORTED — got ${settles(h).at(-1)}`);
-    assert.equal(isHidden(h, 'browse'), false,
-      'fixture sanity: the NP→files abort must leave #browse un-hidden — that residue is '
-      + 'precisely what edge 3 is about');
-
-    const rec = recordDeactivations(h);
-    await backSwipeCommit(h);                       // nowplaying→options: the gesture under test
-    assert.match(settles(h).at(-1) || '', /commit back nowplaying→options/,
-      `fixture sanity: the back-swipe must have committed nowplaying→options — got ${settles(h).at(-1)}`);
 
     assert.equal(isHidden(h, 'browse'), true,
-      'closing Now Playing back to a settings screen must hide the #browse the NP→files abort '
-      + 'left un-hidden. A1 REMOVES this pre-existing residue rather than adding one (plan §13): '
-      + 'at HEAD that #browse stays live behind the settings screen, covered only by its opaque '
-      + 'background — the very background A1 deletes');
+      'the ABORT back to Now Playing must re-hide the #browse its own mid-drag render un-hid. At '
+      + 'HEAD it does not, and that residue is what accumulates across repeated aborted NP '
+      + 'gestures (NPRECONCILE); here the subject is the browseWillHide edge that re-hiding '
+      + 'crosses');
     assert.equal(rec.calls, 1,
-      'and must fire Browse.deactivate exactly once on that edge (plan §9 edge 3)');
+      'and must fire Browse.deactivate exactly once on that edge — after A1b the hook fires at '
+      + 'the ABORT, not later at the Now Playing close, which is why the recorder is installed '
+      + 'before the gesture rather than after it (plan §9 edge 3, relocated)');
     assert.deepEqual(rec.hiddenWhenCalled, [false],
-      'observed at the moment it ran: #browse must still be un-hidden');
+      'observed at the moment it ran: #browse must still be un-hidden, so the virtual controller '
+      + 'captures its scroll anchor from real geometry');
+
+    // And the Now Playing close no longer crosses the edge at all: #browse is already hidden, so
+    // js/nav.js:55's shown→hidden test is false and the hook must NOT fire a second time.
+    await backSwipeCommit(h);                       // nowplaying→options
+    assert.match(settles(h).at(-1) || '', /commit back nowplaying→options/,
+      `fixture sanity: the back-swipe must have committed nowplaying→options — got ${settles(h).at(-1)}`);
+    assert.equal(rec.calls, 1,
+      'and the Now Playing close must NOT fire it again: the abort already hid #browse, so the '
+      + 'shown→hidden edge is not crossed a second time. This is the half of the relocation that '
+      + 'proves the edge MOVED rather than being duplicated');
+    assert.equal(isHidden(h, 'browse'), true, 'end state: #browse is hidden behind the hub');
+    assert.equal(isHidden(h, 'options'), false,
+      'end state: closing Now Playing reveals the settings screen it was opened over — the '
+      + 'destination is un-hidden by the same setView body that hides Now Playing, with no '
+      + 'exemption needed');
   } finally { h.dispose(); }
 });
