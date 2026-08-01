@@ -85,10 +85,19 @@ RED→GREEN; `MOVERHASBOX`, `PARKLOSESTRANSFORM` and `NPPILLIDS` were green at H
 **F23 is untouched:** the force-virtualization knob on `LANDEDPAGESHOWS`'s `browse→home` half and
 on `PAGEOWNSSCROLL`'s measured-element half is retained, with its fixture-sanity failure message.
 
-## 4. Mutants — 24 registered, 15 re-anchored, 16 de-registered
+## 4. Mutants — 24 registered, 13 re-anchored, 16 de-registered
 
-`tools/mutate.mjs` goes from 116 to 124 entries. **37 targeted indices swept in the FOREGROUND, in
-batches inside the 600s window: 0 uncaught, 0 unapplied, 0 stale flags, and no `*.mutbak` remains.**
+`tools/mutate.mjs` goes from 116 to 124 entries (116 − 16 + 24). **37 targeted indices swept in the
+FOREGROUND, in batches inside the 600s window: 0 uncaught, 0 unapplied, 0 stale flags, and no
+`*.mutbak` remains.**
+
+**The rot was larger than Curie's forecast, and the extra ten are this build's own doing.** Curie's
+§4 named 18 anchors the plan's deletions would rot; the anchors gate measured **28** against the
+built tree. The additional ten are anchors on machinery this commit removed beyond the §12 list —
+the held abort-reveal branch and the reveal diagnostics it fed (see §6). Of the 28: 14 were
+re-anchored and 14 de-registered; the sweep then found `swipe6e NOOP-a`/`NOOP-b` inert and one more
+re-anchored entry (`NOOP-b`) was de-registered with them, leaving 13 re-anchored and 16
+de-registered.
 
 **Three genuine findings the sweep produced, each fixed rather than accepted:**
 
