@@ -784,9 +784,16 @@ FORGE'd r3 — build gate open; red suite owed first**), A2
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —
 every round-2 finding resolved and both new gates (`MOVERSDISTINCT`, `LANDEDPAGESHOWS`) proven able to
 fail on the defect they name; one Structural residual, F19 — `Browse.endHold` gains a `landed` argument
-on a path that runs for EVERY gesture, and the fold defines it only for a browse landing, so the four
-shipped Stage-1 transitions have no stated behaviour. One paragraph in §5.3.6 plus one
-`LANDEDPAGESHOWS` fixture row clears it. `Claude/Charpy/PLAN-swipe-declone-stage2-charpy-r3.md`.
+on a path that runs for EVERY gesture, and the fold defined it only for a browse landing, so the four
+shipped Stage-1 transitions had no stated behaviour.
+**The round-3 fold is landed and the plan awaits round 4.** §5.3.6 defines `endHold` over every value
+`currentDesc()` can return: a landing naming no cached browse page keeps HEAD's `activeEntry()`
+behaviour unchanged, and the throwing `Browse.pageElFor` is kept off that path by construction, so the
+wedge-every-future-swipe reading is closed rather than guarded. `LANDEDPAGESHOWS` gains a `browse→home`
+abort-and-commit half plus a third mutant that reddens on the silent reading; both halves are
+class-state and call-count assertions, so **no new device-owed row**. F20 (a mutant at a layer its
+fake-env cell cannot reach), F21 (§9 item 1's false justification) and F22 (`MOVERHASBOX`'s id-derived
+host set) are folded as records tightenings. `Claude/Charpy/PLAN-swipe-declone-stage2-charpy-r3.md`.
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.

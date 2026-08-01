@@ -157,7 +157,8 @@ role**, from `#browse` to each `.browsepage`: the scroll box, the padding, the e
 virtual controller's measured element, and the custom scroll indicator's surface identity. The
 `.browsepage.parked` geometry, from a self-declared fixed box to Invariant P's inherit-everything
 shape. **Ownership of which browse page is shown at a gesture's end**, from an inference (`activeEntry()`
-plus an abort re-render) to the landed screen the gesture reports (Invariant D6).
+plus an abort re-render) to the landed screen the gesture reports (Invariant D6) — **for a landing that
+names a browse page; a landing that names none keeps the existing inference** (§5.3.6).
 
 **STAYS.** The gesture machinery (arm/lock/move/settle/finalize, the session-identity guards, the row
 hold, the reveal diagnostic). The browse **container role** on `#browse` — the append target
@@ -215,8 +216,11 @@ are about a transition knowing its own two ends rather than inferring them from 
 - *Landing.* Which browse page is left shown, parked or hidden when a gesture ends is decided by the
   screen the gesture landed on, not inferred from which page happens to be non-offscreen. At HEAD the
   inference is correct only because an aborted `browse→browse` re-renders its source; Stage 2 deletes
-  that re-render (§6), so the owner must be named or the inference silently inverts on abort. Gated by
-  `LANDEDPAGESHOWS` (§14).
+  that re-render (§6), so the owner must be named or the inference silently inverts on abort. **The
+  invariant governs a landing that names a browse page; a landing that names none keeps HEAD's
+  `activeEntry()` behaviour unchanged**, because the four transitions that produce one are shipped and
+  device-confirmed and this stage does not change them (§5.3.6). Gated by `LANDEDPAGESHOWS` (§14) on
+  both halves.
 
 D6 is new in this fold; it is the generalization of the defects §18 round 2 F11 and SF2 record, and it
 is the same class as D5 — a mover whose identity is assumed rather than resolved.
@@ -461,8 +465,8 @@ D6 forbids and which no gate this plan previously carried could see.
 
 **The invariant, not the implementation.** For a `browse→browse` pair the outgoing and incoming movers
 are the **source page node and the destination page node**, two distinct `.browsepage` elements, and the
-source is resolved before the destination render runs (§9 item 1, which stops being merely historical
-and becomes load-bearing again).
+source is resolved before the destination render runs (§9 item 1, retained unchanged — after Stage 2
+its ground is that the source page is still in the cache, not that it is still the shown one).
 
 **Recommended construction — extend the projection, because that is where the policy already lives.**
 `js/swipe.js:96-98` names `classifyTransition` as "the single place the kind→host mapping policy lives";
@@ -510,7 +514,8 @@ state. On abort it is put back only by the re-render Stage 2 deletes (§5.3.4). 
 named instead of inferred:
 
 - **`Browse.endHold` is told where the gesture landed** — its token argument gains the landed screen
-  descriptor, and it reconciles `.parked`/`.hidden` and controller activation against that page rather
+  descriptor, and — **when that descriptor names a cached browse page**; the other case is defined
+  below — it reconciles `.parked`/`.hidden` and controller activation against that page rather
   than against `activeEntry()` (`js/browse.js:179`, `:185`). **The read belongs in `dropRowHold`
   (`js/app.js:360-364`), the single wrapper around `Browse.endHold`**, and it reads `currentDesc()`.
   Both of that wrapper's paths already apply the screen first: the finalize `finally`, whose own comment
@@ -531,6 +536,39 @@ named instead of inferred:
 - **`PARKLOSESTRANSFORM` (§14) is the gate on the cascade dependency**, because "inline beats a class
   rule" is a fact about the stylesheet as written, and a later `!important` would silently make the
   outgoing mover jump to `translateX(-101vw)` at drag start.
+
+**`endHold` runs on EVERY gesture — the non-browse landing, defined.** `Browse.endHold` is not a
+`browse→browse` function. `takeRowHold()` is unconditional in `start()` (`js/app.js:535`), `beginHold`
+sets `holdRows = true` unconditionally (`js/browse.js:155-156`), and `dropRowHold` calls
+`Browse.endHold` whenever `session.hold` is truthy (`js/app.js:360-363`) — from the finalize `finally`
+(`:1299`) and from the hard reset (`:461`) alike. So its body also runs on `browse→home`,
+`browse→overlay`, `home→browse` and `overlay→browse`, all four of which are **shipped and
+device-confirmed**, and adding an argument to it without saying what that argument means on those paths
+would be a change to four shipped transitions made by omission.
+
+- **The invariant, not the implementation.** `Browse.endHold` is defined for **every** value
+  `currentDesc()` can return. A gesture whose landed descriptor names no cached browse page leaves
+  browse page state and controller activation **exactly as HEAD leaves them** — Stage 2 is not
+  chartered to change those four transitions.
+- **Recommended construction (a recommendation; the builder may satisfy the invariant otherwise).**
+  `landed` selects the reconciliation target only when `keyOf(landed)` hits `pageCache`. On a **miss**,
+  `endHold` runs HEAD's `activeEntry()` inference unchanged, for both the park loop's `stillShown`
+  (`js/browse.js:179`) and the activation target (`:185`). The probe is the cache lookup that returns
+  nothing — **`Browse.pageElFor` is explicitly not on this path**, because it is specified to throw, and
+  a throw inside `dropRowHold` is inside the finalize `finally` and therefore *past*
+  `if (!ok) finishing = false;` (`js/app.js:1300`), which would leave `finishing` true and wedge every
+  future swipe. Routing the miss through a non-throwing probe closes that coordinate by construction
+  rather than by a guard someone must remember to write.
+- **What the miss branch preserves is already the no-op case.** On a gesture that leaves browse by
+  transform, `showPage` never runs — `beginHold`'s own comment records this (`js/browse.js:157-161`),
+  and `endHold`'s records that `activate()` is a no-op for a page that was never suspended. No page
+  carries `.parked`, so the park loop iterates to nothing and `activeEntry()` returns the page the
+  gesture started from, on the abort and the commit alike. Preserving HEAD here costs nothing and is the
+  whole of the requirement.
+- **`LANDEDPAGESHOWS` carries the second half** (§14): a `browse→home` abort **and** commit, asserting
+  the browse page's class state and the controller-activation call count match HEAD. Class state and
+  call counts are jsdom-decidable, so this adds **no device-owed row**; step 10b's re-confirmation of
+  the four Stage-1 transitions stays the backstop rather than the primary.
 
 **The alternative, and its exact cost, so the builder can take it if the device says so.** The
 `#home` park was deferred from drag start to finalize in Stage 1 precisely because a park landing
@@ -736,11 +774,19 @@ measured again, for Stage 2's new absolutely-positioned case, at R2b.
 Ordering requirements that are **correctness**, not incidental:
 
 1. **The outgoing mover is resolved before any destination render runs.** Preserved unchanged
-   (`js/swipe.js:369-380`). ⛔ **Correctness, and more load-bearing after Stage 2, not less** — the
-   earlier revision had this backwards. The destination render calls `showPage(destKey)`, which marks
-   the outgoing page `.parked` (`js/browse.js:299-303`); resolving the source afterwards would have to
-   pick it out of a set where the visible-page inference no longer names it. Resolving first, while the
-   source page is still the shown one, is what makes `'browse-page'` unambiguous on both ends (§5.3.6).
+   (`js/swipe.js:369-380`). ⛔ **Correctness, and retained after Stage 2 with its ground restated.** At
+   HEAD the ground is that the source `#browse` is the element the mid-drag render clobbers, and that is
+   what this ordering has always protected. After Stage 2, `env.sourceEl('browse-page', v)` resolves
+   through `Browse.pageElFor(desc)` — a **descriptor-keyed cache lookup**, independent of `.parked`,
+   `.hidden` and `activeEntry()` — so what the ordering now requires is only that the source page still
+   be **in the cache**, which `evictLRU` guarantees for the whole gesture (§11).
+   ⛔ **A correction, because the wrong reason teaches the wrong thing.** An earlier revision justified
+   this item as "more load-bearing after Stage 2" on the grounds that the destination render parks the
+   outgoing page, so a later resolution "would have to pick it out of a set where the visible-page
+   inference no longer names it." That is false under this plan's own construction: a keyed lookup
+   returns the identical node before or after the render. It is corrected rather than quietly dropped
+   because it teaches that source resolution depends on visibility — which is precisely the inference
+   §5.3.6 exists to remove.
 2. **The `#home` park is deferred from drag start to finalize** on `home→browse`. **Shipped in Stage 1**
    (`js/app.js:501-515`). Restated because a park that lands mid-drag makes the outgoing mover jump to
    `translateX(-101vw)`, which is the most visible possible regression, and Stage 2 must not reinstate it.
@@ -1004,14 +1050,14 @@ deletions and the gate's closure.
 NOGHOSTINFLOW | after stage 1 the construction plan builds an owned pane for exactly one structural transition namely browse to browse and returns real-source for every other pair including home to browse home to overlay and browse to overlay | unit call constructionPlanFor over all eight structural cases from the frozen spec and assert outgoing equals real-source everywhere except the browse to browse case | NATURAL restore the widened condition so an in-flow source going to a non-home destination is planned as app-ghost again which reddens the home to browse and both to-overlay rows expected killing cell NOGHOSTINFLOW | unit pure classification
 HOMESTAYSLIVE | during a home to browse drag the real home element is the outgoing mover and is never parked while the gesture is live and it IS parked once a committed gesture finalizes and is NOT parked after an aborted one | integration boot the app harness with fake timers and deferred rAF then swipe home to books and assert at every mid-drag step that the home element does not carry the parked class and carries a translateX transform then advance past the settle and assert parked is present after a commit and absent after an abort | TWO mutants because one cannot exercise both edges. NATURAL-a the browse-host render branch re-parks home at drag start which reddens the mid-drag assertion. NATURAL-b the finalize commit path stops parking home which reddens the post-commit assertion. expected killing cell for BOTH is HOMESTAYSLIVE | integration app harness over the real shipped listeners
 PAGEISVIEW | each browse page is its own inset own-scroll box whose scroll and content declarations are the ones the browse host carried before the relocation and the browse host itself is no longer a scroller | unit read the shipped css and assert the browsepage base rule declares position absolute and inset zero and overflow-y auto and the same padding and the same webkit-overflow-scrolling and overscroll-behavior values the retired browse host rule carried with each value compared textually against the retired rule captured in the fixture rather than hardcoded and assert the browse host rule declares no overflow-y and no padding | THREE mutants. NATURAL-a the browsepage rule omits overflow-y auto so the page is not a scroller. NATURAL-b the browsepage rule declares a different padding than the retired host rule so the content boxes disagree. NATURAL-c the browse host keeps overflow-y auto so two scroll authorities exist at once. expected killing cell for ALL THREE is PAGEISVIEW | unit css structural audit
-MOVERHASBOX | every element a swipe can resolve as a mover generates a principal box so the inline drag transform is never inert | unit derive the mover host set from source namely the ids appViewEl and overlayEl and viewElFor can return plus the browse host returned literally by the browse-host render branch and assert that for each one the shipped css declares neither display contents nor display none in its base rule and that the browse host base rule still declares position fixed | TWO mutants. NATURAL-a the browse host base rule is changed to display contents which is the exact defect this revision corrects. NATURAL-b the browse host base rule drops position fixed leaving it in flow. expected killing cell for BOTH is MOVERHASBOX | gate source structural
+MOVERHASBOX | every ID-RESOLVED element a swipe can resolve as a mover generates a principal box so the inline drag transform is never inert with the browsepage mover resolved through Browse.pageElFor carrying no id and covered instead by PAGEISVIEW which pins the base rule position absolute and inset zero textually | unit derive the id-resolved mover host set from source namely the ids appViewEl and overlayEl and viewElFor can return plus the browse host returned literally by the browse-host render branch and assert that for each one the shipped css declares neither display contents nor display none in its base rule and that the browse host base rule still declares position fixed | TWO mutants. NATURAL-a the browse host base rule is changed to display contents which is the exact defect this revision corrects. NATURAL-b the browse host base rule drops position fixed leaving it in flow. expected killing cell for BOTH is MOVERHASBOX | gate source structural
 PARKBOXEQUAL | a parked browse page occupies the same box as an active one because the parked rule declares no position and no insets of its own and inherits every box property from the base rule exactly as the home park rule does | unit read the shipped css and assert the browsepage parked rule declares transform and overflow hidden and pointer-events and z-index and declares NONE of position top bottom left right max-width or margin and separately assert the home park rule satisfies the same shape so the two rules are compared against one another rather than against a hardcoded list | TWO mutants. NATURAL-a the parked rule reintroduces top zero which makes the parked box taller than the active one. NATURAL-b the parked rule drops overflow hidden which removes the scroll-container status the anchoring guarantee depends on. expected killing cell for BOTH is PARKBOXEQUAL | unit css structural audit
 PAGEOWNSSCROLL | the container role stays bound to the browse host while the scroller role belongs to each page so a page swap never wipes a page instead of the container and each virtual controller measures the page it was built for | integration boot the app harness and build two browse pages with different scroll heights then assert that reset empties the host and not a page and that browseVisible tests the host and then swap pages and assert the outgoing controller captured its anchor against the outgoing page by reading back the anchor it saved | TWO mutants. NATURAL-a the container operations are re-pointed at the active page so reset wipes a page and a new page is appended inside another page. NATURAL-b the metrics closure reads a shared reference instead of the page it was built for so the outgoing controller captures against the incoming page. expected killing cell for BOTH is PAGEOWNSSCROLL | integration app harness plus unit
 RESETCOVERSPAGES | the swipe style reset clears inline transform and transition and will-change and z-index from every browse page and not only from the elements that carry an id so an interrupted browse to browse gesture cannot leave a page stuck off viewport | unit drive resetSwipeStyles against the real index fixture with an inline transform written onto two browsepage nodes and assert both are cleared alongside the id-carrying views | NATURAL the reset keeps its id-only element list so a browsepage transform survives the reset expected killing cell RESETCOVERSPAGES | unit nav reset against the real fixture
 ENTRYNOZERO | re-entering a cached browse page performs NO scroll write at all unless a position is derived namely a files page playing track or a virtual page anchor so nothing overwrites the offset the page element already holds | integration boot the app harness and enter a books page and leave to home and return and assert that positionOnEnter performed ZERO scroll writes for that page by recording every write rather than by reading back an offset and separately assert a files page for the locally playing book still opens at that track | TWO mutants. NATURAL-a entryScrollY returns zero instead of null for a list page so positionOnEnter writes zero over the retained offset which is the exact inversion this rule prevents. NATURAL-b positionOnEnter writes even when the derived value is null. expected killing cell for BOTH is ENTRYNOZERO | integration app harness
-MOVERSDISTINCT | a browse to browse construction resolves its two mover slots to two DISTINCT browsepage elements and never to the browse host | unit call buildConstruction against a fake env over all eight structural cases and for the browse to browse case assert the outgoing and incoming mover elements are not the same node and that each carries the browsepage class and is not the browse host and separately assert the classification pins sourceHost and destinationHost to browse-page for that pair only | THREE mutants. NATURAL-a the source host projection falls back to in-flow so the outgoing slot resolves to the browse host and the two slots become one node. NATURAL-b the destination host projection falls back to browse-host so the incoming slot resolves to the browse host. NATURAL-c the browse-page destination branch returns the host element instead of the page element. expected killing cell for ALL THREE is MOVERSDISTINCT | unit construction seam against a fake env
+MOVERSDISTINCT | a browse to browse construction resolves its two mover slots to two DISTINCT browsepage elements and never to the browse host | unit call buildConstruction against a fake env over all eight structural cases and for the browse to browse case assert the outgoing and incoming mover elements are not the same node and that each carries the browsepage class and is not the browse host and separately assert the classification pins sourceHost and destinationHost to browse-page for that pair only and SEPARATELY at the app-harness layer drive the real env literal through a browse to browse start and assert the element the browse-page destination branch returns is a browsepage node and not the browse host | THREE mutants. NATURAL-a the source host projection falls back to in-flow so the outgoing slot resolves to the browse host and the two slots become one node. NATURAL-b the destination host projection falls back to browse-host so the incoming slot resolves to the browse host. NATURAL-c the browse-page destination branch in the app-side env literal returns the host element instead of the page element which no fake-env fixture executes and which only the app-harness half reddens on. expected killing cell for ALL THREE is MOVERSDISTINCT | unit construction seam against a fake env for the first two mutants plus app harness over the real env literal for the third
 PARKLOSESTRANSFORM | the parked browse page rule cannot win the cascade against the drag inline transform so an outgoing mover carrying the parked class still tracks the gesture | unit read the shipped css and assert the browsepage parked rule declares its transform WITHOUT an important flag and separately assert no rule matching a browsepage declares an important transform anywhere in the sheet | NATURAL mark the parked transform important so the class beats the inline drag write and the outgoing mover sits off-viewport for the whole gesture expected killing cell PARKLOSESTRANSFORM | unit css structural audit
-LANDEDPAGESHOWS | the page left showing when a gesture ends is the page for the screen the gesture LANDED on for both a commit and an abort and it is decided from that landed screen rather than inferred from which page is currently visible | integration boot the app harness and swipe books to authors and ABORT and advance past the settle and finalize and assert the books page is the shown page and carries neither the parked nor the hidden class and that the authors page carries hidden and that the books page controller is the activated one then repeat with a COMMIT and assert the mirror image | TWO mutants. NATURAL-a the hold release infers the landed page from the first non-offscreen page instead of from the landed descriptor which leaves the destination shown after an abort. NATURAL-b the landed descriptor is read before the screen is applied so the abort reconciles against the pre-abort screen. expected killing cell for BOTH is LANDEDPAGESHOWS | integration app harness abort and commit paths
+LANDEDPAGESHOWS | the page left showing when a gesture ends is the page for the screen the gesture LANDED on for both a commit and an abort and it is decided from that landed screen rather than inferred from which page is currently visible AND a gesture that lands on no browse page at all leaves browse page state and controller activation exactly as HEAD leaves them | integration boot the app harness and swipe books to authors and ABORT and advance past the settle and finalize and assert the books page is the shown page and carries neither the parked nor the hidden class and that the authors page carries hidden and that the books page controller is the activated one then repeat with a COMMIT and assert the mirror image and SEPARATELY drive a browse to home gesture through both an abort and a commit and assert for each that no browse page carries parked or hidden that differs from HEAD and that the controller activation call count for the started-from page equals the count HEAD produces on the same gesture | THREE mutants. NATURAL-a the hold release infers the landed page from the first non-offscreen page instead of from the landed descriptor which leaves the destination shown after an abort. NATURAL-b the landed descriptor is read before the screen is applied so the abort reconciles against the pre-abort screen. NATURAL-c a landed descriptor that names no cached page is routed through the landed lookup anyway so no page is reconciled and the one activation the gesture gets is skipped on browse to home which reddens the activation call count. expected killing cell for ALL THREE is LANDEDPAGESHOWS | integration app harness abort and commit paths
 BROWSESURFACE | the custom scroll indicator recognises a browse page as a supported scroll surface and the native scrollbar suppression covers it | unit call the scrollbar surfaceKind helper with a browsepage element and assert it returns a supported kind rather than null and separately read the shipped css and assert the native-scrollbar suppression selector list covers the browsepage class | TWO mutants. NATURAL-a the browsepage is left out of the supported set so surfaceKind returns null and the indicator removes itself on browse. NATURAL-b the browsepage is left out of the native-scrollbar suppression selector so a native scrollbar returns. expected killing cell for BOTH is BROWSESURFACE | unit
 NPPILLIDS | the now playing pill decoration still strips ids from its clone after the ghost builder is deleted | unit call the pill decoration builder against a fake env whose pill carries a descendant with an id and assert the returned clone carries no id | NATURAL delete the id-strip line inside the pill builder which is the second occurrence of the exact text the deletion list targets inside the ghost builder expected killing cell NPPILLIDS | unit construction seam against a fake env
 NOGHOSTATALL | after stage 2 no transition builds an owned pane and the Construction return carries no capture field at all | unit call buildConstruction against a fake env over all eight structural cases and assert no mover carries ownership owned-pane and that the returned object has no capture key and that no node with the retired ghost class was appended to the fake document | NATURAL re-add the app-ghost branch for browse to browse so a pane is built and a capture is returned which reddens all three assertions expected killing cell NOGHOSTATALL | unit construction seam against a fake env
@@ -1019,7 +1065,9 @@ ABORTNORENDER | an aborted swipe never re-renders its source screen because the 
 NOAPPCLONE | no first-party script clones an element that hosts a view and no temporary allowance for such a clone remains registered | gate scan every first-party js file excluding the vendored bundle for a cloneNode call whose receiver resolves to a view host or the app container per the resolution rules in section 16 and fail naming the file and line and assert the registered exception list holds exactly the now-playing pill entry | ADDITIVE inject a cloneNode call on a queryselector for the app container into an existing first-party file so the derived set gains an unregistered site and the gate reddens and separately inject one on the navbar pill selector and assert the registered exception does NOT redden expected killing cell NOAPPCLONE | gate source scan over first-party js
 ```
 
-**Sixteen cells, twenty-nine mutants.** Every cell asserts a **source fact, a class-state fact, a
+**Sixteen cells, twenty-nine mutants** — counting `NOAPPCLONE`'s two injections separately. (This fold
+adds `LANDEDPAGESHOWS`'s third mutant; the block carried twenty-eight before it, so the previous figure
+of twenty-nine was one high. Recounted here rather than incremented.) Every cell asserts a **source fact, a class-state fact, a
 call-count fact, a DOM-identity fact or a written-property fact** — never a rendered geometry. That is
 deliberate: jsdom has no layout, no paint, no font boosting and no scroll anchoring, so a CI cell
 asserting the alignment, the reflow, the reveal jump or the containing-block flip **could not fail** and
@@ -1036,7 +1084,31 @@ resolvable mover host *generates a box*, which `#browse` does; `NOGHOSTATALL` as
 carries `owned-pane` and that the return has no `capture` key, both of which are true of a construction
 whose two movers are the same node. Both are **green on the defective construction**. A cell that can
 only fail on the defect had to be added, and DOM identity is decidable in jsdom, so it is a unit cell
-rather than a device row — the filmstrip it protects is still device-owed (R7).
+rather than a device row — the filmstrip it protects is still device-owed (R7). **`MOVERSDISTINCT`'s
+third mutant is the one its own layer cannot reach**, and the layer field says so: the defective
+`'browse-page'` branch lives in the app-side `env` literal, which no fake-env fixture executes — every
+construction-seam fixture in the suite hand-writes its env. That half runs at the app-harness layer,
+where `test/swipe-stage5-wiring.test.js` already drives the real `start()` for the stated reason that
+"the action-wiring seam the recipe (fake-env) layer cannot reach" needs a harness. A mutant registered
+against a fixture that cannot execute it is a mutant that survives the sweep, which costs the builder a
+round at step 9.
+
+**`LANDEDPAGESHOWS`'s COMMIT half is load-bearing, not symmetry — do not simplify it away.** The two
+halves kill different mutants and only one of them kills NATURAL-b. An abort mutates neither `navStack`
+nor `fwdStack`, so `currentDesc()` returns the identical descriptor before and after `applyScreen` and
+a descriptor read too early is **invisible on the abort**. The commit is what kills it: its stack
+mutation sits at `js/app.js:817-820`, *ahead* of `applyScreen`, so a too-early read yields the source
+screen and the mirror-image assertion reddens. The abort half kills NATURAL-a (which is SF2) and the
+commit half kills NATURAL-b; neither is redundant with the other.
+
+**`MOVERHASBOX`'s invariant is narrowed to the id-resolved hosts, deliberately.** Stage 2 adds a fourth
+resolution path — `Browse.pageElFor` behind the two `'browse-page'` hosts — that returns an element with
+**no id**, so a set derived from ids stops being the complete mover set in the same commit that makes
+`.browsepage` resolvable. The cell's stated invariant is narrowed to what its derivation actually
+covers and `PAGEISVIEW` is named as the page's cover: it pins the base rule's `position: absolute` and
+`inset: 0` textually, so a change that made a page boxless reddens there. A cell whose stated invariant
+is wider than its derivation is the same shape as a cell that is green on the defect it appears to
+cover, one row up.
 
 **Two cells earn a note on why they are structural rather than behavioural.** `MOVERHASBOX` and
 `PARKBOXEQUAL` both assert properties of CSS *text*, because the behaviour they protect (a transform
@@ -1427,6 +1499,53 @@ inference — `endHold`'s `stillShown = activeEntry()` — which is correct toda
 `browse→browse` re-renders. `LANDEDPAGESHOWS` is the cell, with a mutant on each half (inference
 instead of landed descriptor; landed descriptor read too early), and R7 carries the device half.
 
+### Round 3 — `Claude/Charpy/PLAN-swipe-declone-stage2-charpy-r3.md`
+
+**The class of the failure, named — and this is its fourth instance.** *A change to a SHARED function
+or value must be specified for **every** caller and reader it already has, not only for the new one that
+motivated the change.* The three prior instances are the same shape: the CSS/JavaScript half split
+(F11/F12 — the CSS answered what an element IS and left every resolver describing the old one),
+`abortRender`'s two jobs (SF2 — deleting it for the job the stage makes unnecessary took the second job
+with it), and the `finPlan` reader list (§12 item 15a — a deletion scoped to one of five readers). F19
+is the same defect walked from the other end: the fold's own addition, an argument on a function whose
+reach is four shipped transitions wider than the defect that sent it there. The durable defence is not
+a wider sweep — it is that a plan naming a shared function states its behaviour over the whole domain of
+its argument, which §5.3.6 now does.
+
+**F19 — Structural. `Browse.endHold` gains an argument on a path that runs for every gesture, and the
+fold specified it only for a browse landing. RESOLVED by defining the whole domain.** §5.3.6 gains the
+invariant — `endHold` is defined for every value `currentDesc()` can return, and a landing that names no
+cached browse page leaves browse page state and controller activation exactly as HEAD leaves them — plus
+the recommended construction: a non-throwing `keyOf`/`pageCache` probe, with `Browse.pageElFor`
+explicitly off that path so the wedging throw inside the finalize `finally` is closed by construction
+rather than by a remembered guard. `LANDEDPAGESHOWS` gains the `browse→home` abort-and-commit half and
+a third mutant that reddens on the silent reading (activation dropped on a shipped transition). Both
+halves are class-state and call-count assertions, so **nothing new becomes device-owed**; step 10b stays
+the backstop. D6's *Landing* clause (§5) and §4's MOVES line are qualified to match, so the invariant is
+not stated as a universal anywhere in the plan while §5.3.6 defines an exception to it.
+
+**F20 — Weak. `MOVERSDISTINCT`'s third mutant sits at a layer its fake-env fixture cannot reach.
+RESOLVED by moving the assertion, not the mutant.** The defective branch lives in the app-side `env`
+literal, which no construction-seam fixture executes. That assertion moves to the app-harness layer and
+the cell's layer field records the split; §14 carries the reason.
+
+**F21 — Weak. §9 item 1's new justification is false under this plan's own construction. CORRECTED.**
+`env.sourceEl('browse-page', v)` resolves through a descriptor-keyed cache lookup that is independent of
+`.parked`, `.hidden` and `activeEntry()`, so resolving after the render would return the identical node.
+The ordering **requirement** is retained unchanged; only its ground is restated — the source page must
+still be in the cache, which `evictLRU` guarantees. The wrong reason is corrected in place rather than
+dropped, because it taught that source resolution depends on visibility, which is the inference §5.3.6
+removes. §5.3.6's sibling sentence is corrected to match.
+
+**F22 — Weak. `MOVERHASBOX`'s id-derived host set no longer covers `.browsepage`. RESOLVED by narrowing
+the stated invariant.** The cell claims completeness over a set derived from ids, and Stage 2 adds an
+idless resolution path. The invariant is narrowed to the id-resolved hosts and `PAGEISVIEW` is named as
+the page's cover. No coverage hole follows and the mutants are unaffected.
+
+**The commit half of `LANDEDPAGESHOWS` is recorded as load-bearing** (§14), because it looks like
+symmetry and is not: an abort mutates neither nav stack, so the read-too-early mutant is invisible on it
+and only the commit kills it.
+
 ## 19. Claims verified against source in this rework
 
 Every `file:line`, mechanism and count this revision **newly asserts** was read against HEAD `b9b0682`
@@ -1524,3 +1643,29 @@ says. Two rounds of review found this class after the plan asserted completeness
 statement is a confidence gradient, not a clearance: the sweep enumerated by mechanism (resolve, read,
 restore) rather than by inspiration, and the two structural defences it produced — D6's two halves,
 each with a cell that fails on the defect — are what would catch the next instance, not the sweep.
+
+### 19.2 Claims verified against source in the round-3 fold
+
+Every claim this fold **newly asserts** was read against HEAD `ddb28c7` before handback, per the
+standing step-1a obligation. This fold is small, and so is its list.
+
+| Claim | How it was verified | Result |
+|---|---|---|
+| `takeRowHold()` is unconditional in `start()` | read `js/app.js:535` — no guard on the transition kind | confirmed — the hold is taken for every gesture |
+| `beginHold` sets `holdRows = true` unconditionally | read `js/browse.js:155-156` | confirmed |
+| `dropRowHold` calls `Browse.endHold` whenever `session.hold` is truthy, and is the only caller | read `js/app.js:360-363`, and grepped `Browse.endHold` across `js/app.js` — the one call site | confirmed |
+| `dropRowHold`'s two call sites are the finalize `finally` and the hard reset | read `js/app.js:1299` and `:461` | confirmed — so `endHold` runs on all four Stage-1 transitions |
+| A throw in `dropRowHold` runs past the wedge guard | read `js/app.js:1298-1301` — `dropRowHold(); endOwnership();` precede `if (!ok) finishing = false;` inside the same `finally` | confirmed — F19's expensive reading |
+| `endHold` infers both the park target and the activation target from `activeEntry()` | read `js/browse.js:179` and `:185`, with `offscreen`/`activeEntry` at `:207-208` | confirmed |
+| `keyOf` returns `d.v` for any descriptor that is not `authorBooks` or `files`, so a non-browse descriptor is a cache miss | read `js/browse.js:22-23` against `pageCache` at `:19` | confirmed — the miss branch is reachable by a plain lookup, with no throwing accessor |
+| `showPage` never runs on a gesture that leaves browse by transform, so no page is parked | read `beginHold`'s comment at `js/browse.js:157-161` and `endHold`'s at `:170-176` | confirmed — the park loop is empty and `activate()` is a no-op on that path |
+| The commit's nav-stack mutation sits ahead of the landed-descriptor read | read `js/app.js:817-820` (the `commit` branch's three stack writes) and `:822` (`const dest = currentDesc()`) | confirmed — this is why the commit half kills the read-too-early mutant and the abort half cannot |
+| An abort mutates neither `navStack` nor `fwdStack` | read the same block — every stack write is inside `if (commit)` | confirmed — `currentDesc()` is identical before and after `applyScreen` on the abort |
+| Every construction-seam fixture hand-writes its `env`, so no fake-env cell executes the app-side literal | read `test/swipe-construction.test.js:63`, `:73` (`mkEnv`) and `test/browse-decouple.test.js:35`, `:45` (`mkGhostEnv`) | confirmed — F20's basis |
+| `test/swipe-stage5-wiring.test.js` drives the real `start()` through the app harness | read its header (`test/swipe-stage5-wiring.test.js:1-14`), which states the fake-env recipe layer cannot reach the wiring seam | confirmed — the layer F20's third mutant moves to |
+| The matrix carried twenty-eight mutants before this fold, not twenty-nine | counted every `NATURAL`, `NATURAL-a/b/c` and `ADDITIVE` injection in the `vitruvius-coverage` block | confirmed — the figure was one high; recounted rather than incremented |
+
+**What this list does not prove.** That `LANDEDPAGESHOWS`'s new half kills the mutant it names — that is
+step 8's, and the mutant is written to be killed by a call-count assertion precisely so the question is
+decidable without a device. Nor does it prove the non-browse landing has no third reading; it proves
+that the two readings the review found are both closed, one by construction and one by a cell.
