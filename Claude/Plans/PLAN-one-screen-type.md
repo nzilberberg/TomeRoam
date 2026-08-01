@@ -36,12 +36,26 @@ first review, so one document-wide status line cannot be true; each stage carrie
 |---|---|---|
 | A1, A2, B | `Claude/Charpy/PLAN-one-screen-type-charpy.md`, commit `e979a41`, 2026-07-30 — **TEMPER**, findings folded (§6 migration set completed; the `browseWillHide` edges enumerated; `PEERFINALIZE` added with its binding ordering; §16.4's strike re-aimed) | A1 **SHIPPED** `c4cfd7e`, build `2026-07-30.280`, device-confirmed. A2 and B not built. |
 | A1-fix, A1-fix-r2 | No separate plan-review. Gated instead by the adversary: `Claude/Loki/STRIKE-one-screen-type.md` **KILLED** the A1-fix predicate; r2 (§5.4) is the replacement. | Both **SHIPPED** — `.282` and `.284`. **Device gate step 6f is OWED.** |
-| **A1b** | `Claude/Charpy/PLAN-one-screen-type-A1b-charpy.md`, commit `35f0005`, 2026-07-31 — **TEMPER**, six Structural findings (F1–F6) | **Findings folded 2026-07-31, this revision** (fold summary below). **Re-review OWED before build.** |
+| **A1b** | Round 1: `Claude/Charpy/PLAN-one-screen-type-A1b-charpy.md`, commit `35f0005`, 2026-07-31 — **TEMPER**, six Structural findings (F1–F6), **all six verified resolved at round 2**. Round 2 (the verdict of record): `Claude/Charpy/PLAN-one-screen-type-A1b-charpy-r2.md`, commit `607d8b9`, 2026-07-31 — **TEMPER**, three new Structural (F14–F16) and six Weak/Note (F17–F22) | **Round-2 findings folded 2026-07-31, this revision** (fold summary below). **Re-review OWED before build.** |
 
-**A1b cannot be built on a TEMPER, and that is mechanized.** `Claude/Campaigns/one-screen-type-a1b.json`
-declares a `plan-review` gate whose `acceptVerdict` is `FORGE` alone, and
-`tools/hooks/stage-has-manifest-check.mjs` blocks a build artifact for a stage whose manifest gate is
-unmet. Step 1 of §13 is therefore **not discharged for A1b** and step 8 does not open until it is.
+**A1b cannot be built on a TEMPER, and that is mechanized — and the mechanism itself was defective
+until 2026-07-31.** `Claude/Campaigns/one-screen-type-a1b.json` declares a `plan-review` gate whose
+`acceptVerdict` is `FORGE` alone, and `tools/hooks/stage-has-manifest-check.mjs` blocks a build
+artifact for a stage whose manifest gate is unmet. Step 1 of §13 is therefore **not discharged for
+A1b** and step 8 does not open until it is.
+
+**The gate was unclearable and is now clearable — recorded because the plan cites it as a safety
+argument** (round-2 F14). Its `verdictArtifactGlob` was the literal filename
+`Claude/Charpy/PLAN-one-screen-type-A1b-charpy.md`, with no wildcard, so it could never match a
+`-rN` re-review artifact and would have read round 1's TEMPER whatever verdict a later round filed.
+**Closed by tooling, not by plan text, in two commits:** `d9b3899` makes the highest `-rN` round the
+verdict of record when a glob matches several rounds (`artifactsOfRecord`,
+`tools/campaign/stage-gate-check.mjs:108-113` — an unsuffixed artifact alongside rounds is the
+superseded round-1 original), and `3c89349` widens this manifest's glob to
+`Claude/Charpy/PLAN-one-screen-type-A1b-charpy*.md`. **Verified by execution at HEAD:** the glob now
+matches both rounds, `artifactsOfRecord` selects `…-charpy-r2.md` alone, and the gate reports the
+`plan-review` row against round 2's TEMPER. It fails today because round 2 *is* a TEMPER, which is
+the gate working. **No plan step and no §13 owner discharges F14 — it is already discharged.**
 
 **Why the per-stage split exists.** §5.3 (Stage A1b) was added in commit `8e9b4b6`, *after* the review
 at `e979a41`, while the header still read "PLAN_READY — reviewed (TEMPER)". A reader arriving at step
@@ -49,16 +63,33 @@ at `e979a41`, while the header still read "PLAN_READY — reviewed (TEMPER)". A 
 exists; this table is the same fact in the record, and it is the reason the record is kept per stage
 rather than per document.
 
-**What the A1b fold changed — the answer a reader needs first: the stage's DESIGN did not move.**
-A1b's product change is what it was: delete the two `if (!npOpen)` guards in `setView`
+**What the A1b folds changed — the answer a reader needs first: the stage's DESIGN did not move, in
+either round.** A1b's product change is what it was: delete the two `if (!npOpen)` guards in `setView`
 (`js/nav.js:51` and `js/nav.js:78`). No guard was added, no ordering changed, no cell's subject moved
-because of the fold. What changed is the plan's **justification** (F2, F3 — a central premise was
-false and is replaced by the supersession that actually licenses the change), its **enumerations**
-(F4 five `browseWillHide` edges, F6 the casualty census), its **deletion list** (F5's three shipped
-comment sites, plus a fourth the probe's supersession surfaced — no behaviour in any of them), and its
-**honest cost** (F10 — a third device-owed hazard, on the abort). **The commit's file set grows by
-four comment scrubs across three files** (`js/nav.js`, `js/app.js`, `css/app.css`); its behaviour does
-not.
+because of either fold.
+
+**Round 1 (six Structural findings, all verified resolved at round 2).** What changed is the plan's
+**justification** (F2, F3 — a central premise was false and is replaced by the supersession that
+actually licenses the change), its **enumerations** (F4 five `browseWillHide` edges, F6 the casualty
+census), its **deletion list** (F5's three shipped comment sites, plus a fourth the probe's
+supersession surfaced — no behaviour in any of them), and its **honest cost** (F10 — a third
+device-owed hazard, on the abort). **The commit's file set grows by four comment scrubs across three
+files** (`js/nav.js`, `js/app.js`, `css/app.css`); its behaviour does not.
+
+**Round 2 (three Structural, six Weak/Note) changed no behaviour, no cell and no sequencing either.**
+F14 is discharged by tooling (above), not by this plan. F15 corrects the *grounds* of a ruling whose
+outcome stands — edge 5 stays deliberately uncovered and no cell is owed. F16 corrects the *stated
+mechanism* of a device-owed hazard the user is asked to read, and reduces the cost A1b is charged
+with. F17–F22 are citation and section-order corrections. **Round 2 removed a claim; it added no
+work.**
+
+**⚠️ The pattern round 2 named, and the reason §13 gained step 1a.** All three of round 2's new
+Structural findings sit in text the *round-1 fold* newly wrote or newly certified: F15's second
+ground, F16's cost claim (transcribed faithfully from a round-1 finding that was itself wrong), and
+F18's citation inside the section recording a verification the reviewer had supplied correctly.
+**A fold is where new false sentences enter**, because folded text is written under the belief that
+the review already established it and is therefore not derived against source the way original text
+is. §13 step 1a makes that derivation a step with an owner.
 
 **Stage A1 is SHIPPED** — commit `c4cfd7e`, build `2026-07-30.280`, CI green, device-confirmed
 ("Options screens seem to work as one would expect"). The reported two-screens-through-each-other
@@ -150,6 +181,7 @@ makes Now Playing park the page beneath it.** A2 removes the now-dead stacking. 
 |---|---|---|
 | `Claude/Decisions/DecisionLog.md:1147-1167` — "ONE SCREEN TYPE, with Now Playing the deliberate exception", 2026-07-30, USER DECISION | **Governing** | Highest authority. It settles both the approach and the exception. This plan chooses only the sequence and the mechanism. **Two of its clauses bind this plan directly.** `:1162-1163` incorporates the probe's load-bearing set **by reference**, so retiring a member of that set is a change to what the decision rests on and must be visible (F2 — see the supersession row below). `:1167` states *"do not cite its background as its distinguishing property"*, which this plan violated in three places and no longer does (F3). **The entry is NOT rewritten by this plan** — amending a ratified USER DECISION is the user's call. |
 | `Claude/Decisions/DecisionLog.md:1195-1213` — "A BY-REFERENCE ITEM OF THE NOW-PLAYING DECISION IS SUPERSEDED", 2026-07-31, records pointer | **Governing, and the correct citation for the superseded parts** | **AGREE, and this is the record to cite rather than the ratified entry.** It records that one member of the by-reference set is retired (4.2) and one added (1.9), and it names two sentences of the ratified entry as now stale — `:1157-1158`'s "the background is SHARED with `#options` and all five subs" (false at HEAD since Stage A1) and `:1162`'s "Thirteen" (the wrong number). **Where this plan needs either fact it cites this entry, never the stale sentences.** The three-co-required-properties derivation at `:1158-1161` holds unchanged at HEAD and is cited directly. |
+| `Claude/Campaigns/one-screen-type-a1b.json` — the A1b gate manifest | Live mechanical gate, cited by this plan as the reason A1b cannot be built on a TEMPER | **AGREE at HEAD, after a defect this plan's own citation of it exposed.** Round-2 F14 found the `plan-review` gate's `verdictArtifactGlob` was a literal filename with no wildcard, so it could not match a `-rN` re-review and would read round 1's verdict forever. **Resolved by tooling in `d9b3899` (highest `-rN` becomes the verdict of record) and `3c89349` (glob widened to `…-charpy*.md`), and verified by executing the gate.** No plan text discharges it; the Status section carries the record. |
 | `Claude/Linnaeus/PROBE-np-uniqueness.md` §7.3, §9.2 | Derived fact sheet, gates this design | **AGREE.** §7.3 is the load-bearing fact: an ordinary two-bar-inset screen at z25/z26 could not cover the topbar or the transport for two independent reasons, so removing the background and the z-index from the settings screens cannot change what covers those bars — the settings screens never covered them. §9.2 confirms both reasons hold unchanged at HEAD. |
 | Same record, §4.2 (`:115-117`) and its §8 entry | Derived fact, **ratified by reference** | **CONFLICT, resolved by dated supersession — not by assertion.** §4.2 marked the settings-loop guard (`js/nav.js:78` at HEAD) **load-bearing**, and §8 carried it into the set `DecisionLog:1162-1163` incorporates. That is the guard §12 item 26 deletes, so an earlier draft's claim that the exemption "is not on the probe's list" was **false**. Resolved at the record: **probe §9.1 retires 4.2 to `context`**, on the ground that `hidden` is added to `#nowplaying` in exactly one place (`js/nav.js:81`) and the same synchronous `setView` body clears `hidden` from the destination three lines earlier (`js/nav.js:78-80`) — so the destination is mounted at the instant NP is hidden **on every path**, and the mark's stated reason is refuted at its root. **The bound is narrow and this plan states it narrowly:** the claim was true for the *park* guard (`js/nav.js:51`, §12 item 25 — probe §4.1, marked **context**) and false for the settings-loop guard. |
 | Same record, §1.9 (`:245`, superseded by §9.2) | Derived fact | **AGREE at HEAD, after a mark change in the opposite direction.** 1.9 (NP's background) was `context / not a difference — shared with six screens`, correct when derived at `288504e`. **Stage A1 removed the six shared declarations**, so probe §9.2 **promotes 1.9 to load-bearing**: at HEAD `--page-bg` is declared by `body::before` (`css/app.css:44`) and `.nowplaying` (`css/app.css:510`) alone, pinned by `test/page-bg-single-painter.test.js:28`. **The distinction this plan must get exactly right:** the background IS load-bearing, and it is STILL not NP's *distinguishing* property (`DecisionLog:1167`). It is one of **three co-required properties for covering the bars** (`DecisionLog:1158-1161`), which is a different claim. S4 states it that way. |
@@ -179,8 +211,8 @@ makes Now Playing park the page beneath it.** A2 removes the now-dead stacking. 
   `sourceHost`/`destinationHost` value domains and the structural-case set of the frozen spec
   `test/fixtures/swipe-plan-spec.mjs`. §6.
 - **state_transfer: false** — no stored value moves owner. Each settings screen keeps its own
-  `scrollTop` on its own element, exactly as today; the entry-time reset at `js/nav.js:147` is
-  unchanged.
+  `scrollTop` on its own element, exactly as today; the entry-time reset at `js/nav.js:148`
+  (`if (resetScroll) $(desc.v).scrollTop = 0;`) is unchanged.
 - **async_change: false** — no asynchronous surface changes shape. The settle rAF, the
   transitionend/340ms finalize race and the reveal hold are untouched. `overlayFilmstrip`'s
   rAF + 340ms safety net (`js/nav.js:186-193`) is unchanged in timing and structure.
@@ -192,8 +224,10 @@ makes Now Playing park the page beneath it.** A2 removes the now-dead stacking. 
   carried three different numbers, which is what let the fifth edge stay unnamed. Three come from A1
   (button-nav browse→settings; the abort of a `settings→browse` gesture; the `NP→files` abort residue),
   two from A1b (opening NP while Browse is showing; supersession while NP is the current screen), and
-  A1b **relocates** the third rather than adding a fourth. The settings screens' mounted set shrinks
-  from two to one. §10.
+  **A1b relocates the third rather than adding an edge of its own on that path** — the relocation
+  moves *when* edge 3 fires, it does not raise the count. **The five are enumerated in §9**, which is
+  the canonical list this bullet's total is taken from. The settings screens'
+  mounted set shrinks from two to one. §10.
 
 ## 3. How `.browsepage` peers actually work — derived from source
 
@@ -239,7 +273,7 @@ would move with it during a swipe; that is the defect
 
 **3.5 — `Browse.deactivate()` and `d.browseWillHide` are the lifecycle seam, not the visibility
 mechanism.** `js/nav.js:60-65` calls `d.browseWillHide()` — wired to `Browse.deactivate()` at
-`js/app.js:2870` — on the shown→hidden edge only, **before** `display: none` lands, because a hidden
+`js/app.js:2890` — on the shown→hidden edge only, **before** `display: none` lands, because a hidden
 box measures zero and the virtual controller captures its scroll anchor from real geometry
 (`js/browse.js:320-332`). Re-entry activation is deliberately **not** driven from there; it is owned
 by `showPage()` (`js/browse.js:304-318`), which activates the exact page being rendered.
@@ -299,7 +333,7 @@ the way into a settings screen, to keep its decoded covers warm — the consumer
 browse→settings→browse round trip on a long list, and no stage introduces it because the identical
 cost already ships on browse→home (`js/nav.js:74`). Named in §15 R-B. Restoring a settings screen's
 scroll position on re-entry the way a `.browsepage` does (`js/browse.js:489`) instead of resetting it
-(`js/nav.js:147`) — the decision does not ask for it and no consumer needs it; deliberately out of
+(`js/nav.js:148`) — the decision does not ask for it and no consumer needs it; deliberately out of
 scope. Exporting one screen registry from `Nav` (already named as owed in
 `docs/swipe-model.generated.txt:19-29`) — Stage B makes the case for it stronger but does not build
 it.
@@ -340,8 +374,10 @@ correctly is part of this invariant:
 
 **The arithmetic, spelled out, because "NP keeps all 24" and "A1b deletes 4.2" only look
 contradictory.** The ratified set had 24 members **including 4.2 and excluding 1.9**. The set at HEAD
-has 24 members **excluding 4.2 and including 1.9**. **23 members are common to both and are untouched
-by every stage.** A1b removes 4.2 — which at HEAD is a `context` item, not a load-bearing one, because
+has 24 members **excluding 4.2 and including 1.9**. **23 members are common to both sets — that is the
+intersection — and all 24 of the HEAD set are untouched by every stage**, 1.9 (the background)
+included, which S4 protects most explicitly of all. The number that is 23 is a fact about the overlap,
+not about what moves. A1b removes 4.2 — which at HEAD is a `context` item, not a load-bearing one, because
 the supersession has already retired it. So both statements are true at once: NP keeps every
 load-bearing difference the probe itemises **at HEAD**, and A1b retires an item the decision ratified
 **as of 2026-07-30**. The second sentence is the one the user is owed, and this plan does not hide it
@@ -455,8 +491,8 @@ finalize window, which is what the A2 device gate should be looking at.
 overlap: a filmstrip moves both panes with one shared delta and a fixed base separation, measured
 edge-to-edge with zero gap or overlap for the entire live drag (`PLAN-swipe-declone.md` §15 R2,
 real-engine measured, and the basis Stage 1 shipped on). At finalize, `resetSwipeStyles` clears the
-transform and `setView` applies the park inside one synchronous `applyScreen` call (`js/nav.js:131`
-then `:140`/`:145`), so no frame is painted between the two states. That is a synchronous-call
+transform and `setView` applies the park inside one synchronous `applyScreen` call (`js/nav.js:132`
+then `:141`/`:146`), so no frame is painted between the two states. That is a synchronous-call
 argument, not a compositor observation — **so A2 keeps its own shippable stage, its own device gate
 and an isolated fallback (§15 R-F)**, even though the DOM-order argument above already de-risks it.
 The topbar (30), transport (35) and navbar (40) all still paint above: `auto` is below every one of
@@ -670,7 +706,7 @@ rather than just the fix: the plan reasoned from a reading toward a deletion, an
 caught it — which is why §5.3.5 asked for a proof rather than an opinion in the first place.
 
 **A1b does, however, retire the scenario the sweep's own comment names — a comment scrub, not a
-behaviour change.** `js/app.js:494-496` justifies the sweep with *"NP opened from Options → an
+behaviour change.** `js/app.js:494-497` justifies the sweep with *"NP opened from Options → an
 NP→chapter-list swipe would show it through"*, and `PROBE-np-uniqueness.md` §9.1.g records that this
 consumer exists partly to compensate for the state the settings-loop guard retains. After A1b,
 opening NP from Options **hides** `#options`, so that stated scenario can no longer arise by that
@@ -688,7 +724,7 @@ source at the A1b review and both hold.
   && session.live` (`js/app.js:250`) is read at `js/nav.js:195` inside `reconcile`, and **its truth
   boundaries are the session's, not the drag's**: `session = d` at `js/app.js:486`, `.live` set in
   `start()` at `js/app.js:531`, `session` untouched by `end()`'s `const cur = d; d = null`, nulled only
-  by `sessionDone` (`js/app.js:250`) from finalize or the reveal drop. **The predicate is orthogonal to
+  by `sessionDone` (`js/app.js:257`) from finalize or the reveal drop. **The predicate is orthogonal to
   *which* screen `currentDesc()` names**, so widening what `applyScreen` does for `nowplaying` cannot
   escape it. A1b needs no additional guard. *(This does not relax the step-6f sequencing constraint —
   6f is about whether the shipped predicate reads clean **on device**, which source cannot answer.)*
@@ -761,7 +797,7 @@ are exactly the boundaries the guard needs:
 | Finalize / reveal drop | `sessionDone(cur)` (`js/app.js:1262`, `:893`) | **null** | — |
 | Supersession hard reset | `session = null` (`js/app.js:456`), then re-armed | null → set | — |
 
-`sessionDone` is `if (session === s) session = null` (`js/app.js:250`). Nothing sets `.live` back to
+`sessionDone` is `if (session === s) session = null` (`js/app.js:257`). Nothing sets `.live` back to
 false, so it stays true on the session object for the whole settle phase.
 
 **Therefore the predicate is `!!session && session.live`** — and it ends exactly when ownership ends,
@@ -919,6 +955,19 @@ fixture's own consumers, and two of them were missing from the first draft.
    A1 has since registered six more mutants. **Stage A1b has its own casualties, listed in §6a.** The
    one `SETTINGS_SUBS` anchor (`tools/mutate.mjs:498`) pins `showAppView`'s sweep line, which §4 and
    §5.3.5 retain.
+6. `test/nav.test.js:105` — the `'options'`/`'general'` terms only; the `'nowplaying'` term on that
+   line and the whole of line 106 stay true after Stage B.
+
+**Verification of the set is by execution, not by inspection:** the full `npm test` battery must be
+green in the same commit as the Stage-B production edit, with `test/swipe-declone-stage1.test.js`'s
+fixture-sanity assertion as the specific witness. No new cell is owed for F1 — the existing suite is
+the oracle; the finding was that the plan must list the files it edits.
+
+**Not implicated:** `classifyTransition`, `constructionPlanFor` and `finalizationPlanFor` keep every
+key they have — no exact-key contract shape changes, only value domains — so
+`test/contract-function-gate.test.js` needs no edit. The generated model's four pinned source regions
+(`tools/gen-swipe-model.mjs:57, :61, :65, :69`) fingerprint `js/app.js` regions no stage edits, so
+regeneration churns no pin and no manual re-verification of a pinned constant is owed.
 
 ## 6a. Stage A1b's mutant and cell casualties — expected, gated, and listed
 
@@ -943,19 +992,6 @@ working out whether A1b was supposed to do that.
 **This is a real correction to the plan, not a note.** §13 step 8's "Nothing else" was wrong about
 tests and tooling; it remains accurate about *product* source, which is what it was written to bound.
 Step 8 now says so explicitly.
-6. `test/nav.test.js:105` — the `'options'`/`'general'` terms only; the `'nowplaying'` term on that
-   line and the whole of line 106 stay true after Stage B.
-
-**Verification of the set is by execution, not by inspection:** the full `npm test` battery must be
-green in the same commit as the Stage-B production edit, with `test/swipe-declone-stage1.test.js`'s
-fixture-sanity assertion as the specific witness. No new cell is owed for F1 — the existing suite is
-the oracle; the finding was that the plan must list the files it edits.
-
-**Not implicated:** `classifyTransition`, `constructionPlanFor` and `finalizationPlanFor` keep every
-key they have — no exact-key contract shape changes, only value domains — so
-`test/contract-function-gate.test.js` needs no edit. The generated model's four pinned source regions
-(`tools/gen-swipe-model.mjs:57, :61, :65, :69`) fingerprint `js/app.js` regions no stage edits, so
-regeneration churns no pin and no manual re-verification of a pinned constant is owed.
 
 ## 7. Value and ownership ledger
 
@@ -965,7 +1001,7 @@ settings screen occlusion | behavior | inout | the setView park-and-hide swap | 
 settings screen exclusivity | behavior | out | the single setView visibility loop over options and every sub | the hidden class on each of the six screen elements | Nav.setView | from screen entry to screen exit | ONEPAGE cell
 home parked state on entering a settings screen | behavior | inout | the narrowed setView park guard | the home element parked class | Nav.setView | from settings entry until a non-settings screen is applied | PEERPARK cell
 browse hidden state on entering a settings screen | behavior | inout | the narrowed setView park guard | the browse element hidden class | Nav.setView | from settings entry until browse is applied again | PEERPARK cell
-browse virtual controller anchor capture | behavior | out | the browseWillHide edge call in setView | Browse.deactivate which reads real geometry before display none lands | Nav.setView | one call per browse exit across all FIVE trigger edges enumerated in section 9 which is the single canonical count | PEERPARK second mutant for the button-nav edge and PEERFINALIZE for the two gesture-finalize edges and NPPARKS for the Now Playing entry edge with edge five recorded in section 9 as deliberately uncovered on the idempotence argument
+browse virtual controller anchor capture | behavior | out | the browseWillHide edge call in setView | Browse.deactivate which reads real geometry before display none lands | Nav.setView | one call per browse exit across all FIVE trigger edges enumerated in section 9 which is the single canonical count | PEERPARK second mutant for the button-nav edge and PEERFINALIZE for the two gesture-finalize edges and NPPARKS for the Now Playing entry edge with edge five recorded in section 9 as deliberately uncovered because it reaches the same setView body NPPARKS already drives
 settings screen mounted under Now Playing | behavior | inout | the retained npOpen guard | the settings element revealed when Now Playing closes | Nav.setView | from Now Playing entry to Now Playing exit | NPUNTOUCHED cell
 fromKind | identity | out | Swipe.kindOf | constructionPlanFor and finalizationPlanFor | Swipe.kindOf | per gesture | KINDPLAN cell
 toKind | identity | out | Swipe.kindOf | constructionPlanFor and finalizationPlanFor | Swipe.kindOf | per gesture | KINDPLAN cell
@@ -983,7 +1019,7 @@ a responsibility whose owner changes is exactly the thing that otherwise survive
 Ordering requirements that are **correctness**, not incidental:
 
 1. **The transform is cleared before the park is applied, at finalize.** `resetSwipeStyles`
-   (`js/nav.js:113-119`) already runs at the top of `applyScreen` (`js/nav.js:131`), ahead of
+   (`js/nav.js:114-120`) already runs at the top of `applyScreen` (`js/nav.js:132`), ahead of
    `setView`. Unchanged, and named because Stage A1 now makes `setView('options')` park `#home` on a
    path where it previously did not — a park applied while an inline `translateX` is still on the
    element would compose `translateX(-101vw)` with the gesture's residue.
@@ -1039,7 +1075,7 @@ or `matchMedia` call is added anywhere.
   `js/app.js:549` and `js/app.js:586`. **UNTOUCHED by every stage.** It is keyed to Now Playing, which S4 puts out
   of scope. No cell asserts it beyond NPUNTOUCHED's fixture sanity.
 - **`d.browseWillHide`** (`js/nav.js:60`) — the injected hook wired to `Browse.deactivate()`
-  (`js/app.js:2870`). **Not modified, but newly reached on FIVE edges, and this list is the plan's
+  (`js/app.js:2890`). **Not modified, but newly reached on FIVE edges, and this list is the plan's
   single canonical enumeration of them.**
 
   **⚠️ Three sections of this plan previously carried three different counts** — §7's ledger row said
@@ -1077,15 +1113,35 @@ or `matchMedia` call is added anywhere.
   reading — §14's `PEERFINALIZE` and `NPPARKS` are what prove it.
 
   **Edge 5 is deliberately uncovered, and the reason is recorded so step 16 reads it as a ruling.**
-  Two facts decide it. First, **the contract on edge 5 is byte-identical to edge 4's** — the same
-  `setView('nowplaying')` body, the same `js/nav.js:55` test, the same hook call with `#browse`
-  observed un-hidden — so `NPPARKS` already proves the *behaviour*; what edge 5 adds is only a second
-  *route* to it. Second, **an extra firing is harmless**: `Browse.deactivate()` is idempotent
-  (`js/browse.js:332` no-ops when `activeEntry()` or `_vctl` is absent). Driving a real supersession
-  through the harness to prove a route to an already-proven behaviour is cost without a defect class
-  behind it. **The residual, stated rather than hidden:** if `setView`'s NP path ever gains an effect
-  that is *not* idempotent, this edge stops being free and must gain a cell. That is the condition to
-  re-open it on.
+  **One fact decides it, and it is sufficient alone: the contract on edge 5 is byte-identical to
+  edge 4's** — the same `setView('nowplaying')` body, the same `js/nav.js:55` test, the same hook call
+  with `#browse` observed un-hidden. `applyScreen`'s preamble differs on this path
+  (`resetSwipeStyles` at `js/nav.js:132`, and edge 5 passes `keepGhosts: true` and a computed
+  `render`), and **none of it touches the park/hide block at `js/nav.js:51-69`**. So `NPPARKS` already
+  proves the *behaviour* edge 5 reaches; what edge 5 adds is a second *route* to it. Driving a real
+  supersession through the harness to prove a route to an already-proven behaviour is cost without a
+  defect class behind it.
+
+  **What this ruling does NOT rest on, stated because an earlier revision rested on it and it was
+  false.** It does not rest on an extra firing being harmless, on either of two counts. There is **no
+  extra firing to excuse**: `js/nav.js:55`'s shown→hidden test is itself the guard, so a second
+  `setView('nowplaying')` finds `#browse` already carrying `hidden` and does not fire — a duplicate is
+  unreachable by construction, not merely tolerable. And `js/browse.js:332`'s no-op **does not apply on
+  this edge's own reachability scenario**: `activeEntry()` (`js/browse.js:208-211`) returns the first
+  page that is neither `hidden` nor `parked` — a property of the *page*, not of `#browse` — and the
+  `NP→files` gesture that makes edge 5 reachable runs `Browse.render(desc)` on the same line that
+  un-hides `#browse` (`js/app.js:512`), which activates a page through `showPage()`. So `activeEntry()`
+  is truthy, `_vctl` is present, and the call reaches the real controller. **Where controller
+  idempotence is genuinely relied on anywhere in this plan, the citation is `js/virtuallist.js:251-262`
+  — its `if (state !== 'active' && state !== 'suspended') return;` state guard — which `setView` does
+  not own.**
+
+  **The re-open condition, aimed at the artifact that actually decides it.** Edge 5 stays uncovered
+  only while its `setView` body is the same body `NPPARKS` drives. **The moment edge 5's path acquires
+  an effect edge 4's path does not have** — a branch inside `setView` keyed on the supersession, a new
+  `applyScreen` option that reaches the park/hide block, a caller-specific hook — the byte-identity
+  ground is gone and this edge owes a cell. That is a change to `js/nav.js`'s NP path or to
+  `js/app.js:459`'s call shape, and it is what step 16 re-checks.
 - **`d.isSignedIn`** (`js/nav.js:93`) — gates the navbar's `hidden` toggle. **UNTOUCHED**; no stage
   reads or writes it.
 - **`d.updatePlayerUI`** (`js/nav.js:94`) — the trailing reconcile that runs after every `setView`,
@@ -1133,9 +1189,12 @@ or `matchMedia` call is added anywhere.
 - **Deactivates.** `Browse.deactivate()` gains trigger edges across A1 and A1b — **five in total, and
   §9 is the one place they are counted.** This bullet deliberately states no number of its own: an
   earlier draft said "four" here and then listed three, in a pre-A1b form, and that disagreement is
-  how the fifth edge stayed unnamed. Nothing owns a new handle: `deactivate()` is idempotent with
-  respect to an already-inactive controller (`js/browse.js:332` no-ops when `activeEntry()` or `_vctl`
-  is absent), and re-entry activation stays owned by `showPage()` (`js/browse.js:304-318`), which the
+  how the fifth edge stayed unnamed. Nothing owns a new handle: `Browse.deactivate()`
+  (`js/browse.js:332`) no-ops when there is no active *page* or no `_vctl` on it, and where the
+  controller is reached, **the idempotence with respect to an already-inactive controller is
+  `js/virtuallist.js:251-262`'s state guard** (`if (state !== 'active' && state !== 'suspended')
+  return;`) — one layer below `js/browse.js:332` and not owned by `setView`. Re-entry activation stays
+  owned by `showPage()` (`js/browse.js:304-318`), which the
   existing `renderBrowse` path already calls. **Three of the five occur on a gesture-finalize or
   gesture-supersession path**, which is why `PEERFINALIZE` exists: the narrowed guard runs at every
   finalize through `applyScreen`, and no cell drove it there before A1.
@@ -1392,13 +1451,22 @@ A1b retires. Comments only; no behaviour and no declaration changes.**
     Already false for Options at HEAD (Stage A1 shipped) and fully false after A1b. **Comment only:**
     the pull-to-refresh guard at `js/app.js:1349` reads
     `$('home').classList.contains('parked')` and keeps behaving correctly either way.
-36. **`js/app.js:494-496`** — the sweep's justifying comment, whose stated scenario is *"NP opened from
+36. **`js/app.js:494-497`** — the sweep's justifying comment, whose stated scenario is *"NP opened from
     Options → an NP→chapter-list swipe would show it through"*. After A1b, opening NP from Options
     **hides** `#options`, so that scenario cannot arise by that route. **The sweep itself is KEPT and
-    its line is not edited** (§5.3.5, determination KEEP) — the comment is rewritten to name the
-    `overlayFilmstrip` window, which is the case that actually keeps it alive and always was.
-    `PROBE-np-uniqueness.md` §9.1.g records the sweep as a consumer that exists partly to compensate
-    for the state item 26's guard retains.
+    its line (`:498`) is not edited** (§5.3.5, determination KEEP) — the comment is rewritten to name
+    the `overlayFilmstrip` window, which is the case that actually keeps it alive and always was.
+    **⚠️ The comment is FOUR lines, and only the first two are false.** `:494-495` carry the retired
+    "NP opened from Options" scenario; **`:496-497` are one sentence carrying the still-true exception
+    clause** that explains `d.from.v !== s` (*"But NOT the one that's the OUTGOING screen of THIS
+    swipe … there it's the mover that must slide out, so hiding it makes it vanish mid-drag"*).
+    Rewriting only `494-496` strands `:497` as a clause whose subject was just deleted. **The
+    invariant: no fragment of the retired sentence survives and no true clause is orphaned.** Either
+    span delivers it — replace `494-495` alone and leave the exception clause intact, or rewrite all
+    of `494-497` — and the choice is the builder's. `PROBE-np-uniqueness.md` §9.1.g records the sweep
+    as a consumer that exists partly to compensate for the state item 26's guard retains, **and
+    carries the same truncated `494-496` span — a correction owed to that record, not made by this
+    plan** (the probe is the deriver's artifact).
 37. **`css/app.css:508-509`** — `/* nav.js's setView(): NP is an ADDITIVE overlay that paints over a
     live, un-parked page underneath, so it needs its own background. */`, immediately above the
     `background: var(--page-bg)` at `css/app.css:510`. After A1b the justification is false while the
@@ -1420,7 +1488,7 @@ rather than adding to it.
 stale and are corrected here — both described the pre-A1b world)*:
 
 - **Every `.nowplaying` declaration**, including the `background: var(--page-bg)` at
-  `css/app.css:510`, the `inset: 0` and the `z-index: 60` at `css/app.css:506`. **⛔ This is the
+  `css/app.css:510`, the `inset: 0` and the `z-index: 60` at `css/app.css:505`. **⛔ This is the
   standing user constraint** — `DecisionLog:1147-1167`. `NPUNTOUCHED`'s source-scan cell is the guard.
 - **`js/app.js:498`'s stale-settings sweep.** *(Previously listed as "its live case is the NP one" —
   **that attribution was wrong**. Its live case is the `overlayFilmstrip` window, proven by execution;
@@ -1443,7 +1511,8 @@ stale and are corrected here — both described the pre-A1b world)*:
 
 | # | Step | Owner |
 |---|---|---|
-| 1 | **Stress this plan, PER STAGE — this step is discharged separately for each stage and is NOT discharged for A1b.** A1/A2/B: done, `e979a41`, TEMPER, folded. **A1b: `35f0005` returned TEMPER with six Structural findings; they are folded in this revision, so A1b now owes a RE-REVIEW.** `Claude/Campaigns/one-screen-type-a1b.json`'s `plan-review` gate accepts `FORGE` alone, so step 8 does not open until that verdict is filed. Give the reviewer this revision's fold, not the original. | the plan reviewer |
+| 1 | **Stress this plan, PER STAGE — this step is discharged separately for each stage and is NOT discharged for A1b.** A1/A2/B: done, `e979a41`, TEMPER, folded. **A1b: round 1 (`35f0005`) returned TEMPER with six Structural findings, all folded and all verified resolved at round 2; round 2 (`607d8b9`) returned TEMPER with three new Structural (F14–F16) and six Weak/Note (F17–F22), folded in this revision. A1b therefore owes a THIRD round.** `Claude/Campaigns/one-screen-type-a1b.json`'s `plan-review` gate accepts `FORGE` alone and now reads the highest `-rN` round as the verdict of record, so step 8 does not open until a FORGE is filed in a later round. Give the reviewer this revision's fold, not any earlier one. | the plan reviewer |
+| 1a | **Verify every sentence this fold NEWLY asserts, against source, before the plan goes back to review.** ⭐ **This step exists because a fold is where new false sentences enter.** All three of round 2's new Structural findings landed in text the round-1 fold newly wrote or newly certified, and one of them was a review finding transcribed faithfully into the plan *while being wrong* — folded text is written under the belief that the review already established it, so it escapes the derivation original text gets. **What discharges this step:** every claim the fold newly asserts or newly re-words — every `file:line` citation, every named mechanism, every count, every "verified"/"byte-identical"/"cannot"/"never" — is read against the artifact it cites at the fold's HEAD, including the claims taken from the review itself. **A reviewer's proposal is not a derivation and is not exempt.** The fold reports which claims it checked and how, so the next round audits the check rather than repeating it. **This step does not extend to text the fold did not touch**; that is the reviewer's surface, not the fold's. | the planner |
 | 2 | Author the Stage-A1 red cells: `ONEPAGE`, `PEERPARK`, **`PEERFINALIZE`**, `NOSETTINGSBG`, `NPUNTOUCHED`. Red at HEAD. **`PEERFINALIZE` is not optional and not deferrable past step 4 — see the binding note below.** | the test author |
 | 3 | **Stage A1 build.** `js/nav.js`: narrow the park guard to `if (!npOpen)`; collapse the settings visibility block to one six-way loop; delete `optOpen`/`subOpen`; delete comment lines 78-81 while KEEPING or rewriting 76-77 (§12 item 12); scrub the false additive-premise comments. `css/app.css`: delete both `background: var(--page-bg)` declarations and their justifying comments; rewrite both header comments to the peer statement. Invert `test/nav.test.js:36-44`. Rewrite `test/page-bg-single-painter.test.js` to §16.1 and scrub `test/page-bg-js-painter.test.js:4`'s stale wording (§12 item 22). Bump the build number. | the builder |
 | 4 | **Device gate A1.** Open Options; open each of the five subs and come back; Options from Home and from Books; swipe-back from a sub to the hub and from the hub to Books; open Now Playing from a sub and swipe back to it. **This is the step that answers the user's report** — the two-screens-through-each-other render must be gone. Watch specifically for cover re-decode returning Books→Options→Books (R-B) and for anything painting through a settings screen. | the user |
@@ -1456,8 +1525,8 @@ stale and are corrected here — both described the pre-A1b world)*:
 | 6e | **Stage A1-fix-r2 build.** Replace the predicate with the session-ownership form (`!!session && session.live`, §5.4) — a replacement, not an addition — and rename `gestureLive` and its injected dep to name ownership rather than liveness. Correct `js/nav.js:110`'s claim, which is false in the sense that matters (the reset does land on session-owned movers mid-settle). Bump the build number. | the builder |
 | 6f | **Device gate A1-fix-r2 — the FLICK form, which 6c could not see.** Tap `‹ Back` on a settings sub-screen (or a hub row for the forward variant), then edge-**flick** and **release with commit roughly 125–340ms after the tap**, toward Books and toward Home. **A held drag cannot exercise this band** — release must land inside it. Watch for the committed destination vanishing mid-snap and popping back in about a third of a second later. **This is also the candidate repro for the user's unconfirmed pop-in** (§15 R-I). | the user |
 | 7 | Author the Stage-A1b red cells: `NPPARKS`, `NPRECONCILE`, and the **`PEERFINALIZE` edge-3 RELOCATION** — not a one-assertion edit. In `test/one-screen-type-finalize.test.js:171-221`, **four assertions turn and the cell's subject ceases to exist**: `:186-188` and `:202-204` are **fixture sanity** and redden regardless of where the hook assertion points; `:216` goes `1 → 0`; `:218` goes `[false] → []`. Re-aim the whole scenario at the **abort** (where the hook now fires) and install the recorder **before** the abort rather than after it, or the relocated call goes unrecorded. Strike the stale `NPUNTOUCHED` reference in the `:188` message. §5.3.4 and §6a carry the enumeration. Red at HEAD. | the test author |
-| 8 | **Stage A1b build. ⛔ DOES NOT OPEN until step 1's A1b re-review is filed and accepted, and until step 6f has read on device (see the sequencing rule below).** **Behaviour — two deleted conditions, and nothing else:** `js/nav.js` delete both `if (!npOpen)` guards (**`:51`** and **`:78`**) so the park/hide block and the six-way loop run unconditionally. `npOpen` the variable, the `hidden` toggle (`:81`) and the `np-locked` toggle (`:82`) all stay. **Comments — six sites, zero behaviour (§12 items 27, 28, 34, 35, 36, 37):** delete `js/nav.js:71-77` **whole** (seven lines, not two); correct `js/nav.js:48-50`; correct `js/nav.js:151`, `js/app.js:1343`, `js/app.js:494-496` and `css/app.css:508-509`. **⛔ `css/app.css:510`'s `background: var(--page-bg)` is NOT touched** — item 37 is the comment above it only. **Tests and tooling — execute §6a's casualty table:** de-register mutant `#104`, re-point `#106`, retire `NPUNTOUCHED`'s two class-state cells (`test/one-screen-type.test.js:196`, `:211`; their subject moves to `NPPARKS`), keep its source-scan cell (`:218`), and land step 7's relocated `PEERFINALIZE` cell. Bump the build number. | the builder |
-| 9 | **Device gate A1b — the NP-close path AND the aborted NP-back swipe.** Open NP from Home, from Books and from a settings screen; close each by swipe and by back. Abort an NP-back swipe and an NP→chapter-list swipe, then swipe again — the accumulation in §5.3.1 must be gone and no more than one screen may ever be visible beside NP. **Three honest questions, all three of §15 R-H:** (1) does closing NP back to Books re-decode the covers; (2) does the restore flash; (3) **on the aborted NP-back swipe — the path this step drives most — is the repeated render-plus-teardown felt?** R-H hazard 3 is new in this revision and names what to watch for; half-swipe back from NP repeatedly, as fast as is comfortable, on a long Books list. | the user |
+| 8 | **Stage A1b build. ⛔ DOES NOT OPEN until step 1's A1b re-review is filed and accepted, and until step 6f has read on device (see the sequencing rule below).** **Behaviour — two deleted conditions, and nothing else:** `js/nav.js` delete both `if (!npOpen)` guards (**`:51`** and **`:78`**) so the park/hide block and the six-way loop run unconditionally. `npOpen` the variable, the `hidden` toggle (`:81`) and the `np-locked` toggle (`:82`) all stay. **Comments — six sites, zero behaviour (§12 items 27, 28, 34, 35, 36, 37):** delete `js/nav.js:71-77` **whole** (seven lines, not two); correct `js/nav.js:48-50`; correct `js/nav.js:151`, `js/app.js:1343`, `js/app.js:494-497` (**four comment lines, of which only `:494-495` are false — `:496-497` is the still-true exception clause and no fragment of the retired sentence may survive; §12 item 36**) and `css/app.css:508-509`. **⛔ `css/app.css:510`'s `background: var(--page-bg)` is NOT touched** — item 37 is the comment above it only. **Tests and tooling — execute §6a's casualty table:** de-register mutant `#104`, re-point `#106`, retire `NPUNTOUCHED`'s two class-state cells (`test/one-screen-type.test.js:196`, `:211`; their subject moves to `NPPARKS`), keep its source-scan cell (`:218`), and land step 7's relocated `PEERFINALIZE` cell. Bump the build number. | the builder |
+| 9 | **Device gate A1b — the NP-close path AND the aborted NP-back swipe.** Open NP from Home, from Books and from a settings screen; close each by swipe and by back. Abort an NP-back swipe and an NP→chapter-list swipe, then swipe again — the accumulation in §5.3.1 must be gone and no more than one screen may ever be visible beside NP. **Three honest questions, all three of §15 R-H:** (1) does closing NP back to Books re-decode the covers; (2) does the restore flash; (3) **on the REPEATED half-swipe back from NP — the path this step drives most — does the list get slower or emptier the more times it is repeated?** Half-swipe back from NP and abort, repeatedly, as fast as is comfortable, on a long Books list. **What R-H hazard 3 predicts is a compounding cost, not a first-pass one:** the mid-drag render is paid today and is unchanged by A1b; what A1b adds is a teardown that dematerializes the rows the *next* swipe's render must rebuild. | the user |
 | 10 | Review the Stage-A1b build. **The `showAppView` sweep is NOT an open question here** — it was settled by execution at the A1 review (§5.3.5, determination KEEP) and must not be re-opened. | the code reviewer |
 | 11 | **Stage A2 build.** Delete `z-index: 25` and `z-index: 26` and their two stated causes from the comments. Bump the build number. | the builder |
 | 12 | **Device gate A2.** The same swipe set as step 4, plus commit and abort on each, watching the two drag edges for any flash or paint-order artefact. Fallback if it regresses: restore both z-index declarations alone — they are independent of A1 and A1b, which stay shipped (§15 R-F). | the user |
@@ -1578,10 +1647,12 @@ the test author's call.
 reconstructing one.** Edge 1 (button-nav browse→settings) — `PEERPARK`. Edges 2 and 3 (the
 `settings→browse` abort; the `NP→files` abort, relocated by A1b) — `PEERFINALIZE`. Edge 4 (opening NP
 while Browse is showing) — `NPPARKS`. **Edge 5 (supersession while NP is current, `js/app.js:459`) —
-DELIBERATELY UNCOVERED**, on the two grounds §9 records: its hook contract is byte-identical to edge
-4's, which `NPPARKS` proves, and an extra firing is harmless because `Browse.deactivate()` is
-idempotent (`js/browse.js:332`). **This is a plan ruling, not a bare cell.** Its re-open condition is
-named in §9: if `setView`'s NP path ever gains a non-idempotent effect, edge 5 owes a cell.
+DELIBERATELY UNCOVERED**, on the single ground §9 records and which is sufficient alone: **its hook
+contract is byte-identical to edge 4's — the same `setView` body, which `NPPARKS` proves** — so edge 5
+adds a route, not a behaviour. **This is a plan ruling, not a bare cell.** Its re-open condition is
+named in §9 and is aimed at that body: if edge 5's path ever acquires an effect edge 4's path does not
+have, the byte-identity ground is gone and edge 5 owes a cell. **The ruling does not rest on an
+extra firing being harmless** — §9 records why that ground was false and does not carry it.
 
 **Cells that get inverted rather than kept:** `test/nav.test.js:36-44`. Its subject — what a
 sub-screen does to its hub — is still a real dimension; only the correct answer changes. Deleting it
@@ -1593,7 +1664,7 @@ would leave the dimension bare, which is why §12 item 19 inverts it instead.
 The hazard is that hiding a screen shrinks the document and trips iOS 26's ~50pt fixed-layer
 displacement. Derived at HEAD rather than taken on trust: `#library` (`index.html:36`) contains
 `.topbar` and the eight screen elements, and **every one of them is `position: fixed`** — `#home`
-`css:161`, `#browse` `css:184`, `#options` `css:215`, the five subs `css:780`, `.nowplaying` `css:506`,
+`css:161`, `#browse` `css:184`, `#options` `css:215`, the five subs `css:780`, `.nowplaying` `css:505`,
 `.topbar` `css:236`. A `position: fixed` element contributes nothing to flow height, so `#library`
 contributes nothing, and the signed-in document height is entirely `.app`'s
 `min-height: calc(100% + 12vh)` (`css:75`) plus its padding. **Hiding or parking any screen cannot
@@ -1680,24 +1751,38 @@ what to watch for.
    already applies. **Do not predict this either way**: the mitigation is present, the path is new,
    and only the device settles it.
 
-3. **A full render plus a controller teardown on every ABORTED NP-back swipe, where today there is
-   neither.** This hazard is on the abort, not the close, and it is the one step 9 exercises most.
-   Mid-drag, `showAppView(dest, true)` un-hides `#browse` and runs `Browse.render(desc)`
-   (`js/app.js:512`, reached from `renderDestination` at `js/app.js:542` with `render` hard-coded
-   `true`). **Today the abort stops there**: `applyScreen(currentDesc())` resolves to
-   `setView('nowplaying')`, both guarded blocks are skipped, and `#browse` is simply left un-hidden
-   and active — the abort pays nothing. **After A1b the same abort runs the park/hide block**, which
-   fires `d.browseWillHide()` → `Browse.deactivate()` (`js/nav.js:60`) and then hides `#browse`
-   (`js/nav.js:69`). So every aborted NP-back swipe now pays **a full Browse render plus a virtual-
-   controller teardown**, and it is repeatable as fast as the user can half-swipe, on a long
-   virtualized list.
+3. **A controller teardown on every ABORTED NP-back swipe, which makes the NEXT swipe's
+   already-paid render rebuild rows it would otherwise have kept.** This hazard is on the abort, not
+   the close, and it is the one step 9 exercises most.
+
+   **⚠️ The render is NOT the new cost, and an earlier revision of this section said it was.** That
+   claim was folded in faithfully from a plan-review finding that was itself wrong, and it is
+   corrected here rather than softened. `env.renderDestination` (`js/app.js:541-542`) dispatches
+   `host === 'browse-host'` to `showAppView(dest, true)` with `render` hard-coded `true`, and
+   `js/app.js:512` runs `Browse.render(desc)`. **That happens mid-drag on every NP-back drag toward a
+   browse screen today, whether it aborts or commits, and A1b does not reach it** — A1b's whole
+   product change is two deleted conditions inside `setView`, and `renderDestination` never calls
+   `setView`.
+
+   **What A1b adds is the teardown and the hide.** Today the abort stops after the mid-drag render:
+   `applyScreen(currentDesc())` resolves to `setView('nowplaying')`, both guarded blocks are skipped,
+   and `#browse` is left un-hidden and active. **After A1b the same abort runs the park/hide block**,
+   which fires `d.browseWillHide()` → `Browse.deactivate()` (`js/nav.js:60`) and then hides `#browse`
+   (`js/nav.js:69`). The teardown's last act is `dematerialize()` (`js/virtuallist.js:262`, whose own
+   comment reads *"hidden pages hold ~0 realized rows"*). **So the new cost is not a second render; it
+   is that the render already being paid becomes more expensive, because the previous abort tore down
+   and dematerialized the rows that render must now rebuild.** It is repeatable as fast as the user
+   can half-swipe, on a long virtualized list, and the cost compounds with repetition rather than
+   appearing on the first pass.
 
    **This is a cost of the fix, not a defect in it** — it is the same reconcile that makes the
    accumulation impossible (§5.3.3), and the end state is correct on every abort. What is unknown is
-   whether it is *felt*. **Named fallback, the same one hazard 1 carries:** the `#browse.parked`
-   recipe from §4 DEFERRED — parking `#browse` off-viewport instead of hiding it keeps it painted and
-   closes hazards 1 and 3 together, since a parked `#browse` is neither re-decoded nor deactivated.
-   Pre-designed, deliberately not built; building it is a decision for after the device reading.
+   whether it is *felt*. **Hazards 1 and 3 are ONE mechanism seen twice** — dropped decoded covers and
+   dropped realized rows, both consequences of `#browse` going `display: none` — which is why the same
+   fallback closes both rather than by coincidence: the `#browse.parked` recipe from §4 DEFERRED parks
+   `#browse` off-viewport instead of hiding it, and a parked `#browse` is neither re-decoded nor
+   deactivated. Pre-designed, deliberately not built; building it is a decision for after the device
+   reading.
 
 **No hazard here is a reason to keep the exemption.** The exemption's cost is a defect the user
 photographed twice; these are three regressions that may or may not appear and that have named,

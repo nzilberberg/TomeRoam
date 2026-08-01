@@ -741,6 +741,18 @@ swipe newly pays a `Browse.render`; it is paid today, and what A1b adds is the t
 `dematerialize()` makes that render rebuild rows it would otherwise keep (this error originated in
 round 1's own F10). Six Weak/Note findings are sentence-level.
 **Not re-opened:** `showAppView`'s sweep — §5.3.5's proof is sound, KEEP stands, verified.
+**Round 2 FOLDED 2026-07-31 into `Claude/Plans/PLAN-one-screen-type.md`; a THIRD round is owed
+before step 8.** F14 is closed by tooling, not by plan text — `d9b3899` (highest `-rN` is the verdict
+of record) and `3c89349` (glob widened) — verified by running the gate, which now reads round 2's
+TEMPER. F15's edge-5 ruling stands on its byte-identity ground alone, the false second ground is
+deleted, and the re-open condition is re-aimed at edge 5's `setView` body. F16's hazard 3 now names
+the teardown as the new cost and the `dematerialize()` coupling as why the already-paid render gets
+more expensive; hazards 1 and 3 are recorded as one mechanism. **A1b's DESIGN did not move in either
+round.** §13 gained **step 1a**: every sentence a fold NEWLY asserts is verified against source before
+the plan is handed back — the fold's own sweep found two further off-by-one citations (§8's and
+§5.2's `resetSwipeStyles` call site) that no review had filed. **Owed elsewhere:**
+`Claude/Linnaeus/PROBE-np-uniqueness.md` §9.1.g carries the same truncated `js/app.js:494-496` span
+the plan corrected to `:494-497`; that record is the deriver's to fix.
 
 **Still open in this campaign:** r2's successor stages — A1b (NP parks/hides beneath itself, **plan
 TEMPER'd — findings owed before step 8**), A2
