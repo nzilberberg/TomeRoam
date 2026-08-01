@@ -1111,6 +1111,18 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   their single remaining value, execute the plan's full §12 deletion list (`ghostApp` itself,
   `dropPanes`, the capture-recording block, the `.nav-ghost` sweeps), and remove the gate's temporary
   browse→browse exception.
+  ⚠️ **POSITIONING SCHEME SUPERSEDED — 2026-08-01.** The forecast above says each `.browsepage`
+  becomes its own **`position: fixed`** inset own-scroll box. Stage 2's rework (`735601d`, after
+  `Claude/Charpy/PLAN-swipe-declone-stage2-charpy.md` TEMPERed the original) makes it
+  **`position: absolute; inset: 0`** inside a `#browse` that KEEPS its own `position: fixed` box.
+  **Invariant D4 — a browse page owns its own scroll offset natively — is UNCHANGED**; only the
+  positioning scheme moved, and this entry is an outcome record of Stage 1 rather than a design
+  ratification of Stage 2. **Why:** a `position: fixed` page is re-contained by a transformed
+  `#browse` during a drag, resolving its insets against `#browse`'s padding box instead of the
+  viewport — derived at roughly a 110px jump and 328px height loss on a notched iPhone, on four
+  transitions. `position: absolute` removes it, because a `position: fixed` `#browse` is already the
+  containing block for absolutely-positioned descendants whether or not it is transformed.
+  Declared by the planner rather than changed silently; recorded here by Zelda.
 
 - Mutation #101 (M2ALIGN) orphan CLOSED — 2026-07-30, build `2026-07-30.275`, commit `020c2d9`.
   CI run `30565401541` on `cf48e03` found mutation-sweep shard 5 red: Stage 1

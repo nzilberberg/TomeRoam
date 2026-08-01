@@ -1964,9 +1964,20 @@ move, and are recorded here so its next session does not re-derive them:
    but it must be executed over **14 structural cases, not 8**, and it must not re-introduce an
    `overlay→overlay` row. If Stage B has not landed when Stage 2 runs, Stage 2 collapses 8 rows and
    Stage B re-expands them; the two orders are both correct and neither blocks the other.
-3. **Stage 2's `#browse` → `display: contents` change does not generalize to the settings screens.**
-   Stage 2 makes each `.browsepage` its own fixed inset own-scroll box and dissolves the host. The
-   settings screens **already are** that shape, which is why this plan needs no host at all (§5.1).
+3. **Stage 2's host change does not generalize to the settings screens.**
+   ⚠️ **MECHANISM CORRECTED 2026-08-01 (Zelda scrub) — this item previously described Stage 2 as
+   making `#browse` `display: contents` and "dissolving the host". That mechanism was FALSIFIED and
+   replaced.** `#browse` is the element the swipe transforms on four transitions Stage 1 already
+   shipped, and `display: contents` generates no principal box, so the transform would have gone
+   inert on all four (`Claude/Charpy/PLAN-swipe-declone-stage2-charpy.md`). The reworked Stage 2
+   (`735601d`) **keeps `#browse`'s `position: fixed` box** and gives up only `overflow-y: auto` and
+   its padding; each `.browsepage` becomes `position: absolute; inset: 0` inside it.
+   ⭐ **This matters to THIS plan:** §5.5's containment argument — the stated ground for Stage A2's
+   deletion of `z-index: 25`/`26` — requires `#browse` to carry an inline transform, which requires
+   it to generate a box. The original mechanism would have removed that premise; the rework
+   **restores** it, so A2 loses nothing.
+   The convergence conclusion below is unchanged: the settings screens **already are** their own
+   inset own-scroll box, which is why this plan needs no host at all (§5.1).
    After both land, `.browsepage` and a settings screen are the same kind in the strong sense — each is
    its own fixed inset own-scroll box with no background and no stacking of its own — and the two plans
    converge rather than competing. Nothing in this plan makes Stage 2 harder; §5.1's choice not to add
