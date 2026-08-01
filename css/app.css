@@ -505,8 +505,8 @@ body.has-player #options { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); 
   position: fixed; inset: 0; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;
   overscroll-behavior: none;   /* never chain a bounce to the document */
   display: flex; flex-direction: column;
-  /* nav.js's setView(): NP is an ADDITIVE overlay that paints over a live,
-     un-parked page underneath, so it needs its own background. */
+  /* An opaque background here, plus `inset: 0` and `z-index: 60` above, are the three
+     co-required properties that cover the topbar and the transport (DecisionLog). */
   background: var(--page-bg);
   /* Full-bleed: content owns the whole height; close = swipe right / back.
      The pill keeps a small 5px margin off the physical screen edge. */

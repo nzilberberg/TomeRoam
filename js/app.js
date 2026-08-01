@@ -491,10 +491,12 @@
     // when it's a NEW screen (forward). On BACK the destination is the very screen the
     // overlay/parent was opened over, so it's already there — no re-render (no flash).
     function showAppView(desc, render) {
-      // Hide a STALE settings overlay lurking over the base view (NP opened from
-      // Options → an NP→chapter-list swipe would show it through). But NOT the one
-      // that's the OUTGOING screen of THIS swipe (back from Options → tracks): there
-      // it's the mover that must slide out, so hiding it makes it vanish mid-drag.
+      // Hide a STALE settings overlay lurking over the base view (a button-nav filmstrip
+      // between two overlays un-hides both panes and relies on its pending reconcile to
+      // restore exclusivity — Nav.overlayFilmstrip, js/nav.js — so a browse-destination
+      // render here must sweep it). But NOT the one that's the OUTGOING screen of THIS
+      // swipe (back from Options → tracks): there it's the mover that must slide out, so
+      // hiding it makes it vanish mid-drag.
       for (const s of ['options', ...SETTINGS_SUBS]) if (!d || d.from.v !== s) $(s).classList.add('hidden');
       // Stage 1 (PLAN-swipe-declone.md §5.1): this branch used to also park #home here,
       // synchronously, mid-drag. That was harmless while the outgoing was always an
@@ -1339,8 +1341,9 @@
       // Same exclusions as swipe-back: a touch on the transport, nav, or a form
       // control must never arm the pull (a slider drag with a slight downward
       // wobble would otherwise preventDefault the move and fight the scrub).
-      // Home must be the CURRENT screen (history state), not merely visible —
-      // additive overlays (NP, Options) leave #home un-hidden underneath.
+      // Home must be the CURRENT screen (history state), not merely visible — #home stays
+      // parked (mounted, off-screen) underneath every other screen, so a visibility check
+      // alone would misfire.
       // Stage 6i (PLAN-swipe-noswap-home.md §9 L1): "top of home" is #home's OWN
       // scroll (a position:fixed own-scroll view), not the document — window.scrollY
       // is always 0 for a fixed #home and would mis-arm the pull while home is

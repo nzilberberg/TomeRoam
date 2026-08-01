@@ -24,13 +24,6 @@
 // behind the photographed three-plus-screens render. This cell pins the entry state; the
 // accumulation across aborts is NPRECONCILE's.
 //
-// ⚠️ SKIP-PENDING-BUILD. Every cell below is authored RED against current HEAD and is committed
-// `{ skip: SKIP }` so the pre-commit battery stays green (the hook runs the whole suite; a
-// plain-red cell would block the commit and the project does not use --no-verify). Each was
-// CONFIRMED RED with the skip removed — the exact failure per cell is recorded in
-// Claude/Curie/RED-one-screen-type-a1b.md. The builder REMOVES the skip to drive them red, then
-// builds to green. Do NOT weaken an assertion to green a cell.
-//
 // ⛔ SCOPE, honestly. jsdom has no layout, no paint, no compositing and no stacking. EVERY
 // assertion below is class state, a call count or a call ordering. NOT ONE asserts that fewer
 // screens are VISIBLE, that Now Playing COVERS anything, or that the stack no longer shows
@@ -40,9 +33,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { appDom } = require('./dom-fixture.js');
-
-const SKIP = 'red-first Stage A1b — remove skip to run; the builder greens '
-  + '(Claude/Curie/RED-one-screen-type-a1b.md)';
 
 // ⚠️ SEPARATE FILE FROM THE HARNESS CELLS, DELIBERATELY. test/app-harness.js's boot() replaces
 // global.window / global.document with its own JSDOM and closes it on dispose(), while these unit
@@ -98,7 +88,7 @@ const unhiddenOfSix = () => SIX.filter((s) => !hidden(s));
 // setView('nowplaying') parks nothing, hides nothing and fires no hook.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 test('NPPARKS — entering Now Playing from Browse hides #browse and fires browseWillHide once, '
-  + 'while #browse was still un-hidden (plan §9 edge 4)', { skip: SKIP }, () => {
+  + 'while #browse was still un-hidden (plan §9 edge 4)', () => {
   Nav.applyScreen({ v: 'books' });
   assert.equal(hidden('browse'), false, 'fixture sanity: #browse is shown on Books');
   assert.equal(parked('home'), true, 'fixture sanity: Books parks #home');
@@ -123,31 +113,30 @@ test('NPPARKS — entering Now Playing from Browse hides #browse and fires brows
     + 'captures its scroll anchor from real geometry before display:none lands');
 });
 
-test('NPPARKS — entering Now Playing from a settings screen hides that screen too',
-  { skip: SKIP }, () => {
-    Nav.applyScreen({ v: 'options' });
-    assert.deepEqual(unhiddenOfSix(), ['options'],
-      'fixture sanity: the hub is the one shown settings screen');
-    resetHook();
+test('NPPARKS — entering Now Playing from a settings screen hides that screen too', () => {
+  Nav.applyScreen({ v: 'options' });
+  assert.deepEqual(unhiddenOfSix(), ['options'],
+    'fixture sanity: the hub is the one shown settings screen');
+  resetHook();
 
-    Nav.applyScreen({ v: 'nowplaying' });
+  Nav.applyScreen({ v: 'nowplaying' });
 
-    assert.deepEqual(unhiddenOfSix(), [],
-      'entering Now Playing must hide ALL SIX settings screens. The retained exemption at '
-      + 'js/nav.js:78 kept whichever settings screen was showing mounted underneath, on the '
-      + 'stated ground that the NP-back reveal needs it — a reason refuted at its root: `hidden` '
-      + 'is ADDED to #nowplaying in exactly one place (js/nav.js:81) and the same synchronous '
-      + 'setView body un-hides the destination three lines earlier (js/nav.js:78-80), so the '
-      + 'destination is mounted at the instant NP is hidden on every path (plan §5.3, probe §9.1)');
-    assert.equal(hidden('nowplaying'), false, 'Now Playing must be the shown screen');
-    assert.equal(parked('home'), true, 'and #home must be parked');
-    assert.equal(hidden('browse'), true, 'and #browse must be hidden');
-    assert.equal(hook.calls, 0,
-      'and no deactivation fires on this source: entering the settings screen already hid '
-      + '#browse, so js/nav.js:55\'s shown→hidden edge test is false');
-  });
+  assert.deepEqual(unhiddenOfSix(), [],
+    'entering Now Playing must hide ALL SIX settings screens. The retained exemption at '
+    + 'js/nav.js:78 kept whichever settings screen was showing mounted underneath, on the '
+    + 'stated ground that the NP-back reveal needs it — a reason refuted at its root: `hidden` '
+    + 'is ADDED to #nowplaying in exactly one place (js/nav.js:81) and the same synchronous '
+    + 'setView body un-hides the destination three lines earlier (js/nav.js:78-80), so the '
+    + 'destination is mounted at the instant NP is hidden on every path (plan §5.3, probe §9.1)');
+  assert.equal(hidden('nowplaying'), false, 'Now Playing must be the shown screen');
+  assert.equal(parked('home'), true, 'and #home must be parked');
+  assert.equal(hidden('browse'), true, 'and #browse must be hidden');
+  assert.equal(hook.calls, 0,
+    'and no deactivation fires on this source: entering the settings screen already hid '
+    + '#browse, so js/nav.js:55\'s shown→hidden edge test is false');
+});
 
-test('NPPARKS — entering Now Playing from Home parks #home', { skip: SKIP }, () => {
+test('NPPARKS — entering Now Playing from Home parks #home', () => {
   Nav.applyScreen({ v: 'home' });
   assert.equal(parked('home'), false, 'fixture sanity: #home is the shown screen, un-parked');
   resetHook();

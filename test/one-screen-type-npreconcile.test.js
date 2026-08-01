@@ -33,15 +33,9 @@
 // through; those are paint, a cell about them could not fail here, and it would be a false
 // witness. The outcome the user reported is DEVICE-OWED and is plan step 9's job.
 //
-// ⚠️ SKIP-PENDING-BUILD. Committed `{ skip: SKIP }` so the pre-commit battery stays green; it was
-// CONFIRMED RED with the skip removed. The builder removes the skip and builds to green. Do NOT
-// weaken an assertion to green it.
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { boot } = require('./app-harness.js');
-
-const SKIP = 'red-first Stage A1b — remove skip to run; the builder greens '
-  + '(Claude/Curie/RED-one-screen-type-a1b.md)';
 
 // REAL wall clock, captured before boot() patches setTimeout — app.js's move() resamples velocity
 // only after >8ms of REAL time, so back-to-back synthetic moves leave vx holding the wrong sign
@@ -80,7 +74,7 @@ async function homeThenNowPlaying(h) {
 
 test('NPRECONCILE — an aborted Now Playing gesture reconciles what the gesture un-hid, so screens '
   + 'cannot accumulate beneath Now Playing across repeated aborts',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true });
   try {
     await homeThenNowPlaying(h);

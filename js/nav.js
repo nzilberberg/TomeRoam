@@ -45,39 +45,29 @@ const Nav = (() => {
   function setView(v) {   // 'home' | 'browse' | 'options' | a settings sub | 'nowplaying'
     const $ = d.byId;
     npOpen = v === 'nowplaying';
-    // Every screen but Now Playing is a peer (S1–S3): parked/hidden and shown by
-    // removing one class, exactly like #home and #browse already are. Now Playing
-    // alone stays an additive overlay (S4).
-    if (!npOpen) {
-      $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
-      const browseEl = $('browse');
-      // The shown→hidden edge: going to a non-browse view (home) while #browse is shown.
-      if (v !== 'browse' && !browseEl.classList.contains('hidden')) {
-        // Deactivate Browse's virtual controller BEFORE display:none lands — a hidden box
-        // measures zero, so the anchor must be captured now (from real geometry). Re-entry
-        // activation is owned by Browse.showPage(), not here. See Browse.deactivate() for
-        // the full rationale.
-        if (d.browseWillHide) d.browseWillHide();
-      }
-      // The `.266` stable-height probe (PLAN-stableheight-probe.md) that once pinned `.app`
-      // min-height here is RETIRED (PLAN-browse-decouple.md §7, superseding
-      // PLAN-stableheight-probe.md): active #browse is now a position:fixed own-scroll view
-      // (css: #browse) that never drives the document height, so hiding it on →home cannot
-      // collapse the document and there is nothing for the browser to clamp — the
-      // Books→Home scroll-clamp flash the probe discriminated is removed BY CONSTRUCTION,
-      // with no per-transition pin to set or clear.
-      browseEl.classList.toggle('hidden', v !== 'browse');
+    // Every screen, Now Playing included, is a peer (S1–S5): parked/hidden and shown by
+    // removing one class, exactly like #home and #browse already are. Now Playing keeps its
+    // own background, geometry and stacking (css: .nowplaying) and parks/hides what is
+    // beneath it exactly like every other screen (Stage A1b).
+    $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)
+    const browseEl = $('browse');
+    // The shown→hidden edge: going to a non-browse view (home) while #browse is shown.
+    if (v !== 'browse' && !browseEl.classList.contains('hidden')) {
+      // Deactivate Browse's virtual controller BEFORE display:none lands — a hidden box
+      // measures zero, so the anchor must be captured now (from real geometry). Re-entry
+      // activation is owned by Browse.showPage(), not here. See Browse.deactivate() for
+      // the full rationale.
+      if (d.browseWillHide) d.browseWillHide();
     }
-    // Leave the settings overlays' hidden state untouched when going TO NowPlaying. This
-    // is NOT what makes the NP-back reveal work — every NP-close path restores its own
-    // destination through its own setView/applyScreen call regardless of this exemption
-    // (PLAN-one-screen-type.md §5.3.2). What it actually buys: #browse stays un-hidden
-    // (not display:none) while NP is open, keeping its decoded cover bitmaps warm — the
-    // same reason #home is parked rather than hidden, below. Retired at Stage A1b, which
-    // makes Now Playing park/hide like every other screen (§5.3).
-    if (!npOpen) {
-      for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);
-    }
+    // The `.266` stable-height probe (PLAN-stableheight-probe.md) that once pinned `.app`
+    // min-height here is RETIRED (PLAN-browse-decouple.md §7, superseding
+    // PLAN-stableheight-probe.md): active #browse is now a position:fixed own-scroll view
+    // (css: #browse) that never drives the document height, so hiding it on →home cannot
+    // collapse the document and there is nothing for the browser to clamp — the
+    // Books→Home scroll-clamp flash the probe discriminated is removed BY CONSTRUCTION,
+    // with no per-transition pin to set or clear.
+    browseEl.classList.toggle('hidden', v !== 'browse');
+    for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);
     $('nowplaying').classList.toggle('hidden', !npOpen);
     document.body.classList.toggle('np-locked', npOpen);   // CSS hook: navbar button/pill swap
     // Stage 6i (PLAN-swipe-noswap-home.md §8, F1) RETIRES the home-scoped `home-tall`
@@ -148,7 +138,8 @@ const Nav = (() => {
       if (resetScroll) $(desc.v).scrollTop = 0;
       return;
     }
-    // NP: no scroll reset — the page underneath must stay exactly as it was.
+    // NP: no scroll reset — there is no document scroll to change. The page underneath is
+    // parked/hidden by setView like any other screen (Stage A1b); this call never touches it.
     if (desc.v === 'nowplaying') { setView('nowplaying'); if (render) d.renderNowPlaying(); return; }
     setView('browse');
     setNavActive(desc.v === 'authors' ? 'authors' : desc.v === 'books' ? 'books' : null);

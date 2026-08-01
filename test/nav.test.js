@@ -67,11 +67,17 @@ test('leaving for Home releases every settings overlay and un-parks Home', () =>
   // longer a `body.home-tall` class for this layer to assert.
 });
 
-test('Now Playing leaves the settings overlays as they were (for the back-reveal)', () => {
+// RETIRED AT STAGE A1b (PLAN-one-screen-type.md §5.3, §6a class), the same casualty class as
+// test/one-screen-type.test.js's NPUNTOUCHED class-state cells: A1b deletes the `if (!npOpen)`
+// settings-loop guard, so entering Now Playing now HIDES the settings screen it opened over,
+// exactly as entering any other screen does — the opposite of what this cell asserted. Its
+// subject moves to NPPARKS (test/one-screen-type-npparks.test.js, "entering Now Playing from a
+// settings screen hides that screen too"), which asserts the new truth over the same elements.
+test('Now Playing hides the settings overlay it opened over, like any other screen (Stage A1b — subject in NPPARKS)', () => {
   Nav.applyScreen({ v: 'options' });
   Nav.applyScreen({ v: 'nowplaying' });
   assert.equal(hidden('nowplaying'), false);
-  assert.equal(hidden('options'), false, 'NP must not disturb what it opened over');
+  assert.equal(hidden('options'), true, 'NP now parks/hides what is beneath it like every other screen');
   assert.ok(document.body.classList.contains('np-locked'));
 });
 

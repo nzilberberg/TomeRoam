@@ -186,15 +186,11 @@ async () => {
 // must leave #browse un-hidden" sanity (A1b's abort reconcile hides it), `rec.calls` 1 → 0, and
 // `hiddenWhenCalled` [false] → []. That is why this is a rewrite rather than an edit.
 //
-// ⚠️ SKIP-PENDING-BUILD, like the other two A1b cells. Confirmed RED at HEAD with the skip
-// removed. The builder removes the skip and builds to green.
 // ═══════════════════════════════════════════════════════════════════════════════════════
-const A1B_SKIP = 'red-first Stage A1b — remove skip to run; the builder greens '
-  + '(Claude/Curie/RED-one-screen-type-a1b.md)';
 
 test('PEERFINALIZE — edge 3 RELOCATED (Stage A1b): the NP→files ABORT is where browseWillHide '
   + 'now fires — it re-hides the #browse its own mid-drag render un-hid, once, while #browse was '
-  + 'still un-hidden', { skip: A1B_SKIP }, async () => {
+  + 'still un-hidden', async () => {
   const h = boot({ fakeTimers: true });
   try {
     await settle(h);

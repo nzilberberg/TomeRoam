@@ -747,10 +747,13 @@ const MUTATIONS = [
     file: 'js/browse.js',
     from: "    o.mount.scrollTop = clampY(y, o.mount.scrollHeight, o.mount.clientHeight);",
     to:   "    window.scrollTo(0, clampY(y, o.mount.scrollHeight, o.mount.clientHeight));   // mutated: window, not #browse.scrollTop" },
+  // RE-ANCHORED AT Stage A1b (PLAN-one-screen-type.md §5.3): the enclosing `if (!npOpen) {` block
+  // this sits inside is deleted, so the inner block de-indents from eight spaces to six. Text and
+  // intent unchanged.
   { name: 'browse-decouple PINGONE: the retired .266 stable-height pin is reintroduced on →home (-> PINGONE stays-empty test)',
     file: 'js/nav.js',
-    from: "        if (d.browseWillHide) d.browseWillHide();\n      }",
-    to:   "        if (d.browseWillHide) d.browseWillHide();\n        const appEl = document.querySelector('.app');\n        if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';\n      }" },
+    from: "      if (d.browseWillHide) d.browseWillHide();\n    }",
+    to:   "      if (d.browseWillHide) d.browseWillHide();\n      const appEl = document.querySelector('.app');\n      if (appEl) appEl.style.minHeight = appEl.scrollHeight + 'px';\n    }" },
 
   // ── PLAN-home-shift-fix.md §7.1 — the home→books SCROLL SHIFT campaign (M1/M2).
   // EVERY anchor below carries disambiguating context FROM THE START, because six of six
@@ -882,10 +885,13 @@ const MUTATIONS = [
   // At HEAD its live killer is test/nav.test.js's 'leaving Browse for Home deactivates the Browse
   // controller BEFORE hiding it' (the same invariant on the home edge); once A1 unskips them,
   // PEERPARK and PEERFINALIZE kill it on the three settings edges too.
+  // RE-ANCHORED AT A1b: the enclosing `if (!npOpen) {` block is deleted, so this inner block
+  // de-indents from eight spaces to six (plan §12 items 25/26; Claude/Curie/RED-one-screen-type-
+  // a1b.md §4 casualty note). Text and intent unchanged.
   { name: 'one-screen-type PEERPARK/PEERFINALIZE-b: #browse is hidden BEFORE the browseWillHide anchor capture, so Browse.deactivate measures a zero-height box (-> PEERPARK + PEERFINALIZE observed-un-hidden assertions; at HEAD, nav.test.js deactivate-before-hide)',
     file: 'js/nav.js',
-    from: '        if (d.browseWillHide) d.browseWillHide();\n      }',
-    to:   "        browseEl.classList.toggle('hidden', true);   /* mutated: hide BEFORE the capture */\n        if (d.browseWillHide) d.browseWillHide();\n      }" },
+    from: '      if (d.browseWillHide) d.browseWillHide();\n    }',
+    to:   "      browseEl.classList.toggle('hidden', true);   /* mutated: hide BEFORE the capture */\n      if (d.browseWillHide) d.browseWillHide();\n    }" },
 
   // NOSETTINGSBG's second mutant — the OTHER direction. The cell's painter-set equality must fail
   // when .nowplaying LOSES its background just as surely as when a settings screen regains one;
@@ -896,25 +902,13 @@ const MUTATIONS = [
   // At HEAD its live killer is this file's own predecessor test, PAGE-BG-SINGLE-PAINTER; A1
   // deletes that test in the same commit that unskips NOSETTINGSBG, so the guard is never
   // undefended for an instant.
+  // RE-ANCHORED IN THE A1b BUILD COMMIT: item 37 rewrites the two comment lines above
+  // `background: var(--page-bg)` from the retired additive-overlay reason to the co-required-
+  // properties reason (plan §12 item 37); the anchor moves with it.
   { name: 'one-screen-type NOSETTINGSBG-b: .nowplaying loses its own --page-bg background, so the one screen that must keep painting stops (-> NOSETTINGSBG painter-set equality; at HEAD, PAGE-BG-SINGLE-PAINTER)',
     file: 'css/app.css',
-    from: '     un-parked page underneath, so it needs its own background. */\n  background: var(--page-bg);',
-    to:   '     un-parked page underneath, so it needs its own background. */' },
-
-  // NPUNTOUCHED is a PRESERVATION cell — green at HEAD by construction, because it asserts what
-  // must NOT change. This mutant is therefore the whole of its evidence that it can fail, which is
-  // why it is registered now rather than at build time: it removes the npOpen exemption, so
-  // setView('nowplaying') hides the settings screen Now Playing was opened over and the NP-back
-  // reveal has nothing to filmstrip to.
-  //
-  // RE-ANCHORED IN THE A1 BUILD COMMIT. A1 narrowed the park guard on js/nav.js:51 to
-  // `if (!npOpen) {` — text identical to the settings-loop guard it already wrapped — so this
-  // `from` now occurs TWICE in js/nav.js. Disambiguated by extending it with the six-way
-  // visibility loop that follows the SECOND occurrence, which is the one this mutant means.
-  { name: 'one-screen-type NPUNTOUCHED: the npOpen exemption is removed, so opening Now Playing hides the settings screen underneath and the NP-back reveal has nothing to return to (-> NPUNTOUCHED still-un-hidden assertion)',
-    file: 'js/nav.js',
-    from: "    if (!npOpen) {\n      for (const s of ['options', ...SETTINGS_SUBS])",
-    to:   "    if (true) {\n      for (const s of ['options', ...SETTINGS_SUBS])" },
+    from: '     co-required properties that cover the topbar and the transport (DecisionLog). */\n  background: var(--page-bg);',
+    to:   '     co-required properties that cover the topbar and the transport (DecisionLog). */' },
 
   // Registered in the A1 build commit (six were deferred at authoring time — see the block above —
   // because their anchors did not exist, or would have been no-ops, at HEAD). Each carries
@@ -922,16 +916,45 @@ const MUTATIONS = [
 
   // ONEPAGE — commit 6c9e7e3's exact shape: restore the hub-stays-mounted rule after the six-way
   // loop, so the hub is un-hidden whenever a sub is applied.
+  // RE-ANCHORED AT A1b: the six-way loop's trailing `\n    }` was the js/nav.js:78 guard's own
+  // closing brace, deleted by A1b — that guard has no enclosing brace left to anchor on, so the
+  // anchor moves to the loop plus the line that now follows it (the NP hidden toggle).
   { name: 'one-screen-type ONEPAGE: the hub-stays-mounted rule is restored after the six-way loop, so the hub is un-hidden whenever a sub is applied (-> ONEPAGE exactly-one-unhidden assertion)',
     file: 'js/nav.js',
-    from: "      for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);\n    }",
-    to:   "      for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);\n      $('options').classList.toggle('hidden', !(v === 'options' || isSub(v)));\n    }" },
+    from: "    for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);\n    $('nowplaying').classList.toggle('hidden', !npOpen);",
+    to:   "    for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);\n    $('options').classList.toggle('hidden', !(v === 'options' || isSub(v)));\n    $('nowplaying').classList.toggle('hidden', !npOpen);" },
 
-  // PEERPARK-a / PEERFINALIZE-a — restore the settings exemption in the narrowed park guard.
+  // PEERPARK-a / PEERFINALIZE-a — restore the settings exemption in the park-and-hide block.
+  // RE-ANCHORED AT A1b: the block's `if (!npOpen) {` wrapper is deleted, so a settings exemption
+  // can no longer be restored by widening one shared guard condition — the park toggle and the
+  // browse-hide toggle are now two separate unconditional statements. Guarding both (the `also`
+  // half) is what reproduces "parks nothing and hides nothing" on a settings entry.
   { name: 'one-screen-type PEERPARK/PEERFINALIZE-a: the settings exemption is restored in the park guard, so entering a settings screen parks nothing and hides nothing (-> PEERPARK + PEERFINALIZE class assertions)',
     file: 'js/nav.js',
-    from: "    if (!npOpen) {\n      $('home').classList.toggle('parked', v !== 'home');",
-    to:   "    if (!npOpen && v !== 'options' && !isSub(v)) {\n      $('home').classList.toggle('parked', v !== 'home');" },
+    from: "    $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)",
+    to:   "    if (v !== 'options' && !isSub(v)) $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)",
+    also: {
+      from: "    browseEl.classList.toggle('hidden', v !== 'browse');",
+      to:   "    if (v !== 'options' && !isSub(v)) browseEl.classList.toggle('hidden', v !== 'browse');",
+    } },
+
+  // ── Stage A1b — three mutants for the park/hide block's own coverage cells (plan §14;
+  // Claude/Curie/RED-one-screen-type-a1b.md §4). §14's NATURAL-a ("restore the npOpen guard on
+  // the park and hide block") is ONE mutant in the plan's coverage matrix; post-A1b that block has
+  // no enclosing brace left to re-guard as a unit, so it splits into two statement-level mutants
+  // (`a`, `a'`) — three total, not two, and no dimension is added or dropped.
+  { name: "one-screen-type NPPARKS-a: the npOpen guard is restored on the park toggle alone, so entering Now Playing no longer parks #home (-> NPPARKS from Home)",
+    file: 'js/nav.js',
+    from: "    $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)",
+    to:   "    if (!npOpen) $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)" },
+  { name: "one-screen-type NPPARKS-a': the npOpen guard is restored on the browse-hide toggle alone, so entering Now Playing no longer hides #browse (-> NPPARKS from Browse, NPRECONCILE, PEERFINALIZE edge 3 relocated)",
+    file: 'js/nav.js',
+    from: "    browseEl.classList.toggle('hidden', v !== 'browse');",
+    to:   "    if (!npOpen) browseEl.classList.toggle('hidden', v !== 'browse');" },
+  { name: 'one-screen-type NPPARKS-b: the npOpen guard is restored on the six-way settings loop, so entering Now Playing no longer hides the settings screens (-> NPPARKS from a settings screen)',
+    file: 'js/nav.js',
+    from: "    for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);",
+    to:   "    if (!npOpen) for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);" },
 
   // NOSETTINGSBG-a — re-add the deleted background to #options, so the painter set regains a
   // third member.
@@ -948,10 +971,11 @@ const MUTATIONS = [
 
   // PEERPARK-c — delete the browseWillHide() call entirely, so the hook never fires on the
   // settings edges (distinct from PEERPARK/PEERFINALIZE-b, which fires it at the wrong TIME).
+  // RE-ANCHORED AT A1b: same de-indent as PEERPARK/PEERFINALIZE-b above (eight spaces to six).
   { name: 'one-screen-type PEERPARK-c: the browseWillHide() call is deleted, so the hook never fires on the settings shown->hidden edge (-> PEERPARK + PEERFINALIZE call-count assertions)',
     file: 'js/nav.js',
-    from: "        if (d.browseWillHide) d.browseWillHide();\n      }\n      // The `.266` stable-height probe",
-    to:   "      }\n      // The `.266` stable-height probe" },
+    from: "      if (d.browseWillHide) d.browseWillHide();\n    }\n    // The `.266` stable-height probe",
+    to:   "    }\n    // The `.266` stable-height probe" },
 
   // ── PLAN-one-screen-type.md §14 — the FILMSTRIPDRAG cell (Stage A1-fix / A1-fix-r2, plan §5.4).
   //

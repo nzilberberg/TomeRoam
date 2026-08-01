@@ -175,7 +175,15 @@ test('PEERPARK — browseWillHide fires exactly once on the browse→settings sh
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// NPUNTOUCHED (unit + source scan)
+// NPUNTOUCHED (source scan)
+//
+// NARROWED AT STAGE A1b (plan §6a, §14). This cell's two class-state tests — Now Playing leaving
+// a settings screen or sub-screen mounted underneath it — asserted the `if (!npOpen)` settings-loop
+// guard at js/nav.js:78, retired at Stage A1b: entering Now Playing now hides those screens exactly
+// as entering any other screen does. That behaviour moved to NPPARKS
+// (test/one-screen-type-npparks.test.js), which asserts the new truth over the same elements, so
+// the dimension is not left bare. NPUNTOUCHED narrows to the one property Stage A1b does not
+// touch and never will:
 //
 // ⚠️ THIS IS A PRESERVATION CELL, AND IT IS GREEN AT HEAD BY CONSTRUCTION — deliberately, and it
 // is committed UNSKIPPED. It exists to prove Now Playing STAYS untouched: invariant S4, and the
@@ -185,36 +193,7 @@ test('PEERPARK — browseWillHide fires exactly once on the browse→settings sh
 // fail is therefore carried by its registered MUTANT (tools/mutate.mjs, "one-screen-type
 // NPUNTOUCHED"), which is CONFIRMED to redden it — evidence of the same kind, obtained the same
 // way, as a red. The confirmation is recorded in Claude/Curie/RED-one-screen-type.md.
-//
-// WHAT IT GUARDS. js/nav.js:82's `if (!npOpen)` guard is the mechanism of the NP-back reveal: it
-// leaves whichever settings screen was showing exactly as it was, so closing NP finds it again.
-// After A1 that guard wraps a loop which already handles all six screens correctly, so a reader
-// who finds it undocumented sees a guard with no visible purpose — and the obvious simplification
-// deletes it and silently breaks the reveal (plan §12 item 12, the review's F3). This cell is
-// what catches that edit; the retained source comment is what stops it being attempted.
 // ═══════════════════════════════════════════════════════════════════════════════════════
-test('NPUNTOUCHED — applying Now Playing leaves the settings screen that was showing exactly '
-  + 'as it was, for the NP-back reveal', () => {
-  Nav.applyScreen({ v: 'options' });
-  assert.equal(hidden('options'), false, 'fixture sanity: the hub is showing');
-
-  Nav.applyScreen({ v: 'nowplaying' });
-  assert.equal(hidden('nowplaying'), false, 'Now Playing must be shown');
-  assert.equal(hidden('options'), false,
-    'Now Playing must NOT disturb the settings screen it opened over — that screen is what the '
-    + 'NP-back reveal filmstrips back to. The `if (!npOpen)` guard in setView IS this mechanism; '
-    + 'deleting it as a redundant wrapper around the six-way loop silently breaks the reveal');
-  assert.ok(document.body.classList.contains('np-locked'),
-    'and the np-locked hook must still be set');
-});
-
-test('NPUNTOUCHED — applying Now Playing over a settings SUB-screen leaves that sub showing', () => {
-  Nav.applyScreen({ v: 'general' });
-  Nav.applyScreen({ v: 'nowplaying' });
-  assert.equal(hidden('general'), false,
-    'the sub-screen Now Playing opened over must stay mounted for the back-reveal');
-});
-
 test('NPUNTOUCHED — the .nowplaying rule still declares its own inset, z-index and background '
   + '(source)', () => {
   const css = readRoot('css/app.css').replace(/\/\*[\s\S]*?\*\//g, ' ');
