@@ -17,11 +17,13 @@
 // reads its own table. So the expected outcomes are written here BY HAND, and changing
 // them is a deliberate two-part edit (production + this contract) that a review can see.
 //
-// SCOPE: CONSTRUCTION ONLY (stage 4). `expectedConstruction` is the { outgoing, incoming,
+// SCOPE: CONSTRUCTION ONLY. `expectedConstruction` is the { outgoing, incoming,
 // renderDestination, decorations } contract js/swipe.js constructionPlanFor() returns.
-// The FINALIZATION contract (commit/abort/scroll/stackEffect/reveal) is added as
-// `expectedFinalization` when stage 6 builds finalizationPlanFor() — it is intentionally
-// absent now, and its absence must NOT be read as "finalization is verified".
+// There is NO finalization contract here. Stage 6d added one frozen field,
+// `expectedFinalization.abortRender`, and PLAN-swipe-declone.md Stage 2 retired it with the
+// function it froze: no transition overwrites its source element any more, so an abort has
+// nothing to re-render and the decision does not exist. This absence must NOT be read as
+// "finalization is verified".
 
 // Kind -> a representative screen used to exercise a structural case. Every concrete
 // registry pair reduces to one of these by kind; the exhaustive per-pair proof lives in
@@ -30,47 +32,43 @@ export const REPRESENTATIVE = { home: 'home', browse: 'books', overlay: 'options
 
 // The eight structural transitions (home->home is not a transition). Each expectation
 // mirrors js/swipe.js constructionPlanFor() as of Stage 1 (PLAN-swipe-declone.md §5.1):
-//   outgoing 'app-ghost' iff the SOURCE AND DESTINATION are BOTH browse (narrowed from
-//     stage 6f's wider "source not overlay, destination not home" — every view is
-//     already its own position:fixed inset own-scroll box, so only the one pair sharing
-//     a single real host, #browse, still needs a stand-in)
+//   outgoing 'real-source' ALWAYS — no transition builds a copy of a view
+//     (PLAN-swipe-declone.md Invariant D1). Stage 1 narrowed the copy to the one pair
+//     sharing a single real host (#browse); Stage 2 gave each browse page its own inset
+//     own-scroll box, so that pair moves two real `.browsepage` elements too
 //   incoming 'real-destination' ALWAYS — the home-snapshot outcome is RETIRED (Stage 6i):
 //     a →home reveal un-parks the real fixed #home as the incoming mover instead
-//   renderDestination 'browse-host' iff the DESTINATION is browse
+//   renderDestination 'browse-page' iff BOTH ends are browse — the destination is rendered
+//     and its own PAGE node is the incoming mover (PLAN-swipe-declone.md §5.3.6)
+//   renderDestination 'browse-host' iff the DESTINATION is browse and the source is not
 //   renderDestination 'home-host' iff the DESTINATION is home (Stage 6i)
 //   decorations [] for every structural case (the NP pill is a MODIFIER, below)
 //
-// expectedFinalization carries FROZEN finalization DATA — currently just the abort
-// re-render rule ('rerender' iff the source's #browse host was overwritten mid-drag,
-// i.e. browse->browse). Stage 6d builds js/swipe.js finalizationPlanFor() and turns this
-// data into a LIVE oracle: test/swipe-stage6d.test.js compares production
-// finalizationPlanFor(classification).abortRender against expectedFinalization.abortRender
-// for all 8 structural cases. The DATA is unchanged from stage 4 — only its consumption is
-// new.
-//
 // expectedHosts carries the FROZEN sourceHost/destinationHost the STAGE-5 classification must
 // project (PLAN-swipe-stage5.md §3, F1-r) — a hand-written independent oracle, NOT derived from
-// production. Projection: sourceHost = fromKind==='overlay' ? 'overlay' : 'in-flow'; destinationHost
-// = toKind==='overlay' ? 'overlay' : toKind==='browse' ? 'browse-host' : 'home'. It is INERT until
-// classifyTransition re-emits the host fields at stage 5 — the generator reads only
-// expectedConstruction/expectedFinalization, and the per-pair host proof in swipe-transition.test.js
-// is `{ todo }` until then. Its presence here must NOT be read as "the hosts are verified".
+// production. Projection: a browse->browse PAIR projects 'browse-page' on BOTH ends, so its two
+// mover slots resolve to the two page NODES rather than to the one #browse host they share
+// (PLAN-swipe-declone.md §5.3.6, Invariant D6); otherwise sourceHost = fromKind==='overlay' ?
+// 'overlay' : 'in-flow', and destinationHost = toKind==='overlay' ? 'overlay' :
+// toKind==='browse' ? 'browse-host' : 'home'.
 export const STRUCTURAL_CASES = [
-  { from: 'home',    to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
-  { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
-  { from: 'browse',  to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'home-host',   decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'home' } },
-  { from: 'browse',  to: 'browse',  expectedConstruction: { outgoing: 'app-ghost',  incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'rerender' }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
-  { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
-  { from: 'overlay', to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'home-host',   decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'home' } },
-  { from: 'overlay', to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'browse-host' } },
-  { from: 'overlay', to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedFinalization: { abortRender: 'none' },     expectedHosts: { sourceHost: 'overlay', destinationHost: 'overlay' } },
+  { from: 'home',    to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'browse-host' } },
+  { from: 'home',    to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
+  { from: 'browse',  to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'home-host',   decorations: [] }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'home' } },
+  { from: 'browse',  to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-page', decorations: [] }, expectedHosts: { sourceHost: 'browse-page', destinationHost: 'browse-page' } },
+  { from: 'browse',  to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedHosts: { sourceHost: 'in-flow', destinationHost: 'overlay' } },
+  { from: 'overlay', to: 'home',    expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'home-host',   decorations: [] }, expectedHosts: { sourceHost: 'overlay', destinationHost: 'home' } },
+  { from: 'overlay', to: 'browse',  expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] }, expectedHosts: { sourceHost: 'overlay', destinationHost: 'browse-host' } },
+  { from: 'overlay', to: 'overlay', expectedConstruction: { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'none',        decorations: [] }, expectedHosts: { sourceHost: 'overlay', destinationHost: 'overlay' } },
 ];
 
-// A pane covers the view iff the outgoing is a ghost. The home-snapshot incoming
-// outcome is RETIRED (Stage 6i, PLAN-swipe-noswap-home.md): a →home reveal never builds
-// an owned pane. Derived from the construction contract, not stored on the plan (no
-// redundant field).
-export const paneOf = (c) => c.outgoing === 'app-ghost';
+// A pane covers the view iff the outgoing mover is anything OTHER than the real source.
+// After PLAN-swipe-declone.md Stage 2 no construction is one: the enum has a single value,
+// and this is the surface on which a re-introduced copy would have to declare itself.
+// Written against the one REAL value rather than against a retired literal, so a NEW copy
+// outcome — whatever it were called — is reported as a pane instead of silently passing.
+// Derived from the construction contract, not stored on the plan (no redundant field).
+export const paneOf = (c) => c.outgoing !== 'real-source';
 
 // The Now Playing pill MODIFIER — the outcome data, written once. NP as SOURCE clones a
 // decoration mover based at the outgoing slot (and the body loses np-locked); NP as
@@ -104,7 +102,7 @@ export const NP_DECORATION = {
 // removed such guards). The screen-name matrix documents it by skipping `f.v === t.v`.
 // A same-IDENTITY parameterized pair (authorBooks(A)->authorBooks(A)) IS reachable
 // (navTo pushes it) and IS a valid transition, so it yields a plan — it is NOT this case.
-const BROWSE_PLAN = { outgoing: 'app-ghost', incoming: 'real-destination', renderDestination: 'browse-host', decorations: [] };
+const BROWSE_PLAN = { outgoing: 'real-source', incoming: 'real-destination', renderDestination: 'browse-page', decorations: [] };
 
 // The SEVEN enumerated §15 (Engineering Contract) descriptor-scenario cases. This list is
 // the single source; test/descriptor-coverage-gate.test.js fails if the fixture below does

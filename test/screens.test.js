@@ -69,8 +69,13 @@ test('native scrollbars are hidden ONLY on the surfaces the indicator supports',
   const list = sel[0].split(',').map((s) => s.trim());
   // Stage 6i (PLAN-swipe-noswap-home.md §9 L2): #home left the document-scroll surface
   // and became its own fixed scroller, so it joins the scoped native-scrollbar hide too.
-  // The browse-decouple (PLAN-browse-decouple.md §6 B5) does the same for #browse.
-  assert.deepEqual(sortd(list), sortd(['html', 'body', '#home', '#browse', ...subs.map((s) => '#' + s), '#options']));
+  // The browse-decouple (PLAN-browse-decouple.md §6 B5) did the same for #browse, and
+  // PLAN-swipe-declone.md §5.3.1 then moved the browse SCROLLER down to each `.browsepage`
+  // — which is listed for a reason that is not cosmetic: a reserved classic scrollbar comes
+  // out of the scroll container's PADDING BOX, which is the box an absolutely-positioned
+  // descendant resolves against, so a page reserving a gutter is narrower than #browse's
+  // border box by it and §5.3.2's content-geometry equality is off by that much.
+  assert.deepEqual(sortd(list), sortd(['html', 'body', '#home', '#browse', '.browsepage', ...subs.map((s) => '#' + s), '#options']));
   assert.ok(!list.includes('*'), 'never hide native scrollbars globally — see finding 2');
   assert.ok(!list.includes('#nowplaying'), 'Now Playing must keep its native scrollbar');
 });

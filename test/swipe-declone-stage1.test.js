@@ -63,20 +63,28 @@ function addRow(h) {
 const outgoingOf = (fv, tv) =>
   Swipe.constructionPlanFor(Swipe.classifyTransition({ from: { v: fv }, to: { v: tv } })).outgoing;
 
-test('NOGHOSTINFLOW — after Stage 1 only browse->browse builds an owned pane; every other '
-  + 'structural pair (including home->browse, home->overlay, browse->overlay) moves its '
-  + 'real element directly', async () => {
+// Stage 1 narrowed the owned pane to browse->browse; Stage 2 (PLAN-swipe-declone.md §5.3)
+// removed even that, so EVERY structural pair now moves its real element. The cell's subject
+// is unchanged and is still Stage 1's: an IN-FLOW source going to a non-home destination —
+// home->browse, home->overlay, browse->overlay — must never be planned as a copy. Those three
+// are SHIPPED and device-confirmed, and the mutant that widens the condition back to stage
+// 6f's "in-flow source, non-home destination" still reddens exactly here.
+test('NOGHOSTINFLOW — no structural pair builds an owned pane; every in-flow source '
+  + '(home->browse, home->overlay, browse->overlay) moves its real element directly', async () => {
   const spec = await loadSpec();
   const REP = spec.REPRESENTATIVE;   // { home: 'home', browse: 'books', overlay: 'options' }
   const wrong = [];
   for (const c of spec.STRUCTURAL_CASES) {
     const got = outgoingOf(REP[c.from], REP[c.to]);
-    const want = (c.from === 'browse' && c.to === 'browse') ? 'app-ghost' : 'real-source';
-    if (got !== want) wrong.push(`${c.from}->${c.to} got '${got}' want '${want}'`);
+    if (got !== 'real-source') wrong.push(`${c.from}->${c.to} got '${got}' want 'real-source'`);
   }
   assert.deepEqual(wrong, [],
-    `every structural pair except browse->browse must move its real element, never build an owned `
-    + `pane:\n  ${wrong.join('\n  ')}`);
+    `every structural pair must move its real element, never build an owned pane:\n  ${wrong.join('\n  ')}`);
+  // Named explicitly, so the three SHIPPED in-flow rows this cell was built to defend are
+  // proved by name and not only as members of a loop that could be re-scoped.
+  for (const [f, t] of [['home', 'books'], ['home', 'options'], ['books', 'options']]) {
+    assert.equal(outgoingOf(f, t), 'real-source', `${f}->${t} must move its real element (SHIPPED, device-confirmed)`);
+  }
   assert.equal(spec.STRUCTURAL_CASES.length, 8, 'fixture sanity: there are eight structural cases');
 });
 

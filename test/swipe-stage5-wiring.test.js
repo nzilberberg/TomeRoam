@@ -47,13 +47,19 @@ test('F1b WIRING — outgoing rides at base 0, incoming parks at the signed ±d.
     assert.equal(starts(h).length, 1, 'the browse->browse back-swipe engaged');
     const w = h.window.innerWidth;
     assert.ok(w > 0, 'fixture sanity: the viewport has a width');
-    const inc = txNum(h.$('browse').style.transform);            // incoming, base = off = -d.w (back)
-    const ghostEl = h.document.querySelector('.nav-ghost');
-    const out = txNum(ghostEl && ghostEl.style.transform);       // outgoing app-ghost, base 0
-    assert.ok(inc !== null && inc < -w / 2,
+    // The two movers are two .browsepage nodes; the HOST carries no drag transform at all.
+    assert.equal(h.$('browse').style.transform, '',
+      'the #browse host must NOT be dragged on a browse->browse gesture — both mover slots '
+      + 'resolve to page nodes (Invariant D6 distinctness)');
+    const moved = [...h.document.querySelectorAll('.browsepage')]
+      .map((p) => txNum(p.style.transform)).filter((n) => n !== null);
+    assert.equal(moved.length, 2, `exactly two pages carry a drag transform; got ${moved.length}`);
+    const inc = Math.min(...moved);   // incoming, base = off = -d.w (back)
+    const out = Math.max(...moved);   // outgoing, base 0
+    assert.ok(inc < -w / 2,
       `a BACK swipe's incoming must park at a NEGATIVE base (-d.w); got translateX ${inc} (w=${w})`);
-    assert.ok(out !== null && Math.abs(out) < w / 2,
-      `the outgoing pane must ride at base 0 (only the small drag offset); got translateX ${out}`);
+    assert.ok(Math.abs(out) < w / 2,
+      `the outgoing page must ride at base 0 (only the small drag offset); got translateX ${out}`);
     h.touch.end(80, 302); await settle(h); await h.clock.advance(400); await settle(h);
   } finally { h.dispose(); }
 });

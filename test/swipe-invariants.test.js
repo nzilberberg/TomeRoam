@@ -245,24 +245,13 @@ test('I20 — a new touch while merely ARMED supersedes: the old session goes, t
 
     assert.equal(starts(h).length, 1,
       'exactly one gesture went live — the superseded one must never start()');
-    assert.equal(ghosts(h), 1,
-      'one pane, owned by the NEW session; a stranded pane from the old one would make two');
-  } finally { h.dispose(); }
-});
-
-test('I2/I20 — superseding a LIVE drag disposes its pane instead of stranding it', async () => {
-  const h = boot({ fakeTimers: true });
-  try {
-    await onAuthorsOverBooks(h);
-    h.touch.start(10, 300, addRow(h));
-    await realSleep(12);
-    h.touch.move(120, 302);              // live: start() ran, a ghost pane exists
-    assert.equal(ghosts(h), 1, 'fixture sanity: the live drag really did build a pane');
-
-    h.touch.start(10, 300, addRow(h));   // superseded by a new gesture
-    await settle(h);
-    assert.equal(ghosts(h), 0,
-      'every pane is released or disposed exactly once, on every exit path (I2)');
+    // OBSERVABLE MIGRATED (PLAN-swipe-declone.md Stage 2). This used to count owned panes —
+    // one, owned by the NEW session, because a stranded pane from the old one would make two.
+    // No transition builds a pane any more, so the count is always 0 and would prove nothing;
+    // what it stood for — the superseded session leaves NOTHING behind — is asserted directly
+    // instead: no pane, and exactly one live session, the new one.
+    assert.equal(ghosts(h), 0, 'no transition builds an owned pane, so none can be stranded');
+    assert.ok(activeSession(h), 'the NEW session owns the UI after the supersession');
   } finally { h.dispose(); }
 });
 
@@ -373,26 +362,35 @@ test('supersession CONTROL — the mid-drag render really does put the destinati
   } finally { h.dispose(); }
 });
 
-// LIVE GUARD (Stage 6a, closed KR-swipe-source-rerender; stage 6d re-derived the render
-// flag). The supersession pre-stack recovery re-renders the SOURCE into the shared
-// #browse (app.js begin(): applyScreen(currentDesc(), { render: cur.live &&
-// cur.finPlan.abortRender === 'rerender' }) inside the hold envelope), so the
-// host content matches the screen the stack + navbar return to — closing the wrong-page/
-// wrong-tap class .178 fixed. Before the build it failed MEASURED with
-// renders = ["books","authors","books"] (mid-drag put Books in, nothing put Authors back);
-// after the build renders end on 'authors'. Was `{ todo }` (new policy); Brunel built it.
-test('I11/I20 — superseding a live browse->browse drag re-renders the SOURCE into #browse',
+// LIVE GUARD (Stage 6a closed KR-swipe-source-rerender; stage 6d re-derived the render flag;
+// PLAN-swipe-declone.md Stage 2 made the guarantee STRUCTURAL and retired the mechanism).
+//
+// THE GUARANTEE IS UNCHANGED: after a superseded browse->browse drag, the browse view must
+// hold the SOURCE screen, because that is where the stack and the navbar return to — the
+// wrong-page/wrong-tap class .178 fixed. What changed is why it holds. Stage 6a made the
+// pre-stack recovery RE-RENDER the source into the shared #browse; Stage 2 gives each browse
+// page its own element, so the mid-drag render never overwrote the source in the first place
+// and there is nothing to put back.
+//
+// SO THE ASSERTION IS INVERTED, and deliberately: the old measured failure was
+// renders = ["books","authors","books"] — mid-drag put Books in and nothing put Authors back,
+// so the fix ADDED a third render. Now a third render is the DEFECT: it would mean the source
+// was clobbered after all. The recovery must reconcile without rendering anything.
+test('I11/I20 — a superseded live browse->browse drag leaves the SOURCE showing, with no re-render',
   async () => {
     const h = boot({ fakeTimers: true });
     try {
       await onAuthorsOverBooks(h);
+      const before = renders(h).length;
       h.touch.start(10, 300, addRow(h));
       await realSleep(12);
       h.touch.move(120, 302);                        // live: Authors -> Books
       h.touch.start(10, 300, addRow(h));             // superseded by a new gesture
       await settle(h);
-      assert.equal(renders(h).at(-1), 'authors',
-        `I11: nav returns to the source, so #browse must hold the source too. renders=${JSON.stringify(renders(h))}`);
+      assert.deepEqual(renders(h).slice(before), ['books'],
+        'the ONLY render is the mid-drag destination one. A render of the source after it means '
+        + 'the source was overwritten and had to be rebuilt — the very thing Invariant D3 removes. '
+        + `renders=${JSON.stringify(renders(h))}`);
     } finally { h.dispose(); }
   });
 
@@ -561,33 +559,17 @@ test('endpoint — a VERTICAL abandon leaves no active owner', async () => {
   } finally { h.dispose(); }
 });
 
-// ⚠️ REWORKED per the .223 review, finding 4. The prior version asserted only that the
-// owner was null 700ms later — but a mutation that clears the session AT FINALIZE
-// (ignoring revealPending) reaches that same end state and survived. So this pins the
-// INTERMEDIATE ownership: with deferRaf the held reveal's paint gate stays pending, so
-// after finalize the ghost is still covering and the owner MUST still be active; only
-// once the paint frames fire and drop() runs may it be null.
-test('endpoint — a HELD reveal keeps the owner THROUGH finalize, releasing it only at drop', async () => {
-  const h = boot({ fakeTimers: true, deferRaf: true });
-  try {
-    // Stage 6i (PLAN-swipe-noswap-home.md §5/§12) retired the commit→home held reveal
-    // this test used to drive — browse→home no longer holds (the real fixed #home is the
-    // un-parked incoming mover, never covered by a snapshot or a ghost). An ABORTED
-    // browse->browse swipe (Authors<->Books) is the surviving held path: it re-renders
-    // the source under the ghost and holds until paintable
-    // (holdGhostUntilPaintable($('browse'), cover), unchanged by this stage).
-    await onAuthorsOverBooks(h);
-    await abortingSwipe(h, addRow(h));   // drives the 340ms finalize; the 600ms backstop stays unfired
-    // finalize ran and STARTED the held reveal; the paint gate (double-rAF) is queued,
-    // not fired, so the pane still covers — the owner must survive.
-    assert.ok(activeSession(h),
-      `the owner must survive finalize while the reveal pane is held; got ${JSON.stringify(activeSession(h))}`);
-    // Fire the paint frames → drop() → owner ends.
-    for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();
-    await settle(h);
-    assert.equal(activeSession(h), null, 'once the held pane drops, the owner must be gone');
-  } finally { h.dispose(); }
-});
+// ── RETIRED WITH THE CLONE (PLAN-swipe-declone.md Stage 2, §12 item 27) ─────────────
+// Two cells here had the BUILT PANE as their only subject. "I2/I20 — superseding a LIVE
+// drag disposes its pane instead of stranding it" pinned I2 (every pane released or
+// disposed exactly once on every exit path); with no pane built there is none to strand,
+// and I2 now holds vacuously for the only ownership kind left — the NP pill decoration,
+// whose disposal is pinned by the DEC cell in test/swipe-stage6e.test.js. "endpoint — a
+// HELD reveal keeps the owner THROUGH finalize" pinned the intermediate ownership across
+// the held reveal's paint gate, and the held reveal existed only to keep a ghost covering
+// a page being re-decoded after an abort re-render. Both the re-render and the hold are
+// gone (§12 items 13 and 15a), so an abort now ends its session at finalize like every
+// other transition — which the surrounding endpoint cells already pin.
 
 // ── .223 review, finding 1a — the paused settle rAF must not write a stale transform ──
 // Hidden mid-settle, rAF pauses but the 340ms finalize timer still fires; finalize

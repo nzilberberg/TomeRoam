@@ -198,19 +198,6 @@ test('constructionPlanFor throws on an unhandled source kind, not just destinati
     /unhandled destination kind/);
 });
 
-// 6d / §3.3 — finalizationPlanFor mirrors constructionPlanFor's own-contract guard: no
-// default branch on EITHER kind. A directly-supplied bad fromKind/toKind must THROW rather
-// than fall through to the abortRender ternary (which would silently answer 'none' for an
-// unhandled kind). These guards (js/swipe.js finalizationPlanFor) shipped in Stage 6d without
-// a throw test or a registered mutant — Mendeleev's BC-1: making BOTH guards inert left the
-// whole swipe suite green. Registered mutants: tools/mutate.mjs "swipe6d BC-1a"/"BC-1b".
-test('finalizationPlanFor throws on an unhandled source kind and on an unhandled destination kind', () => {
-  assert.throws(() => Swipe.finalizationPlanFor({ fromKind: 'nonsense', toKind: 'browse' }),
-    /unhandled source kind/);
-  assert.throws(() => Swipe.finalizationPlanFor({ fromKind: 'browse', toKind: 'nonsense' }),
-    /unhandled destination kind/);
-});
-
 // ── STAGE 5 — the reintroduced host fields ───────────────────────────────────────────
 // PLAN-swipe-stage5.md F2/F1-r. Build .229 removed sourceHost/destinationHost from
 // classifyTransition (no consumer then; the no-dead-fields rule — see CLASSIFICATION_KEYS

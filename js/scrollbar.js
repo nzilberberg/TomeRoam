@@ -2,16 +2,16 @@
 // title bar and the transport (or nav bar). The native viewport scrollbar runs the
 // full window height, behind both fixed bars, with no way to inset it. So we hide the
 // native scrollbars on the surfaces THIS indicator supports (the document, the fixed
-// own-scroll #home, the fixed own-scroll #browse, and the settings overlays — see the
-// SCOPED rule in app.css) and draw our own thin indicator here.
+// own-scroll #home, each browse page, and the settings overlays — see the SCOPED rule
+// in app.css) and draw our own thin indicator here.
 //
 // SCOPE (important): the indicator covers surfaces whose scroll fits the
 // title-bar→transport band: the DOCUMENT (a residual surface — no in-flow app view
 // rides it any longer, both #home and #browse are their own fixed scrollers), the
-// fixed own-scroll #home (Stage 6i, PLAN-swipe-noswap-home.md §9 L2), the fixed
-// own-scroll #browse (Books/Authors/files — the browse-decouple, PLAN-browse-decouple.md
-// §6 B5 — #browse left the document-scroll surface the same way #home did), and the
-// settings overlays (#options + subs). Higher, differently-shaped scrollers — Now
+// fixed own-scroll #home (Stage 6i, PLAN-swipe-noswap-home.md §9 L2), each browse PAGE
+// (Books/Authors/files — the browse-decouple took #browse off the document scroll the
+// same way #home did, and PLAN-swipe-declone.md §5.3.1 then moved the scroller itself
+// down to each `.browsepage` inside it), and the settings overlays (#options + subs). Higher, differently-shaped scrollers — Now
 // Playing (z60), the speed popover (z50), the track-info sheet (z80), the book menu
 // (z85) — sit ABOVE this indicator and have their OWN geometry, so they KEEP their
 // native scrollbars and this module ignores their scroll events (surfaceKind → null).
@@ -40,14 +40,20 @@ const ScrollBar = (() => {
   const isDoc = (t) => t === document || t === document.documentElement || t === document.body || t === window;
 
   // 'doc' = the window/document scroll (Books / Authors / files); 'home' = the fixed
-  // own-scroll #home (Stage 6i); 'browse' = the fixed own-scroll #browse (the
-  // browse-decouple); 'overlay' = a settings sub-screen's own scroll; null = anything
-  // else (NP / sheet / popover / modal / stray element) → NOT ours, leave its native
-  // scrollbar alone.
+  // own-scroll #home (Stage 6i); 'browse' = the browse scroller — since
+  // PLAN-swipe-declone.md §5.3.1 that is each `.browsepage`, an inset:0 absolutely-
+  // positioned child of the #browse box, and NOT #browse itself; 'overlay' = a settings
+  // sub-screen's own scroll; null = anything else (NP / sheet / popover / modal / stray
+  // element) → NOT ours, leave its native scrollbar alone.
+  // ⛔ A `.browsepage` carries NO id (browse.js creates it with a class only), so the id
+  // test below cannot see it: without the class case every browse scroll event took the
+  // unsupported branch and the indicator removed itself on browse. #browse is retained
+  // as a kind because it is still the box and still the element `.hidden` toggles.
   function surfaceKind(t) {
     if (isDoc(t)) return 'doc';
     if (t && t.id === 'home') return 'home';
     if (t && t.id === 'browse') return 'browse';
+    if (t && typeof t.classList === 'object' && t.classList && t.classList.contains('browsepage')) return 'browse';
     if (t && typeof t.matches === 'function' && t.matches(OVERLAY_SEL)) return 'overlay';
     return null;
   }

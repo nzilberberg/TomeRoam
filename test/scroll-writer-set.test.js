@@ -70,11 +70,15 @@ const NON_SOURCE_TREES = ['android/build', '.claude/worktrees'];
 // horizontal write on a descendant cannot move an ancestor's vertical offset. Registered
 // rather than pattern-excluded so the exclusion is a decision, not an omission.
 const HORIZONTAL_CLASS = [
-  { file: 'js/swipe.js', text: 'c[i].scrollLeft =',
-    why: 'carousel offsets copied onto the CLONE, never onto a real view' },
   { file: 'js/app.js', text: 't.dataset.sl = t.scrollLeft',
     why: 'a dataset WRITE that READS scrollLeft — not a scroll write at all' },
 ];
+// RE-DERIVED 2026-08-01 for PLAN-swipe-declone.md Stage 2. The class had a second member,
+// js/swipe.js "c[i].scrollLeft =" — carousel offsets copied onto the CLONE. It is gone with
+// the clone-fidelity helper cluster (plan §12 item 3): the real carousels keep their own
+// scrollLeft, so there was nothing left to copy them onto. De-registered rather than left to
+// rot, and the class is NOT pattern-excluded — the surviving member keeps the registration
+// honest, and a NEW horizontal writer must still be registered here rather than filtered out.
 
 // ── S4 — TEXTUAL only. Non-textual movers are outside reach BY CONSTRUCTION, not by
 // omission; they are residuals (§8 R-writer-enum), and browser scroll anchoring is the live
@@ -174,20 +178,27 @@ const BASELINE = [
   { n: 2, cls: 'A', file: 'js/nav.js', text: "if (resetScroll) $(desc.v).scrollTop = 0;",
     target: 'the screen element for desc.v, guarded by resetScroll', owner: 'nav applyScreen',
     why: "reached only after the desc.v === 'home' branch has already returned, so desc.v !== 'home'" },
-  { n: 3, cls: 'A', file: 'js/browse.js', text: 'o.mount.scrollTop = clampY(',
-    target: 'the browse mount', owner: 'browse.js applyScrollY',
-    why: 'o.mount is the #browse scroller' },
-  { n: 4, cls: 'A', file: 'js/browse.js', text: 'scrollTo: (y) => { o.mount.scrollTop = y; },',
-    target: 'the browse mount', owner: "browse.js's injected opts.scrollTo seam",
-    why: 'o.mount is the #browse scroller. The text `scrollTo:` here is a property KEY, not a '
-      + 'call site, so it is not double-counted in class B' },
+  { n: 3, cls: 'A', file: 'js/browse.js', text: 'page.scrollTop = clampY(',
+    target: 'a .browsepage element', owner: 'browse.js applyScrollY',
+    why: 'a browse PAGE is the browse scroller since PLAN-swipe-declone.md §5.3.1 — an '
+      + 'inset:0 absolutely-positioned child of #browse, never #home. The write target is the '
+      + 'page PARAMETER, so it is whatever page the caller already holds and cannot be '
+      + 'redirected by an inference' },
+  { n: 4, cls: 'A', file: 'js/browse.js', text: 'scrollTo: (y) => { m.scrollTop = y; },',
+    target: 'the .browsepage a virtual controller was built for', owner: "browse.js's injected opts.scrollTo seam",
+    why: 'the closure captures virtualView\'s own page-node parameter, so each controller '
+      + 'writes ITS OWN page and no two share a pointer (PLAN-swipe-declone.md §5.3.4). Never '
+      + '#home. The text `scrollTo:` here is a property KEY, not a call site, so it is not '
+      + 'double-counted in class B' },
   { n: 5, cls: 'A', file: 'js/debug.js', text: 'body.scrollTop = body.scrollHeight;',
     target: 'the debug log body', owner: 'the debug overlay',
     why: 'an element inside the debug overlay' },
 
   // ── Class B — element `scrollTo`/`scrollBy`/`scrollIntoView` call sites (4 sites).
   { n: 6, cls: 'B', file: 'js/browse.js', text: "el.scrollIntoView({ block: 'start' });",
-    target: "a .lettergroup descendant of the browse mount, whose nearest scroll container is #browse",
+    target: 'a .lettergroup descendant of a browse PAGE, whose nearest scroll container is that '
+      + 'page — PLAN-swipe-declone.md §5.3.1 moved the scroller from #browse down to each page, '
+      + 'so this entry\'s previous recording of #browse as the container is no longer true',
     owner: "browse.js's local scrollTo(L) helper",
     why: 'a browse-mount descendant. ⚠️ CAVEAT REGISTERED: the target is resolved by a '
       + 'RUNTIME-BUILT selector, so the derivation can see the CALL but cannot prove the TARGET '
@@ -197,7 +208,7 @@ const BASELINE = [
   { n: 8, cls: 'B', file: 'js/browse.js', text: 'scrollTo(t.dataset.letter);',
     target: 'entry 6', owner: 'the alpha-index click handler', why: 'calls entry 6' },
   { n: 9, cls: 'B', file: 'js/virtuallist.js', text: 'opts.scrollTo(y + metrics.listTop()',
-    target: 'whatever the injected seam targets, which at HEAD is entry 4\'s browse mount',
+    target: "whatever the injected seam targets, which at HEAD is entry 4's .browsepage node",
     owner: 'the virtual list', why: 'the virtual list touches no element directly' },
 
   // ── Class C — `window`-targeted DOCUMENT scroll, the separate class of S3 (5 sites).
@@ -207,10 +218,12 @@ const BASELINE = [
   // are fixed own-scroll boxes (the reasoning recorded at css/app.css:146-149).
   { n: 10, cls: 'B', file: 'js/app.js', text: 'if (cur) window.scrollTo(0, cur.scroll0);',
     target: 'the document', owner: 'the supersession recovery', why: 'a document scroll, not an element write' },
+  // Entries 11 and 12 were a GROUP of two sharing this text — the HELD abort path and the
+  // no-hold abort path. PLAN-swipe-declone.md Stage 2 deleted the held abort branch (an abort
+  // has nothing to rebuild and nothing to hold), so the group has a single member now, and the
+  // group-count check is exactly what would have caught that deletion going unrecorded.
   { n: 11, cls: 'B', file: 'js/app.js', text: 'window.scrollTo(0, cur.scroll0);',
-    target: 'the document', owner: 'the HELD abort path', why: 'a document scroll, not an element write' },
-  { n: 12, cls: 'B', file: 'js/app.js', text: 'window.scrollTo(0, cur.scroll0);',
-    target: 'the document', owner: 'the no-hold abort path', why: 'a document scroll, not an element write' },
+    target: 'the document', owner: 'the abort path', why: 'a document scroll, not an element write' },
   { n: 13, cls: 'D', file: 'js/app.js', text: 'window.scrollTo = function (...args) {',
     target: 'the window.scrollTo API ITSELF', owner: 'the reveal watcher\'s diagnostic wrapper',
     why: 'write-through and document-scoped like the calls it wraps, so it moves nothing on '

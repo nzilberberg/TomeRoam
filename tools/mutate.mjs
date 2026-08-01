@@ -65,7 +65,7 @@ const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'left
 const HARDRESET_DISPOSE_FROM = [
   "        if (cur) disposeOwnedPanes(cur, 'superseded');",
   '        resetSwipeStyles(cur ? true : undefined);',
-  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
+  "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
 ].join('\n');
 const HARDRESET_DISPOSE_TO = '        /* mutated: no hard reset */';
 // stage 6a §9 VR — the two ordering defects the Loki strike measured against the real
@@ -73,7 +73,7 @@ const HARDRESET_DISPOSE_TO = '        /* mutated: no hard reset */';
 const VR_HOLD_ORDER_FROM = [
   "        if (cur) disposeOwnedPanes(cur, 'superseded');",
   '        resetSwipeStyles(cur ? true : undefined);',
-  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
+  "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
   '        if (cur) window.scrollTo(0, cur.scroll0);',
   '        dropRowHold();',
 ].join('\n');
@@ -81,7 +81,7 @@ const VR_HOLD_ORDER_TO = [
   '        dropRowHold();',
   "        if (cur) disposeOwnedPanes(cur, 'superseded');",
   '        resetSwipeStyles(cur ? true : undefined);',
-  "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
+  "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
   '        if (cur) window.scrollTo(0, cur.scroll0);',
 ].join('\n');
 // Re-anchored stage 6c: `finishing = false;` (F2) now sits between dropRowHold() and
@@ -107,26 +107,33 @@ const VR_IDENTITY_ORDER_TO = [
 // calls renderScreen(), never Browse.render()), so the flag's value cannot leak into a
 // #browse render for that fixture regardless. NC's genuine proof is the scroll mutation
 // below, which reddens its scroll-restore clause directly.
-const RECOVERY_RENDER_LINE = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });";
+const RECOVERY_RENDER_LINE = "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });";
 const RECOVERY_RENDER_ALWAYS_FALSE = "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });";
 // stage 6a Poirot F1 (Claude/Poirot/f09cf9d-swipe-stage6-supersession.md) — the orphan
 // sub-case (d===null) must keep nav.js's default resetScroll so a home/options source
 // still scrolls to top. Forcing resetScroll:false back onto the orphan (the f09cf9d bug)
 // reds the OB-home cell in test/swipe-stage6.test.js.
-const F1_ORPHAN_RESETSCROLL_TO = "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: false, keepGhosts: cur ? true : undefined });";
+const F1_ORPHAN_RESETSCROLL_TO = "        applyScreen(currentDesc(), { render: false, resetScroll: false, keepGhosts: cur ? true : undefined });";
 
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
 // Stage 1 (PLAN-swipe-declone.md §5.1) retires the `fromKind` argument along with
 // ghostApp's HOME-source branch (browse->browse is the only caller left), so this anchor
 // re-points at the now-bare `ghostApp()` call — same F7a ordering intent, new text.
-const S5_ORDER_FROM = [
-  "    if (plan.outgoing === 'app-ghost') {",
-  '      const g = ghostApp();',
+const FINALIZE_ORDER_FROM = [
+  '        let ok = false;',
+  '        try { runFinalize(); ok = true; } finally {',
+  '          dropRowHold(); endOwnership();',
 ].join('\n');
+const FINALIZE_ORDER_TO = [
+  '        let ok = false;',
+  '        dropRowHold();   /* mutated: the hold releases BEFORE the applyScreen it must follow */',
+  '        try { runFinalize(); ok = true; } finally {',
+  '          endOwnership();',
+].join('\n');
+const S5_ORDER_FROM = "    outgoing = mover(env.sourceEl(sourceHost, from.v), 'borrowed-real', 'outgoing');";
 const S5_ORDER_TO = [
-  "    if (plan.outgoing === 'app-ghost') {",
-  '      env.renderDestination(dest, destinationHost);',
-  '      const g = ghostApp();',
+  '    env.renderDestination(dest, destinationHost);   /* mutated: render BEFORE the source is resolved */',
+  "    outgoing = mover(env.sourceEl(sourceHost, from.v), 'borrowed-real', 'outgoing');",
 ].join('\n');
 const S5_NPPILL_FROM = [
   "      doc.querySelectorAll('.np-pill-float').forEach((n) => n.remove());",
@@ -202,8 +209,8 @@ const MUTATIONS = [
   // test/mutation-anchors.test.js, not by anyone running this file.
   { name: 'browse: drop browseVisible from the scroll-yank guard (.161)',
     file: 'js/browse.js',
-    from: "    if (browseVisible() && !offscreen(page)) positionOnEnter(desc, page, 0);",
-    to: "    if (!offscreen(page)) positionOnEnter(desc, page, 0);" },
+    from: "    if (browseVisible() && !offscreen(page)) positionOnEnter(desc, page);",
+    to: "    if (!offscreen(page)) positionOnEnter(desc, page);" },
   // The ordering assertion the shared recorder made possible: claim ownership only
   // AFTER the element is loading. `.162`'s report claimed this lived here and it
   // did not — the tool had the two production fixes but never this one, so the
@@ -238,12 +245,12 @@ const MUTATIONS = [
   { name: 'swipe: begin() stops hard-resetting a superseded session (-> I2/I20 pane test)',
     from: HARDRESET_DISPOSE_FROM, to: HARDRESET_DISPOSE_TO },
   // ── SWIPE stage 6a: supersession pre-stack recovery (PLAN-swipe-stage6.md §6/§9) ─
-  { name: 'stage6a (a): the Browse hold releases BEFORE the recovery render (-> VR: kept rows dematerialize/rebuild)',
-    from: VR_HOLD_ORDER_FROM, to: VR_HOLD_ORDER_TO },
+  { name: 'stage6a (a) re-anchored: the Browse hold releases BEFORE the applyScreen it must follow, so endHold is handed the PRE-commit descriptor (-> LANDEDPAGESHOWS commit half)',
+    from: FINALIZE_ORDER_FROM, to: FINALIZE_ORDER_TO },
   { name: 'stage6a (b): session/d null BEFORE the hold release (-> VR: dropRowHold no-ops, hold leaks)',
     from: VR_IDENTITY_ORDER_FROM, to: VR_IDENTITY_ORDER_TO },
-  { name: 'stage6a: recovery never re-renders a clobbered source (-> SR known-red test)',
-    from: RECOVERY_RENDER_LINE, to: RECOVERY_RENDER_ALWAYS_FALSE },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the mutation IS the shipped behaviour now. No transition overwrites its source, so the
+  // recovery never re-renders and `render: false` is literal — there is no decision left to defeat.
   { name: 'stage6a: recovery stops restoring the session-start scroll (-> SC known-red test, NC scroll clause)',
     from: '        if (cur) window.scrollTo(0, cur.scroll0);',
     to: '        /* mutated: no scroll restore */' },
@@ -288,27 +295,17 @@ const MUTATIONS = [
     // an outer commit/abort branch that already established `cur`).
     from: '        if (cur) window.scrollTo(0, cur.scroll0);',
     to: '        /* mutated: no scroll restore */' },
-  { name: 'swipe: held abort stops restoring the starting scroll (-> I7 test)',
-    // Unique via the following mark('restored') — only the held-abort path (the
-    // `abortRender === 'rerender'` branch) reports that mark immediately after the
-    // scroll restore.
-    from: [
-      '          window.scrollTo(0, cur.scroll0);',
-      "          mark('restored');",
-    ].join('\n'),
-    to: [
-      '          /* mutated: no scroll restore */',
-      "          mark('restored');",
-    ].join('\n') },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the HELD abort branch is deleted (§12 item 13) — an abort has nothing to hold a ghost over,
+  // so there is no held scroll restore to suppress. The no-hold abort restore is still guarded below.
   { name: 'swipe: no-hold abort stops restoring the starting scroll (-> AB.noclobber-overlay / AB.noclobber-home tests)',
     // Unique via the preceding applyScreen statement — only the no-hold abort branch
     // pairs this scroll restore with that exact resetScroll:false applyScreen call.
     from: [
-      "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });",
+      "          applyScreen(dest, { render: false, resetScroll: false });",
       '          window.scrollTo(0, cur.scroll0);',
     ].join('\n'),
     to: [
-      "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });",
+      "          applyScreen(dest, { render: false, resetScroll: false });",
       '          /* mutated: no scroll restore */',
     ].join('\n') },
   { name: 'swipe: abort mutates the nav stack like a commit (-> I11 abort test)',
@@ -348,8 +345,7 @@ const MUTATIONS = [
     // ownership end is now this line.
     from: 'dropRowHold(); endOwnership();',
     to:   'dropRowHold();' },
-  { name: 'stage3: held reveal drop does not end ownership (-> endpoint held-reveal test)',
-    from: DROP_SESSIONDONE_FROM, to: DROP_SESSIONDONE_TO },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): holdGhostUntilPaintable is deleted with its only caller — no path ends ownership at a drop.
   // ── .223 review fixes (sanctioned: findings 1a, 2, and 4's stronger test) ──────
   { name: 'r223 1a: settle rAF not cancelled → stale transform on real #browse (-> 1a test)',
     from: 'cancelAnimationFrame(cur.settleFrame);',
@@ -448,45 +444,37 @@ const MUTATIONS = [
     file: 'js/swipe.js',
     from: '    const mover = (element, ownership, slot) => ({ element, ownership, slot });',
     to:   '    const mover = (element, ownership, slot) => ({ el: element, own: ownership, slot });' },
-  { name: 'swipe5 F1c: an owned pane is not the sole capture source (capture set for overlay<->overlay) (-> capture-null test)',
-    file: 'js/swipe.js',
-    from: '    let capture = null, outgoing, incoming, decoration = null;',
-    to:   '    let capture = { animSync: 0, animRes: 0 }, outgoing, incoming, decoration = null;' },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the `capture` field is REMOVED from the Construction return (§6): no producer, no key, nothing to set.
   // swipe5 F2-r "the home snapshot capture carries a ghostY it must not" REMOVED (Stage 6i,
   // PLAN-swipe-noswap-home.md §5/§12 scrub): its target, snapshotHome()'s return statement,
   // is DELETED — a →home reveal no longer builds any owned pane, so there is no home-snapshot
   // capture left for a ghostY to leak into. The class of defect (a capture missing/gaining a
   // field it should not carry) stays covered elsewhere: swipe5 F1c above (capture set when it
   // must be null) and the exact-key assertions in test/swipe-construction.test.js.
-  { name: 'swipe5 F4a: the app-ghost recipe reads an ambient document, not env.document (-> no-ambient recipe test)',
+  // RE-ANCHORED (PLAN-swipe-declone.md Stage 2): the app-ghost recipe is deleted, so the
+  // ambient-read hazard moves to the ONE builder left — npPillClone. The intent is identical
+  // (a builder reaching the world through a global instead of through env) and the cell that
+  // kills it is the same one, now driven on an NP transition.
+  { name: 'swipe5 F4a: the surviving pane builder reads an ambient document, not env.document (-> no-ambient recipe test)',
     file: 'js/swipe.js',
-    from: "      const clone = doc.querySelector('.app').cloneNode(true);",
-    to:   "      const clone = document.querySelector('.app').cloneNode(true);" },
-  { name: 'swipe5 F4b: copyAnimPhase reads an ambient Element, not env\'s (-> copyAnimPhase-through-env test)',
-    file: 'js/swipe.js',
-    from: '      const El = win && win.Element;',
-    to:   "      const El = (typeof Element !== 'undefined') ? Element : (win && win.Element);" },
-  { name: 'swipe6d FP/AB: finalizationPlanFor forces abortRender to none regardless of classification (-> FP oracle + AB.clobber test)',
-    file: 'js/swipe.js',
-    from: "    const abortRender = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'rerender' : 'none';",
-    to:   "    const abortRender = 'none';" },
-  { name: 'swipe5 F7a: the destination render runs BEFORE the outgoing ghost is built (-> outgoing-before-render test)',
+    from: "      doc.querySelectorAll('.np-pill-float').forEach((n) => n.remove());\n      const clone = env.navPill().cloneNode(true);",
+    to:   "      document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());\n      const clone = env.navPill().cloneNode(true);" },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): copyAnimPhase is deleted with the clone-fidelity cluster — the real nodes carry their own
+  // running animations, so no phase is copied and no Element is read. The no-ambient-DOM
+  // guarantee itself is still guarded by the re-anchored F4a mutant below.
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): finalizationPlanFor is deleted with the abortRender decision (§12 item 8).
+  { name: 'swipe5 F7a: the destination render runs BEFORE the outgoing mover is resolved (-> outgoing-before-render test)',
     file: 'js/swipe.js',
     from: S5_ORDER_FROM, to: S5_ORDER_TO },
-  { name: 'swipe5 navGhost: the ghost wrapper sits ABOVE the persistent bars (z>=30) (-> nav-ghost contract test)',
-    file: 'js/swipe.js',
-    from: "      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;pointer-events:none;will-change:transform;';",
-    to:   "      wrap.style.cssText = 'position:fixed;inset:0;z-index:99;overflow:hidden;pointer-events:none;will-change:transform;';" },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): ghostWrap and the .nav-ghost wrapper are deleted (§12 item 2) — there is no wrapper to mis-stack.
   { name: 'swipe5 npPill: npPillClone stops removing the stale float (-> NP pill recipe test)',
     file: 'js/swipe.js',
     from: S5_NPPILL_FROM, to: S5_NPPILL_TO },
-  { name: 'swipe5 freezeArt: the app-ghost recipe skips freezeArt, leaving data-art on the clone (-> freezeArt recipe test)',
-    file: 'js/swipe.js',
-    from: S5_FREEZEART_FROM, to: S5_FREEZEART_TO },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): freezeArt is deleted (§12 item 3) — no nodes are created, so nothing can re-trigger the art loader.
   // — CONTRACT (js/swipe.js) —
   { name: 'swipe5 F1-r: the sourceHost projection is mis-mapped (overlay source -> in-flow) (-> per-pair host projection test)',
     file: 'js/swipe.js',
-    from: "    const sourceHost = fromKind === 'overlay' ? 'overlay' : 'in-flow';",
+    from: "    const sourceHost = fromKind === 'overlay' ? 'overlay' : browsePair ? 'browse-page' : 'in-flow';",
     to:   "    const sourceHost = 'in-flow';" },
   // — WIRING / L3 adapter (js/app.js) —
   { name: 'swipe5 F1b: L3 maps the incoming base with the WRONG sign (-> F1b base-sign wiring)',
@@ -526,23 +514,15 @@ const MUTATIONS = [
   // Each makes its guard body a no-op, so an unhandled kind falls through to the abortRender
   // ternary and silently answers 'none' instead of throwing → reddens the new throw test in
   // test/swipe-transition.test.js. Same `void 0` shape as swipe4 F3.
-  { name: 'swipe6d BC-1a: finalizationPlanFor no longer throws on an unhandled fromKind (-> finalizationPlanFor unhandled-kind test)',
-    file: 'js/swipe.js',
-    from: `      throw new Error('Swipe.finalizationPlanFor: unhandled source kind "' + c.fromKind + '"');`,
-    to:   '      void 0; // mutated: fromKind guard inert' },
-  { name: 'swipe6d BC-1b: finalizationPlanFor no longer throws on an unhandled toKind (-> finalizationPlanFor unhandled-kind test)',
-    file: 'js/swipe.js',
-    from: `      throw new Error('Swipe.finalizationPlanFor: unhandled destination kind "' + c.toKind + '"');`,
-    to:   '      void 0; // mutated: toKind guard inert' },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): finalizationPlanFor is deleted (§12 item 8), and with it both own-contract guards.
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): finalizationPlanFor is deleted (§12 item 8), and with it both own-contract guards.
   // The RC.armed §4.10 tooling loop: the committed RC.armed test catches dropping the
   // `cur.live` build-ran conjunct from the recovery reader (js/app.js), but there was no
   // REGISTERED mutant for it. Dropping `cur.live &&` makes an ARMED (pre-lock, never-built)
   // browse→browse recovery read finPlan.abortRender directly ('rerender'), so it wrongly
   // re-renders #browse → reddens RC.armed (a DRAGGING/overlay supersession is unchanged:
   // cur.live is true / abortRender is 'none' there).
-  { name: 'swipe6d RC: recovery reader drops the cur.live build-ran conjunct (-> RC.armed test)',
-    from: "render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false",
-    to:   "render: cur ? (cur.finPlan.abortRender === 'rerender') : false" },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the conjunct guarded a render decision that no longer exists — the recovery renders nothing.
   // ── SWIPE stage 6e: owner-driven disposeOwnedPanes(session, reason) (PLAN-swipe-stage6e.md) ─
   // Curie authored the DP/BR/HR/DEC/RGreveal cells before disposeOwnedPanes existed, so their
   // true built-code defenders (a broken filter INSIDE the new helper, and the nav.js decoration
@@ -569,12 +549,13 @@ const MUTATIONS = [
   // the owned pane is already gone via disposeOwnedPanes, so the DOM outcome is UNCHANGED and only
   // NOOP.mechanism's sweep-count reddens (count 1) — which is exactly why a DOM-outcome cell (DP)
   // cannot catch it and a mechanism cell must. Two one-site mutants, one per site.
-  { name: 'swipe6e NOOP-a: owned branch drops keepGhosts at the explicit resetSwipeStyles (app.js) -> the global .nav-ghost sweep runs (-> NOOP.mechanism)',
-    from: '        resetSwipeStyles(cur ? true : undefined);',
-    to:   '        resetSwipeStyles(undefined);' },
-  { name: 'swipe6e NOOP-b: owned branch drops keepGhosts in the applyScreen opts (app.js) -> applyScreen\'s internal sweep runs (-> NOOP.mechanism)',
-    from: "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
-    to:   "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined });" },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): NOOP-a and NOOP-b both asserted which of two
+  // mechanisms disposes an OWNED PANE on the recovery branch. No transition builds one, so both
+  // sweeps remove nothing and each mutant applies cleanly while changing no behaviour — the sweep
+  // reported both UNCAUGHT. Nothing is left undefended by their removal: keepGhosts suppresses a
+  // sweep of a node kind that is never created and is itself on the subtraction list (§12 item 14),
+  // while the nav.js sweep line it guards is RETAINED for the NP pill float — whose removal is
+  // defended by the DEC cell in test/swipe-stage6e.test.js.
   // B2 — RSN reason correctness (plan §9 promised a mistag mutant that never landed). (a) the
   // disposal reason TOKEN is wrong -> RSN's "superseded recorded" assertion reddens; (b) the trace
   // fires UNCONDITIONALLY, ignoring the `disposed` flag (Charpy F2) -> a pane-LESS supersession
@@ -594,7 +575,7 @@ const MUTATIONS = [
     from: '        resetSwipeStyles(cur ? true : undefined);',
     to:   '        resetSwipeStyles(true);',
     also: {
-      from: "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
+      from: "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
       to:   "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: true });",
     } },
   // ── SWIPE stage 6f: outgoing app-ghost for in-flow→overlay — SUPERSEDED by Stage 1 ──
@@ -609,7 +590,7 @@ const MUTATIONS = [
   // back to the wider one re-opens exactly the hole Stage 1 closes.
   { name: 'stage1 NOGHOSTINFLOW: constructionPlanFor outgoing reverts to the wider pre-declone rule, ghosting every in-flow source to a non-home destination (-> NOGHOSTINFLOW test)',
     file: 'js/swipe.js',
-    from: "    const outgoing = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'app-ghost' : 'real-source';",
+    from: "    const outgoing = 'real-source';",
     to: [
       "    const outgoing = c.fromKind === 'overlay' ? 'real-source'",
       "      : (c.toKind === 'home' ? 'real-source' : 'app-ghost');",
@@ -727,26 +708,22 @@ const MUTATIONS = [
   // the de-registered stage6i GHOSTSCROLL note above), so the ternary collapses to one
   // line. Same mutation intent (a browse source reverts to reading window.scrollY),
   // simpler anchor.
-  { name: 'browse-decouple GHOSTSCROLL: the outgoing app-ghost reverts to reading window.scrollY for a BROWSE source (-> GHOSTSCROLL equals-500 test)',
-    file: 'js/swipe.js',
-    from: "      const ghostY = doc.getElementById('browse').scrollTop || 0;",
-    to:   "      const ghostY = env.scrollY() || 0;" },
-  { name: 'browse-decouple STRIPEXCLUDE: the .alphaindex exclusion is dropped from the ghost clone (-> STRIPEXCLUDE no-strip test)',
-    file: 'js/swipe.js',
-    from: "      clone.querySelectorAll('.alphaindex').forEach((n) => n.remove());",
-    to:   "      /* mutated: .alphaindex not excluded from the ghost clone */" },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): ghostApp is deleted (§12 item 1). The real outgoing element HAS its scrollTop, so no offset is
+  // read, baked or capturable — the jump-to-top coordinate does not exist.
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the clone is deleted, so there is no copy to exclude the strip from. The REAL strip rides with
+  // its own transformed page inside the rectangle browse->home already produces (plan §5.4, device row R3).
   { name: 'browse-decouple REALIZE: the virtual-list scroll listener reverts to window (bubble phase), never seeing a #browse own-scroll (-> REALIZE listener test)',
     file: 'js/virtuallist.js',
     from: "  if (typeof document !== 'undefined') document.addEventListener('scroll', onDocScroll, { capture: true, passive: true });",
     to:   "  if (typeof window !== 'undefined') window.addEventListener('scroll', onDocScroll, { passive: true });" },
   { name: 'browse-decouple METRICS: browse.js virtualView stops injecting #browse-relative metrics/scrollTo (-> METRICS injected-metrics test)',
     file: 'js/browse.js',
-    from: "      metrics: {\n        scrollY: () => o.mount.scrollTop,\n        viewportH: () => o.mount.clientHeight,\n        listTop: () => o.mount.scrollTop + list.getBoundingClientRect().top - o.mount.getBoundingClientRect().top,\n      },\n      scrollTo: (y) => { o.mount.scrollTop = y; },",
-    to:   "      /* mutated: no #browse-relative metrics/scrollTo injected — falls to the window default */" },
-  { name: 'browse-decouple RESTORE: applyScrollY reverts to window.scrollTo instead of writing #browse.scrollTop (-> RESTORE write-surface test)',
+    from: "      metrics: {\n        scrollY: () => m.scrollTop,\n        viewportH: () => m.clientHeight,\n        listTop: () => m.scrollTop + list.getBoundingClientRect().top - m.getBoundingClientRect().top,\n      },\n      scrollTo: (y) => { m.scrollTop = y; },",
+    to:   "      /* mutated: no page-relative metrics/scrollTo injected — falls to the window default */" },
+  { name: 'browse-decouple RESTORE (re-anchored): applyScrollY reverts to window.scrollTo instead of writing the PAGE scrollTop (-> ENTRYNOZERO derived-write half + the virtual anchor cell)',
     file: 'js/browse.js',
-    from: "    o.mount.scrollTop = clampY(y, o.mount.scrollHeight, o.mount.clientHeight);",
-    to:   "    window.scrollTo(0, clampY(y, o.mount.scrollHeight, o.mount.clientHeight));   // mutated: window, not #browse.scrollTop" },
+    from: "    page.scrollTop = clampY(y, page.scrollHeight, page.clientHeight);",
+    to:   "    window.scrollTo(0, clampY(y, page.scrollHeight, page.clientHeight));   // mutated: window, not the page's own scrollTop" },
   // RE-ANCHORED AT Stage A1b (PLAN-one-screen-type.md §5.3): the enclosing `if (!npOpen) {` block
   // this sits inside is deleted, so the inner block de-indents from eight spaces to six. Text and
   // intent unchanged.
@@ -806,8 +783,8 @@ const MUTATIONS = [
   // abortRender is 'none' for home→browse, so control reaches the no-hold branch. The unique
   // `render: cur.finPlan.abortRender === 'rerender', ` prefix is what pins app.js:1227.
   { name: "M1NOWRITE: the abort finalize passes resetScroll: true, so nav.js's home branch writes 0 over the offset the park preserved (-> M1NOWRITE zero-writes-in-window-B red)",
-    from: "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });",
-    to:   "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: true });" },
+    from: "          applyScreen(dest, { render: false, resetScroll: false });",
+    to:   "          applyScreen(dest, { render: false, resetScroll: true });" },
   // ADDITIVE DESIGN-REVERT: the retired restore has no shipped text, so a fabricated `from`
   // would be refused by both the applier and the anchors gate. Both halves anchor on real text
   // and the edit genuinely changes it.
@@ -833,8 +810,8 @@ const MUTATIONS = [
   // catches regardless of value (§7.2: "no NON-ZERO write" would be a weaker, wrong oracle;
   // this project's own doctrine already rejects it).
   { name: 'M1NAVWINS: a re-introduced restore writes the captured window scroll (cur.scroll0) onto #home.scrollTop after the abort finalize, clobbering an interleaved Home tap 340ms later (-> M1NAVWINS window-B red AND M1NOWRITE — BOTH must redden; if only one does, the other is MASKED and that is a finding, not a caught)',
-    from: "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);",
-    to:   "          applyScreen(dest, { render: cur.finPlan.abortRender === 'rerender', resetScroll: false });\n          window.scrollTo(0, cur.scroll0);\n          if (cur.from.v === 'home') $('home').scrollTop = cur.scroll0;   /* mutated: the retired restore, re-derived */" },
+    from: "          applyScreen(dest, { render: false, resetScroll: false });\n          window.scrollTo(0, cur.scroll0);",
+    to:   "          applyScreen(dest, { render: false, resetScroll: false });\n          window.scrollTo(0, cur.scroll0);\n          if (cur.from.v === 'home') $('home').scrollTop = cur.scroll0;   /* mutated: the retired restore, re-derived */" },
   // MUTUNIQ carries TWO mutants for the same reason M1PARKRANGE carries three: one mutant
   // cannot exercise both a REFUSAL and a correct-site APPLICATION. -a is the plan's declared
   // mutant; -b is added by the test author because the cell's own specification includes "and
@@ -856,10 +833,8 @@ const MUTATIONS = [
   // mutation was left with no killer. test/ghost-clone-alignment.test.js restores a
   // browse->browse-scoped guard for the interim; DELETE both it and this entry together
   // with the constant in Stage 2 (plan §12 items 5, 16, 17).
-  { name: 'M2ALIGN: the ghost builder reverts to the vestigial in-flow 46px, misaligning the clone content-top from the real fixed-inset content-top (-> M2ALIGN aligned-value test)',
-    file: 'js/swipe.js',
-    from: "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '53px';",
-    to:   "      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '46px';" },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the 53px clone-alignment constant is deleted with ghostApp (§12 item 5) — it existed ONLY to
+  // undo the clone id-stripping, and the real view keeps its own fixed-inset content-top.
 
   // ── PLAN-one-screen-type.md §14 — ONE SCREEN TYPE (Options and its subs become peers).
   //
@@ -1070,6 +1045,153 @@ const MUTATIONS = [
     file: 'js/app.js',
     from: '    const gestureOwnsMovers = () => !!session && session.live;',
     to:   '    const gestureOwnsMovers = () => !!d && d.live;   /* mutated: guards the DRAG HANDLE\'s lifetime, not the SESSION\'s */' },
+
+  // ── PLAN-swipe-declone.md STAGE 2 (the browse->browse de-clone) ──────────────────────
+  // The twenty-four mutants Claude/Curie/RED-swipe-declone-stage2.md §3 specifies. NONE of
+  // them could be registered before the build: every anchor targets text this stage CREATES,
+  // and test/mutation-anchors.test.js fails with ANCHOR NOT FOUND on an anchor whose `from`
+  // does not occur. They land in the SAME commit as the build, which is why the anchors gate
+  // is green on both sides of it.
+  //
+  // The killer named in each entry is the DESIGNATED cell — a sweep result of merely CAUGHT
+  // is not closure, because an unrelated test catching a mutant leaves the designated
+  // assertion unproven.
+
+  // ── PAGEISVIEW — the page is the scroller, the host is not (css structural) ──
+  { name: 'S2-1 PAGEISVIEW: the .browsepage base rule drops overflow-y, so a browse page is not a scroller at all (-> PAGEISVIEW)',
+    file: 'css/app.css',
+    from: "  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;\n}\nbody.has-player .browsepage { padding-bottom: 20px; }",
+    to:   "  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;\n}\nbody.has-player .browsepage { padding-bottom: 20px; }" },
+  { name: 'S2-2 PAGEISVIEW: the .browsepage padding differs from the retired #browse scroller, so the content boxes disagree (-> PAGEISVIEW)',
+    file: 'css/app.css',
+    from: "  position: absolute; inset: 0;\n  padding: 14px 16px 40px;",
+    to:   "  position: absolute; inset: 0;\n  padding: 14px 12px 40px;" },
+  { name: 'S2-3 PAGEISVIEW: #browse keeps overflow-y, so there are TWO scroll authorities at once (-> PAGEISVIEW)',
+    file: 'css/app.css',
+    from: "  max-width: 640px; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }",
+    to:   "  max-width: 640px; margin: 0 auto;\n  overflow-y: auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }" },
+
+  // ── MOVERHASBOX — Invariant D5, the structural form of round-1 F1 ──
+  { name: 'S2-4 MOVERHASBOX: the #browse base rule becomes display:contents, so the drag transform is INERT on four shipped transitions (-> MOVERHASBOX)',
+    file: 'css/app.css',
+    from: "#browse {\n  position: fixed; left: 0; right: 0;",
+    to:   "#browse {\n  display: contents; left: 0; right: 0;" },
+  { name: 'S2-5 MOVERHASBOX: the #browse base rule drops position:fixed, falling to normal flow (-> MOVERHASBOX)',
+    file: 'css/app.css',
+    from: "#browse {\n  position: fixed; left: 0; right: 0;",
+    to:   "#browse {\n  left: 0; right: 0;" },
+
+  // ── PARKBOXEQUAL — Invariant P, extended to the page park rule ──
+  { name: 'S2-6 PARKBOXEQUAL: .browsepage.parked re-declares top: 0, making the parked box taller than the active one (-> PARKBOXEQUAL)',
+    file: 'css/app.css',
+    from: ".browsepage.parked {\n  transform: translateX(-101vw);",
+    to:   ".browsepage.parked {\n  top: 0;\n  transform: translateX(-101vw);" },
+  { name: 'S2-7 PARKBOXEQUAL: .browsepage.parked drops overflow:hidden, losing the scroll-container status the anchoring guarantee rests on (-> PARKBOXEQUAL)',
+    file: 'css/app.css',
+    from: ".browsepage.parked {\n  transform: translateX(-101vw);\n  overflow: hidden; pointer-events: none; z-index: 0;\n}",
+    to:   ".browsepage.parked {\n  transform: translateX(-101vw);\n  pointer-events: none; z-index: 0;\n}" },
+
+  // ── PARKLOSESTRANSFORM — the cascade dependency the whole gesture rests on ──
+  { name: 'S2-8 PARKLOSESTRANSFORM: the parked transform is marked !important, so the class beats the inline drag write and the outgoing mover sits off-viewport for the whole gesture (-> PARKLOSESTRANSFORM)',
+    file: 'css/app.css',
+    from: ".browsepage.parked {\n  transform: translateX(-101vw);",
+    to:   ".browsepage.parked {\n  transform: translateX(-101vw) !important;" },
+
+  // ── BROWSESURFACE — the indicator and the native-bar suppression ──
+  { name: 'S2-9 BROWSESURFACE: .browsepage is dropped from the scrollbar-width suppression list, so a native bar returns and the geometry equality is off by its gutter (-> BROWSESURFACE)',
+    file: 'css/app.css',
+    from: "html, body, #home, #browse, .browsepage, #options, #general, #playback, #buffering, #downloads, #diagnostics { scrollbar-width: none; }",
+    to:   "html, body, #home, #browse, #options, #general, #playback, #buffering, #downloads, #diagnostics { scrollbar-width: none; }" },
+  { name: 'S2-10 BROWSESURFACE: surfaceKind loses its .browsepage case, so the indicator removes itself on browse (-> BROWSESURFACE)',
+    file: 'js/scrollbar.js',
+    from: "    if (t && typeof t.classList === 'object' && t.classList && t.classList.contains('browsepage')) return 'browse';\n",
+    to:   "" },
+
+  // ── PAGEOWNSSCROLL — the role SPLIT: container stays on the host, scroller is the page ──
+  { name: 'S2-11 PAGEOWNSSCROLL: the container ops are re-pointed at the active page, so reset() wipes a PAGE instead of the host (-> PAGEOWNSSCROLL container half)',
+    file: 'js/browse.js',
+    from: "    if (o.mount) o.mount.innerHTML = '';",
+    to:   "    { const a = activeEntry(); if (a) a.el.innerHTML = ''; }   /* mutated: the role re-pointed, not split */" },
+  { name: 'S2-12 PAGEOWNSSCROLL: the virtualView metrics closure reads a SHARED reference, so the outgoing controller captures its anchor against the incoming page (-> PAGEOWNSSCROLL measured-element half)',
+    file: 'js/browse.js',
+    from: "        scrollY: () => m.scrollTop,\n        viewportH: () => m.clientHeight,\n        listTop: () => m.scrollTop + list.getBoundingClientRect().top - m.getBoundingClientRect().top,",
+    to:   "        scrollY: () => o.mount.scrollTop,\n        viewportH: () => o.mount.clientHeight,\n        listTop: () => o.mount.scrollTop + list.getBoundingClientRect().top - o.mount.getBoundingClientRect().top," },
+
+  // ── RESETCOVERSPAGES — the first borrowed mover with no id ──
+  { name: 'S2-13 RESETCOVERSPAGES: resetSwipeStyles keeps its id-only element list, so an interrupted gesture strands a page at translateX(+/-w) (-> RESETCOVERSPAGES)',
+    file: 'js/nav.js',
+    from: "    els.push(...document.querySelectorAll('.browsepage'));\n",
+    to:   "" },
+
+  // ── ENTRYNOZERO — write ONLY a derived position (Invariant D4 at the call site) ──
+  { name: 'S2-14 ENTRYNOZERO: entryScrollY returns 0 instead of null for a list page, writing the top over the offset the page already holds (-> ENTRYNOZERO)',
+    file: 'js/browse.js',
+    from: "    if (descV === 'files') return trackY == null ? 0 : trackY;\n    return null;",
+    to:   "    if (descV === 'files') return trackY == null ? 0 : trackY;\n    return 0;" },
+  { name: 'S2-15 ENTRYNOZERO: positionOnEnter writes even when nothing was derived (the null guard dropped) (-> ENTRYNOZERO)',
+    file: 'js/browse.js',
+    from: "    if (y != null) applyScrollY(page, y);",
+    to:   "    applyScrollY(page, y);" },
+
+  // ── MOVERSDISTINCT — Invariant D6, distinctness ──
+  { name: 'S2-16 MOVERSDISTINCT: the sourceHost projection loses its browse-page case, so the outgoing slot falls back to the #browse host (-> MOVERSDISTINCT recipe half)',
+    file: 'js/swipe.js',
+    from: "    const sourceHost = fromKind === 'overlay' ? 'overlay' : browsePair ? 'browse-page' : 'in-flow';",
+    to:   "    const sourceHost = fromKind === 'overlay' ? 'overlay' : 'in-flow';" },
+  { name: 'S2-17 MOVERSDISTINCT: the destinationHost projection loses its browse-page case, so the incoming slot falls back to the #browse host (-> MOVERSDISTINCT recipe half)',
+    file: 'js/swipe.js',
+    from: "    const destinationHost = toKind === 'overlay' ? 'overlay'\n      : browsePair ? 'browse-page'\n        : toKind === 'browse' ? 'browse-host' : 'home';",
+    to:   "    const destinationHost = toKind === 'overlay' ? 'overlay'\n      : toKind === 'browse' ? 'browse-host' : 'home';" },
+  // ⭐ REGISTERED AGAINST THE APP-HARNESS CELL, NOT THE RECIPE ONE. Every construction-seam
+  // fixture in this suite hand-writes its env, so this branch — the app-side env LITERAL — is
+  // executed by nothing at the recipe layer, and a mutant registered there would SURVIVE the
+  // sweep (Curie, RED-swipe-declone-stage2.md §3).
+  { name: 'S2-18 MOVERSDISTINCT: the app-side env literal returns the #browse HOST from its browse-page destination branch (-> MOVERSDISTINCT app-harness half)',
+    from: "          if (host === 'browse-page') { showAppView(dest, true); return Browse.pageElFor(dest); }",
+    to:   "          if (host === 'browse-page') { showAppView(dest, true); return $('browse'); }" },
+
+  // ── LANDEDPAGESHOWS — Invariant D6, the landing ──
+  { name: 'S2-19 LANDEDPAGESHOWS: endHold INFERS the landed page from the first non-offscreen page instead of the landed descriptor, leaving the destination shown after an abort (-> LANDEDPAGESHOWS browse->browse abort)',
+    file: 'js/browse.js',
+    from: "    const landedKey = keyFor(landed);",
+    to:   "    let landedKey = null; for (const [k, v] of pageCache) if (!offscreen(v.el)) { landedKey = k; break; }   /* mutated: inferred, not landed */" },
+  // ⭐ ONLY THE COMMIT HALF KILLS THIS. An abort mutates neither navStack nor fwdStack, so
+  // currentDesc() returns the identical descriptor before and after applyScreen and a too-early
+  // read is INVISIBLE there. The commit's stack mutation sits AHEAD of applyScreen, so the
+  // pre-applyScreen descriptor is the SOURCE screen and the mirror-image assertion reddens.
+  { name: 'S2-20 LANDEDPAGESHOWS: the landed descriptor is read BEFORE the screen is applied, so a commit reconciles against the pre-commit screen (-> LANDEDPAGESHOWS browse->browse COMMIT half)',
+    from: "      if (window.Browse && Browse.endHold) Browse.endHold(t, currentDesc());",
+    to:   "      if (window.Browse && Browse.endHold) Browse.endHold(t, session && session.from);   /* mutated: the PRE-applyScreen descriptor */" },
+  { name: 'S2-21 LANDEDPAGESHOWS: a landed descriptor naming no cached page is routed through the landed lookup anyway, so nothing is reconciled and the one activation the gesture gets is skipped (-> LANDEDPAGESHOWS browse->home)',
+    file: 'js/browse.js',
+    from: "    if (landedKey != null && pageCache.has(landedKey)) {",
+    to:   "    if (landedKey != null) {   /* mutated: the cache hit test dropped from the miss branch */" },
+
+  // ── NPPILLIDS — the double-occurrence trap in §12 item 4 ──
+  // The id strip occurred TWICE at HEAD and only the ghost builder's copy was on the deletion
+  // list. This mutant deletes the SURVIVING one — the pill decoration's — which is exactly what
+  // a text-directed deletion would have done.
+  { name: 'S2-22 NPPILLIDS: the pill decoration stops stripping ids from its clone (the RETAINED occurrence of the id-strip line) (-> NPPILLIDS)',
+    file: 'js/swipe.js',
+    from: "      clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));\n      clone.classList.add('np-pill-float');",
+    to:   "      clone.classList.add('np-pill-float');" },
+
+  // ── NOGHOSTATALL — no owned pane, no .nav-ghost node, no capture key ──
+  // TWO PARTS, because re-adding the plan VALUE alone changes no mover: the seam no longer
+  // branches on it. The pane has to be built and the capture returned for the cell's three
+  // assertions to be the discriminator they are written as.
+  { name: 'S2-23 NOGHOSTATALL: the app-ghost branch is re-added for browse->browse — a pane is built, a .nav-ghost is mounted and a capture is returned (-> NOGHOSTATALL)',
+    file: 'js/swipe.js',
+    from: "    let outgoing, incoming, decoration = null;\n    outgoing = mover(env.sourceEl(sourceHost, from.v), 'borrowed-real', 'outgoing');",
+    to:   "    let capture = null, outgoing, incoming, decoration = null;\n    if (classification.fromKind === 'browse' && classification.toKind === 'browse') {\n      const w = env.document.createElement('div'); w.className = 'nav-ghost';\n      env.document.body.appendChild(w);\n      outgoing = mover(w, 'owned-pane', 'outgoing'); capture = { ghostY: 0 };\n    } else outgoing = mover(env.sourceEl(sourceHost, from.v), 'borrowed-real', 'outgoing');",
+    also: {
+      from: "    return { decorations, movers: { outgoing, incoming, decoration } };",
+      to:   "    return { decorations, movers: { outgoing, incoming, decoration }, capture };" } },
+
+  // ── ABORTNORENDER — an abort is a transform reset and nothing else ──
+  { name: 'S2-24 ABORTNORENDER: the abort re-render is restored, so an aborted swipe rebuilds its source screen (-> ABORTNORENDER)',
+    from: "          applyScreen(dest, { render: false, resetScroll: false });",
+    to:   "          applyScreen(dest, { render: true, resetScroll: false });" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
