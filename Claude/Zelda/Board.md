@@ -786,7 +786,16 @@ every round-2 finding resolved and both new gates (`MOVERSDISTINCT`, `LANDEDPAGE
 fail on the defect they name; one Structural residual, F19 — `Browse.endHold` gains a `landed` argument
 on a path that runs for EVERY gesture, and the fold defined it only for a browse landing, so the four
 shipped Stage-1 transitions had no stated behaviour.
-**The round-3 fold is landed and the plan awaits round 4.** §5.3.6 defines `endHold` over every value
+**Stage 2 plan review round 4 (`2b6d0ed`, the round-3 fold): FORGE — the plan is cleared to build.**
+F19 is closed over the whole domain, `MOVERSDISTINCT`/`LANDEDPAGESHOWS`/`MOVERHASBOX`'s tightenings are
+in, the mutant recount is right (28 before, 29 after, 16 cells — counted mechanically), and nothing new
+is device-owed. Four non-blocking residuals for the builder to carry, all caught in CI or records-only:
+F23 (`LANDEDPAGESHOWS`'s call-count assertion needs a force-virtualized fixture or it is vacuous —
+`VirtualList.setForceVirtual(true)`, as `test/browse-virtual.test.js:170` already does), F24 (§5.3.6's
+"the miss branch is the no-op case" is false for an aborted `home→browse`, where `showPage` HAS parked a
+page mid-drag), F25 (§7's two ledger rows still state the pre-correction, landed-only claim), F26 (a
+scope overclaim in §18's Round 3 entry). `Claude/Charpy/PLAN-swipe-declone-stage2-charpy-r4.md`.
+The round-3 fold: §5.3.6 defines `endHold` over every value
 `currentDesc()` can return: a landing naming no cached browse page keeps HEAD's `activeEntry()`
 behaviour unchanged, and the throwing `Browse.pageElFor` is kept off that path by construction, so the
 wedge-every-future-swipe reading is closed rather than guarded. `LANDEDPAGESHOWS` gains a `browse→home`
