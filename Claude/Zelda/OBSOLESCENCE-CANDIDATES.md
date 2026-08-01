@@ -132,6 +132,15 @@ inline `transform`, and a non-none transform establishes a stacking context, so 
 contained inside it and cannot outstack a sibling. **Containment, not hiding.**
 (`PLAN-one-screen-type.md` §5.2 and the §5.5 correction.)
 
+⛔ **A2's premise is COUPLED TO DECLONE STAGE 2 — added 2026-08-01, found by review.** The
+containment argument above requires `#browse` to carry an inline `transform`, which requires
+`#browse` to generate a principal box. Declone Stage 2 as originally written made `#browse`
+`display: contents` — **no box, no transform, no stacking context, and A2's stated ground is gone.**
+The argument is TRUE at HEAD and A2 is safe to build today; it becomes false only if Stage 2 lands a
+boxless `#browse`. Stage 2 is being reworked to keep `#browse` transformable (which dissolves this),
+but until that rework is FORGED, **do not build A2 and Stage 2 in either order without re-checking
+this dependency.** Source: `Claude/Charpy/PLAN-swipe-declone-stage2-charpy.md`.
+
 ### 11. Stage B — the transition taxonomy
 `overlay` becomes Now Playing alone; the kind table grows from 8 to 14 rows. Pure records/naming
 work: the thing `js/nav.js`'s name-check identifies stops being "an additive overlay", so the
