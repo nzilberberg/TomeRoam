@@ -23,23 +23,31 @@ genuinely needs a structural change, because its source and destination share th
 <!-- vitruvius-gate {"plan_type":"refactor",
   "patterns":{"boundary_relocation":true,"callee_replacement":true,"contract_shape":true,"state_transfer":true,"async_change":false,"persistence_migration":false,"lifecycle_ownership":true},
   "project_adapter":"tomeroam-js-dom",
-  "source_ranges":["css/app.css:78-91","css/app.css:92-132","css/app.css:172-191","css/app.css:805-814","js/browse.js:60-90","js/browse.js:108-131","js/browse.js:200-265","js/browse.js:267-319","js/browse.js:480-547","js/browse.js:637-662","js/nav.js:34-42","js/nav.js:104-110","js/app.js:536-556","js/app.js:1215-1245","js/scrollbar.js:41-62","js/virtuallist.js:240-262","js/swipe.js:146-205","js/swipe.js:354-406"],
+  "source_ranges":["css/app.css:78-91","css/app.css:92-132","css/app.css:172-191","css/app.css:805-814","js/browse.js:60-90","js/browse.js:108-131","js/browse.js:140-211","js/browse.js:200-265","js/browse.js:267-319","js/browse.js:480-547","js/browse.js:637-662","js/nav.js:34-42","js/nav.js:104-110","js/app.js:536-556","js/app.js:1215-1245","js/scrollbar.js:41-62","js/virtuallist.js:240-262","js/swipe.js:82-117","js/swipe.js:146-205","js/swipe.js:354-406"],
   "callee_ranges":["js/swipe.js:222-261","js/swipe.js:276-333"],
   "affected_contracts":["test/fixtures/swipe-plan-spec.mjs:1","test/ghost-clone-alignment.test.js:1","test/no-view-clone-gate.test.js:1","test/scroll-writer-set.test.js:169","test/contract-function-gate.test.js:33","test/browse-decouple.test.js:78","test/repaint.test.js:135","test/browse-virtual.test.js:538","tools/mutate.mjs:1"],
   "staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Zelda/Board.md","Claude/Decisions/DecisionLog.md"],
-  "blocking_questions":["NOGHOSTINFLOW","HOMESTAYSLIVE","PAGEISVIEW","MOVERHASBOX","PARKBOXEQUAL","PAGEOWNSSCROLL","RESETCOVERSPAGES","ENTRYNOZERO","BROWSESURFACE","NPPILLIDS","NOGHOSTATALL","ABORTNORENDER","NOAPPCLONE"]} -->
+  "blocking_questions":["NOGHOSTINFLOW","HOMESTAYSLIVE","PAGEISVIEW","MOVERHASBOX","MOVERSDISTINCT","PARKBOXEQUAL","PARKLOSESTRANSFORM","PAGEOWNSSCROLL","RESETCOVERSPAGES","ENTRYNOZERO","LANDEDPAGESHOWS","BROWSESURFACE","NPPILLIDS","NOGHOSTATALL","ABORTNORENDER","NOAPPCLONE"]} -->
 
-Status: **Stage 1 SHIPPED and device-confirmed** (build `2026-07-30.274`+). **Stage 2 REWORKED after
-plan review, not reviewed in its reworked form.** Stage 2 removes the clone from `browse→browse`,
-which unlocks the deletions and closes the gate's temporary exception.
+Status: **Stage 1 SHIPPED and device-confirmed** (build `2026-07-30.274`+). **Stage 2 REWORKED twice
+after plan review; the round-2 review is folded here and the result is not itself reviewed.** Stage 2
+removes the clone from `browse→browse`, which unlocks the deletions and closes the gate's temporary
+exception.
 
-**What the rework changed, in one line.** The GOAL of Stage 2 is unchanged; its MECHANISM is replaced
-and its EDIT SURFACE is larger than the previous revision stated. §5.3 previously made `#browse` a
-boxless container (`display: contents`). `#browse` is the element the swipe transforms on four
-transitions Stage 1 already shipped, and an element with `display: contents` generates no principal box,
-so a transform on it is inert. `#browse` now **keeps** its box and each `.browsepage` becomes a
-`position: absolute; inset: 0` scroller inside it. Details, and the four other structural corrections
-the review returned, are in §5.3 and §18.
+**What the CSS rework changed, in one line.** §5.3 previously made `#browse` a boxless container
+(`display: contents`). `#browse` is the element the swipe transforms on four transitions Stage 1
+already shipped, and an element with `display: contents` generates no principal box, so a transform on
+it is inert. `#browse` now **keeps** its box and each `.browsepage` becomes a
+`position: absolute; inset: 0` scroller inside it. That mechanism was measured true by the round-2
+review and is built as written (§18 round 2).
+
+**What the round-2 fold changed, in one line.** The CSS half was reworked and **the JavaScript half was
+left describing the old mechanism.** Three consequences, one class: with the clone gone, the two
+`browse→browse` mover slots both resolved to `#browse` (F11); the step split device-tested a form that
+does not ship (F12); and Browse's own page-selection state lost the only thing that restored it on an
+abort (SF2, found by the sweep this fold ran for exactly that class). §5.3.4, §5.3.6, §9 and §13 carry
+the corrections. **The SCOPE of Stage 2 is unchanged** — the same transition, the same goal, the same
+deletions; what moved is the mover resolution, the page-selection owner, and the step ordering.
 
 ## Index
 
@@ -70,8 +78,9 @@ the review returned, are in §5.3 and §18.
 | Record | Standing | Reconciliation |
 |---|---|---|
 | The user's instruction, 2026-07-29: "Stop cloning." | Governing | Highest authority here. It settles the approach; this plan chooses only the sequence. |
-| `Claude/Charpy/PLAN-swipe-declone-stage2-charpy.md` (verdict TEMPER, 2026-08-01) | Ratified review of Stage 2 | **AGREE, and it is the reason this revision exists.** Its five Structural findings are resolved in §18; its Weak and Note findings are folded into §5.3, §12 and §14. |
-| `Claude/Decisions/DecisionLog.md:1066-1113` — the Stage 1 outcome record, which forecasts Stage 2 as "make each `.browsepage` its own **fixed** inset own-scroll box" | Ratified outcome record | **CONFLICT with §5.3, declared rather than silent.** The settled constraint is Invariant D4 (a page owns its own scroll offset natively), and it is unchanged. The *positioning scheme* named in that forecast is changed here from `position: fixed` to `position: absolute`, because a fixed page is re-contained by a transformed `#browse` and jumps by `safe-top + 51px` at drag start — derived in §5.3.2. The entry is an outcome record of Stage 1, not a design ratification of Stage 2, and §13 step 14 updates it when Stage 2 lands. |
+| `Claude/Charpy/PLAN-swipe-declone-stage2-charpy.md` (verdict TEMPER, 2026-08-01) | Ratified review of Stage 2, round 1 | **AGREE, and it is the reason the CSS rework exists.** Its five Structural findings are resolved in §18 round 1, and the round-2 review re-checked and confirmed all five. |
+| `Claude/Charpy/PLAN-swipe-declone-stage2-charpy-r2.md` (verdict TEMPER, 2026-08-01) | Ratified review of Stage 2, round 2 | **AGREE, and it is the reason this revision exists.** It measured the reworked CSS mechanism true on the real-engine instrument and struck the JavaScript half. Its two Structural findings (F11, F12) and four Weak findings (F13–F15, F17) are resolved in §18 round 2; its Note (F16) is discharged in the text. |
+| `Claude/Decisions/DecisionLog.md:1066-1113` — the Stage 1 outcome record, which forecast Stage 2 as "make each `.browsepage` its own **fixed** inset own-scroll box" | Ratified outcome record | **CONFLICT DECLARED AND DISCHARGED at `41f2933`.** The settled constraint is Invariant D4 (a page owns its own scroll offset natively) and it is unchanged; only the *positioning scheme* changed, from `position: fixed` to `position: absolute`, because a fixed page is re-contained by a transformed `#browse` and jumps at drag start (§5.3.2). The user superseded the forecast in place at `41f2933`, recording `position: absolute` with D4 explicitly untouched. Nothing is owed here; the row is retained because the superseding is the reason the two records now agree. |
 | `Claude/Decisions/DecisionLog.md:1147-1167` — ONE SCREEN TYPE, with **Now Playing the deliberate exception** | Ratified USER DECISION | **AGREE, and untouched.** Stage 2 changes nothing about `#nowplaying`: no geometry, no stacking, no background, no mover role. It moves the browse pages *toward* the one-screen-type model by giving them the same inset own-scroll box every other screen has. |
 | `PLAN-swipe-noswap-home.md` (Stage 6i) | Ratified, built | **AGREE**, and it is the precedent: it retired `snapshotHome` and made `→home` un-park the real fixed `#home` as the incoming mover. |
 | `PLAN-browse-decouple.md` | Ratified, built | **AGREE** — it made active `#browse` a `position: fixed` own-scroll view. That is the precondition that made Stage 1 cheap, and it is what Stage 2 now splits into a box role and a scroller role. |
@@ -79,13 +88,17 @@ the review returned, are in §5.3 and §18.
 | `css/app.css:98-126` — `#home.parked`'s **Invariant P** and the `overflow: hidden` derivation, including the note at `css:105-108` that `.browsepage.parked` diverges *because* a `.browsepage` is an IN-FLOW element with no `bottom` inset to inherit | Ratified, device- and Blink-measured (`Claude/Loki/STRIKE-home-shift-m1-*`) | **CONFLICT, resolved by extending Invariant P rather than by keeping the divergence.** Stage 2 gives `.browsepage` its own inset box, so the stated reason for the divergence stops being true. Rather than re-deriving a second park geometry, Stage 2 makes `.browsepage.parked` declare **no** position and **no** insets — exactly `#home.parked`'s shape — so both park rules obey Invariant P and the comment at `css:105-108` is rewritten to say so. `overflow: hidden` stays on both, on the same two grounds recorded at `css:110-117`. |
 | `css/app.css:172-183` — `#browse` "deliberately carries NO will-change / non-none transform"; the `.195`/`.196` history — a **persistent** transform on `#browse` makes it the containing block for `position: fixed` descendants and breaks the A–Z strip | Ratified source comments, recording a shipped regression, gated by `BROWSEFIXED` (`test/browse-decouple.test.js:78-89`) | **AGREE, and they constrain the rework.** Both records concern a *persistent* transform; a gesture-scoped one is not that, and `browse→home` already ships it. They matter because they establish that `#browse`'s box and its transform behaviour are load-bearing — which is what made dissolving the box a change of that class rather than a cleanup. Under the reworked mechanism `#browse` keeps `position: fixed` and still declares no `will-change` and no non-none transform, so `BROWSEFIXED` survives with one assertion migrated (§10). |
 | `PLAN-one-screen-type.md:863-873` (§5.5 — during a browse↔settings gesture `#browse` is an un-hidden mover whose inline transform **establishes a stacking context**, so `.alphaindex` is contained; "Containment, not hiding, is the reason during a gesture") | Ratified, and the stated ground for Stage A2's deletion of `z-index: 25`/`26` | **AGREE under the reworked mechanism, after having been CONFLICT under the previous one.** A `display: contents` `#browse` establishes no stacking context; a `position: fixed` `#browse` carrying an inline transform does. Keeping the box keeps §5.5 true, so Stage 2 removes no premise Stage A2 rests on. See §18 F2 for the one records obligation that survives. |
-| `PLAN-one-screen-type.md:1967-1976` — items 2 and 3 of "how the two plans interact", which name Stage 2's mechanism as "`#browse` → `display: contents`" and "dissolves the host" | Ratified claim, now describing a mechanism this plan does not use | **CONFLICT, owned outside this plan.** The convergence conclusion still holds — `.browsepage` and a settings screen still become the same kind of thing — but the mechanism named there is wrong after this rework. ⛔ This plan does not edit `PLAN-one-screen-type.md`; the correction is a cross-plan reconciliation the user owns. Recorded here so it is not lost. |
+| `PLAN-one-screen-type.md` — **item 3** of "how the two plans interact", which named Stage 2's mechanism as "`#browse` → `display: contents`", "dissolves the host", and "its own **fixed** inset own-scroll box" | Ratified claim that described a mechanism this plan does not use | **CONFLICT DECLARED AND DISCHARGED at `41f2933`.** The convergence conclusion always held — `.browsepage` and a settings screen still become the same kind of thing — and only the named mechanism was wrong. The user scrubbed both falsified clauses in place. Two precision defects in this plan's own prior declaration, corrected here: it said "items 2 and 3" when only **item 3** named the mechanism (item 2 names `js/swipe.js:167`/`:203` and was unaffected), and it did not name item 3's second falsified clause, the **fixed** box. The line range `1967-1976` cited by the earlier revision no longer delimits the item — `41f2933` inserted lines — so no range is cited now. ⛔ This plan still does not edit `PLAN-one-screen-type.md`. |
 | `js/browse.js:292-298` + `css/app.css:78-85` (iOS drops decoded bitmaps for a `display: none` subtree; measured ROWS KEPT 68/68, src 22→22, +img 0) and `js/virtuallist.js:263-270` (an aborted `browse→browse` re-materialized the page; measured +img=72, −img=90, withSrc=0) | Ratified, device-measured | **AGREE, and they set §15 R5's posture.** These are the two recorded mechanisms of the open abort-repaint symptom. Stage 2 perturbs both, so R5 gains an attribution obligation and §13 splits the device gate; see §18 F5. |
 | `test/scroll-writer-set.test.js:169-205` — the M1WRITERSET registered baseline of every textual vertical-scroll writer in `js/`, with a rot check that FAILS when a registered entry's text no longer occurs | Live gate | **CONFLICT, resolved by re-derivation in the same commit.** Stage 2 rewrites the text of baseline entries 3 and 4 and falsifies the recorded reason of entry 6. The gate's own header forbids repairing a red by narrowing the pattern. §10 and §12 carry the obligation. |
 | `test/no-view-clone-gate.test.js` — NOAPPCLONE, **built in Stage 1**, with two registered exceptions, the second a dated temporary allowance for the `browse→browse` clone | Live gate | **AGREE, and it supersedes this plan's own earlier statement that the gate lands after Stage 2.** Stage 2's obligation is to delete the temporary exception, not to build the gate. §16. |
 | Memory `tomeroam-swipe-repaint-saga` — "never transform the real in-flow view" | Working hypothesis, tested by Stage 1 | **RESOLVED in this plan's favour.** Stage 1 shipped real-element movers on `home→browse`, `home→overlay` and `browse→overlay` and is device-confirmed. The hypothesis did not hold. |
 | `Claude/Loki/STRIKE-home-shift-m1-*` | Executed strikes | **AGREE**, and they supply the instrument: real-engine measurement via `chrome --headless=new --disable-gpu --user-data-dir=<scratch> <probe url>`, real-time (no `--virtual-time-budget`). §15 uses it. |
-| **GAP** | — | No record states what the `#browse` element is *for* once it stops being the scroller. This plan closes that gap by naming it: `#browse` is the browse **container and view box** — the append target, the `innerHTML` wipe target, the `.hidden` carrier for `Nav.setView`, and the transformable mover for every `browse↔non-browse` transition. It is not, after Stage 2, a scroller. |
+| `js/swipe.js:99-101` — `classifyTransition`'s kind→host projection, "the single place the kind→host mapping policy lives", pinned per structural case in the frozen spec's `expectedHosts` | HEAD source, read directly | **CONFLICT with §5.1, and it is F11.** `sourceHost` is `'in-flow'` for a browse source and `destinationHost` is `'browse-host'` for a browse destination, so `env.sourceEl` (`js/app.js:541`) → `Nav.appViewEl` (`js/nav.js:36`) returns `#browse` and `env.renderDestination`'s browse-host branch (`js/app.js:544`) returns `$('browse')` literally. Both `browse→browse` mover slots resolve to one element. Resolved in §5.3.6 by extending the projection, which is the one place the policy lives. |
+| `js/browse.js:299-303` (`showPage`'s park/hide toggle) + `:164-196` (`endHold`) + `js/app.js:1229`/`:1261` (the abort branch, gated on `finPlan.abortRender === 'rerender'`) | HEAD source, read directly | **CONFLICT with §5.3.4's deletion of `abortRender`, and it is SF2.** `showPage(destKey)` runs inside the drag-start render and marks the outgoing page `.parked`; the only thing that puts the selection back on an aborted `browse→browse` is the `abortRender: 'rerender'` re-render, which calls `showPage(sourceKey)`. Deleting it leaves the destination page shown after an abort. Resolved in §5.3.6 by Invariant D6. |
+| `js/browse.js:205-211` — `offscreen()`/`activeEntry()`: "A page is off screen when it is display:none'd OR parked off-viewport during a swipe" | Ratified source comment | **AGREE, and it becomes a constraint.** Exactly one browse page is non-offscreen at any time, and four call sites read that (`endHold` twice, `applyScrollY`'s realize, the view-level `deactivate`/`activate`, plus the late-fetch guard at `:546` reading `offscreen` directly). §5.3.6 preserves the invariant rather than breaking it, and names what the fallback would cost if it did. |
+| **GAP, closed** | — | No record stated what the `#browse` element is *for* once it stops being the scroller. This plan closes that gap by naming it: `#browse` is the browse **container and view box** — the append target, the `innerHTML` wipe target, the `.hidden` carrier for `Nav.setView`, and the transformable mover for every `browse↔non-browse` transition. It is not, after Stage 2, a scroller. |
+| **GAP, closed** | — | No record stated who owns **which browse page is shown** at the end of a gesture. At HEAD it is inferred — from `activeEntry()` inside `endHold`, and from a re-render on the abort path. Stage 2 deletes the re-render, so this plan names the owner: Invariant D6 (§5). |
 
 ## Applicability
 
@@ -137,11 +150,14 @@ is a copy.** Two are real: `.alphaindex` re-parenting (§5.4), and clipping plus
 ## 4. Scope boundary — MOVES / STAYS / SPLIT / DEFERRED
 
 **MOVES.** The outgoing-mover decision for `browse→browse`, from a built clone pane to the real
-outgoing `.browsepage` (Stage 1 already moved the other three). The browse **scroller role**, from
-`#browse` to each `.browsepage`: the scroll box, the padding, the entry-position write, the virtual
-controller's measured element, and the custom scroll indicator's surface identity. The
+outgoing `.browsepage` (Stage 1 already moved the other three). The **mover identity** for both ends of
+`browse→browse`, from the `#browse` host to the two page elements — carried by the kind→host projection
+at `js/swipe.js:99-101`, which is the one place that policy lives (§5.3.6). The browse **scroller
+role**, from `#browse` to each `.browsepage`: the scroll box, the padding, the entry-position write, the
+virtual controller's measured element, and the custom scroll indicator's surface identity. The
 `.browsepage.parked` geometry, from a self-declared fixed box to Invariant P's inherit-everything
-shape.
+shape. **Ownership of which browse page is shown at a gesture's end**, from an inference (`activeEntry()`
+plus an abort re-render) to the landed screen the gesture reports (Invariant D6).
 
 **STAYS.** The gesture machinery (arm/lock/move/settle/finalize, the session-identity guards, the row
 hold, the reveal diagnostic). The browse **container role** on `#browse` — the append target
@@ -185,7 +201,25 @@ saved-and-restored offset, therefore no clamp to suppress and no source page to 
 mover set is resolved by `Nav.appViewEl` (`js/nav.js:36`), `Nav.overlayEl` (`js/nav.js:35`),
 `env.sourceEl` (`js/app.js:541`) and `env.renderDestination` (`js/app.js:543-555`). A transform applies
 only to an element that generates a box, so any host reachable from those four must generate one. This
-invariant is new in this revision; it is the generalization of the defect §18 F1 records.
+invariant is new in this revision; it is the generalization of the defect §18 R1 F1 records.
+
+**Invariant D6 — a transition's two mover slots resolve to two DISTINCT elements, and the element that
+is shown when the gesture ends is the one the gesture LANDED on.** Two halves of one rule, because both
+are about a transition knowing its own two ends rather than inferring them from the DOM.
+
+- *Distinctness.* No transition may resolve its outgoing and incoming slots to the same node. One
+  element in two slots is not a filmstrip: `start()` writes a transform only for the non-zero-`base`
+  mover (`js/app.js:594`) and `move()` writes for every mover in list order (`js/app.js:615`), so the
+  second write wins and the single element translates by `base + t` with the incoming's `±w` offset —
+  the view slides off with nothing arriving. Gated by `MOVERSDISTINCT` (§14).
+- *Landing.* Which browse page is left shown, parked or hidden when a gesture ends is decided by the
+  screen the gesture landed on, not inferred from which page happens to be non-offscreen. At HEAD the
+  inference is correct only because an aborted `browse→browse` re-renders its source; Stage 2 deletes
+  that re-render (§6), so the owner must be named or the inference silently inverts on abort. Gated by
+  `LANDEDPAGESHOWS` (§14).
+
+D6 is new in this fold; it is the generalization of the defects §18 round 2 F11 and SF2 record, and it
+is the same class as D5 — a mover whose identity is assumed rather than resolved.
 
 ### 5.1 Per transition
 
@@ -196,7 +230,7 @@ invariant is new in this revision; it is the generalization of the defect §18 F
 | `browse→overlay` | real `#browse` | real overlay | **Shipped (Stage 1).** Stage 2 must not change what `#browse` can do as a mover. |
 | `browse→home` | real `#browse` | real `#home` | **Shipped (Stage 6i).** Stage 2 must not change what `#browse` can do as a mover. |
 | `overlay→*` | real overlay | real destination | **Shipped.** Untouched. |
-| `browse→browse` | real outgoing `.browsepage` | real incoming `.browsepage` | **Stage 2.** Each page becomes its own inset scroller inside `#browse`, so the two pages are two independently-scrolled real elements. |
+| `browse→browse` | real outgoing `.browsepage` (`sourceHost: 'browse-page'`) | real incoming `.browsepage` (`destinationHost: 'browse-page'`) | **Stage 2.** Each page becomes its own inset scroller inside `#browse`, so the two pages are two independently-scrolled real elements. **Both host values are new (§5.3.6);** without them both slots resolve to `#browse` and there is no filmstrip. |
 
 **Read the four "must not change" rows as a constraint, not as a note.** Three of them name `#browse`
 as a mover. Stage 2 changes `#browse`; the previous revision of §5.3 changed it in a way that made those
@@ -217,9 +251,14 @@ not cover — an **absolutely-positioned** page translated to `+w` inside a `pos
 `overflow` is `visible`. That is R2b, and it is measured before Stage 2 part A ships.
 
 **Z-order during a drag.** Two movers in a filmstrip do not overlap, so z-order is not load-bearing for
-the mid-drag frames. It *is* load-bearing at the two edges. For `browse→browse` both movers are children
-of the same `#browse` box, so the existing ladder is untouched and no new stacking rule is introduced.
-`.browsepage.parked` keeps its `z-index: 0`. **No z-index change is planned.**
+the mid-drag frames. It *is* load-bearing at the two edges. For `browse→browse` the two movers are **two
+distinct `.browsepage` children of the same `#browse` box** — distinct by D6, siblings by construction —
+so they share one stacking context, the existing ladder is untouched and no new stacking rule is
+introduced. `.browsepage.parked` keeps its `z-index: 0`. **No z-index change is planned.**
+
+*(The earlier revision wrote this as "both movers are children of the same `#browse` box" and the
+round-2 review named it as the plan's one untested assumption. The sentence is true and stays; what was
+missing was the word **distinct**, and the mechanism that makes it so — §5.3.6.)*
 
 ### 5.3 Stage 2 — `browse→browse`
 
@@ -276,15 +315,25 @@ A `position: fixed` page does not have that property, and the cost is exact. A f
 viewport while `#browse` is untransformed, and against `#browse`'s **padding box** while `#browse` is
 transformed. `#browse`'s padding box begins at `y = T` and ends at `y = viewportH − B`, so under a drag:
 
-- the page's top edge moves from `T` to `T + T` — **down by `safe-top + 51px`**;
-- the page's bottom edge moves from `viewportH − B` to `viewportH − B − B` — **up by `nav-h + nav-pad`**;
-- the page's height falls from `viewportH − T − B` to `viewportH − 2T − 2B` — **shrinking by
-  `2·(T + B)`**.
+- the page's top edge moves from `T` to `T + T` — **down by `T`, i.e. `safe-top + 51px`**;
+- the page's bottom edge moves from `viewportH − B` to `viewportH − B − B` — **up by `B`, i.e.
+  `nav-h + nav-pad`**;
+- the page's height falls from `viewportH − T − B` to `viewportH − 2T − 2B` — **shrinking by `T + B`**,
+  which is the sum of the two edge movements and nothing more.
 
-On a notched iPhone (`safe-top = 59px`, `nav-h = 54px`, `nav-pad = 0`) that is a 110px downward jump and a
-328px height loss at drag start, reverting at finalize, on `browse→home`, `browse→overlay`,
-`home→browse` and `overlay→browse`. That is the geometry the plan review asked to be derived rather than
-discovered; `position: absolute` removes it.
+On a notched iPhone (`safe-top = 59px`, `nav-h = 54px`, `nav-pad = 0`, so `T = 110`, `B = 54`) that is a
+110px downward jump and a **164px** height loss at drag start, reverting at finalize, on `browse→home`,
+`browse→overlay`, `home→browse` and `overlay→browse`. That is the geometry the plan review asked to be
+derived rather than discovered; `position: absolute` removes it.
+
+⛔ **The earlier revision published `2·(T + B)` and "≈328px" here and in §18. Both were wrong by a
+factor of two** — the height *formula* `viewportH − 2T − 2B` was right, and the *loss* was misread off
+it. The round-2 review measured the rejected route on the real-engine instrument at `viewportH = 744`:
+rest `top=110 bottom=690 height=580`, under a transformed `#browse` `top=220 bottom=636 height=416` —
+`top +110`, `bottom −54`, height loss **164**, exactly `T + B`. The conclusion is unchanged, because
+164px is still a disqualifying jump and `position: absolute` still removes it by construction; the
+figure is corrected because this paragraph is advertised as derived, and a later measurement reading 164
+would otherwise be taken as refuting the model rather than the arithmetic.
 
 **Content-geometry equality, derived.** `#browse` has no border, so its padding box equals its border
 box. With `#browse`'s own padding removed, its content box equals its padding box equals its border box.
@@ -293,6 +342,16 @@ page's border box is exactly `#browse`'s border box. Applying the same `padding:
 page yields a content box identical to HEAD's `#browse` content box, with the same padding at the same
 edges contributing to the same scrollable content. `max-width: 640px; margin: 0 auto` stays on `#browse`
 and the page fills whatever that produces, so horizontal geometry is unchanged at every viewport width.
+
+⛔ **The equality above is CONDITIONAL on the new scroller reserving no scrollbar gutter, and the
+condition is not free.** A classic (non-overlay) scrollbar is reserved out of the scroll container's
+padding box, which is the box an absolutely-positioned descendant resolves against — so a `.browsepage`
+that reserves one is narrower than `#browse`'s border box by the gutter width, and every "identical
+rectangle" claim in this section and in §5.4 is off by it. Measured on the round-2 instrument: **15px**
+in Blink with a classic scrollbar present, and **0** with iOS overlay scrollbars, which is what ships.
+That makes the native-scrollbar suppression reaching `.browsepage` (§18 round 1 F6; `css:811-814`) a
+**precondition of this derivation**, not an independent cosmetic fix — it is carried in §9 item 4's
+commit set for that reason, and `BROWSESURFACE`'s second mutant is what holds it.
 
 #### 5.3.3 Why the parked rule loses its insets
 
@@ -358,10 +417,22 @@ half-transformed. Stage 2 makes a `.browsepage` a mover for the first time, and 
 an id, so the reset must also clear `transform`/`transition`/`willChange`/`zIndex` on every
 `.browsepage`. Without it, a `browse→browse` gesture interrupted before the settle path's own clear
 (`js/app.js:816`) leaves a page stuck off-viewport — the "erratic after a while" class the reset exists
-to prevent. §18 F11.
+to prevent. §18 round 1 SF1.
 
-**`abortRender: 'rerender'` becomes unreachable**, because the source page node is never overwritten, so
-an abort has nothing to restore. `finalizationPlanFor` collapses to a constant and is deleted.
+**`abortRender: 'rerender'` becomes unreachable as a RE-RENDER**, because the source page node is never
+overwritten, so an abort has no *content* to rebuild. `finalizationPlanFor` collapses to a constant and
+is deleted. ⛔ **What that re-render also carried, and what must therefore be re-homed:** it was the only
+call that put Browse's own page **selection** back after an aborted `browse→browse` — `applyScreen(dest,
+{ render: true, … })` (`js/app.js:1230`) reaches `Browse.render` → `showPage(sourceKey)`, which is what
+un-parks the source page and parks the destination. Delete it and take the plain abort branch
+(`js/app.js:1261`, which passes `render: false` once `abortRender` is gone) and nothing calls `showPage`
+at all: the source page stays `.parked`, the destination stays shown, and `endHold`'s
+`stillShown = activeEntry()` (`js/browse.js:179`) then resolves to the **destination** and hides the
+source. The abort would leave the wrong list on screen. §5.3.6 re-homes it under Invariant D6.
+
+*(This is the sweep's finding, SF2. The earlier claim — "an abort has nothing to restore" — was true of
+the page's content and false of the page's selection, which is the same substitution the round-2 review
+struck twice: a CSS-side fact carried across as though it settled the JavaScript side.)*
 
 #### 5.3.5 The fallback, and when to take it
 
@@ -372,6 +443,108 @@ invariant is D4. If the builder finds per-page scrollers break the virtualizer's
 two-host form does not, the two-host form satisfies D4 equally and is the fallback — say so rather than
 re-introducing a copy. Note that the two-host form does **not** dissolve §18 F1: two hosts must both
 generate boxes, and both are then reachable as movers.
+
+#### 5.3.6 The two `browse→browse` movers, and who owns the landing
+
+This subsection is the JavaScript counterpart of §5.3.1. The CSS gives each page its own box; without
+what follows, nothing ever resolves a mover **to** one.
+
+**The resolution today, traced through HEAD.** `buildConstruction` reads `sourceHost` and
+`destinationHost` off the classification (`js/swipe.js:357`) and uses them for both slots:
+`env.sourceEl(sourceHost, from.v)` at `:365`, `env.renderDestination(dest, destinationHost)` at `:387`.
+`classifyTransition` projects those hosts at `js/swipe.js:99-101` — `sourceHost` is `'in-flow'` for any
+non-overlay source, `destinationHost` is `'browse-host'` for any browse destination. App-side,
+`'in-flow'` → `appViewEl(v)` (`js/app.js:541`) → `d.byId('browse')` (`js/nav.js:36`), and
+`'browse-host'` → `showAppView(dest, true); return $('browse')` (`js/app.js:544`). **For a
+`browse→browse` pair both slots therefore return `#browse`** — one element in two mover slots, which
+D6 forbids and which no gate this plan previously carried could see.
+
+**The invariant, not the implementation.** For a `browse→browse` pair the outgoing and incoming movers
+are the **source page node and the destination page node**, two distinct `.browsepage` elements, and the
+source is resolved before the destination render runs (§9 item 1, which stops being merely historical
+and becomes load-bearing again).
+
+**Recommended construction — extend the projection, because that is where the policy already lives.**
+`js/swipe.js:96-98` names `classifyTransition` as "the single place the kind→host mapping policy lives";
+a second mapping anywhere else would be the divergence that comment exists to prevent. So the projection
+gains one case on each end, keyed on the pair rather than on either kind alone:
+
+```
+sourceHost        'overlay'      fromKind === 'overlay'
+                  'browse-page'  fromKind === 'browse' && toKind === 'browse'      // NEW
+                  'in-flow'      otherwise
+destinationHost   'overlay'      toKind === 'overlay'
+                  'browse-page'  toKind === 'browse' && fromKind === 'browse'      // NEW
+                  'browse-host'  toKind === 'browse'
+                  'home'         otherwise
+```
+
+App-side, both new host values resolve through **one** new Browse accessor, `Browse.pageElFor(desc)` —
+the cached `.browsepage` node for `keyOf(desc)`:
+
+- `env.sourceEl('browse-page', v)` returns the source page node. It is resolved before any render, when
+  the source page is the cached, on-screen one.
+- `env.renderDestination(dest, 'browse-page')` performs the same `showAppView(dest, true)` the
+  `'browse-host'` branch does and returns `Browse.pageElFor(dest)` instead of `$('browse')`. The node
+  exists by then on both paths: a cache hit shows the cached node, and a cache miss creates and appends
+  the page node synchronously before its first `await` (`js/browse.js:494-499`), so the incoming mover on
+  a miss is the same node the fetched content later fills.
+- **A null resolution is an error, not a null mover.** If either accessor cannot produce an element the
+  seam throws rather than returning `undefined` into a mover slot, where it would surface much later as
+  a transform write on nothing.
+
+`constructionPlanFor`'s declared `renderDestination` gains `'browse-page'` on the `browse→browse` row so
+the declared field and the operative host do not disagree for the one row this plan changes (§6).
+
+**Why not re-point `appViewEl`.** Because the same source view must still resolve to `#browse` when the
+destination is *not* browse — `browse→home` and `browse→overlay` ship that today and §5.1 forbids
+changing it. The resolution is a property of the **pair**, which is exactly what the classification
+knows and what `appViewEl(v)` cannot.
+
+**The landing — who decides which page is shown when the gesture ends.**
+
+At HEAD the drag-start render calls `showPage(destKey)` (`js/browse.js:487`/`:499`), which marks the
+outgoing page `.parked` while a row hold is live (`:299-303`; the hold is taken at `js/app.js:535`,
+before `buildConstruction` at `:560`, so `holdRows` is true throughout). On commit that is the wanted end
+state. On abort it is put back only by the re-render Stage 2 deletes (§5.3.4). Under D6 the owner is
+named instead of inferred:
+
+- **`Browse.endHold` is told where the gesture landed** — its token argument gains the landed screen
+  descriptor, and it reconciles `.parked`/`.hidden` and controller activation against that page rather
+  than against `activeEntry()` (`js/browse.js:179`, `:185`). **The read belongs in `dropRowHold`
+  (`js/app.js:360-364`), the single wrapper around `Browse.endHold`**, and it reads `currentDesc()`.
+  Both of that wrapper's paths already apply the screen first: the finalize `finally`, whose own comment
+  records that it "lands after the SYNCHRONOUS applyScreen" (`js/app.js:1266-1271`), and the hard-reset
+  path, which calls `applyScreen(currentDesc(), …)` at `js/app.js:459` and `dropRowHold()` at `:461`. So
+  one read at one site is correct on the commit branch, the abort branch and the hard reset alike. This
+  makes them one path, and it removes the plan's dependence on a re-render it is deleting.
+- **The park stays where it is: applied at the drag-start render, cleared at the hold's release.** The
+  outgoing mover therefore carries `.parked` while it is being dragged, and the drag's inline
+  `style.transform` (`js/app.js:594`, `:615`) overrides `.browsepage.parked`'s `transform` for the whole
+  gesture — verified at HEAD: the parked rule (`css/app.css:86-91`) declares no `!important`, so the
+  cascade puts inline above it. The other three parked declarations are wanted on a live mover:
+  `overflow: hidden` keeps the box a scroll container with its offset intact (Invariant P ground 1),
+  `pointer-events: none` is correct during a drag, and `z-index: 0` is inert between two non-overlapping
+  siblings of one stacking context. At the settle the inline transform is cleared (`js/app.js:816`) and
+  the parked transform takes effect in the same frame — which is precisely the commit end state, for
+  free.
+- **`PARKLOSESTRANSFORM` (§14) is the gate on the cascade dependency**, because "inline beats a class
+  rule" is a fact about the stylesheet as written, and a later `!important` would silently make the
+  outgoing mover jump to `translateX(-101vw)` at drag start.
+
+**The alternative, and its exact cost, so the builder can take it if the device says so.** The
+`#home` park was deferred from drag start to finalize in Stage 1 precisely because a park landing
+mid-drag on the outgoing mover was a device-visible regression (§9 item 2). That record concerns `#home`,
+whose park rule also carries `will-change: transform` (`css:131`) and which is not a `.browsepage`, so it
+is a **reason to look**, not a derivation that the same thing happens here — hence the named device
+observation at step 10b: *at drag start the outgoing page must not jump off-screen.* If it does, the
+fallback is to defer the page park to the hold's release the same way, so neither page is parked during
+the drag. Its cost is stated rather than discovered: that breaks the one-non-offscreen-page invariant
+(`js/browse.js:205-211`), whose consumers are `endHold`'s `stillShown` (already re-homed above, so no
+extra cost), the view-level `deactivate`/`activate` (`:332-333`, not reachable inside a `browse→browse`
+gesture), and — the one that would need its own fix — the late-fetch guard at `js/browse.js:546`, which
+uses `offscreen(page)` to stop a slow fetch for the outgoing page from writing a scroll position into a
+page the user is looking at.
 
 ### 5.4 The A–Z strip's containing block, derived
 
@@ -386,14 +559,31 @@ resolves against that ancestor's padding box.
 | At rest, HEAD | none | the viewport |
 | At rest, after Stage 2 | none — `#browse` still declares no transform (`BROWSEFIXED`), and `position: absolute` on the page establishes no containing block for a fixed descendant | the viewport — **unchanged** |
 | `browse→home` / `browse→overlay` drag, HEAD | `#browse` (inline transform) | `#browse`'s padding box |
-| `browse→home` / `browse→overlay` drag, after Stage 2 | `#browse` (inline transform) | `#browse`'s padding box — **unchanged**, because `#browse` keeps the same border box and its padding is now zero, so its padding box is the same rectangle |
+| `browse→home` / `browse→overlay` drag, after Stage 2 | `#browse` (inline transform) | `#browse`'s padding box — **unchanged**. `#browse` has no border, so its padding box equals its border box whether or not it declares padding; removing `#browse`'s padding does not move that rectangle, and `#browse` stops reserving a scrollbar gutter in the same change |
 | `browse→browse` drag, HEAD | the clone's `translateY` — and the clone excludes the strip (`js/swipe.js:321`), so the *real* strip is inside the un-transformed live `#browse` | the viewport |
-| `browse→browse` drag, after Stage 2 | the `.browsepage` (inline transform) | the page's padding box — which equals `#browse`'s border box, **the same rectangle the `→home` drag already produces today** |
+| `browse→browse` drag, after Stage 2 | the `.browsepage` (inline transform) | the page's padding box — which equals `#browse`'s border box **provided the page reserves no scrollbar gutter**, and is then the same rectangle the `→home` drag already produces today |
 
 So Stage 2 introduces **no new containing rectangle** for the strip. It extends an already-shipping
 behaviour to one more transition, at the identical magnitude. That is why R3 stays a device row and does
 not become a blocker: the thing to look at on device is whether that displacement *looks* acceptable,
 and one of the two transitions producing it is already in the user's hands.
+
+**Two corrections the round-2 review returned, both folded above.**
+
+1. **The equality is conditional.** A reserved classic-scrollbar gutter comes out of the padding box, so
+   a `.browsepage` that reserves one shifts the strip's containing rectangle horizontally. Measured on
+   the round-2 instrument: the two rectangles are **vertically identical** (`top=235`, `height=385` on
+   both the shipping `→home` drag and the new `browse→browse` drag — exactly as this section claims),
+   and horizontally they differ by one gutter (`left=469` versus `left=454`, a 15px difference) while a
+   classic scrollbar is present. iOS overlay scrollbars reserve nothing, so the shipping delta is 0.
+   The suppression reaching `.browsepage` is therefore a precondition of this row, not a cosmetic fix
+   (§5.3.2, §9 item 4).
+2. **The `→home` row's stated reason was confused, though its conclusion was right.** The earlier text
+   said the rectangle is unchanged "because `#browse` keeps the same border box and its padding is now
+   zero, so its padding box is the same rectangle." `#browse` has no border, so its padding box equals
+   its border box *regardless* of padding — removing the padding is irrelevant to this row. Corrected in
+   place, so no later reader infers that an `inset: 0` absolutely-positioned child is affected by its
+   containing block's padding. It is not.
 
 ## 6. Contract change
 
@@ -402,12 +592,18 @@ and one of the two transitions producing it is already in the user's hands.
 outgoing | identity
 capture | identity
 abortRender | behavior
+sourceHost | identity
+destinationHost | identity
 ```
 
 Structural notation — the exact shapes, before and after:
 
 ```
 AT HEAD (Stage 1 shipped)
+  classifyTransition({from,to}) -> { fromKind, toKind,
+                              sourceHost: 'overlay' | 'in-flow',
+                              destinationHost: 'overlay' | 'browse-host' | 'home',
+                              decorations: frozen [] }
   constructionPlanFor(c) -> { outgoing: 'app-ghost' | 'real-source',
                               incoming: 'real-destination',
                               renderDestination: 'browse-host' | 'home-host' | 'none',
@@ -415,15 +611,40 @@ AT HEAD (Stage 1 shipped)
                               // 'app-ghost' iff fromKind === 'browse' && toKind === 'browse'
   buildConstruction(from, dest, env) -> { decorations, movers, capture: { ghostY, animSync, animRes } | null }
   finalizationPlanFor(c) -> { abortRender: 'rerender' | 'none' }
+  env.sourceEl(host, v)            -> host 'overlay' | 'in-flow'
+  env.renderDestination(dest,host) -> host 'overlay' | 'browse-host' | 'home'
+  Browse.endHold(token)            -> void
+  (no Browse accessor returns a page element)
 
 AFTER STAGE 2
+  classifyTransition({from,to}) -> { fromKind, toKind,
+                              sourceHost: 'overlay' | 'browse-page' | 'in-flow',
+                              destinationHost: 'overlay' | 'browse-page' | 'browse-host' | 'home',
+                              decorations: frozen [] }
   constructionPlanFor(c) -> { outgoing: 'real-source',
                               incoming: 'real-destination',
-                              renderDestination: 'browse-host' | 'home-host' | 'none',
+                              renderDestination: 'browse-page' | 'browse-host' | 'home-host' | 'none',
                               decorations: frozen [] }
   buildConstruction(from, dest, env) -> { decorations, movers }              // `capture` REMOVED, not nulled
   finalizationPlanFor                                                        // DELETED
+  env.sourceEl(host, v)            -> host 'overlay' | 'browse-page' | 'in-flow'
+  env.renderDestination(dest,host) -> host 'overlay' | 'browse-page' | 'browse-host' | 'home'
+  Browse.endHold(token, landed)    -> void                                   // `landed` = the landed screen descriptor
+  Browse.pageElFor(desc)           -> Element                                // throws rather than returning null
 ```
+
+**`'browse-page'` is one value on two enums and it means one thing:** resolve this slot to the
+`.browsepage` node for the descriptor, not to the `#browse` host. It appears on `sourceHost` and on
+`destinationHost` for exactly the pair `fromKind === 'browse' && toKind === 'browse'` (§5.3.6), and
+`constructionPlanFor`'s declared `renderDestination` carries it on the same row so the declared field
+and the operative host cannot disagree. Every other host value is untouched, so the four Stage-1
+transitions resolve exactly as they ship.
+
+**Two consumers now exist for each new value, at this stage:** `sourceHost: 'browse-page'` is consumed
+by `env.sourceEl` in `start()`; `destinationHost: 'browse-page'` by `env.renderDestination` in the same
+literal; `Browse.pageElFor` by both of those branches; `endHold`'s `landed` argument by the
+park/hide/activate reconciliation inside `endHold` itself. No field is added for a later stage or for a
+test.
 
 `outgoing` collapses to a one-value enum. **Keep the field.** It is the frozen spec's per-case assertion
 surface and the thing the anti-cloning gate reads; collapsing it to nothing would delete the place a
@@ -431,6 +652,10 @@ re-introduced clone would have to declare itself.
 
 **Migration (U10).** `test/fixtures/swipe-plan-spec.mjs` is the hand-written independent oracle and
 changes in the same commit as production — that two-part edit is deliberate and is what a review sees.
+It pins the hosts per structural case in `expectedHosts` (`js/swipe.js:98` names it as the pinning
+surface), so the `browse→browse` row's `sourceHost` and `destinationHost` both change there in the same
+commit as the projection; a row left at `'in-flow'`/`'browse-host'` reddens the spec rather than passing
+silently, which is the property that makes this change self-enforcing.
 `Swipe.buildConstruction`'s return is registered `NON_CONTRACT` in
 `test/contract-function-gate.test.js:42-44` because it carries live DOM nodes, so removing the `capture`
 key does not trip the **exact-key** gate; that registration is re-read and kept in the same commit,
@@ -447,6 +672,11 @@ target text is deleted is de-registered in the same commit, or the anchors gate 
 ```vitruvius-ledger
 # name | class | dir | producer | consumer | owner | lifecycle | verification
 outgoing mover element | identity | out | the constructionPlanFor outgoing branch | the start() mover mapping in app.js | Swipe.buildConstruction | per gesture | NOGHOSTINFLOW cell in stage 1 and NOGHOSTATALL cell in stage 2
+browse to browse outgoing mover element | identity | out | env.sourceEl resolving the browse-page source host | the outgoing mover slot in buildConstruction and the drag transform writes | the classifyTransition host projection | per gesture | MOVERSDISTINCT cell plus device row R7
+browse to browse incoming mover element | identity | out | env.renderDestination resolving the browse-page destination host | the incoming mover slot in buildConstruction and the drag transform writes | the classifyTransition host projection | per gesture | MOVERSDISTINCT cell plus device row R7
+the browse page accessor | resource | in | Browse.pageElFor keyed on the descriptor | both browse-page host branches in the app-side env literal | Browse | session | MOVERSDISTINCT cell asserts both slots resolve to distinct browsepage nodes
+the landed screen descriptor at hold release | identity | in | the finalize path reading currentDesc after applyScreen | Browse.endHold reconciling park and hide and activation | the finalize path in app.js | per gesture | LANDEDPAGESHOWS cell
+browse page selection after a gesture ends | behavior | inout | Browse.endHold using the landed descriptor | showPage and the virtual controller activation | Browse.endHold | per gesture | LANDEDPAGESHOWS cell plus device row R7
 source view scroll offset | geometry | inout | the user scrolling the real view element | the outgoing mover paint during the drag | the real view element | continuous and unaffected by the gesture | HOMESTAYSLIVE cell plus device row R1
 home parked state during a browse-host drag | behavior | inout | the env.renderDestination browse-host branch | the nav setView call at finalize | the env.renderDestination browse-host branch | spans drag start to finalize | HOMESTAYSLIVE cell and its second mutant
 browse container role | identity | inout | Nav.setView and Browse.render | the innerHTML wipe and the appendChild and the hidden-class visibility test in browse.js | the browse host element | the whole session | PAGEOWNSSCROLL cell asserts the container operations still target the host after a page swap
@@ -462,11 +692,19 @@ abort re-render decision | behavior | out | Swipe.finalizationPlanFor | the runF
 the dead env scrollY supplier | resource | in | the env literal built in app.js start() | nothing at HEAD | the env literal in app.js | per gesture until deleted | the deletion is verified by the ambient-read audit in section 10
 ```
 
-**No dead field is added.** Every row is an existing value whose producer, owner or existence changes;
-the plan adds no new field to any contract and no second injected reference. Three rows record
-**removals** (`Construction capture field`, `abort re-render decision`, `the dead env scrollY supplier`)
-— recorded because a value whose consumer set is empty is exactly the thing that otherwise survives as
-dead weight.
+**No dead field is added.** Most rows are existing values whose producer, owner or existence changes.
+**Three values are genuinely new in this fold**, and each has a current-stage consumer it can reach, so
+none is a dead field: `Browse.pageElFor` (consumed by both `'browse-page'` host branches in the app-side
+`env` literal, in the same commit that introduces them), the `'browse-page'` host values themselves
+(consumed by `buildConstruction`'s two mover slots), and `endHold`'s landed descriptor (consumed inside
+`endHold`'s own park/hide/activate reconciliation). None is added for a test or for a later stage; each
+replaces an inference the same commit removes. Three rows record **removals** (`Construction capture
+field`, `abort re-render decision`, `the dead env scrollY supplier`) — recorded because a value whose
+consumer set is empty is exactly the thing that otherwise survives as dead weight.
+
+**No second injected reference into `js/browse.js`.** `o.mount` keeps the container role and nothing is
+re-pointed (§18 round 1 F3). `Browse.pageElFor` is an **export** — a value leaving Browse — not a
+reference injected into it, so the no-second-pointer property the role split was built for is intact.
 
 ## 8. Effect ownership after the callee is retired
 
@@ -498,24 +736,40 @@ measured again, for Stage 2's new absolutely-positioned case, at R2b.
 Ordering requirements that are **correctness**, not incidental:
 
 1. **The outgoing mover is resolved before any destination render runs.** Preserved unchanged
-   (`js/swipe.js:369-380`). After Stage 2 the outgoing is a real page element rather than a clone, which
-   makes the ordering less load-bearing — but `browse→browse` still renders into a page that must
-   already exist, so the order stands.
+   (`js/swipe.js:369-380`). ⛔ **Correctness, and more load-bearing after Stage 2, not less** — the
+   earlier revision had this backwards. The destination render calls `showPage(destKey)`, which marks
+   the outgoing page `.parked` (`js/browse.js:299-303`); resolving the source afterwards would have to
+   pick it out of a set where the visible-page inference no longer names it. Resolving first, while the
+   source page is still the shown one, is what makes `'browse-page'` unambiguous on both ends (§5.3.6).
 2. **The `#home` park is deferred from drag start to finalize** on `home→browse`. **Shipped in Stage 1**
    (`js/app.js:501-515`). Restated because a park that lands mid-drag makes the outgoing mover jump to
    `translateX(-101vw)`, which is the most visible possible regression, and Stage 2 must not reinstate it.
 3. **The transform is cleared before the park is applied**, at finalize. `resetSwipeStyles`
    (`js/nav.js:104-110`) already runs at the top of `applyScreen`, ahead of `setView`. Stage 2 widens
    what that reset covers (§5.3.4) but does not move it.
-4. **Stage 2's per-page scroller migration lands with every one of its readers in ONE commit.** The
-   set is: the CSS relocation, `applyScrollY`'s signature and write target, `playingTrackY`'s read
-   target, `virtualView`'s metrics and `scrollTo` closures, the `sy`/`restoring` deletion,
-   `entryScrollY`/`positionOnEnter`'s entry rule, `resetSwipeStyles`'s widened element set, and the
-   M1WRITERSET baseline. Splitting any of them produces two scroll authorities or a red gate on a
-   half-migrated tree.
+4. **Stage 2's functional change lands in ONE commit — every reader of the retired scroller, and the
+   mover change with them.** The set is: the CSS relocation (§5.3.1), `applyScrollY`'s signature and
+   write target, `playingTrackY`'s read target, `virtualView`'s metrics and `scrollTo` closures, the
+   `sy`/`restoring` deletion, `entryScrollY`/`positionOnEnter`'s entry rule, `resetSwipeStyles`'s
+   widened element set, the M1WRITERSET baseline, **the scroll-indicator surface change and the
+   native-scrollbar suppression** (`js/scrollbar.js:50` and `css:811-814` — §5.3.2 makes the second a
+   precondition of the geometry derivation, not a cosmetic fix), **the host projection and both
+   `browse-page` resolutions with `Browse.pageElFor`** (§5.3.6), **`endHold`'s landed-screen argument**
+   (§5.3.6), and **the `outgoing` collapse with `ghostApp`'s deletion**. ⛔ Splitting any of them
+   produces two scroll authorities, a mover slot resolved against a surface the same commit retired, or
+   a red gate on a half-migrated tree. The last three are new to this fold and each has its own reason:
+   the mover resolution is meaningless without the collapse that removes the clone; `endHold`'s argument
+   is what replaces the abort re-render the collapse deletes; and **`ghostApp` reads
+   `#browse.scrollTop` (`js/swipe.js:324`), so any HEAD that keeps the clone after the CSS relocation
+   has a live consumer of a dead scroller** — the §18 round 2 F12 defect.
 5. **The park geometry is settled before the Stage 2 device gate runs.** Not a code ordering — a *gate*
    ordering. §13 step 10a measures the park/un-park box equality on the real-engine instrument and must
-   read zero before step 10b puts the change in front of a device. See §18 F5.
+   read zero before step 10b puts the change in front of a device. See §18 round 1 F5.
+6. **`Browse.endHold` runs after the finalize path's `applyScreen`, and reads the landed screen from
+   there.** Correctness. The hold is released in the finalize `finally` (`js/app.js:1266-1271`), whose
+   own comment records that it "lands after the SYNCHRONOUS applyScreen"; that is exactly what makes
+   `currentDesc()` the landed screen for both the commit and the abort branch. Reversing the two would
+   hand `endHold` the pre-abort descriptor and park the page the gesture returned to.
 
 Incidental and free to move: the order of the effect deletions inside `ghostApp`'s removal (the whole
 function goes at once), and the order in which the frozen-spec rows are edited.
@@ -580,7 +834,11 @@ It adds no lookup, no query and no module-level state. `#browse` remains resolve
 | M1WRITERSET registered baseline | `test/scroll-writer-set.test.js:169-205` | **Re-derived by running the derivation, never hand-edited.** Entries 3 and 4 change text (`o.mount.scrollTop` → the page element) and would otherwise trip the gate's rot check; entry 6's recorded `why` ("whose nearest scroll container is `#browse`") becomes false and is corrected even though the gate cannot see it. ⛔ The gate's own header forbids repairing a red by narrowing the pattern or the file set. |
 | `NOAPPCLONE` registered exceptions | `test/no-view-clone-gate.test.js` | **Temporary exception 2 deleted** with the clone it allows. §16. |
 | Mutation anchors into `ghostApp` | `tools/mutate.mjs`, `test/mutation-anchors.test.js` | **De-registered** with their target text, including #101 (M2ALIGN), the `.alphaindex` clone-exclude anchors and the `freezeArt` anchors. |
-| Frozen construction spec | `test/fixtures/swipe-plan-spec.mjs` | `'app-ghost'` removed from every `expectedConstruction` row and from `paneOf`; the `browse→browse` row's `abortRender: 'rerender'` removed. |
+| Frozen construction spec | `test/fixtures/swipe-plan-spec.mjs` | `'app-ghost'` removed from every `expectedConstruction` row and from `paneOf`; the `browse→browse` row's `abortRender: 'rerender'` removed; **that row's `expectedHosts` changed to `sourceHost: 'browse-page'`, `destinationHost: 'browse-page'`** and its `renderDestination` to `'browse-page'`. |
+| `Browse.endHold` call signature | `js/browse.js:164`, called at `js/app.js:363` | **Gains the landed screen descriptor.** Both the definition and the one call site change in the same commit; the argument's consumer is inside `endHold` (§5.3.6). |
+| `Browse.pageElFor` | new export in `js/browse.js` | **Added, with two current-stage consumers** — the `'browse-page'` branches of `env.sourceEl` and `env.renderDestination` (`js/app.js:541`, `:543-555`). It throws rather than returning null, so a missing page fails at the seam instead of as a transform write on `undefined`. |
+| `js/scrollbar.js` supported-surface set | `js/scrollbar.js:47-53` | **`surfaceKind` gains the `.browsepage` case.** It keys on `t.id === 'browse'` at `:50` and a page carries no id, so without this the indicator takes the unsupported branch (`:83`) and removes itself on browse. In the part-A commit set (§9 item 4). |
+| Native-scrollbar suppression selector list | `css/app.css:811-814` | **Extended to `.browsepage`.** A precondition of §5.3.2's and §5.4's geometry equality, not a cosmetic fix. In the part-A commit set. |
 
 ## 11. Lifecycle and ownership
 
@@ -591,7 +849,7 @@ The `'owned-pane'` mover ownership kind is retired. Each lifecycle concern, name
   existing `'owned-decoration'` kind unchanged.
 - **Borrows.** All view movers become `'borrowed-real'` — the kind that already governs `#home`,
   `#browse` and the overlays. **New in Stage 2:** a `.browsepage` joins that set. It is the first
-  borrowed mover with no id, which is why the reset's element set widens (§5.3.4, §18 F11).
+  borrowed mover with no id, which is why the reset's element set widens (§5.3.4, §18 round 1 SF1).
 - **Mutates.** The gesture writes `style.transform` on borrowed elements and clears it at
   `resetSwipeStyles` and at the settle (`js/app.js:816`). The `.browsepage` addition is the only change.
 - **Releases.** `dropPanes()` (`js/app.js:662`) filters `own === 'owned-pane'` and becomes a no-op, then
@@ -608,9 +866,18 @@ The `'owned-pane'` mover ownership kind is retired. Each lifecycle concern, name
   exactly the same operations that drop the element — at parity with HEAD, where `sy` lives on the same
   cache entry.
 
-**Nothing added now is justified only by a later stage.** Stage 2 adds no field and no injected
-reference. The one behavioural addition — the widened `resetSwipeStyles` element set — has a Stage 2
-consumer: the `.browsepage` movers Stage 2 itself creates.
+**Nothing added now is justified only by a later stage.** Stage 2 adds no injected reference into
+`js/browse.js`; the three values it does add are each consumed in the same commit (§7). The behavioural
+additions — the widened `resetSwipeStyles` element set, the `'browse-page'` resolutions, and `endHold`'s
+landed argument — all have Stage 2 consumers: the `.browsepage` movers Stage 2 itself creates, and the
+page selection whose previous restorer Stage 2 itself deletes.
+
+**One lifetime is new and is named.** A `.browsepage` resolved as a mover is **borrowed for the gesture
+and owned by the page cache**, so the gesture must not outlive it: the cache can evict or destroy a page
+(`evictLRU`, `clearCache`, `reset`) independently of any gesture. Verified for the reachable case —
+`evictLRU` cannot take the outgoing page mid-drag (§18 round 2's sweep) — and `Browse.reset`/
+`clearCache` already invalidate any outstanding hold through `dropHold` (`js/browse.js:197-203`), which
+is the existing mechanism for exactly this class and needs no extension.
 
 ## 12. The deletion list
 
@@ -634,8 +901,9 @@ citations were written against pre-Stage-1 source and every one of them had move
    hidden/parked prunes (`:313-314`).
 7. `'app-ghost'` from `constructionPlanFor`'s `outgoing` ternary (`:167`) and the comment block that
    explains it (`:155-166`).
-8. `finalizationPlanFor` entirely (`:196-205`) with its comment block (`:185-195`), plus its export
-   (`:407`) and its contract-gate registration.
+8. `finalizationPlanFor` entirely (`:196-205`) with its comment block (`:185-195`), plus its name in the
+   module's export list (`js/swipe.js:408` — the earlier revision cited `:407`, which is blank) and its
+   contract-gate registration.
 9. `capture` from the `buildConstruction` return (`:373-377`, `:405`) and from its comment (`:369-372`).
 10. The stale `env.scrollY` mention in the module comment (`:212`).
 
@@ -650,6 +918,14 @@ citations were written against pre-Stage-1 source and every one of them had move
     `applyScreen` (`:459`, `:1230`) and `Nav.resetSwipeStyles` — the *parameter* goes; the `nav.js:105`
     sweep line stays for the NP pill float.
 15. The `owned-pane` filters at `:266`, `:376`, `:688`, `:743`, `:794`.
+15a. ⛔ **Every `finPlan` reader, in the SAME commit as `finalizationPlanFor`'s deletion** — the session
+    field itself (`:484`, `finPlan: Swipe.finalizationPlanFor(…)`), the hard-reset path's re-render
+    condition (`:459`, `cur.live && cur.finPlan.abortRender === 'rerender'`), the abort held-reveal
+    branch's condition (`:1229`), the plain abort branch's `render:` argument (`:1261`), and the comment
+    that explains the mechanism (`:425-429`). **Missing from the previous revision's list**, and not a
+    tidy-up: with the field gone, `cur.finPlan.abortRender` is a property read on `undefined` and every
+    settle throws. The two re-render conditions become a literal `false` — which is what makes the page
+    selection an orphan until Invariant D6 re-homes it (§5.3.6, §18 round 2 SF2).
 
 **js/browse.js**
 16. The `sy` scroll listener in `init()` (`:67-73`) and the per-page-scroll-memory comment (`:109-119`).
@@ -699,7 +975,7 @@ not removed — §5.3.3), the row hold, the `.app` runway, the session-identity 
 
 | # | Step | Owner | State |
 |---|---|---|---|
-| 1 | Stress this plan; verdict forge / temper / scrap. | the plan reviewer | Stage 1 done; Stage 2 round 1 returned TEMPER; **this revision is unreviewed** |
+| 1 | Stress this plan; verdict forge / temper / scrap. | the plan reviewer | Stage 1 done; Stage 2 rounds 1 and 2 both returned TEMPER; **this revision, which folds round 2, is unreviewed** |
 | 2 | Real-engine measurement R1 + R2 (§15) against HEAD and a scratch Stage-1 build. | the deriver | **done** 2026-07-30 |
 | 3 | Author the Stage-1 red cells `NOGHOSTINFLOW`, `HOMESTAYSLIVE`. | the test author | **done** |
 | 4 | **Stage 1 build.** | the builder | **done**, build `2026-07-30.274` |
@@ -707,14 +983,15 @@ not removed — §5.3.3), the row hold, the `.app` runway, the session-identity 
 | 6 | Review the Stage-1 build. | the code reviewer | **waived by the user for this stage** |
 | 7 | Attack the ratified claim "moving the real outgoing view is visually identical to the ghost it replaces". | the adversary | **waived by the user for this stage** |
 | 8 | **Real-engine measurement R2b** (§15): an `inset: 0` absolutely-positioned page translated to `+w` inside the fixed `#browse` — does it extend `scrollingElement.scrollWidth`, and does it paint outside the viewport? Run against a scratch build over the static `index.html`, before any product edit. | the deriver | open |
-| 9 | Author the Stage-2 red cells: `PAGEISVIEW`, `MOVERHASBOX`, `PARKBOXEQUAL`, `PAGEOWNSSCROLL`, `RESETCOVERSPAGES`, `ENTRYNOZERO`, `BROWSESURFACE`, `NPPILLIDS`, `NOGHOSTATALL`, `ABORTNORENDER`. Red at HEAD. | the test author | open |
-| 10 | **Stage 2 build, part A.** The CSS relocation (§5.3.1), the `o.mount` role split, the `sy`/restore deletion, the entry-position rule, the widened `resetSwipeStyles`, and the M1WRITERSET re-derivation — **all in one commit** (§9 item 4). Bump the build number. | the builder | open |
-| 10a | **Park-geometry probe, before the device sees it.** On the real-engine instrument, compare the resolved box of a `.browsepage` with and without `.parked`, and measure the reveal delta on a mid-park content mutation. **Both must read 0.** A non-zero result stops the sequence — do not proceed to 10b, because the abort-repaint symptom then has three candidate causes and the device gate cannot separate them (§18 F5). | the deriver | open |
-| 10b | Device gate: `browse→browse` both directions, commit and abort, on a long list and a short one; the A–Z strip during a `browse→browse` and a `browse→home` drag; a virtualized list past 600 items; re-confirm `home→browse`, `browse→home`, `browse→overlay`, `overlay→browse` commit and abort. **A Stage 1 device pass is not evidence about Stage 2 — Stage 2 touches the element all four of those use as a mover.** | the user | open |
-| 11 | **Stage 2 build, part B.** `outgoing` collapses to `'real-source'`; `finalizationPlanFor` is deleted. Execute the §12 deletion list in full, including the test and tooling entries and `NOAPPCLONE`'s exception 2. Bump the build number. | the builder | open |
+| 9 | Author the Stage-2 red cells: `PAGEISVIEW`, `MOVERHASBOX`, `MOVERSDISTINCT`, `PARKBOXEQUAL`, `PARKLOSESTRANSFORM`, `PAGEOWNSSCROLL`, `RESETCOVERSPAGES`, `ENTRYNOZERO`, `LANDEDPAGESHOWS`, `BROWSESURFACE`, `NPPILLIDS`, `NOGHOSTATALL`, `ABORTNORENDER`. Red at HEAD. | the test author | open |
+| 10 | **Stage 2 build — the whole functional change, ONE commit** (§9 item 4): the CSS relocation (§5.3.1), the `o.mount` role split, the `sy`/restore deletion, the entry-position rule, the widened `resetSwipeStyles`, the M1WRITERSET re-derivation, the scroll-indicator surface change and the native-scrollbar suppression, the host projection with both `browse-page` resolutions and `Browse.pageElFor` (§5.3.6), `endHold`'s landed-screen argument (§5.3.6), and the `outgoing` collapse with `ghostApp`'s deletion. The frozen spec, `NOAPPCLONE`'s exception 2 and every mutation anchor whose target text goes are edited in the SAME commit — their rot checks redden otherwise. Bump the build number. | the builder | open |
+| 10a | **Park-geometry probe, before the device sees it.** On the real-engine instrument, compare the resolved box of a `.browsepage` with and without `.parked`, and measure the reveal delta on a mid-park content mutation. **Both must read 0.** A non-zero result stops the sequence — do not proceed to 10b, because the abort-repaint symptom then has three candidate causes and the device gate cannot separate them (§18 round 1 F5). The box-equality half already reads 0 on three axes (round-2 measurement); the reveal-delta half is what remains owed. | the deriver | open |
+| 10b | **Device gate, on the form that ships.** `browse→browse` both directions, commit and abort, on a long list and a short one — **and the abort must return to the page it started on** (§5.3.6, `LANDEDPAGESHOWS`'s device half); **at drag start the outgoing page must not jump off-screen** (§5.3.6's named observation); browse re-entry after leaving to Home keeps its scroll position (§18 round 2 F15); the A–Z strip during a `browse→browse` and a `browse→home` drag; a virtualized list past 600 items; re-confirm `home→browse`, `browse→home`, `browse→overlay`, `overlay→browse` commit and abort. **A Stage 1 device pass is not evidence about Stage 2 — Stage 2 touches the element all four of those use as a mover.** | the user | open |
+| 11 | **Stage 2 subtraction pass.** Execute the remaining §12 deletion list: the now-dead pane machinery (`dropPanes`, `holdGhostUntilPaintable`, `revealPending`, the abort held-reveal branch, the `owned-pane` filters, the capture-recording block and its diagnostic readers, the `.nav-ghost` sweeps and the `keepGhosts` parameter, the `env.scrollY` supplier) and the remaining test and tooling entries. **Exit condition: every item is listed with the reason it is unreachable at step 10's HEAD** — no caller, or a caller whose condition is now constant-false. An item that cannot be shown unreachable is not a subtraction and does not belong in this step. Bump the build number. | the builder | open |
+| 11b | **Device re-confirm after the subtraction:** `browse→browse` commit and abort, plus the four Stage-1 transitions. Short, because step 11 changes no behaviour — and run anyway, because the standing scar (§15) is that the form device-tested is the form that ships, and step 11 changes the shipped form even when it cannot change its behaviour. | the user | open |
 | 12 | Review the Stage-2 build. | the code reviewer | open |
 | 13 | Audit the suite: every deleted assertion accounted for, no dimension left bare by the deletions, and every migrated gate re-derived rather than narrowed. | the coverage auditor | open |
-| 14 | Update `Claude/Subsystems/swipe-reveal.md`, the board and the decision log; HEAD-wide scrub of "ghost", "app-ghost", "snapshot" and "clone" in records that describe the swipe. **Includes surfacing the `PLAN-one-screen-type.md:1967-1976` mechanism correction to the user** — this plan does not edit that plan. | the assistant | open |
+| 14 | Update `Claude/Subsystems/swipe-reveal.md`, the board and the decision log; HEAD-wide scrub of "ghost", "app-ghost", "snapshot" and "clone" in records that describe the swipe. *(The `PLAN-one-screen-type.md` mechanism correction this step used to carry was reconciled by the user at `41f2933` and is discharged — §1.)* | the assistant | open |
 
 **Stage 1 is independently shippable and independently valuable, and it shipped.** Three of four
 transitions and every Home-originating swipe are de-cloned. Stage 2 buys the last transition, the
@@ -731,7 +1008,10 @@ MOVERHASBOX | every element a swipe can resolve as a mover generates a principal
 PARKBOXEQUAL | a parked browse page occupies the same box as an active one because the parked rule declares no position and no insets of its own and inherits every box property from the base rule exactly as the home park rule does | unit read the shipped css and assert the browsepage parked rule declares transform and overflow hidden and pointer-events and z-index and declares NONE of position top bottom left right max-width or margin and separately assert the home park rule satisfies the same shape so the two rules are compared against one another rather than against a hardcoded list | TWO mutants. NATURAL-a the parked rule reintroduces top zero which makes the parked box taller than the active one. NATURAL-b the parked rule drops overflow hidden which removes the scroll-container status the anchoring guarantee depends on. expected killing cell for BOTH is PARKBOXEQUAL | unit css structural audit
 PAGEOWNSSCROLL | the container role stays bound to the browse host while the scroller role belongs to each page so a page swap never wipes a page instead of the container and each virtual controller measures the page it was built for | integration boot the app harness and build two browse pages with different scroll heights then assert that reset empties the host and not a page and that browseVisible tests the host and then swap pages and assert the outgoing controller captured its anchor against the outgoing page by reading back the anchor it saved | TWO mutants. NATURAL-a the container operations are re-pointed at the active page so reset wipes a page and a new page is appended inside another page. NATURAL-b the metrics closure reads a shared reference instead of the page it was built for so the outgoing controller captures against the incoming page. expected killing cell for BOTH is PAGEOWNSSCROLL | integration app harness plus unit
 RESETCOVERSPAGES | the swipe style reset clears inline transform and transition and will-change and z-index from every browse page and not only from the elements that carry an id so an interrupted browse to browse gesture cannot leave a page stuck off viewport | unit drive resetSwipeStyles against the real index fixture with an inline transform written onto two browsepage nodes and assert both are cleared alongside the id-carrying views | NATURAL the reset keeps its id-only element list so a browsepage transform survives the reset expected killing cell RESETCOVERSPAGES | unit nav reset against the real fixture
-ENTRYNOZERO | re-entering a cached browse page keeps the scroll offset the page element already holds and a position is written only when one is derived namely a files page playing track or a virtual page anchor | integration boot the app harness and enter a books page and set its scrollTop then leave to home and return and assert the offset is unchanged and separately assert a files page for the locally playing book still opens at that track | TWO mutants. NATURAL-a entryScrollY returns zero instead of null for a list page so positionOnEnter writes zero over the retained offset which is the exact inversion this rule prevents. NATURAL-b positionOnEnter writes even when the derived value is null. expected killing cell for BOTH is ENTRYNOZERO | integration app harness
+ENTRYNOZERO | re-entering a cached browse page performs NO scroll write at all unless a position is derived namely a files page playing track or a virtual page anchor so nothing overwrites the offset the page element already holds | integration boot the app harness and enter a books page and leave to home and return and assert that positionOnEnter performed ZERO scroll writes for that page by recording every write rather than by reading back an offset and separately assert a files page for the locally playing book still opens at that track | TWO mutants. NATURAL-a entryScrollY returns zero instead of null for a list page so positionOnEnter writes zero over the retained offset which is the exact inversion this rule prevents. NATURAL-b positionOnEnter writes even when the derived value is null. expected killing cell for BOTH is ENTRYNOZERO | integration app harness
+MOVERSDISTINCT | a browse to browse construction resolves its two mover slots to two DISTINCT browsepage elements and never to the browse host | unit call buildConstruction against a fake env over all eight structural cases and for the browse to browse case assert the outgoing and incoming mover elements are not the same node and that each carries the browsepage class and is not the browse host and separately assert the classification pins sourceHost and destinationHost to browse-page for that pair only | THREE mutants. NATURAL-a the source host projection falls back to in-flow so the outgoing slot resolves to the browse host and the two slots become one node. NATURAL-b the destination host projection falls back to browse-host so the incoming slot resolves to the browse host. NATURAL-c the browse-page destination branch returns the host element instead of the page element. expected killing cell for ALL THREE is MOVERSDISTINCT | unit construction seam against a fake env
+PARKLOSESTRANSFORM | the parked browse page rule cannot win the cascade against the drag inline transform so an outgoing mover carrying the parked class still tracks the gesture | unit read the shipped css and assert the browsepage parked rule declares its transform WITHOUT an important flag and separately assert no rule matching a browsepage declares an important transform anywhere in the sheet | NATURAL mark the parked transform important so the class beats the inline drag write and the outgoing mover sits off-viewport for the whole gesture expected killing cell PARKLOSESTRANSFORM | unit css structural audit
+LANDEDPAGESHOWS | the page left showing when a gesture ends is the page for the screen the gesture LANDED on for both a commit and an abort and it is decided from that landed screen rather than inferred from which page is currently visible | integration boot the app harness and swipe books to authors and ABORT and advance past the settle and finalize and assert the books page is the shown page and carries neither the parked nor the hidden class and that the authors page carries hidden and that the books page controller is the activated one then repeat with a COMMIT and assert the mirror image | TWO mutants. NATURAL-a the hold release infers the landed page from the first non-offscreen page instead of from the landed descriptor which leaves the destination shown after an abort. NATURAL-b the landed descriptor is read before the screen is applied so the abort reconciles against the pre-abort screen. expected killing cell for BOTH is LANDEDPAGESHOWS | integration app harness abort and commit paths
 BROWSESURFACE | the custom scroll indicator recognises a browse page as a supported scroll surface and the native scrollbar suppression covers it | unit call the scrollbar surfaceKind helper with a browsepage element and assert it returns a supported kind rather than null and separately read the shipped css and assert the native-scrollbar suppression selector list covers the browsepage class | TWO mutants. NATURAL-a the browsepage is left out of the supported set so surfaceKind returns null and the indicator removes itself on browse. NATURAL-b the browsepage is left out of the native-scrollbar suppression selector so a native scrollbar returns. expected killing cell for BOTH is BROWSESURFACE | unit
 NPPILLIDS | the now playing pill decoration still strips ids from its clone after the ghost builder is deleted | unit call the pill decoration builder against a fake env whose pill carries a descendant with an id and assert the returned clone carries no id | NATURAL delete the id-strip line inside the pill builder which is the second occurrence of the exact text the deletion list targets inside the ghost builder expected killing cell NPPILLIDS | unit construction seam against a fake env
 NOGHOSTATALL | after stage 2 no transition builds an owned pane and the Construction return carries no capture field at all | unit call buildConstruction against a fake env over all eight structural cases and assert no mover carries ownership owned-pane and that the returned object has no capture key and that no node with the retired ghost class was appended to the fake document | NATURAL re-add the app-ghost branch for browse to browse so a pane is built and a capture is returned which reddens all three assertions expected killing cell NOGHOSTATALL | unit construction seam against a fake env
@@ -739,11 +1019,24 @@ ABORTNORENDER | an aborted swipe never re-renders its source screen because the 
 NOAPPCLONE | no first-party script clones an element that hosts a view and no temporary allowance for such a clone remains registered | gate scan every first-party js file excluding the vendored bundle for a cloneNode call whose receiver resolves to a view host or the app container per the resolution rules in section 16 and fail naming the file and line and assert the registered exception list holds exactly the now-playing pill entry | ADDITIVE inject a cloneNode call on a queryselector for the app container into an existing first-party file so the derived set gains an unregistered site and the gate reddens and separately inject one on the navbar pill selector and assert the registered exception does NOT redden expected killing cell NOAPPCLONE | gate source scan over first-party js
 ```
 
-**Thirteen cells, twenty-three mutants.** Every cell asserts a **source fact, a class-state fact, a
-call-count fact or a written-property fact** — never a rendered geometry. That is deliberate: jsdom has
-no layout, no paint, no font boosting and no scroll anchoring, so a CI cell asserting the alignment, the
-reflow, the reveal jump or the containing-block flip **could not fail** and would be a false witness.
-Those questions are §15's, and they are real-engine-measured or device-owed.
+**Sixteen cells, twenty-nine mutants.** Every cell asserts a **source fact, a class-state fact, a
+call-count fact, a DOM-identity fact or a written-property fact** — never a rendered geometry. That is
+deliberate: jsdom has no layout, no paint, no font boosting and no scroll anchoring, so a CI cell
+asserting the alignment, the reflow, the reveal jump or the containing-block flip **could not fail** and
+would be a false witness. Those questions are §15's, and they are real-engine-measured or device-owed.
+
+⛔ **One cell breached that rule and is corrected here.** `ENTRYNOZERO`'s earlier fixture said "leave to
+home and return and assert the offset is unchanged" — a **retention** claim, and in jsdom `scrollTop` is
+a plain settable property with no box to destroy, so that clause passed on any engine behaviour and
+witnessed nothing. The legitimate jsdom-decidable subject is the **absence of a write**, and the fixture
+now says so. The retention itself is engine behaviour and is filed as its own device row (§15 R8).
+
+**Why `MOVERSDISTINCT` exists when two cells already look at movers.** `MOVERHASBOX` asserts that every
+resolvable mover host *generates a box*, which `#browse` does; `NOGHOSTATALL` asserts that no mover
+carries `owned-pane` and that the return has no `capture` key, both of which are true of a construction
+whose two movers are the same node. Both are **green on the defective construction**. A cell that can
+only fail on the defect had to be added, and DOM identity is decidable in jsdom, so it is a unit cell
+rather than a device row — the filmstrip it protects is still device-owed (R7).
 
 **Two cells earn a note on why they are structural rather than behavioural.** `MOVERHASBOX` and
 `PARKBOXEQUAL` both assert properties of CSS *text*, because the behaviour they protect (a transform
@@ -772,6 +1065,19 @@ clone existing is not coverage of this design; it is coverage of the thing being
 - **R-E. The heading reflow does not go away.** Stage 1's device pass is the evidence for this and it is
   **discharged**: Stage 1 is device-confirmed. Retained here only so the honesty condition is not lost —
   if the reflow ever returns, `text-size-adjust` is not the fallback.
+- **R-G. The park lands on a live outgoing mover.** `showPage` marks the outgoing page `.parked` at the
+  drag-start render, and the drag's inline transform is what keeps it on screen (§5.3.6). The cascade
+  says inline wins and `PARKLOSESTRANSFORM` holds the stylesheet to it, but Stage 1 had to defer
+  `#home`'s park out of the drag for a device-visible reason, so this is watched at step 10b rather than
+  argued away. Named fallback and its cost in §5.3.6. R7.
+- **R-H. A browse page's `scrollTop` does not survive `display: none` on WebKit.** The entry rule now
+  writes nothing for a list page (§5.3.4), which makes engine-level retention the only thing positioning
+  a returning page — and every non-swipe re-entry goes through `display: none` (`showPage` hides every
+  page but one; `Nav.setView` hides `#browse` itself, destroying the whole subtree's boxes). This
+  project already records that a hidden box measures zero. **Measured retained in Blink** on the
+  round-2 instrument (page hide/show 500→500, host hide/show 700→700, transform park 900→900,
+  HEAD-shaped host scroller 600→600), so the expected outcome is that it holds; it is filed because
+  nothing in CI can witness it either way. R8.
 - **R-F. A gate is repaired by narrowing it.** M1WRITERSET, `BROWSEFIXED` and `NOAPPCLONE` all redden or
   change under Stage 2. Each one's correct response is re-derivation or migration; narrowing a pattern
   to make a red go away removes exactly the coverage the next adversarial pass targets. Named as a risk
@@ -784,13 +1090,22 @@ real-time — no `--virtual-time-budget`; the instrument the strikes in
 - **R1 and R2 — done, 2026-07-30.** A real fixed mover shows zero content-top and font-size delta under
   transform; a fixed mover at `translateX(±innerWidth)` does not extend `scrollWidth`; the filmstrip's
   two movers stay edge-to-edge with zero overlap for the whole live drag.
-- **R2b — open, gates step 10.** An `inset: 0` absolutely-positioned `.browsepage` inside the fixed
-  `#browse` (whose `overflow` is `visible`), translated to `+w`: does it extend
-  `document.scrollingElement.scrollWidth`, and does it paint outside the viewport? Also read the parked
-  page at `translateX(-101vw)` on the same question in the negative direction.
-- **R2c — open, gates step 10b (this is step 10a).** With and without `.parked` on the same
-  `.browsepage`: the resolved `top`, `bottom`, `clientHeight` and `scrollHeight` of the box, and the
-  reveal delta after a mid-park content mutation. All deltas must read 0.
+- **R2b — HALF ANSWERED by the round-2 review; the rest gates step 10.** An `inset: 0`
+  absolutely-positioned `.browsepage` inside the fixed `#browse` (whose `overflow` is `visible`),
+  translated to `+w`. **Answered: it does not extend `document.scrollingElement.scrollWidth`** —
+  measured 526 → 526 → 526 at `translateX(+innerWidth)` and at `translateX(-101vw)`, so the negative
+  direction is answered too. **Still owed: whether it PAINTS outside the viewport**, which is not
+  readable from a DOM dump.
+- **R2c — HALF ANSWERED by the round-2 review; the rest is step 10a.** With and without `.parked` on
+  the same `.browsepage`: **the box equality reads 0 on three axes** — border-box height, `clientHeight`
+  and `scrollHeight` (580 / 580 / 4054 in both states) under the reworked park rule. **Still owed: the
+  reveal delta after a mid-park content mutation**, which must also read 0.
+- **Also answered by round 2, and recorded so it is not re-run.** A transform on `#browse` cannot move
+  an `inset: 0` absolutely-positioned page (page `top` delta 0, height delta 0, `left` delta −37 at
+  `translateX(-37px)`) — §5.3.2's central claim, measured rather than argued. And the A–Z strip's
+  containing rectangle is vertically identical on the new `browse→browse` case and the shipping
+  `browse→home` case (`top=235`, `height=385` in both) — §5.4's claim, with the horizontal gutter
+  caveat that section now carries.
 
 **Device-owed — only the user's iOS device can settle these** (WebKit, iOS 26, real compositing):
 
@@ -806,6 +1121,16 @@ real-time — no `--virtual-time-budget`; the instrument the strikes in
 - **R6.** iOS fixed-layer displacement (the black-band class) with `#browse` as a non-scrolling fixed
   box. The runway that seats the bars is on `.app` and is untouched, so no premise changes — but the
   black-band saga has surprised this project before and the check is cheap.
+- **R7.** The `browse→browse` filmstrip itself, in the form that ships: two real pages travelling
+  edge-to-edge, **no jump off-screen at drag start** (R-G), and an **abort returning to the page it
+  started on** (Invariant D6). `MOVERSDISTINCT` and `LANDEDPAGESHOWS` prove the construction and the
+  selection in jsdom; that the result animates and lands correctly is device-owed. Step 10b.
+- **R8.** A browse page's scroll offset surviving `display: none` on WebKit — leave a scrolled browse
+  list to Home, return, and confirm the position is where you left it. Measured retained in Blink
+  (R-H); unobservable in CI by construction, since the cell that used to claim it could not fail.
+  If it does not hold on device, the `sy` deletion is what comes back into question, not the entry
+  rule — the entry rule is right either way, and a replacement would be a derived position, never a
+  restored one. Step 10b.
 
 **Prior scars this plan is exposed to.** The swipe machinery has invalidated verifications through
 environment traps before (recorded in memory `tomeroam-swipe-repaint-saga`, eight of them); a
@@ -858,15 +1183,32 @@ stated premise no longer holds. **Verified by reading, not assumed** — and del
 real-element movers work perfectly well with additive overlays, so changing it would be scope this plan
 did not earn.
 
+**Two host vocabularies already disagree, and this plan does not reconcile them.** `constructionPlanFor`
+declares `renderDestination: 'browse-host' | 'home-host' | 'none'` while `classifyTransition` projects
+`destinationHost: 'overlay' | 'browse-host' | 'home'`, and it is the **classification's** value that
+`buildConstruction` actually passes to `env.renderDestination` (`js/swipe.js:387`) — so `'home-host'` is
+declared and `'home'` is operative for the same transition. Observed while specifying §5.3.6, verified
+by reading, and deliberately **not acted on**: it is Stage-1 shipped behaviour, no defect follows from
+it, and fixing it is scope this plan did not earn. Stage 2 does not deepen it — it adds `'browse-page'`
+to both surfaces, so the one row this plan changes has the declared and the operative host agreeing.
+
 **Proportionality.** Stage 1 was a one-line classification change plus a park-timing change, and it
-shipped. Stage 2 is a CSS relocation, one role split in `js/browse.js`, one widened reset, eight test
-and gate migrations, and a long subtraction. The length here is the deletion list, the migration table
-and the honesty about what only a device can settle — not the size of the change.
+shipped. Stage 2 is a CSS relocation, one role split in `js/browse.js`, one widened reset, two new host
+values resolving through one new accessor, one argument added to the row hold's release, twelve test and
+gate migrations, and a long subtraction. The length here is the deletion list, the migration table and
+the honesty about what only a device can settle — not the size of the change. **The round-2 fold moved
+no scope**: the same transition, the same goal, the same deletions. What it changed is how the two
+movers are resolved, who owns the landing, and the order the steps run in.
 
-## 18. Review resolutions — the reworked mechanism, finding by finding
+## 18. Review resolutions — finding by finding
 
-Every finding in `Claude/Charpy/PLAN-swipe-declone-stage2-charpy.md`, with what this revision does about
-it. F11 is not from that review; it is a defect this rework found while discharging F3.
+Two review rounds, kept apart because **both rounds number a finding F11 and they are different
+defects.** Round 1's findings are F1–F10; round 2's are F11–F18. Findings the plan's own passes found
+are numbered `SF*` and are not review findings — `SF1` is the one the CSS rework found while discharging
+round 1's F3, and carried the label "F11" in that revision; it is renamed here so the two F11s cannot be
+confused. `SF2` is what this fold's sweep found.
+
+### Round 1 — `Claude/Charpy/PLAN-swipe-declone-stage2-charpy.md`
 
 **F1 — Structural. `display: contents` on `#browse` made the drag transform inert on four transitions.
 RESOLVED by replacing the mechanism.** `#browse` keeps its `position: fixed` inset box and gives up only
@@ -879,8 +1221,9 @@ than by a note. §5.1's per-transition table and §5.3 now describe the same des
 RESOLVED by not taking that route.** The page is `position: absolute`, and `#browse` is *already* the
 containing block for absolutely-positioned descendants whether or not it is transformed — so the
 containing block cannot flip. §5.3.2 derives the geometry the fixed-page route would have produced
-(down by `safe-top + 51px`, height shrinking by `2·(T + B)`, ≈110px and ≈328px on a notched iPhone) so
-the choice is on the record rather than rediscovered.
+(down by `safe-top + 51px`, height shrinking by `T + B`, ≈110px and ≈164px on a notched iPhone) so the
+choice is on the record rather than rediscovered. *(This paragraph published `2·(T + B)`/≈328px in the
+previous revision; corrected per round 2's F13, with the measurement in §5.3.2.)*
 
 **F2 — Structural, conditional. Stage 2 falsified `PLAN-one-screen-type.md` §5.5, the ground for Stage
 A2's `z-index` deletion. DISSOLVED, with one records obligation surviving.** §5.5's mechanism needs
@@ -963,8 +1306,8 @@ holds exactly one pre-mount data-attribute effect (`data-art`, `js/swipe.js:222`
 what the looked-up element is *capable of* — no longer applies, because the reworked mechanism leaves
 `appViewEl('books')` returning a transformable fixed box.
 
-**F11 — Structural, found by this rework. `Nav.resetSwipeStyles` does not cover the elements Stage 2
-makes into movers. FOLDED.** `js/nav.js:104-110` clears inline swipe styling from a fixed list of ids
+**SF1 *(labelled F11 in the previous revision)* — Structural, found by the CSS rework.
+`Nav.resetSwipeStyles` does not cover the elements Stage 2 makes into movers. FOLDED.** `js/nav.js:104-110` clears inline swipe styling from a fixed list of ids
 plus `.np-actions`; no `.browsepage` carries an id (`js/browse.js:494-495`). At HEAD this is complete,
 because `browse→browse`'s outgoing mover is an owned pane that is removed wholesale. Stage 2 makes a
 `.browsepage` a borrowed mover for the first time, so a gesture interrupted before the settle path's own
@@ -972,7 +1315,7 @@ clear (`js/app.js:816`) would leave a page stuck at `translateX(±w)` with nothi
 "erratic after a while" class the comment at `js/nav.js:90-103` says this reset exists to prevent.
 `resetSwipeStyles` widens to include every `.browsepage`; `RESETCOVERSPAGES` is the cell.
 
-**Three more corrections this rework made to the plan's own claims, each verified against HEAD.**
+**Three more corrections the CSS rework made to the plan's own claims, each verified against HEAD.**
 
 1. **The anti-cloning gate is already built.** §13 step 12 ("Build the anti-cloning gate to §16") and
    §16's "lands after Stage 2" were false at HEAD. §16 is rewritten and the step is replaced by the
@@ -985,6 +1328,104 @@ clear (`js/app.js:816`) would leave a page stuck at `translateX(±w)` with nothi
    check that fails when an entry's text no longer occurs. Stage 2 rewrites entries 3 and 4 and falsifies
    entry 6's recorded reason. §10's contract table and §12's part-A commit set carry the obligation, and
    §15 R-F names the wrong response so it is not taken.
+
+### Round 2 — `Claude/Charpy/PLAN-swipe-declone-stage2-charpy-r2.md`
+
+**The class of the failure, named.** The round-1 rework replaced the CSS mechanism and **left the
+JavaScript half describing the old one.** Both round-2 Structural findings are that single omission seen
+twice, and the sweep this fold ran for the same class found a third (SF2). The general form: *a change
+to what an element IS obliges a pass over every place that RESOLVES it, READS it, or RESTORES it — the
+CSS answers the first question only.* The three instances are the mover resolution (F11), the clone's
+read of the retired scroller (F12), and the abort's restore of page selection (SF2).
+
+**The sweep, and what it cleared.** Every JavaScript surface that depends on `#browse` being the
+scroller, on `.browsepage` being in flow, or on the clone existing, read against HEAD:
+
+| Surface | Verdict |
+|---|---|
+| `env.sourceEl` / `env.renderDestination` mover resolution (`js/app.js:541`, `:544`; `js/nav.js:36`; `js/swipe.js:99-101`, `:365`, `:387`) | **DEFECT — F11.** Both slots return `#browse`. |
+| `ghostApp`'s `#browse.scrollTop` read (`js/swipe.js:324`) | **DEFECT — F12.** A live consumer of a scroller the same stage retires. |
+| The abort's page-selection restore (`js/app.js:1229`/`:1261`, `js/browse.js:164-196`, `:299-303`) | **DEFECT — SF2.** Deleted with `abortRender` and never re-homed. |
+| Every `finPlan` reader (`js/app.js:459`, `:484`, `:1229`, `:1261`, and the comment at `:425-429`) | **DEFECT in the deletion list — folded as §12 item 15a.** Only `:1229-1236` was listed; deleting `finalizationPlanFor` without `:484` and `:459` makes every settle read a property of `undefined`. |
+| `Nav.resetSwipeStyles`'s id-only element set (`js/nav.js:104-110`) | Already found and folded — SF1. |
+| `ScrollBar.surfaceKind`'s `t.id === 'browse'` (`js/scrollbar.js:50`) and the suppression list (`css:811-814`) | Already found (round 1 F6); **the step that performs it was missing — F17.** |
+| Every vertical-scroll read and write in `js/` | Enumerated: `js/browse.js:71`, `:228`, `:252`, `:654-658` (all in §5.3.4's set), `js/swipe.js:324` (F12), `js/scrollbar.js:60` (generic, works on any element once `surfaceKind` admits it), `js/app.js:1352`, `:1359` (`#home` only), `js/nav.js:131`, `:138` (home and overlays only). **No `$('browse').scrollTop` write exists anywhere**, so `applyScreen`'s `resetScroll` never touched the browse scroller and nothing changes for it. Clear. |
+| `showPage`'s hide-versus-park choice (`js/browse.js:299-303`) | **Clear, and load-bearing.** `holdRows` is true throughout a gesture — `takeRowHold()` runs at `js/app.js:535`, before `buildConstruction` at `:560` — so the outgoing page is `.parked`, never `.hidden`. Were it hidden, the outgoing mover would have no box and D5 would be violated by a class rather than by a base rule. Recorded because it is a silent precondition of the whole design. |
+| `showPage`'s deactivate loop (`js/browse.js:286-291`) | **Clear.** Under a hold it `suspend()`s rather than `deactivate()`s, so the outgoing page keeps its rows while it is the live mover. The mechanism that existed for the clone's benefit is the one the real mover needs. |
+| `evictLRU` (`js/browse.js:335-343`) | **Clear.** It evicts the minimum `order` excluding the key being rendered, and the source page is the second-most-recently-used, so a mid-drag destination render cannot evict the outgoing mover. |
+| `snapBrowse` (`js/app.js:283-286`) | **Clear for Stage 2, and a pre-existing wart.** It picks the first `#browse .browsepage` that is not `.hidden`, ignoring `.parked` — the exact distinction `js/browse.js:205-207` warns about. Unchanged by Stage 2 and diagnostic-only; named so it is not mistaken for new. |
+| `.browsepage.parked` versus the inline drag transform (`css/app.css:86-91`) | **Clear by the cascade, gated anyway.** No `!important`, so inline wins; `PARKLOSESTRANSFORM` holds the stylesheet to it and step 10b watches the drag-start frame. |
+
+**F11 — Structural. After the `outgoing` collapse both `browse→browse` movers resolve to `#browse`.
+RESOLVED by extending the one place the kind→host policy lives.** §5.3.6 traces the defect through HEAD
+and specifies the fix: `sourceHost` and `destinationHost` both take a new `'browse-page'` value for the
+`browse→browse` pair, and both app-side branches resolve through one new accessor,
+`Browse.pageElFor(desc)`. The invariant is promoted to **D6 (distinctness)** so it is closed
+structurally rather than by a note, and `MOVERSDISTINCT` (§14) is the gate — added because
+`MOVERHASBOX` and `NOGHOSTATALL` are **both green on the defective construction**, which is exactly why
+the defect could reach a review twice. §5.1's per-transition table now names the host values it asserts
+the outcome of, so the two sections cannot drift apart again.
+
+**F12 — Structural. The part A / part B split device-tested a form that does not ship. RESOLVED by
+collapsing the split.** Two conditions had to hold: no intermediate HEAD may leave a live consumer
+reading a scroller the same commit retired, and the device gate must observe the mover configuration
+that ships. The `outgoing` collapse, `ghostApp`'s deletion, the mover resolution and `endHold`'s landed
+argument therefore move into the single functional commit at step 10 (§9 item 4), and step 11 becomes a
+**pure subtraction of provably-unreachable machinery**, with that unreachability as its stated exit
+condition. Step 10b is now the gate on the shipped form and carries three named observations it did not
+have: the abort's landing, the drag-start frame, and browse re-entry retention. Step 11b re-confirms
+after the subtraction — short, and run anyway, because §15's standing scar is about the *form* that
+ships, not only about its behaviour.
+
+**F13 — Weak. The rejected `position: fixed` route's height loss was published at twice its true
+value. CORRECTED.** The loss is `T + B`, measured **164px**, not `2·(T + B)`/328px. §5.3.2 carries the
+corrected derivation, the measurement that confirms it, and an explicit note that the earlier figure was
+wrong — because the same number appears in the rework's commit message, and a later reading of 164 must
+not be taken as refuting the model. §18 round 1 F1a is corrected to match. The conclusion is unchanged:
+164px is still disqualifying and `position: absolute` still removes the coordinate by construction.
+
+**F14 — Weak. §5.3.2's and §5.4's equality claims are conditional on the scrollbar suppression and did
+not say so. FOLDED, and the dependency is stated in both places.** A reserved classic-scrollbar gutter
+comes out of the padding box an absolutely-positioned child resolves against — measured 15px in Blink,
+0 with iOS overlay scrollbars. The suppression reaching `.browsepage` is therefore a **precondition of
+the derivation**, and it is carried in §9 item 4's commit set on that basis rather than as a cosmetic
+fix. §5.4's confused justification for the `browse→home` row (padding is irrelevant when there is no
+border) is corrected in place.
+
+**F15 — Weak, open-unknown. D4's retention across `display: none` is unnamed and unobserved.
+FOLDED, and the decision is stated.** The assumption stands: the entry rule writes nothing for a list
+page, and engine-level retention is what positions a returning page. It is measured retained in Blink
+and is now **named as risk R-H with its own device row R8** and its own line in step 10b's checklist.
+`ENTRYNOZERO`'s fixture is narrowed to the only thing jsdom can witness — the **absence of a write** —
+because its retention clause passed on any engine behaviour and was the matrix's one false witness
+(§14). If R8 fails on device, what comes back into question is the `sy` deletion, not the entry rule.
+
+**F16 — Note. Citation and scoping defects. DISCHARGED.** `finalizationPlanFor`'s export is
+`js/swipe.js:408`, not `:407` (§12 item 8, corrected with the reason). §1's `PLAN-one-screen-type.md`
+row over-scoped to "items 2 and 3" when only item 3 named the mechanism, and did not name item 3's
+second falsified clause — both corrected, and the row now records the reconciliation as **discharged at
+`41f2933`** rather than as an open obligation, as does the `DecisionLog` row. §13 step 14's clause is
+removed for the same reason. No line range into `PLAN-one-screen-type.md` is cited any more, because
+`41f2933` moved them.
+
+**F17 — Weak. No step performed the production fix `BROWSESURFACE` requires. FOLDED.** The
+scroll-indicator classifier and the native-scrollbar suppression are now both in §9 item 4's enumerated
+commit set and in §13 step 10, and both appear in §10's contract table with their locations. The
+enumeration that was presented as complete now is.
+
+**F18 — Note. Round-1 findings re-checked and confirmed resolved. ACCEPTED, no change.** Recorded so
+the checks are not repeated: F3, F4, F7, F8, F9, F10 and the three self-found corrections are each
+verified real and correctly discharged, and the sequencing ruling and step 10a both stand as written.
+
+**SF2 — Structural, found by this fold's sweep. Deleting `abortRender` removes the only thing that
+restores Browse's page selection after an aborted `browse→browse`. RESOLVED by naming the owner.** The
+re-render was carrying two jobs — rebuilding content, which Stage 2 genuinely makes unnecessary, and
+re-running `showPage` for the source key, which nothing else does. Traced in §5.3.4; resolved in §5.3.6
+by **Invariant D6 (landing)**: `Browse.endHold` is told the landed screen and reconciles park, hide and
+controller activation against it, for the commit and the abort alike. That also removes an existing
+inference — `endHold`'s `stillShown = activeEntry()` — which is correct today only because an aborted
+`browse→browse` re-renders. `LANDEDPAGESHOWS` is the cell, with a mutant on each half (inference
+instead of landed descriptor; landed descriptor read too early), and R7 carries the device half.
 
 ## 19. Claims verified against source in this rework
 
@@ -1019,7 +1460,7 @@ before handback, per the standing step-1a obligation. The list is the audit trai
 | `showPage`'s deactivate loop runs before `.hidden` lands | read `js/browse.js:286-291` and `:299-303` | confirmed |
 | `surfaceKind` keys on `t.id === 'browse'`; a page has no id | read `js/scrollbar.js:47-53` and `js/browse.js:494-495` | confirmed |
 | Native scrollbar suppression is by id and does not cover `.browsepage` | read `css/app.css:811-814` | confirmed |
-| `Nav.resetSwipeStyles` covers ids only | read `js/nav.js:104-110` | confirmed — this is F11 |
+| `Nav.resetSwipeStyles` covers ids only | read `js/nav.js:104-110` | confirmed — this is SF1 |
 | The id-strip text occurs twice | read `js/swipe.js:312` and `:339` | confirmed |
 | `npPillClone`'s clone call | read `js/swipe.js:338` | confirmed; §16's prior citation `:318` was stale |
 | Every §12 `js/swipe.js` citation | read `js/swipe.js:146-205`, `:217-345`, `:354-406` | all re-derived; every prior citation had moved |
@@ -1043,3 +1484,43 @@ before handback, per the standing step-1a obligation. The list is the audit trai
 enumerated effects are the complete set, that the chosen owner for each is correct, that a proposed cell
 kills the mutation it names, or that the derived geometry in §5.3.2 and §5.4 matches what an engine
 actually computes. Those are §13 step 1's, step 8's and step 10a's, and the review's.
+
+### 19.1 Claims verified against source in the round-2 fold
+
+Every `file:line`, mechanism, count and "measured"/"verified"/"never" this fold **newly asserts** was
+read against HEAD `ec1a889` before handback. Read in full for this pass: `js/swipe.js:82-205` and
+`:347-408`, `js/browse.js:60-74`, `:140-211`, `:255-345`, `:470-547`, `:637-662`, `js/app.js:283-286`,
+`:340-379`, `:530-630`, `:806-822`, `:1205-1279`, `js/nav.js:100-145`, `js/scrollbar.js:36-95`,
+`css/app.css:78-132` and `:172-193`, and the round-2 review in full.
+
+| Claim | How it was verified | Result |
+|---|---|---|
+| Both `browse→browse` mover slots resolve to `#browse` | read the chain `js/swipe.js:357`, `:365`, `:387` → `js/app.js:541`, `:544` → `js/nav.js:36`, and the projection at `js/swipe.js:99-101` | confirmed — F11 |
+| `classifyTransition` is the single place the kind→host policy lives, and the hosts are pinned in the frozen spec | read the comment at `js/swipe.js:96-98` | confirmed — it is why §5.3.6 extends the projection rather than adding a second mapping |
+| `start()` writes an inline transform only for a non-zero-`base` mover; `move()` writes for every mover | read `js/app.js:594` and `:615`, and `baseOf` at `:566` | confirmed — this is why one element in two slots produces a single translated view |
+| `takeRowHold()` runs before `buildConstruction`, so `holdRows` is true during the drag-start render | read `js/app.js:535` and `:560` | confirmed — the outgoing page is `.parked`, never `.hidden` |
+| `showPage` parks the outgoing page and suspends rather than deactivates its controller under a hold | read `js/browse.js:286-291` and `:299-303` | confirmed |
+| `showPage` runs synchronously inside the destination render on both the cache-hit and cache-miss paths | read `js/browse.js:485-490` and `:494-499` — no `await` precedes either call | confirmed — the incoming mover node exists when `renderDestination` returns |
+| The abort re-render is the only caller that restores page selection, and it goes away with `abortRender` | read `js/app.js:1229-1237` and `:1261`, then `js/browse.js:164-196` | confirmed — SF2 |
+| `endHold` infers the shown page from `activeEntry()` | read `js/browse.js:179` and `:185`, with `activeEntry`/`offscreen` at `:205-211` | confirmed |
+| The hold is released after the synchronous `applyScreen`, so `currentDesc()` is the landed screen | read `js/app.js:1266-1271` and `:363` | confirmed — §9 item 6 |
+| `.browsepage.parked` declares no `!important`, so an inline drag transform wins | read `css/app.css:86-91` | confirmed — gated by `PARKLOSESTRANSFORM` |
+| The height loss of the rejected fixed-page route is `T + B`, not `2·(T + B)` | re-derived from `viewportH − T − B` versus `viewportH − 2T − 2B`, and cross-checked against the round-2 measurement 580 → 416 at `T=110`, `B=54` | confirmed — 164px, F13 |
+| `finPlan` has five readers, not one, and two are outside the deletion list | read `js/app.js:459`, `:484`, `:1229`, `:1261` and the comment at `:425-429` | confirmed — §12 item 15a |
+| `dropRowHold` is the single wrapper around `Browse.endHold`, and both its paths apply the screen first | read `js/app.js:360-364`, `:458-461` and `:1266-1271` | confirmed — one read site serves commit, abort and hard reset |
+| `Browse.reset` invalidates an outstanding hold through `dropHold` | read `js/browse.js:76` and `:197-203` | confirmed — the borrowed-page lifetime needs no new mechanism |
+| `evictLRU` cannot evict the outgoing page mid-drag | read `js/browse.js:335-343` — it takes the minimum `order` excluding the rendered key, and the source is second-newest | confirmed |
+| No `$('browse').scrollTop` write exists; `applyScreen`'s `resetScroll` never touched the browse scroller | grepped `scrollTop`/`scrollHeight`/`clientHeight` across `js/` and read `js/nav.js:131`, `:138` | confirmed — the browse branch writes no scroll |
+| The complete set of vertical-scroll reads and writes in `js/` | grepped and read every hit | enumerated in §18 round 2's sweep table |
+| `snapBrowse` filters on `.hidden` only, ignoring `.parked` | read `js/app.js:283-286` against `js/browse.js:205-207` | confirmed — pre-existing, diagnostic-only, unchanged by Stage 2 |
+| `surfaceKind` keys on `t.id === 'browse'` and `update` removes the indicator on an unsupported surface | read `js/scrollbar.js:47-53` and `:79-91` | confirmed — F17's subject |
+| `finalizationPlanFor`'s export is at `js/swipe.js:408` and `:407` is blank | read `js/swipe.js:406-408` | confirmed — F16 |
+| The `#browse` rule and the `.browsepage.parked` rule match §5.3.1's BEFORE block exactly | read `css/app.css:86-91` and `:184-191` | confirmed |
+| The Invariant P divergence comment says a `.browsepage` is in flow with no `bottom` to inherit | read `css/app.css:105-108` | confirmed — the premise §5.3.3 falsifies |
+
+**What this list does not prove.** That the sweep found every JavaScript surface the CSS rework
+implies — it proves that the surfaces named were read and that each verdict above is what the source
+says. Two rounds of review found this class after the plan asserted completeness, so the honest
+statement is a confidence gradient, not a clearance: the sweep enumerated by mechanism (resolve, read,
+restore) rather than by inspiration, and the two structural defences it produced — D6's two halves,
+each with a cell that fails on the defect — are what would catch the next instance, not the sweep.
