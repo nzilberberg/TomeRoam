@@ -834,6 +834,23 @@ dead-field exemption) are also filed for the planner, untouched. Full 6-shard mu
 0 uncaught, matching CI's partition; full suite 808/807/0-fail/1-skip. **Step 10a (the park-geometry
 device probe) still gates step 10b (the device pass) and step 11 (the subtraction pass) is still
 pending** — neither was touched this session.
+
+**Step 13 — coverage audit CLOSED (2026-08-01, `Claude/Mendeleev/AUDIT-swipe-declone-stage2.md`,
+verdict ADEQUATE).** All 52 deleted `test()` declarations accounted for (13 migrated with their value
+changed, 38 with their subject); no migrated gate narrowed — BROWSEFIXED and SCROLLBAR were
+strengthened, M1WRITERSET re-derived; all sixteen §14 cells swept, with the designated killer
+confirmed by execution on six Stage-2 mutants (`110 113 116 118 119 122`). **Three findings open:**
+**M1 (Structural)** — a `browse→browse` mover is now a `pageCache`-owned `.browsepage`, and no cell
+drives its destruction mid-gesture by `Browse.clearCache()` (reached from `Net.onReconnect`,
+`js/app.js:3118`), `Browse.reset()`, or a mid-gesture `applyScreen(…, {render:true})`;
+`resetSwipeStyles` cannot reach a detached page (`js/nav.js:114` is a document query). The sibling
+invariant is already held and tested for the touch-target row (`test/swipe-gesture.test.js:24-25`).
+Owner: the planner (intended behaviour, alongside W44) → the test author. **Close before step 11**,
+which walks that region. **M2 (Gap)** — `Browse.pageElFor`'s documented throw-on-miss has no cell;
+both stand-ins re-implement the throw, so a `return null` ships green. Owner: the test author.
+**M3 (Gap)** — the `CLB` source-text purge gate (`clobbered`/`sourceWasClobbered` absent from `js/`)
+went out with `test/swipe-stage6d.test.js`; §12 never listed it and its subject is still live. Owner:
+the planner. Watch-list **W12** is discharged by deletion — close it.
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.
