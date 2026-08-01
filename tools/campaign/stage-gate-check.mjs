@@ -87,14 +87,41 @@ export function verdictsIn(file) {
   return declaredVerdicts(readFileSync(file, 'utf8'));
 }
 
+// When a gate's glob matches several artifacts, the ones carrying a numeric `-rN` ROUND suffix are
+// successive rounds of the same review, and only the LAST round is the verdict of record. Without
+// this, a gate passes if ANY round was accepted — so r1 FORGE followed by r2 SCRAP reads as
+// cleared. Measured when found: 17 gates across 8 manifests match multiple artifacts, one of them
+// ten Charpy rounds of Stage 5.
+//
+// ⚠️ KNOWN RESIDUAL, stated rather than papered over. The other multi-match shape suffixes the
+// COMMIT SHA (`PLAN-swipe-stage6d-00874b5.md` vs `-d3571bf.md`), and shas carry no order, so the
+// last round cannot be derived from the filename. Those keep the any-accepted semantics. Ordering
+// them would need git history per artifact — real work, not a cheap gate — and the cheap fix for
+// a NEW manifest is to point the glob at one artifact. Closing the `-rN` shape is what is cheaply
+// closable today; the sha shape is recorded here so it is not mistaken for covered.
+export function roundOf(file) {
+  const m = basename(file).match(/-r(\d+)\.md$/i);
+  return m ? Number(m[1]) : null;
+}
+
+// The artifacts whose verdicts count, given everything the glob matched.
+export function artifactsOfRecord(files) {
+  const rounds = files.map(f => ({ f, r: roundOf(f) })).filter(x => x.r !== null);
+  if (rounds.length === 0) return files;                       // no round suffixes — unchanged
+  const max = Math.max(...rounds.map(x => x.r));
+  // Files WITHOUT a round suffix alongside rounds are the round-1 original; they are superseded.
+  return rounds.filter(x => x.r === max).map(x => x.f);
+}
+
 // Evaluate every gate in `manifest` against the artifacts under `root`.
 export function gateResults(manifest, root) {
   const results = [];
   for (const g of manifest.gates || []) {
     if (!g.required) { results.push({ ...g, ok: true, status: 'skipped (not required)' }); continue; }
     if (g.waived)     { results.push({ ...g, ok: true, status: `waived (${g.waived.reason})` }); continue; }
-    const files = globFiles(g.verdictArtifactGlob, root);
-    if (files.length === 0) { results.push({ ...g, ok: false, status: `MISSING — no verdict artifact at ${g.verdictArtifactGlob}` }); continue; }
+    const matched = globFiles(g.verdictArtifactGlob, root);
+    if (matched.length === 0) { results.push({ ...g, ok: false, status: `MISSING — no verdict artifact at ${g.verdictArtifactGlob}` }); continue; }
+    const files = artifactsOfRecord(matched);
     const found = files.flatMap(f => verdictsIn(f));
     const hit = found.filter(v => g.acceptVerdict.includes(v));
     // Distinguish the three outcomes — they need different fixes. UNDECLARED means the artifact

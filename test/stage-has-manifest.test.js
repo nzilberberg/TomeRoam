@@ -16,7 +16,7 @@ import { join } from 'node:path';
 
 import { unboundBuildLogs, buildGlobs, unclearedPreBuildGates } from '../tools/hooks/stage-has-manifest-check.mjs';
 import { declaresComplete } from '../tools/hooks/campaign-complete-check.mjs';
-import { declaredVerdicts } from '../tools/campaign/stage-gate-check.mjs';
+import { declaredVerdicts, artifactsOfRecord } from '../tools/campaign/stage-gate-check.mjs';
 
 // A fixture repo root holding only Claude/Campaigns manifests. The staged-file list is injected
 // rather than produced by git staging — the git plumbing is shared with campaign-complete-check
@@ -179,6 +179,27 @@ test('every declaration form in live use parses', () => {
     ['{"verdict": "FORGE"}', ['FORGE'], 'machine-readable block'],
   ];
   for (const [txt, want, label] of cases) assert.deepEqual(declaredVerdicts(txt), want, label);
+});
+
+test('ROUNDS: only the LAST round is the verdict of record', () => {
+  // Without this a gate passes if ANY round was accepted, so r1 FORGE then r2 SCRAP reads as
+  // cleared. Measured when found: 17 gates across 8 manifests match multiple artifacts, one of
+  // them ten Charpy rounds of Stage 5.
+  assert.deepEqual(artifactsOfRecord(['/x/PLAN-a.md', '/x/PLAN-a-r2.md', '/x/PLAN-a-r10.md']),
+    ['/x/PLAN-a-r10.md']);
+  // Numeric, not lexical — 'r10' sorts before 'r2' as a string.
+  assert.deepEqual(artifactsOfRecord(['/x/p-r10.md', '/x/p-r2.md']), ['/x/p-r10.md']);
+  // The unsuffixed original alongside rounds is round 1, and is superseded.
+  assert.deepEqual(artifactsOfRecord(['/x/p.md', '/x/p-r2.md']), ['/x/p-r2.md']);
+});
+
+test('ROUNDS: a multi-match with no round suffixes is left alone', () => {
+  // The other multi-match shape suffixes the commit SHA, which carries no order. Those keep the
+  // any-accepted semantics — a stated residual, not a covered case. Narrowing them here would
+  // silently drop real artifacts (e.g. a build log plus its hold-diagnosis).
+  const shas = ['/x/PLAN-s-00874b5.md', '/x/PLAN-s-d3571bf.md'];
+  assert.deepEqual(artifactsOfRecord(shas), shas);
+  assert.deepEqual(artifactsOfRecord(['/x/a-build.md', '/x/a-holddiag.md']).length, 2);
 });
 
 test('THE REAL ARTIFACT: Charpy\'s A1b casebook declares TEMPER, not FORGE', () => {
