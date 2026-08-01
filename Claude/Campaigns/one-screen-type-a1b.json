@@ -8,7 +8,7 @@
       "gate": "plan-review",
       "owner": "charpy",
       "required": true,
-      "verdictArtifactGlob": "Claude/Charpy/PLAN-one-screen-type-A1b-charpy.md",
+      "verdictArtifactGlob": "Claude/Charpy/PLAN-one-screen-type-A1b-charpy*.md",
       "acceptVerdict": [
         "FORGE"
       ]
