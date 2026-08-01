@@ -91,9 +91,23 @@ function globMatches(glob, file) {
   return rx.test(basename(file));
 }
 
-// Gates that must be CLEARED BEFORE a build log may land. The scheme's order is plan-review →
-// red-suite → build → code-review → coverage-audit → adversary; the first two precede the build,
-// the rest judge it and cannot exist yet.
+// Gates that must be CLEARED BEFORE a build log may land.
+//
+// ⚠️ `adversary` IS a pre-build gate, and reading it as a post-build one cost a real out-of-order
+// run. `SCHEME.md` is explicit: "Loki and Poirot are the seats that must be cleared to proceed —
+// **Loki against a ratified promise BEFORE work is built on it**, Poirot against the code before it
+// ships." Loki's own spec names its moments the same way: before a campaign opens, **before a
+// flagship rung builds**, on any ratified promise shaped like "and then it works."
+//
+// The mistake that earned this line: a campaign manifest lists its gates in a fixed order for
+// READABILITY — plan-review, red-suite, build, code-review, coverage-audit, adversary — and that
+// list was mistaken for the sequence. It is a definition-of-done checklist, not an ordering. The
+// de-clone Stage 2 build ran with its adversary gate unstruck because the dispatcher took the order
+// off the manifest instead of off the scheme. Encoding it here means the manifest's presentation can
+// never again be read as its order.
+//
+// So: plan-review, red-suite and adversary precede the build. code-review and coverage-audit judge
+// the built code and cannot exist yet.
 //
 // WHY THIS HALF EXISTS. Requiring a manifest stops a stage having no gate list, but a manifest
 // alone does not stop a stage being BUILT before its review — campaign-complete-check only fires
@@ -103,7 +117,7 @@ function globMatches(glob, file) {
 // that the stage's central premise was false against the very probe the user's decision
 // incorporates. Building first would have meant building the wrong thing and discovering it in
 // code review — the expensive place. "Review before build" is an ORDER, and orders are checkable.
-export const PRE_BUILD_GATES = ['plan-review', 'red-suite'];
+export const PRE_BUILD_GATES = ['plan-review', 'red-suite', 'adversary'];
 
 // For each staged build log, the manifest binding it and any pre-build gate not yet cleared.
 export function unclearedPreBuildGates(repoRoot = ROOT, logs = null) {

@@ -103,7 +103,7 @@ test('declaresComplete: IN_PROGRESS defers, absent/COMPLETE asserts', () => {
 // before its review, because campaign-complete-check only fires when the manifest is flipped to
 // COMPLETE — after the fact. Stage A1b was one dispatch from being built on a plan section that
 // had never been reviewed; the review then returned TEMPER with six Structural findings.
-function orderedRoot(planReviewVerdict) {
+function orderedRoot(planReviewVerdict, adversaryVerdict = 'HELD_STONE') {
   const root = mkdtempSync(join(tmpdir(), 'tr-order-'));
   mkdirSync(join(root, 'Claude', 'Campaigns'), { recursive: true });
   mkdirSync(join(root, 'Claude', 'Charpy'), { recursive: true });
@@ -113,12 +113,15 @@ function orderedRoot(planReviewVerdict) {
     gates: [
       { gate: 'plan-review', owner: 'charpy', required: true, verdictArtifactGlob: 'Claude/Charpy/PLAN-c-charpy.md', acceptVerdict: ['FORGE'] },
       { gate: 'red-suite', owner: 'curie', required: true, verdictArtifactGlob: 'Claude/Curie/RED-c.md', acceptVerdict: ['RED_SUITE_READY'] },
+      { gate: 'adversary', owner: 'loki', required: true, verdictArtifactGlob: 'Claude/Loki/STRIKE-c.md', acceptVerdict: ['HELD_STONE'] },
       { gate: 'build', owner: 'brunel', required: true, verdictArtifactGlob: 'Claude/Brunel/c-build.md', acceptVerdict: ['BUILD_GREEN'] },
       { gate: 'code-review', owner: 'poirot', required: true, verdictArtifactGlob: 'Claude/Poirot/c.md', acceptVerdict: ['SHIP'] },
     ],
   }));
   if (planReviewVerdict) writeFileSync(join(root, 'Claude', 'Charpy', 'PLAN-c-charpy.md'), `VERDICT: ${planReviewVerdict}\n`);
   writeFileSync(join(root, 'Claude', 'Curie', 'RED-c.md'), 'VERDICT: RED_SUITE_READY\n');
+  mkdirSync(join(root, 'Claude', 'Loki'), { recursive: true });
+  if (adversaryVerdict) writeFileSync(join(root, 'Claude', 'Loki', 'STRIKE-c.md'), `VERDICT: ${adversaryVerdict}\n`);
   return root;
 }
 
@@ -225,4 +228,31 @@ test('THE REAL ARTIFACT: every existing manifest still parses and declares a bui
   const globs = buildGlobs(process.cwd());
   assert.ok(globs.length >= 10, `expected the real campaign manifests to be readable, got ${globs.length}`);
   for (const g of globs) assert.match(g.glob, /^Claude\/Brunel\//);
+});
+
+test('THE OUT-OF-ORDER RUN: building with the adversary gate unstruck is blocked', () => {
+  // SCHEME.md: "Loki and Poirot are the seats that must be cleared to proceed — Loki against a
+  // ratified promise BEFORE work is built on it, Poirot against the code before it ships." Loki's
+  // own spec names the same moments: before a campaign opens, before a flagship rung builds.
+  //
+  // Earned by a real out-of-order run: the de-clone Stage 2 build ran with its adversary gate
+  // unstruck, because the dispatcher took the order off the MANIFEST's gate list — which is a
+  // definition-of-done checklist printed in a fixed order for readability, not a sequence.
+  const root = orderedRoot('FORGE', null);          // plan FORGEd, red suite ready, NO strike filed
+  try {
+    const early = unclearedPreBuildGates(root, ['Claude/Brunel/c-build.md']);
+    assert.equal(early.length, 1, 'an unstruck adversary gate must block the build');
+    assert.deepEqual(early[0].blocking.map((b) => b.gate), ['adversary']);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a filed-but-unaccepted strike (KILL) also blocks the build', () => {
+  // A KILL is a filed verdict, not an accepted one. Treating "filed" as "cleared" would make the
+  // gate report the strike happening rather than the strike passing.
+  const root = orderedRoot('FORGE', 'KILL');
+  try {
+    const early = unclearedPreBuildGates(root, ['Claude/Brunel/c-build.md']);
+    assert.equal(early.length, 1);
+    assert.match(early[0].blocking[0].status, /KILL/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
