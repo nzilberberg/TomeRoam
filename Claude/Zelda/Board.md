@@ -819,6 +819,21 @@ hard-reset `applyScreen` line at `js/app.js:459`, and the browse-decouple `METRI
 (re-anchor, do not drop). Full list plus six non-mutation surfaces the plan's §10/§12 do not name
 (incl. `test/swipe-construction.test.js`'s exact-key `CONSTRUCTION_KEYS` and the GENERATED swipe
 inventories): `Claude/Curie/RED-swipe-declone-stage2.md`.
+**Stage 2 BUILT (2026-08-01, build `2026-08-01.292`/`.293`, commits `ee1080f`/`375e11f`/`e1db674`) —
+`browse→browse` moves two real `.browsepage` elements; the clone machinery is deleted.** Reviewed:
+`Claude/Poirot/POIROT-swipe-declone-stage2-e1db674.md` (verdict PASS, fix-then-ship) plus a cold-read
+adversary addendum (`Claude/Poirot/POIROT-swipe-declone-stage2-e1db674-adversary-addendum.md`,
+findings A1–A10). **Both are CLOSED (2026-08-01, build `2026-08-01.294`, commit `e1208eb`):** F1/F5/F3
+(+A2)/F4(+A4)/A1/A3/A5/A6/A9/A10, three comment observations (O1/O2/O3), fixed — each red-first or
+mutation-verified where the finding named a coverage gap (A1 against mutant `#119`; F1 manually
+against the guard's two halves). **F2 (same-key `authorBooks(A)→authorBooks(A)` collides in both
+mover slots) is FILED FOR THE PLANNER, not resolved** — a same-key regression PIN was added to
+MOVERSDISTINCT (`test/swipe-declone-stage2-construction.test.js`) that records the current colliding
+output without deciding reachability. A7 (`sourceEl` ignores its `v` arg) and A8 (`plan.outgoing`'s
+dead-field exemption) are also filed for the planner, untouched. Full 6-shard mutation sweep 123/123,
+0 uncaught, matching CI's partition; full suite 808/807/0-fail/1-skip. **Step 10a (the park-geometry
+device probe) still gates step 10b (the device pass) and step 11 (the subtraction pass) is still
+pending** — neither was touched this session.
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.
