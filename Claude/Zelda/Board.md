@@ -758,8 +758,27 @@ the plan is handed back — the fold's own sweep found two further off-by-one ci
 `Claude/Linnaeus/PROBE-np-uniqueness.md` §9.1.g carries the same truncated `js/app.js:494-496` span
 the plan corrected to `:494-497`; that record is the deriver's to fix.
 
+**Stage A1b plan review round 3 — ⭐ FORGE, 2026-07-31**
+(`Claude/Charpy/PLAN-one-screen-type-A1b-charpy-r3.md`, reviewed at `de84349`). **All nine round-2
+findings resolved; step 1 of §13 is DISCHARGED and step 8 is open.** The manifest gate now reports
+`✓ plan-review [charpy] — pass (FORGE)`, reading r3 as the verdict of record — the first round the
+gate could read at all. Each Structural closure was checked against the thing itself, not the fold's
+account of it: F14 by executing `globFiles`/`artifactsOfRecord` directly; F15 across **all four**
+places (§7 ledger, §9, §10, §14 — a partial fix here would have been round 1's F4 shape); F16 by
+re-deriving `js/app.js:541-542`→`:512` unreached by A1b and `js/virtuallist.js:262`'s
+`dematerialize()`. Residual classes were **swept** rather than spot-checked — no `2870`, no
+`css/app.css:506`, no `js/app.js:250`-as-`sessionDone`, no scroll-reset-at-`:147` survives.
+**Four new findings, NONE blocking** (2 Weak, 2 Note, no cell owed by any): F23 — the fold's own
+rationale for step 1a miscounts its evidence (F14 was the manifest, not plan text; F18 was Weak, not
+Structural). F24 — §9 says edge 5 "passes `keepGhosts: true`"; `js/app.js:459` makes all three
+options ternary on the superseded session, and the ruling holds on **both** branches. F25 — the
+plan's step-6f sequencing text (`:38`, `:1528`, `:1564`) is stale against this board; **not a fold
+defect**, it went stale at `de84349`. F26 — §3.5's `js/nav.js:60-65` span; the call is `:60` alone.
+**Three rounds, and A1b's design never moved:** it is still the deletion of the two `if (!npOpen)`
+guards at `js/nav.js:51` and `:78`.
+
 **Still open in this campaign:** r2's successor stages — A1b (NP parks/hides beneath itself, **plan
-TEMPER'd — findings owed before step 8**), A2
+FORGE'd r3 — build gate open; red suite owed first**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`.
