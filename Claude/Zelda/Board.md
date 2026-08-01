@@ -803,6 +803,22 @@ abort-and-commit half plus a third mutant that reddens on the silent reading; bo
 class-state and call-count assertions, so **no new device-owed row**. F20 (a mutant at a layer its
 fake-env cell cannot reach), F21 (§9 item 1's false justification) and F22 (`MOVERHASBOX`'s id-derived
 host set) are folded as records tightenings. `Claude/Charpy/PLAN-swipe-declone-stage2-charpy-r3.md`.
+**Stage 2 RED SUITE AUTHORED (2026-08-01, build `2026-08-01.291`) — plan §13 step 9 is done and the
+build (step 10) is unblocked.** Thirteen cells across `test/swipe-declone-stage2-css.test.js`,
+`-construction.test.js`, `-reset.test.js` and `-browse.test.js`. Every cell that can be red at HEAD is
+red at HEAD, each verified by running it with its skip removed; red cells ship behind
+`{ skip: SKIP_* }` (SKIP-PENDING-BUILD) and **the builder removes each skip to drive it red**.
+MOVERHASBOX, PARKLOSESTRANSFORM and NPPILLIDS are green at HEAD and registered as gates/guards, not
+as red cells. F23 is discharged: `LANDEDPAGESHOWS`'s `browse→home` half forces virtualization, so
+NATURAL-c's activation call count is ≥1 at HEAD and 0 under the mutant instead of 0 on both. The
+24 new mutants are SPECIFIED, not registered — every anchor targets text the build creates, so
+registering them at HEAD would redden the anchors gate; they go in the build's own commit.
+**⛔ 18 EXISTING MUTATION ANCHORS ROT on Stage 2's deletions and only four are on §12 item 24's
+list** — including Stage 1's own NOGHOSTINFLOW anchor (`#76`), five separate anchors on the single
+hard-reset `applyScreen` line at `js/app.js:459`, and the browse-decouple `METRICS`/`RESTORE` pair
+(re-anchor, do not drop). Full list plus six non-mutation surfaces the plan's §10/§12 do not name
+(incl. `test/swipe-construction.test.js`'s exact-key `CONSTRUCTION_KEYS` and the GENERATED swipe
+inventories): `Claude/Curie/RED-swipe-declone-stage2.md`.
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.
