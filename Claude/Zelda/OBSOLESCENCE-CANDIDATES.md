@@ -116,6 +116,50 @@ it. Its sibling `top: 0` genuinely was vestigial and was deleted; this is not.
 
 ---
 
+## DEFERRED WORK — chosen postponements, not obsolescence
+
+These are not mechanisms outliving their cause; they are work we decided not to do yet. Listed here
+so the same file answers "what do we still owe" and nothing needs a second home.
+
+### 10. Stage A2 — delete `z-index: 25` / `z-index: 26`
+Same item as entry 4 above, stated as work rather than as a candidate. Two declarations, two comment
+clauses, one build bump. Safe because DOM order reproduces both deleted relationships: the five subs
+sit after `#options` in the markup, so at `auto` a sub still paints above the hub.
+⚠️ **Tell the device gate the real reason.** An earlier draft justified this by saying `.alphaindex`
+is "hidden with `#browse`" — true at rest, **false during a browse↔settings gesture**, when `#browse`
+is an un-hidden mover. The conclusion holds by a different mechanism: as a mover `#browse` carries an
+inline `transform`, and a non-none transform establishes a stacking context, so `.alphaindex` is
+contained inside it and cannot outstack a sibling. **Containment, not hiding.**
+(`PLAN-one-screen-type.md` §5.2 and the §5.5 correction.)
+
+### 11. Stage B — the transition taxonomy
+`overlay` becomes Now Playing alone; the kind table grows from 8 to 14 rows. Pure records/naming
+work: the thing `js/nav.js`'s name-check identifies stops being "an additive overlay", so the
+taxonomy that still says so is wrong. No behaviour change.
+
+### 12. The `340` magic number — three places, nothing binding them
+`js/app.js:1305` (`cur.settleTimer = setTimeout(finalize, 340)`) and `js/nav.js:204`
+(`setTimeout(finish, 340)`) are both bare literals timing a CSS transition, and the CSS duration is
+not co-located with either. Three copies of one fact with no mechanical relationship: change the CSS
+and both timers are silently wrong.
+**Note the distinction:** the `transitionend` + idempotent `done` + timeout-fallback idiom is
+defensible and is not the defect. The defect is the unbound constant.
+**Fix:** single-source it (a CSS custom property read once, or one exported constant) and gate it
+against the CSS value.
+
+### 13. Master-plan stage 10 — remove old diagnostics and simplify
+The swipe/reveal plan retains a structured trace through migration (session id, state transition,
+selected plan, resources acquired/released, pane lifecycle, lease, commit/abort reason, final
+descriptor, final scroll) behind the Diagnostics toggle. Stage 10 removes what is no longer earning
+its keep — explicitly **after** device parity, not before.
+
+### 14. Plan-step ownership — every step names its owner
+Plan steps should carry an explicit `owner:` and a single enumeration, enforced by the Vitruvius
+authoring gate. Earned by dispatching work to the wrong seat because the step's owner had to be
+inferred from the work's flavour rather than read. Cross-reference `dispatch-the-named-owner`.
+
+---
+
 ## How to work this list
 1. Pick an entry and run its own discriminator on device — not a general "does the app look fine".
 2. If it is removed: move the entry to RESOLVED with what the device showed, and delete the mechanism
