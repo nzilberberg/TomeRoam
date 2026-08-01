@@ -572,28 +572,45 @@ test('endpoint — a VERTICAL abandon leaves no active owner', async () => {
 // other transition — which the surrounding endpoint cells already pin.
 
 // ── .223 review, finding 1a — the paused settle rAF must not write a stale transform ──
-// Hidden mid-settle, rAF pauses but the 340ms finalize timer still fires; finalize
-// clears the transforms and (the fix) cancels the settle rAF, so when the frame later
-// runs on foreground it must NOT re-shift the real #browse. Without the cancel the rAF
-// writes translateX(±innerWidth) onto the live Browse view — "the list shoved sideways".
+// Hidden mid-settle, rAF pauses but the 340ms finalize timer still fires; finalize clears the
+// transforms and (the fix) cancels the settle rAF, so when the frame later runs on foreground it
+// must NOT re-shift a real view. Without the cancel the rAF writes translateX(±innerWidth) onto a
+// live view — "the list shoved sideways".
+//
+// ⭐ ASSERTED OVER THE MOVER SET, NOT OVER #browse (repaired 2026-08-01). This cell used to watch
+// #browse alone, on the stated ground that "the incoming mover is the real #browse". PLAN-swipe-
+// declone.md Stage 2 made that false: a browse→browse gesture's two movers are two .browsepage
+// nodes and #browse carries no drag transform at all. The cell went on watching a host that is
+// clean either way, so the registered mutant that removes the cancel SURVIVED — caught by CI's
+// full-registry sweep, invisible to a targeted one. The production guard never moved; only the
+// elements it protects did, so the cell now derives them instead of naming one.
 const nonZeroShift = (t) => /translateX\(\s*-?[1-9]/.test(t || '');   // translateX(0px)/'' do not match
-test('1a — a cancelled settle rAF cannot re-shift the real #browse after finalize', async () => {
+/** Every element a swipe can transform: the two id-resolved view hosts plus every browse page. */
+const shiftable = (h) => [h.$('home'), h.$('browse'), ...h.document.querySelectorAll('.browsepage')].filter(Boolean);
+const shifted = (h) => shiftable(h).filter((el) => nonZeroShift(el.style.transform))
+  .map((el) => `${el.id ? '#' + el.id : '.browsepage[' + (el.dataset.key || '?') + ']'}="${el.style.transform}"`);
+test('1a — a cancelled settle rAF cannot re-shift any real view after finalize', async () => {
   const h = boot({ fakeTimers: true, deferRaf: true });
   try {
     await onAuthorsOverBooks(h);
     const row = addRow(h);
-    // Abort browse→browse: the incoming mover is the real #browse (borrowed-real).
+    // Abort browse→browse: both movers are real .browsepage elements (borrowed-real).
     h.touch.start(10, 300, row);
     h.touch.move(80, 302); await realSleep(12);
     h.touch.move(200, 304); await realSleep(12);
+    // ANTI-VACUITY: the drag must actually have shifted something, or "nothing carries a stale
+    // shift" is satisfied by a gesture that never wrote a transform at all.
+    assert.ok(shifted(h).length > 0,
+      'fixture sanity: the live drag must have shifted at least one real element, or this cell '
+      + 'asserts the absence of something that never happened');
     h.touch.move(30, 304); await realSleep(12);
     h.touch.end(30, 304);
     await h.clock.advance(400);   // finalize: cancels the settle rAF + clears transforms
-    assert.ok(!nonZeroShift(h.$('browse').style.transform),
-      `#browse must not carry a stale shift right after finalize; got "${h.$('browse').style.transform}"`);
+    assert.deepEqual(shifted(h), [],
+      `no real view may carry a stale shift right after finalize; got ${JSON.stringify(shifted(h))}`);
     for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();   // fire queued frames
-    assert.ok(!nonZeroShift(h.$('browse').style.transform),
-      `a cancelled settle rAF must not re-shift #browse on a later frame; got "${h.$('browse').style.transform}"`);
+    assert.deepEqual(shifted(h), [],
+      `a cancelled settle rAF must not re-shift a real view on a later frame; got ${JSON.stringify(shifted(h))}`);
   } finally { h.dispose(); }
 });
 

@@ -347,9 +347,17 @@ const MUTATIONS = [
     to:   'dropRowHold();' },
   // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): holdGhostUntilPaintable is deleted with its only caller — no path ends ownership at a drop.
   // ── .223 review fixes (sanctioned: findings 1a, 2, and 4's stronger test) ──────
-  { name: 'r223 1a: settle rAF not cancelled → stale transform on real #browse (-> 1a test)',
+  { name: 'r223 1a: settle rAF not cancelled AND the ownership-identity guard removed → stale transform on a real view (-> 1a test)',
+    // TWO PARTS, and the second is not padding. Since PLAN-swipe-declone.md Stage 2 removed the
+    // held abort reveal, finalize ends its session in the finally-block on EVERY path, so the
+    // stage-6c identity guard already makes an uncancelled frame a no-op. Removing only the
+    // cancel is invisible; removing both reproduces the .223 defect. The identity guard's OWN
+    // path (a superseded session, where finalize never ran) is mutant 'stage6c G1', unchanged.
     from: 'cancelAnimationFrame(cur.settleFrame);',
-    to:   '/* mutated: settle rAF left uncancelled */' },
+    to:   '/* mutated: settle rAF left uncancelled */',
+    also: {
+      from: '        if (cur !== session) return;\n        for (const m of cur.movers) m.el.style.transform',
+      to:   '        for (const m of cur.movers) m.el.style.transform' } },
   { name: 'r223 2: finishing not restored on a throw → swipe wedge (-> throw-in-finalize test)',
     from: 'if (!ok) finishing = false;   // a throw in applyScreen must never wedge every future swipe',
     to:   'if (false) finishing = false;' },
@@ -560,9 +568,19 @@ const MUTATIONS = [
   // disposal reason TOKEN is wrong -> RSN's "superseded recorded" assertion reddens; (b) the trace
   // fires UNCONDITIONALLY, ignoring the `disposed` flag (Charpy F2) -> a pane-LESS supersession
   // then claims a disposal that never happened, reddening RSN's pane-less-no-trace clause.
-  { name: 'swipe6e RSN-mistag: the disposal reason token is wrong (-> RSN "superseded" recorded)',
-    from: "        if (cur) disposeOwnedPanes(cur, 'superseded');",
-    to:   "        if (cur) disposeOwnedPanes(cur, 'wrong-reason');" },
+  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2, reconciled 2026-08-01 after CI's full-registry
+  // sweep reported it UNCAUGHT). RSN-mistag perturbed the disposal REASON token, which has exactly
+  // one consumer: the PBDebug SWIPE line inside disposeOwnedPanes. That line is gated on `disposed`
+  // — deliberately, so a no-op call cannot claim a disposal that never happened — and no transition
+  // builds an owned pane any more, so it never runs and the token is unobservable. The mutation
+  // applies cleanly and changes nothing.
+  // NOT a relocation, checked rather than assumed: the only ownership kind left is the NP pill
+  // decoration ('owned-decoration'), removed by resetSwipeStyles, which takes no reason token.
+  // STILL DEFENDED, and by what — disposeOwnedPanes' `own` FILTER (it never removes a
+  // borrowed-real mover) by the BR cell; the pane-less reality by DP.browse-home; the NP
+  // decoration's removal on the recovery by DEC — all in test/swipe-stage6e.test.js, all passing.
+  // Only the disposal EVENT and its reason lose coverage, and they lose it by having no subject.
+  // disposeOwnedPanes itself is a step-11 subtraction item (§12 item 15) and is left standing.
   { name: 'swipe6e RSN-emit: the disposal trace fires unconditionally, ignoring the disposed flag (-> RSN pane-less-no-trace clause / Charpy F2)',
     from: "      if (disposed && window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);",
     to:   "      if (window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);" },
