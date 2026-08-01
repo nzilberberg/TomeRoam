@@ -25,32 +25,8 @@ const { boot } = require('./app-harness.js');
 const { readRoot, ROOT } = require('./dom-fixture.js');
 
 async function settle(h, n = 12) { for (let i = 0; i < n; i++) await h.settle(); }
-const realSetTimeout = global.setTimeout;
-const realSleep = (ms) => new Promise((r) => realSetTimeout(r, ms));
 const swipeLog = (h) => h.log.calls.filter((c) => c.name === 'debug' && c.args[0] === 'SWIPE').map((c) => c.args[1]);
 const settles = (h) => swipeLog(h).filter((m) => /^#\d+ (abort|commit) /.test(m));
-
-// A fresh env whose document is the REAL index.html, mirroring test/swipe-construction.test.js's
-// recipe seam: the ghost is built through env.document, not an ambient document.
-function mkGhostEnv({ browseScrollTop = 0, withStrip = false } = {}) {
-  const dom = new JSDOM(readRoot('index.html'));
-  const doc = dom.window.document;
-  const lib = doc.getElementById('library'); if (lib) lib.classList.remove('hidden');
-  const browse = doc.getElementById('browse'); if (browse) browse.classList.remove('hidden');
-  if (withStrip) {
-    const strip = doc.createElement('div'); strip.className = 'alphaindex'; strip.textContent = 'A';
-    browse.appendChild(strip);
-  }
-  doc.getElementById('browse').scrollTop = browseScrollTop;
-  const env = {
-    document: doc,
-    scrollY: () => 0,   // the DECOUPLE world: the document is always at the top
-    sourceEl: (host, v) => doc.getElementById(v === 'home' ? 'home' : 'browse'),
-    navPill: () => doc.querySelector('.np-actions'),
-    renderDestination: () => doc.getElementById('browse'),
-  };
-  return { env, doc };
-}
 
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // BROWSEFIXED (§11, SOURCE-TEXT) — the active #browse base css rule is position:fixed and

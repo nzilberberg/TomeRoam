@@ -189,12 +189,19 @@ const Browse = (() => {
       const shown = pageCache.get(landedKey);
       if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }
     } else {
-      // A landing that names NO cached browse page — browse→home, browse→overlay,
-      // home→browse, overlay→browse, all four shipped and device-confirmed. Those keep
-      // the inference they ship with, unchanged: Stage 2 is not chartered to change them,
-      // and on this path showPage never ran, so no page is parked, the loop below
-      // iterates to nothing and activeEntry() is the page the gesture started from.
-      // activate() is a no-op for a page that was never suspended, so realize explicitly.
+      // A landing that names NO cached browse page. Of the four shipped, device-confirmed
+      // transitions where browse participates on exactly one end, only ONE OUTCOME of each
+      // reaches here, not the whole transition: browse→home and browse→overlay on COMMIT
+      // (the destination — home/overlay — is never a browse page); home→browse and
+      // overlay→browse on ABORT (the gesture lands back on the non-browse source). The other
+      // outcome of each pair — an abort of browse→home/browse→overlay, or a commit of
+      // home→browse/overlay→browse — lands ON a cached browse page (the source, still
+      // cached, or the destination, cached by the drag-start render) and takes the LANDED
+      // branch above instead. Those keep the inference they ship with, unchanged: Stage 2 is
+      // not chartered to change them, and on this path showPage never ran, so no page is
+      // parked, the loop below iterates to nothing and activeEntry() is the page the gesture
+      // started from. activate() is a no-op for a page that was never suspended, so realize
+      // explicitly.
       const stillShown = activeEntry();
       for (const v of pageCache.values()) {
         if (!v.el.classList.contains('parked')) continue;
@@ -222,7 +229,14 @@ const Browse = (() => {
   function pageElFor(desc) {
     const k = keyFor(desc);
     const hit = k == null ? null : pageCache.get(k);
-    if (!hit) throw new Error('Browse.pageElFor: no cached browse page for ' + JSON.stringify(desc));
+    if (!hit) {
+      // A descriptor is plain in production, so JSON.stringify never throws in practice — but
+      // this accessor's whole point is to fail LOUDLY and BY NAME at a miss, and letting a
+      // cyclic descriptor turn that into an unrelated JSON TypeError would defeat it silently.
+      let d;
+      try { d = JSON.stringify(desc); } catch { d = String(desc); }
+      throw new Error('Browse.pageElFor: no cached browse page for ' + d);
+    }
     return hit.el;
   }
   // Destructive cache operations invalidate any outstanding hold: their controllers
@@ -557,16 +571,18 @@ const Browse = (() => {
     // A fresh page has no saved position → top; a files page for the book playing
     // here opens at its current track. Positioned AFTER onRender so the rows are
     // built and laid out (the files case measures a row).
-    // ONLY if this page is actually on screen: positionOnEnter → applyScrollY →
-    // window.scrollTo, so a slow fetch for page A resolving after the user moved to
-    // page B would otherwise yank B's scroll to a Y measured from a display:none
-    // node. showPage() marks the shown page by REMOVING .hidden. The cache-identity
-    // check above is not enough here — the superseded page is still cached and still
-    // connected, just hidden, which is exactly how this got through the first time.
+    // ONLY if this page is actually on screen: positionOnEnter → applyScrollY writes THIS
+    // page's OWN scrollTop (Invariant D4) — since each page is its own inset:0 own-scroll
+    // box, a slow fetch for page A can only ever move page A's scroll, never another page's
+    // (there is no shared scroller left to yank). The guard still matters: without it, a
+    // fetch resolving after the user moved elsewhere would reposition and force-realize a
+    // page nobody is looking at. showPage() marks the shown page by REMOVING .hidden. The
+    // cache-identity check above is not enough here — the superseded page is still cached
+    // and still connected, just hidden, which is exactly how this got through the first time.
     // BOTH conditions. Page-level .hidden covers Browse page A -> Browse page B, but
     // leaving Browse entirely (-> Home / Options) hides the #browse CONTAINER and
     // leaves the active page node WITHOUT .hidden — so the page check alone still let
-    // a late fetch scroll the window while Home was on screen. showPage()/the virtual
+    // a late fetch position the page while Home was on screen. showPage()/the virtual
     // controllers already combine these two the same way (see line ~258).
     if (browseVisible() && !offscreen(page)) positionOnEnter(desc, page);
   }

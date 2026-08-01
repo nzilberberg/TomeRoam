@@ -362,8 +362,12 @@
     // callers apply the screen FIRST — the finalize `finally` lands after the SYNCHRONOUS
     // applyScreen, and the hard-reset path calls applyScreen(currentDesc(), …) immediately
     // before dropRowHold() — so ONE read here is the settled screen on the commit branch,
-    // the abort branch and the hard reset alike. Reading it before applyScreen would hand
-    // endHold the pre-commit descriptor and park the page the gesture just landed on.
+    // the abort branch and the hard reset alike, PROVIDED applyScreen itself did not throw.
+    // dropRowHold sits in finalize's `finally` (below), so it also runs when runFinalize()
+    // threw: on a commit the stack mutation precedes applyScreen, so a throwing applyScreen
+    // hands endHold the DESTINATION descriptor while the destination was never actually
+    // applied. Reading it before applyScreen would hand endHold the pre-commit descriptor
+    // and park the page the gesture just landed on.
     const dropRowHold = () => {
       if (!session || !session.hold) return;
       const t = session.hold; session.hold = 0;
@@ -987,8 +991,7 @@
           // `res=` is the residual measured AT the sync: 0 means the assignment took.
           // A large res says the seek itself failed; res=0 with the flash still present
           // says animation phase is not the mechanism after all.
-          const ghostDiff = (cover.diff ? ` | ghostVsReal=[${cover.diff}]` : '')
-            + ` animSync=${cur.animSync == null ? '?' : cur.animSync}`
+          const ghostDiff = ` animSync=${cur.animSync == null ? '?' : cur.animSync}`
             + `/res=${cur.animRes == null ? '?' : cur.animRes}`;
             // POSITION across the reveal — scrollY/documentHeight at each step, plus the
             // scroll the ghost was frozen at. A move between preDrop and postDrop, or a

@@ -560,10 +560,11 @@ const MUTATIONS = [
   // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): NOOP-a and NOOP-b both asserted which of two
   // mechanisms disposes an OWNED PANE on the recovery branch. No transition builds one, so both
   // sweeps remove nothing and each mutant applies cleanly while changing no behaviour — the sweep
-  // reported both UNCAUGHT. Nothing is left undefended by their removal: keepGhosts suppresses a
-  // sweep of a node kind that is never created and is itself on the subtraction list (§12 item 14),
-  // while the nav.js sweep line it guards is RETAINED for the NP pill float — whose removal is
-  // defended by the DEC cell in test/swipe-stage6e.test.js.
+  // reported both UNCAUGHT. Nothing is left undefended by their removal: keepGhosts suppresses
+  // the `.nav-ghost` sweep (js/nav.js:105) — a node kind that is never created and is itself on
+  // the subtraction list (§12 item 14) — while the ADJACENT `.np-pill-float` sweep (js/nav.js:106)
+  // is UNGUARDED by keepGhosts and runs regardless; its removal is defended by the DEC cell in
+  // test/swipe-stage6e.test.js.
   // B2 — RSN reason correctness (plan §9 promised a mistag mutant that never landed). (a) the
   // disposal reason TOKEN is wrong -> RSN's "superseded recorded" assertion reddens; (b) the trace
   // fires UNCONDITIONALLY, ignoring the `disposed` flag (Charpy F2) -> a pane-LESS supersession

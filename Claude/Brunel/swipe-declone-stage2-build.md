@@ -31,12 +31,12 @@ by popping the nav stack. So the question reduces to: can two adjacent stack ent
   guarded on the current view being `options` and pushes a sub, which is never `options`.
 - A PARAMETERIZED descriptor always pushes, so the census is of its TRIGGERS:
   - `authorBooks(A)` is pushed only by `openAuthor`, whose only trigger is `authorRow`
-    (`js/browse.js:753`), and `authorRow` is rendered only on the **authors** page
+    (`js/browse.js:771`), and `authorRow` is rendered only on the **authors** page
     (`listView(el,'Authors',…)` and its `patchRows` twin). Predecessor key: `authors`.
-  - `files(B)` is pushed only by `openFiles` — triggered by `bookRow` (`js/browse.js:783`), rendered
+  - `files(B)` is pushed only by `openFiles` — triggered by `bookRow` (`js/browse.js:788`), rendered
     only on the **books** and **authorBooks** pages, and by the home-screen tile
-    (`js/app.js:1547`) — and by the Now-Playing forward nav (`filesDescForCurrent`). Predecessor
-    key: `books`, `author:<rk>`, `home` or `nowplaying`.
+    (`js/app.js:1409`, `renderTile` at `:1388`) — and by the Now-Playing forward nav
+    (`filesDescForCurrent`). Predecessor key: `books`, `author:<rk>`, `home` or `nowplaying`.
 
 At every push site the current descriptor's key differs from the pushed one's, so no two adjacent
 entries share a key and `buildConstruction` can never receive a same-key browse pair.
