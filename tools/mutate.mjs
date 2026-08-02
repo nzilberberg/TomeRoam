@@ -1211,6 +1211,20 @@ const MUTATIONS = [
   { name: 'S2-24 ABORTNORENDER: the abort re-render is restored, so an aborted swipe rebuilds its source screen (-> ABORTNORENDER)',
     from: "          applyScreen(dest, { render: false, resetScroll: false });",
     to:   "          applyScreen(dest, { render: true, resetScroll: false });" },
+
+  // ── EMPTYAFTERHOME — the hold release must not activate a controller inside a hidden #browse ──
+  // ⭐ THE OVER-BROAD-FIX PROBE, registered by the test author at the RED-suite step because its
+  // anchor is the SHIPPED landed branch and therefore already exists (the two mutants that anchor
+  // on the fix itself cannot be registered until the fix ships — see
+  // Claude/Curie/RED-browse-empty-after-home-commit.md §6). The defect lives in endHold's ELSE
+  // branch; the cheapest wrong repair is to delete the activate+realize pair from BOTH branches,
+  // which also strips the one realization a gesture LANDING on a browse page gets. The two-line
+  // anchor is what disambiguates it: the `if` line alone occurs twice (the else branch's copy is
+  // byte-identical), so the preceding `const shown = pageCache.get(landedKey);` carries it.
+  { name: 'EMPTYAFTERHOME over-broad fix: the LANDED branch stops activating and realizing the page the gesture landed on (-> the landed-branch realization)',
+    file: 'js/browse.js',
+    from: "      const shown = pageCache.get(landedKey);\n      if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }",
+    to:   "      const shown = pageCache.get(landedKey);\n      if (shown && shown.el._vctl) { /* mutated: the landed page is neither activated nor realized */ }" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
