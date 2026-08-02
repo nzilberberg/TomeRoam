@@ -57,8 +57,11 @@ Promotion sites (an element becomes its own compositing layer):
 - **`#home.parked`** (`css:103-107`): `transform: translateX(-101vw); will-change: transform;
   z-index:0` — a **promoted, off-screen-but-PAINTED** layer (nav.js:57 comment: "parked =
   off-screen but PAINTED"). Deliberate, so covers stay decoded.
-- `.browsepage.parked` (`css:91-96`): `transform: translateX(-101vw)` (promoted by transform; no
-  explicit `will-change`).
+- `.browsepage.parked` (`css:143-146`): `transform: translateX(-300vw)` (promoted by transform; no
+  explicit `will-change`). Was `translateX(-101vw)` at the time of this probe (build `.255`);
+  moved to `-300vw` by `Claude/Plans/PLAN-parked-page-rides-home.md` (2026-08-02) to put the park
+  offset out of reach of `#browse`'s own displacement. The promotion/demotion mechanism this probe
+  derives is unaffected — a non-`101` `translateX` still promotes.
 - NP pill clone `.np-pill-float` (`swipe.js:285`) — owned-decoration, small, not full-viewport;
   not a flash surface.
 

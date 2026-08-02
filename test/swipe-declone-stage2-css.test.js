@@ -298,7 +298,7 @@ test('PARKBOXEQUAL — .browsepage.parked declares no position and no insets, so
 // hold's release, so for the WHOLE of a browse->browse gesture the outgoing mover carries
 // `.parked` while `js/app.js` writes `style.transform` on it every frame. That works only because
 // the class rule declares no `!important`. A later `!important` would silently make the outgoing
-// mover jump to translateX(-101vw) at drag start — the most visible possible regression, and one
+// mover jump to translateX(-300vw) at drag start — the most visible possible regression, and one
 // no behavioural cell in jsdom can see. This is a fact about the stylesheet as written, so the
 // stylesheet is where it is asserted.
 test('PARKLOSESTRANSFORM [GATE] — no rule matching a .browsepage declares an !important transform, '
