@@ -65,14 +65,24 @@ export function unmergedPaths(repoRoot = ROOT) {
   } catch { return []; }                                  // fail OPEN: unreadable is not proof
 }
 
+// ⚠️ A PENDING SEQUENCE ALONE MUST NOT BLOCK — measured, by this gate blocking real work within
+// minutes of being written. `git revert --continue` COMMITS each step while the sequencer todo
+// still lists the remaining ones, so "pending" is the normal state of the command that FINISHES a
+// sequence. Keying on it made the gate refuse the only way forward, which is how a gate gets
+// switched off rather than fixed.
+//
+// UNMERGED PATHS are the unambiguous signal: no legitimate commit carries a file git still
+// considers conflicted. `--continue` requires them resolved and staged first, so it passes.
+// The pending sequence is still reported as CONTEXT when a block fires, because "you are also
+// mid-sequence" is exactly what the reader needs to know at that moment.
 function main() {
   const pending = sequencePending();
   const unmerged = unmergedPaths();
-  if (!pending && unmerged.length === 0) return 0;
+  if (unmerged.length === 0) return 0;                 // pending alone is normal — see above
 
   console.error('✗ no-partial-sequence FAILED — this commit would land an UNFINISHED operation:');
   if (pending) {
-    console.error('  — a revert/cherry-pick sequence is still pending (.git/sequencer/todo exists).');
+    console.error('  — a revert/cherry-pick sequence is ALSO still pending (.git/sequencer/todo).');
     console.error('    Commits remaining in the sequence have NOT been applied.');
   }
   for (const f of unmerged) console.error('  — unmerged path: ' + f);
