@@ -18,14 +18,15 @@ on Home *by construction*, for the whole gesture. The fix moves the park beyond 
 detector silent at every sample; destination still settled correctly at 0). Six earlier hypotheses
 missed this because every one of them sampled **at rest**, where the state is clean.
 
-**Rounds 1 and 2 of temper applied — 2026-08-02** (`…-charpy.md` and `…-charpy-r2.md`, both TEMPER).
-**The shipped constant is unchanged at `-300vw` through both rounds**, as are the floor, the option
-set and the sequence. Round 1 corrected the plan's ACCOUNT (a derivation wrong by a sign, and a
-coverage claim the cell did not deliver); round 2 confirmed both resolutions as the right design and
-found that **both of the new witnesses could not fail** — each mutant provably equivalent, each on the
-axis round 1 had named. Round 2's corrections are therefore to two mutants and one invariant's scope,
-plus a non-waivable exit condition (§11) that no named mutant counts until the sweep executes it. The
-per-round tables are in §11.
+**RATIFIED 2026-08-02 after three rounds of temper** (`…-charpy.md`, `…-charpy-r2.md`,
+`…-charpy-r3.md`, all TEMPER). **The shipped constant is unchanged at `-300vw` through all three**, as
+are the floor, the option set and the sequence. Round 1 corrected the plan's ACCOUNT (a derivation
+wrong by a sign; a coverage claim the cell did not deliver). Rounds 2 and 3 each found that the new
+witnesses **could not fail** — four mutants in total, every one provably equivalent. **The single
+lesson, and the reason there is no round 4: every finding after round 1 was a claim about
+REACHABILITY**, and reading is what has been wrong about reachability three times. §11's ordering —
+register the mutant, run the sweep, let execution answer — is the instrument that settles it. The
+per-round tables are in §11; the promise for the adversary is §12.
 
 **Round 1 detail** (`Claude/Charpy/PLAN-parked-page-rides-home-charpy.md`,
 verdict TEMPER, reviewed at HEAD `11de914`). **The shipped constant is unchanged at `-300vw`**; the
@@ -49,7 +50,8 @@ compute its floor while summing two literals and is now specified to derive its 
 8. Coverage Model — the ten catalog dimensions, the two CI cells, the real-engine oracle, the device gate
 9. Bench-answerable versus device-owed
 10. Risk registry
-11. Handoff
+11. Handoff — including the non-waivable mutant exit condition
+12. The promise for the adversary
 
 ## 1. Defining records and authority
 
@@ -302,9 +304,27 @@ Every dimension of the auditor's catalog appears; absence is a decision.
 
    **Mutation [F9 — the first-specified mutant was EQUIVALENT and is replaced].** The pre-r2 draft named "make `renderDestination`'s `'home'` branch call `showAppView(dest, true)`". That mutant cannot fail: on a `browse→home` gesture `dest.v === 'home'`, and `showAppView` (`js/app.js:535-536`) branches on exactly that — the home branch un-parks `#home` and hides `#browse`, and **never reads the `render` argument at all**; only the `else` branch reaches `Browse.render`. No page would park and the cell would stay green. Since NOPARKONHOME is the ONLY witness for I10, and I10 is what replaced the withdrawn arithmetic exemption, shipping that mutant would have traded a proof that is wrong for an assertion that cannot fail — strictly worse, because a wrong proof invites checking and a vacuous gate reads as settled.
 
-   **The replacement, verified at source this round:** make the home destination fall into the `else` branch by breaking the guard's comparison at `js/app.js:535` — `desc.v === 'home'` → `desc.v === 'home-unreachable'`. A `browse→home` gesture then calls `Browse.render({v:'home'})`, which takes the cache-miss path (`js/browse.js:533-538`): `keyOf` falls through its ternary to `d.v` and keys `'home'` to itself (no throw), a page node is built, and `showPage('home')` parks every other cached page while the hold is live → **NOPARKONHOME reddens.** This is also the realistic form of the regression I10 guards — the branch that keeps a home destination off the browse render path being lost.
+   **A SECOND equivalent mutant was then found and replaced [F12].** The round-2 replacement — break `showAppView`'s guard at `js/app.js:535` — is *also* unobservable, for the same structural reason one link earlier: **`showAppView` never runs on a `browse→home` gesture at all.** Verified link by link this round: `destinationHost` computes to `'home'` for `toKind === 'home'` (`js/swipe.js:112-114`); it is passed as the second argument at `js/swipe.js:260`; `showAppView` has exactly two call sites in all of `js/` — `js/app.js:579` and `:580` — both gated on `host === 'browse-page'` / `'browse-host'`; and a home destination takes the `host === 'home'` branch at `:585`, which calls neither. Mutating anything inside `showAppView` is therefore invisible on this gesture.
 
-   ⚠️ **Deliberately NOT `if (false)`.** `npm test` includes `test/lint.test.js`, and a constant condition trips `no-constant-condition` — the mutant would redden the LINT cell and be mis-attributed to a test bug rather than to this invariant. A mutant must redden the cell it names and nothing else; changing the compared string keeps the code lint-clean while making the branch unreachable. (The test author owns the final form; what the plan owes is a mutant that actually makes a home-destination gesture reach `showPage`.)
+   ⚠️ **A trap for whoever writes this cell:** the plan-level label is `renderDestination = 'home-host'` (`js/swipe.js:187`) — that is what the generated matrix prints — but the value actually passed to the dispatch is `destinationHost = 'home'`. A mutant or an assertion written against the matrix's label targets a string the dispatch never sees.
+
+   **The mutant, with every link checked at source this round rather than trusted.** Mutate the branch the invariant is actually about, `js/app.js:585`, to reach the browse render path:
+
+   ```
+   if (host === 'home') { $('home').classList.remove('parked'); Browse.render(dest); return $('home'); }
+   ```
+
+   - `dest` is in scope — `renderDestination: (dest, host) => {…}` (`js/app.js:573`). ✓
+   - `Browse` is in scope in the same object literal (`Browse.pageElFor` at `:579`). ✓
+   - `Browse.render({v:'home'})` → `keyOf` (`js/browse.js:22`) falls through its ternary to `d.v`, keying `'home'` to itself. No throw. ✓
+   - Cache miss (no `'home'` page is ever cached) → `placeholderFor({v:'home'})` (`js/browse.js:97-98`) returns `skelRows(9)` for any non-`files` descriptor. No throw. ✓
+   - `js/browse.js:536-538` — the node is appended and cached, and **`showPage('home')` runs SYNCHRONOUSLY, before the `try` that opens the fetch**; `render` being `async` therefore does not defer it. ✓
+   - `showPage` (`js/browse.js:338-342`) with `holdRows === true` — set by `takeRowHold()` (`js/app.js:557`), which runs before `Swipe.buildConstruction` (`:596`) and therefore before this branch — toggles `.parked` onto every other cached page. ✓
+   - NOPARKONHOME's mid-drag sample sees a `.parked` `.browsepage` → **red.** The fixture precondition is this plan's standing one (dimension 1: a populated `pageCache`, ≥2 pages, one away). ✓
+
+   This is also the realistic regression I10 guards — a `browse→home` destination render acquiring browse content. **The lesson, recorded because it has now cost three mutants:** choose the mutation site from the DISPATCH that actually runs, never from a neighbouring function that merely looks like the right place.
+
+   ⚠️ **Deliberately NOT `if (false)`** for any guard-breaking variant. `npm test` includes `test/lint.test.js`, and a constant condition trips `no-constant-condition` — the mutant would redden the LINT cell and be mis-attributed to a test bug rather than to this invariant. A mutant must redden the cell it names and nothing else. (The test author owns the final form; what the plan owes is a mutant whose reachability is derived from the dispatch.)
 9. **Persistence round-trip and version evolution — NOT APPLICABLE.** Nothing persisted, nothing versioned, nothing serialized.
 10. **Functional achievement (the feature oracle) — APPLICABLE and load-bearing.** The oracle: drive the user's exact repro in a real layout engine and assert that NO `.browsepage` rect intersects the viewport at ANY touchmove sample of the forward `home→books` drag, and that the destination settles at 0. This is the claim the fix exists to make true, and it is the one thing no consistency oracle can see.
 
@@ -327,8 +347,10 @@ with every cell green — the same shape as the defect being fixed.]**
   - (m1) restore `translateX(-101vw)` → both (i) and (ii) redden. The shipped defect itself.
   - (m2) `translateX(-250vw)` → clears the floor, reddens (ii) alone. Pins the tested form independently of the arithmetic.
   - (m3) `#browse { max-width: 640px }` → `max-width: 250vw` → reddens the **structural `max-width` bar** inside (i), alone. **[F10 — reclassified.]** It does NOT move the arithmetic: under the stated formula `min(250, 100) = 100` and `edgeVw` stays 100, so `FLOOR` stays 200 and `N = 300` clears it. The pre-r2 draft claimed this mutant moved the floor to 350; it does not, and on the arithmetic alone m3 would have been equivalent — round-1 F2 returning in new clothing. It is kept only as a witness for the structural bar, and labelled as such.
-  - (m3′) **`#browse { max-width: 640px }` → `width: 200vw`** → reddens the **no-`width`** assertion inside (i), alone, under either reading of the arithmetic. This is the form the round-2 review named, and it composes with the property set the cell already asserts.
-  - (m4) **`#browse { max-width: 640px }` → `min-width: 200vw`** → reddens the **no-`min-width`** assertion inside (i), alone. Registered in addition to m3′ because it is the one mutant in this set that is non-equivalent in **layout** as well as in the cell's precondition set: per CSS 2.1 §10.4 the used width is `max(min-width, min(max-width, width))`, so `min-width` BEATS `max-width` and the box genuinely becomes 200vw wide — `edgeVw` really would be ~200 and the floor really would move to 300, which `N = 300` fails under the strict inequality. m3′ leaves the used width capped at 640px by the surviving `max-width`, so it reddens the cell's precondition rather than its geometry. Both are worth having; m4 is the one that proves the bound and not only the guard.
+  - (m3′) **`max-width: 640px;` → `max-width: 640px; width: 200vw;`** → reddens the **no-`width`** assertion inside (i), alone. Used width is `min(200vw, 640px) = 640px`, so there is no geometric change: this is a precondition-only kill, and that is exactly what it is registered to witness.
+  - (m4) **`max-width: 640px;` → `max-width: 640px; min-width: 200vw;`** → reddens the **no-`min-width`** assertion inside (i), alone, AND is the one mutant in this set non-equivalent in **layout** as well as in the precondition set. Derivation, stated exactly because an approximation here is the difference between a killing mutant and an equivalent one: per CSS 2.1 §10.4 the used width is re-solved with `min-width` when the `max-width` result is smaller, so `W = 200vw`, beating the `max-width` this mutant deliberately leaves in place. The box is then over-constrained (`left: 0`, `right: 0`, non-auto width, both margins `auto`), and **CSS 2.1 §10.3.7** gives the two margins equal values *unless that would make them negative* — here they would be `−50vw` each, so for `ltr` `margin-left` is set to **0** and `margin-right` solves to `−100vw`. Hence **`L = 0` and `L + W = 200vw` exactly**, `FLOOR = 300`, and `N = 300` fails the strict inequality → red. **Had the margins centred instead**, `L` would be `−50vw`, `L + W = 150vw`, `FLOOR = 250`, and `N = 300` would have cleared it — the mutant would be equivalent. The §10.3.7 clause is load-bearing, not a detail.
+
+  ⚠️ **Both are ADDITIVE, and that is load-bearing [F13].** An earlier draft specified m3′ and m4 as *replacing* `max-width: 640px`, which deletes it — while m3′'s justification appeals to "the surviving `max-width`" and m4's rests on `min-width` *beating* a `max-width`. With it deleted, each mutant trips the cell's own anti-vacuity clause (the `#browse` rule must yield a `max-width`) and reddens THAT check instead of the `no-width` / `no-min-width` assertion it is registered to witness — leaving both of those assertions with no discriminating mutant, which is round-1 F2's domination shape one level down in the precondition set. It also leaves the realistic regression unexercised: nobody widens `#browse` by deleting its `max-width`; they add a property beside it. **This is the class the §11 exit condition cannot catch** — both texts kill the cell either way, so the sweep would go green and the evidence line would be ticked while two of the three assertions inside (i) stayed unwitnessed. It is caught by reading the mutant strings, which is why they are written out here in full.
 - **Anti-vacuity:** assert the `.browsepage.parked` rule exists and declares a `translateX` before reading its magnitude, AND that the `#browse` rule was found and yielded a `max-width` — a parse miss on either side must fail loudly, never pass by absence. A cell that silently defaults `edgeVw` to 100 when it cannot find the rule is exactly the gate-greens-a-dirty-tree shape this project has already paid for.
 - **Layer:** unit / source-structural. **Honest scope:** this asserts properties of CSS TEXT and arithmetic over them. It does not assert a resolved box; jsdom has no layout. Dimension 10 is where the geometry is actually witnessed. It also does not cover a mid-gesture viewport change — that is outside the law's stated precondition (§4, F5), not inside this cell's silence.
 
@@ -416,6 +438,16 @@ new witnesses could not fail. Constant still `-300vw`; no option, floor or seque
 | F11 | Weak — I10 claimed more than its mechanism supports: `applyScreen({render:true})` also reaches `showPage` via `renderBrowse`, and `begin()`'s `finishing` gate guards arming a gesture, not navigating, so a navbar tap in the 340ms settle window parks pages during a `browse→home` gesture. | I10 restated as its mechanism (the gesture's own destination render), not as a universal; dimension 8's "second factor is empty" narrowed to match. The button-nav path moved out of R6's future clause into **R7, a named present path** — covered by the floor, and by an ordering inside `applyScreen` (`resetSwipeStyles` at `js/nav.js:129` before `renderBrowse` at `:153`) that **nothing pins**, which is stated rather than relied on silently. |
 | — | Round 2's prediction: if either mutant were recorded as verified on this plan's say-so, the plan would ship two green cells witnessing nothing. | Answered structurally, not by care: §11 now carries a **non-waivable exit condition** that every named mutant is registered in `tools/mutate.mjs` and confirmed to redden its cell **by executing the sweep**, which exits nonzero on a survivor. |
 
+**Round 3 (`…-charpy-r3.md`, verdict TEMPER) — the exit condition and m4's layout argument confirmed;
+both round-2 mutants still equivalent. Constant, floor, option set and sequence unchanged.**
+
+| # | Finding | Resolution |
+|---|---|---|
+| F12 | Structural — the NOPARKONHOME replacement was equivalent too, one link earlier: `showAppView` has exactly two call sites (`js/app.js:579`, `:580`), both gated on browse hosts, and a `browse→home` gesture computes `destinationHost = 'home'` (`js/swipe.js:112-114`, passed at `:260`) and takes the `host === 'home'` branch at `:585`, which calls neither — so `showAppView` never runs and mutating its guard is unobservable. | Mutant replaced with one whose every link I verified at source this round: **add `Browse.render(dest)` to `:585`'s home branch**. `dest` and `Browse` in scope at `:573`/`:579`; `keyOf` → `'home'`; `placeholderFor` returns a skeleton for any non-`files` descriptor; `showPage('home')` runs SYNCHRONOUSLY at `js/browse.js:538` before the `try` that opens the fetch, so `async` does not defer it; `holdRows` is already true via `takeRowHold()` (`js/app.js:557`, before `buildConstruction` at `:596`). Also recorded: the `renderDestination: 'home-host'` label (`js/swipe.js:187`) is NOT the value the dispatch receives — a trap for the next reader. |
+| F13 | Structural — m3′ and m4 were specified as REPLACING `max-width: 640px`, deleting the declaration their own justifications depend on; each would redden the cell's anti-vacuity check rather than the `no-width`/`no-min-width` assertion it witnesses, leaving both assertions with no discriminating mutant. The sweep cannot see this — both texts kill the cell either way. | Both made **additive**: `max-width: 640px; width: 200vw;` and `max-width: 640px; min-width: 200vw;`. Each now reddens exactly its named assertion with anti-vacuity green, and both justifications become literally true. |
+| — | m4's `~200vw` was hedged, and the hedge hid the load-bearing step. | Stated exactly: **`L + W = 200vw`**, via CSS 2.1 §10.4 (`min-width` beats `max-width`) *and* §10.3.7 (over-constrained margins take equal values unless negative — here `−50vw` each, so `margin-left` is set to 0 and `L = 0`). Had the margins centred, `L + W` would be 150vw, the floor 250, and `N = 300` would have cleared it — the mutant would be equivalent. |
+| F14 | Note — the exit condition binds, but at cell granularity only. | One clause added to §11 recording what the sweep proves and what it cannot: which assertion a mutant reddens stays a judgement made when the mutant is chosen. Nothing built for it, by decision. |
+
 **Decisions made:** (a) over (b) and (c). (b) re-opens the `.alphaindex` containing-block break class
 and adds a scroll authority for zero measured gain. (c) is more principled, but its cheap form does
 not remove the mechanism — a one-step variant of the repro defeats it — and its complete form is a
@@ -427,14 +459,28 @@ not the minimum that clears the floor.
 the build. R2 (cover retention at the new distance) — DEVICE, strongly argued against, fallback
 specified.
 
-**Next owner:** **Charpy**, for a round-3 read of **F9's and F10's resolutions only** — the two
-replaced mutants, m4's CSS 2.1 §10.4 justification, and the exit condition. Everything else was struck
-in rounds 1 and 2 and survived; F11 is a scoping correction that gates nothing. Then Curie (three CI
-cells — PARKOUTOFREACH, DRAGREACHBOUNDED, NOPARKONHOME — plus the real-engine oracle script, red
-first), then Brunel (the one-declaration change, the comment, the three mutation anchors, the two F4
-scrub targets), then the device gate. **Mutant registration comes BEFORE the cells are written**, per
-the exit condition below — that ordering is what keeps this from being the round that traded a visible
-error for an invisible one.
+**RATIFIED — 2026-08-02, by the dispatcher, on the round-3 review's own recommendation. There is no
+round 4.** The reason is recorded because it is the plan's most useful lesson: the arithmetic, the
+option set and the value have been right since round 1 and have never moved, and **every finding after
+round 1 has been a claim about REACHABILITY** — whether an arithmetic case is reachable (F1), whether a
+mutant's code path is reachable (F9, F12), whether an assertion is reachable given what fails first
+(F2, F10, F13). A fourth round would predict reachability by reading again, which is precisely the
+thing that has been wrong three times. The correct instrument is already written into §11's ordering:
+register the mutant, run the sweep, and let **execution** answer the reachability question before
+anyone writes the cell it is meant to defend. It is cheap and it is definitive. *(Ratified by the
+dispatcher with the plan reviewer concurring — not self-certified; a planner does not pass his own
+plan.)*
+
+**Next owner: Loki (the adversary).** Per the scheme, a ratified promise is struck before work is
+built on it. The promise to put in front of him is named in §12.
+
+**Then Curie**, in this order and not another: **register the mutants in `tools/mutate.mjs` and run
+the sweep FIRST**, and only then write the three CI cells (PARKOUTOFREACH, DRAGREACHBOUNDED,
+NOPARKONHOME) and the real-engine oracle script, red first. The ordering is the exit condition's
+whole point — four mutants in this plan have been written from an adjacent function or an adjacent
+declaration rather than from the dispatch, and execution is what catches the fifth. **Then Brunel**
+(the one-declaration change, the comment, the three mutation anchors, the two F4 scrub targets), then
+the device gate.
 
 **⛔ NON-WAIVABLE EXIT CONDITION — EVERY MUTANT THIS PLAN NAMES IS PROVEN BY EXECUTION, NEVER BY
 ASSERTION.** No cell in this plan counts as coverage until its named mutant is **registered in
@@ -445,14 +491,25 @@ mutant is a **finding that blocks**, not a footnote to be explained away. Regist
 cell being called done; a mutant that survives sends the cell back to design, not the mutant to a
 waiver list.
 
-**Why this is a gate and not a reminder.** Two rounds of review found two named mutants that provably
-could not redden their cells (F9, F10) — both stated in this plan with enough confidence to invite
-being taken on trust. Had they been recorded as verified on this plan's say-so, the result would have
-been two green cells witnessing nothing in place of one arithmetic proof that was wrong by a sign:
+**Why this is a gate and not a reminder.** Three rounds of review found **four** named mutants that
+provably could not redden their cells (F9, F10, F12, F13) — every one stated with enough confidence to
+invite being taken on trust. Had any been recorded as verified on this plan's say-so, the result would
+have been green cells witnessing nothing in place of one arithmetic proof that was wrong by a sign:
 strictly worse than where round 1 started, because a wrong proof reads as a claim someone can check
 while a vacuous gate reads as settled. This is the project's own named scar — a gate that greens a
 dirty tree — and the standards' rule that a discipline which has failed twice must be made structural
 rather than restated more emphatically.
+
+**⚠️ What the gate proves, and the one level it cannot reach [F14].** The sweep proves *this mutant
+reddens this cell*. It does **not** prove *this mutant reddens this assertion within this cell* — and
+that finer level is exactly where F13 lived, and where round-1 F2 lived before it: a mutant can kill a
+cell through its anti-vacuity check or through a neighbouring assertion while the one it was
+registered to witness stays untested. **Nothing is to be built for this**; per-assertion attribution is
+not cheaply mechanizable and the cost of trying would exceed the risk. The clause is here so that
+"mutation-verified" is never read as more than the sweep shows: **the gate proves a cell can fail;
+which assertion it fails on remains a judgement made when the mutant is chosen, and it is discharged
+by reading the mutant's text against the assertion list** — which is why every mutant in this plan is
+written out in full rather than described.
 
 **Required evidence / gates:** PARKOUTOFREACH green and mutation-verified on **all five** mutants
 (m1, m2, m3, m3′, m4), with m3/m3′/m4 each reddening assertion (i) ALONE and m2 reddening (ii) alone;
@@ -471,6 +528,30 @@ targets — `test/swipe-declone-stage2-css.test.js:301` and
 plan — its four open items are answered here as: (1) §4 plus device gate item 2; (2) §5; (3) §6 I1;
 (4) R1, still open and device-owed.
 
-VERDICT: PLAN_READY — rounds 1 and 2 of temper applied 2026-08-02; F1–F11 resolved as tabled in §11;
-shipped constant unchanged at `-300vw` throughout. Every named mutant is registered-and-executed
-before its cell counts as coverage (§11, non-waivable).
+## 12. The promise for the adversary
+
+One promise carries this plan, and it is the one to strike:
+
+> **A parked `.browsepage` cannot compose onto the viewport, for any displacement `#browse` can take,
+> because `300vw > 100vw + (L + W)` — and both terms of that floor are bounded by construction.**
+
+Everything else is either measured (the mechanism, the 4px Δ, the after-run), preserved (Invariant P,
+`overflow: hidden`, the positioning scheme), or gated (the cells, the oracle, the device items). This
+one sentence is the plan's whole "and then it works," and it is the only claim that would still be
+load-bearing if every other section were deleted.
+
+**Where it is softest, stated so the strike is not slowed by a search.** The floor's two terms are
+bounded by *enumeration* — term 1 by "these are all the writers of a transform on `#browse`", term 2
+by "these are all the properties that can widen its box". An enumeration is a claim that a set is
+complete, and this plan's own history is three rounds of complete-looking sets that were not: the
+transition set that omitted a sign, the mutant chains that omitted a link, the assertion set that
+omitted what fails first. If a fifth writer of `#browse`'s transform exists, or a route by which its
+used width exceeds its containing block that the property list does not name, the floor is a number
+rather than a law and `-300vw` holds by luck. **The stated precondition — a constant viewport width
+(§4, F5) — is the one place the plan already admits the promise fails**, and it is admitted rather
+than defended, so it is a starting point rather than a finding.
+
+VERDICT: RATIFIED — 2026-08-02, by the dispatcher on the round-3 review's recommendation, the plan
+reviewer concurring. Three rounds of temper applied; F1–F14 resolved as tabled in §11; **shipped
+constant unchanged at `-300vw` throughout all three**. Every named mutant is registered-and-executed
+before its cell counts as coverage (§11, non-waivable). Next gate: the adversary, against §12.

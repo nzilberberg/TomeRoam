@@ -1311,9 +1311,64 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   precedes writing the cell. This is the project's "prove the check can fire before trusting a
   negative" discipline applied to mutants rather than to instruments.
 
+- CHOOSE A MUTATION SITE FROM THE DISPATCH THAT RUNS, NOT A NEIGHBOURING FUNCTION — 2026-08-02,
+  earned three times on one plan. `PLAN-parked-page-rides-home.md` had FOUR named mutants that could
+  not redden the cells they were registered against, and every one failed the same way: the site was
+  picked from a function that looked like the right place instead of from the call graph that actually
+  executes. The sharpest instance: a mutant inside `showAppView` is unobservable on a `browse→home`
+  gesture, because `showAppView` has exactly two call sites (`js/app.js:579`, `:580`), both gated on
+  `host === 'browse-page'`/`'browse-host'`, while that gesture computes `destinationHost = 'home'`
+  (`js/swipe.js:112-114`, passed at `:260`) and takes the `:585` branch, which calls neither. A related
+  trap in the same graph: the plan-level label is `renderDestination = 'home-host'` (`js/swipe.js:187`,
+  what the generated matrix prints) but the value the dispatch receives is `'home'` — a mutant or
+  assertion written against the matrix's label targets a string that never arrives. RULE: before
+  registering a mutant, derive its reachability from the dispatch and name every link; a mutant is a
+  claim that a specific line executes and changes a specific outcome, and "it is in the right file" is
+  not that claim.
+
+- A MUTANT'S TEXT MUST NOT DELETE THE PRECONDITION ITS OWN CELL ASSERTS — 2026-08-02, silent-pass class.
+  Two mutants on `PLAN-parked-page-rides-home.md` were written to REPLACE `#browse`'s
+  `max-width: 640px` in order to exercise the cell's `no-width` and `no-min-width` assertions. Deleting
+  the declaration trips the same cell's anti-vacuity check (the rule must yield a `max-width`), so each
+  mutant reddened THAT check instead of the assertion it was registered to witness — leaving both
+  assertions with no discriminating mutant while the sweep reported a kill. WRITE THE MUTANT ADDITIVELY
+  (`max-width: 640px; width: 200vw;`), which is also the realistic regression: nobody widens a box by
+  deleting its `max-width`, they add a property beside it. ⚠️ THIS IS THE CLASS THE MUTATION SWEEP
+  CANNOT CATCH — both texts kill the cell, so the gate goes green and the evidence line is ticked. The
+  sweep proves *this mutant reddens this cell*, never *this assertion within this cell*; which
+  assertion it fails on stays a judgement made when the mutant is chosen, discharged by reading the
+  mutant's text against the assertion list.
+
+- OVER-CONSTRAINED MARGINS DECIDE WHETHER A `min-width` MUTANT KILLS — 2026-08-02, CSS fact, measured
+  against the spec rather than assumed. For `#browse` (`position: fixed; left: 0; right: 0;
+  max-width: 640px; margin: 0 auto`), adding `min-width: 200vw` makes the used width 200vw (CSS 2.1
+  §10.4: the width is re-solved with `min-width` when the `max-width` result is smaller). The box is
+  then over-constrained, and §10.3.7 gives the two auto margins equal values UNLESS that would make
+  them negative — here they would be −50vw each, so for `ltr` `margin-left` is set to 0 and
+  `margin-right` solves to −100vw. Hence the left offset `L = 0` and `L + W = 200vw` EXACTLY. Had the
+  margins centred, `L` would be −50vw and `L + W` 150vw. On this plan that is the difference between a
+  floor of 300 (mutant kills, since the shipped 300vw fails a strict `>`) and a floor of 250 (mutant is
+  equivalent). An approximate "~200vw" would have hidden it.
+
 - A MUTANT MUST REDDEN THE CELL IT NAMES AND NOTHING ELSE — 2026-08-02, mutant-authoring footgun.
   `npm test` includes `test/lint.test.js`, so a mutant written as `if (false)` trips
   `no-constant-condition` and reddens the LINT cell rather than its target — the sweep still reports a
   kill, but the kill is mis-attributed and the named guard stays undefended. Express an
   unreachable-branch mutant as a value change that lints clean (for the home-destination case:
   `desc.v === 'home'` → a string that never matches), not as a constant condition.
+
+- PLAN-parked-page-rides-home.md IS RATIFIED — 2026-08-02, dispatcher decision, reviewer concurring.
+  Three rounds of temper (`Claude/Charpy/PLAN-parked-page-rides-home-charpy{,-r2,-r3}.md`, all TEMPER),
+  fourteen findings, and the shipped constant never moved: `.browsepage.parked`
+  `translateX(-101vw)` -> `translateX(-300vw)`, one CSS declaration. The arithmetic, the 200vw floor
+  and the option set were right at round 1 and were re-derived independently at 375/640/1000px each
+  round without moving. RATIFIED WITHOUT A FOURTH ROUND, and the reason is the transferable part:
+  EVERY finding after round 1 was a claim about REACHABILITY -- whether an arithmetic case is reachable
+  (a back gesture drives the outgoing mover the other way), whether a mutant's code path is reachable
+  (twice), whether an assertion is reachable given what fails first (twice). Reading is what has been
+  wrong about reachability, three times; a fourth reading would predict it the same way. The instrument
+  that settles it is already in the plan: register the mutant, run the sweep, let execution answer,
+  BEFORE the cell it defends is written. Next gate is the adversary against the plan's one
+  load-bearing promise (§12): a parked page cannot compose onto the viewport because
+  300vw > 100vw + (L + W), both terms bounded by construction -- softest at the two ENUMERATIONS that
+  bound is built from, since this plan's own history is three complete-looking sets that were not.
