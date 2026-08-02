@@ -55,7 +55,15 @@ function defaultSteps() {
   // vigilance; this footgun recurred until mechanized).
   return [
     ['no-mutbak', [join(ROOT, 'tools', 'hooks', 'no-mutbak-check.mjs')]],
+    // An UNFINISHED revert/cherry-pick sequence must not be committed. A revert that stops
+    // halfway looks exactly like one that finished, and on 2026-08-01 that shipped a change
+    // minus its review fixes. Runs early: it is cheap and nothing below it matters if the tree
+    // is a half-applied sequence.
+    ['no-partial-sequence', [join(ROOT, 'tools', 'hooks', 'no-partial-sequence-check.mjs')]],
     ['stamp', [join(ROOT, 'tools', 'stamp-build.mjs'), '--check']],
+    // ...and the same coherence in the INDEX. The check above reads the working tree, which can
+    // be self-consistent while the STAGED copies carry a stale number — twice in one session.
+    ['staged-stamp', [join(ROOT, 'tools', 'hooks', 'staged-stamp-check.mjs')]],
     ['lint', existsSync(eslint) ? [eslint, 'js', 'sw.js'] : null],
     ['typecheck', existsSync(tsc) ? [tsc, '-p', 'jsconfig.json'] : null],
     ['tests', ['--test', 'test/*.test.js']],
