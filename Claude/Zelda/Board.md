@@ -1009,6 +1009,28 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   `-101vw`), the parked-page-rides-home suite's own historical narrative, or PARKM1's intentional
   restore. Suite re-run green (823/822/0-fail/1-skip); all seven mutants re-swept in the foreground,
   still CAUGHT. Device gate (R1, R2) remains owed, unchanged. **Next: Poirot.**
+- **parked-page-rides-home CODE REVIEW: PASS — fix-then-ship (2026-08-02, Poirot, target `b358f73`).**
+  Casebook `Claude/Poirot/POIROT-parked-page-rides-home-b358f73.md`, range `9cfd621..b358f73`. The
+  one-declaration change is correct and complete against the plan; the comment carries all four
+  mandated items and neither of the two the plan barred (it states I10 in its F11-scoped form and says
+  "composed BY THE PARK OFFSET"); Invariant P and `overflow: hidden` byte-identical. Verified by
+  execution this pass, not from the build log: full suite 823/822/0-fail/1-skip; `mutation-sweep 126
+  127 128 129 130 131 132` → 7 caught, 0 uncaught/unapplied/stale, each `killed by:` the cell it names;
+  **and the three migrated anchors re-swept separately** (`104 105 106` → 3 caught) — the check the
+  anchors gate does not make, since it proves the `from` string matches but not that the mutant still
+  bites. Tree clean, no `*.mutbak`. **Ten findings, all records/citation-accuracy; none changes a
+  rendered pixel and none blocks the device gate.** Six required (F1-F6): three stale `css:` citations
+  created by this build's own +25 lines (`css/app.css:125` and `test/parked-page-rides-home-css.test.js:331`
+  now point into `#home`; `:411`'s `css:119` points at the comment), two live failure diagnostics still
+  asserting `-101vw` at HEAD (`:411`, `:432`), two dead skip constants (`:382`, `:385`), and two unfilled
+  plan §11 record items — no `DecisionLog.md` build entry (its ratification entry still reads "not yet
+  built" / "`css/app.css` is still untouched" at `:1242-1246`) and the measurement record not annotated
+  as realized. Four observations (F7-F10): PARKM4's registered name claims a strict-inequality kill the
+  sweep disproves; `css/app.css:140-141`'s "nothing in js/ listens for resize" is falsified by the
+  vendored console; the no-padding/border cell is a GATE with no mutant; the real-engine oracle has no
+  recorded run at 375/640/1000px. The builder's scrub CALL on the seven remaining `-101vw` hits is
+  **correct** — each verified `#home.parked`, a historical probe, or PARKM1's deliberate restore.
+  **Next: Brunel (apply-review), then the device gate — which is what stands between this and "fixed".**
 - **Build-gate spec corrections — RATIFIED + FROZEN (2026-07-24, Charpy FORGE):**
   `Claude/Plans/PLAN-build-gate-spec-corrections.md`, approved wording locked in `~/.claude/frozen-artifacts.txt`
   (freeze-guard verified). Corrects the installed Gate A/B spec (Brunel.md Local §) for the user's
