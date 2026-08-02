@@ -25,15 +25,15 @@
 // CSS; it is pinned independently, against the real entry point, by DRAGREACHBOUNDED in
 // test/parked-page-rides-home-browse.test.js.
 //
-// CELLS IN THIS FILE.
-//   fixture sanity            GREEN@HEAD  the parse found a sheet, a park transform and a box.
-//   left/right/margin         GREEN@HEAD  the centring precondition the L = (V-W)/2 term needs.
-//   no width                  GREEN@HEAD, GATE — killed by mutation PARKM3P.
-//   no min-width              GREEN@HEAD, GATE — killed by mutation PARKM4.
-//   no padding/border         GREEN@HEAD, GATE.
-//   max-width bar             GREEN@HEAD, GATE — killed by mutation PARKM3.
-//   strict inequality         RED@HEAD    101vw does not clear the 200vw floor.
-//   shipped form              RED@HEAD    the bench-measured value is 300, not 101.
+// CELLS IN THIS FILE — all eight GREEN, all eight mutation-witnessed.
+//   fixture sanity            the parse found a sheet, a park transform and a box (anti-vacuity).
+//   left/right/margin         GATE — the centring precondition; killed by mutation PARKINSET.
+//   no width                  GATE — killed by mutation PARKM3P.
+//   no min-width              GATE — killed by mutation PARKM4.
+//   no padding/border         GATE — killed by mutation PARKPAD.
+//   max-width bar             GATE — killed by mutation PARKM3.
+//   strict inequality         killed by mutation PARKM1 (the shipped defect restored).
+//   shipped form              killed by mutation PARKM1 and, alone, by PARKM2 (-250vw).
 //
 // ⭐ WHY EIGHT NAMED TESTS AND NOT ONE. The plan's §11 gate proves "this mutant reddens this
 // CELL"; it explicitly cannot prove "this mutant reddens this ASSERTION within the cell" (its
@@ -371,14 +371,13 @@ test('PARKOUTOFREACH — #browse\'s max-width is expressed in px, or in vw at no
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// THE ARITHMETIC — RED @HEAD. Plan §4, §8 dimension 6.
+// THE ARITHMETIC. Plan §4, §8 dimension 6.
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// ⛔ SKIP-PENDING-BUILD, this project's convention for a red-first cell (the Stage-2 red suite,
-// commit be7da1c, landed the same way). The two tests below are RED at HEAD and were RUN red
-// before the skip was applied — the exact failure output is quoted in
-// Claude/Curie/parked-page-rides-home-test-design-2026-08-02.md §7. The skip is what lets a
-// red-first suite live in a green tree; THE BUILDER REMOVES BOTH SKIPS FIRST, drives each red,
-// and only then makes them green. A skip removed after the constant changes proves nothing.
+// These two were the red-first cells: authored against the shipped `-101vw`, run red, and landed
+// behind SKIP-PENDING-BUILD so a red-first suite could live in a green tree. The build removed
+// both skips, drove each red, and then made them green. Both are live now, and each is defended
+// by a registered mutant rather than by that history — PARKM1 restores the shipped defect and
+// reddens both; PARKM2 (-250vw) clears the floor and reddens the shipped-form cell alone.
 /** The park offset in vw, magnitude, for every rule that declares one on a parked page. */
 function parkOffsetsVw() {
   return declaredOn(PARKED_RULES).filter((d) => d.prop === 'transform').map((d) => {

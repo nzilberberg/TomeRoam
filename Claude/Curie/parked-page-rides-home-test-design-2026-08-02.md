@@ -1,12 +1,18 @@
 # Test design — PLAN-parked-page-rides-home.md · 2026-08-02
 
-Type: test design (the red suite that gates the build)
+Type: test design
 
 Authored by the test author from `Claude/Plans/PLAN-parked-page-rides-home.md` (VERDICT: RATIFIED,
 2026-08-02), at HEAD `04739c9`, after the adversary's strike
 (`Claude/Loki/parked-page-rides-home-strike-2026-08-02.md`, VERDICT: HELD_STONE) and BEFORE the
-one-declaration build. The working tree ships `translateX(-101vw)`; nothing in `css/` or `js/` is
-touched by this work.
+one-declaration build.
+
+**Current as of the coverage audit's remediation.** The build has shipped (`2026-08-02.304`), the
+code review passed, and the coverage audit
+(`Claude/Mendeleev/parked-page-rides-home-coverage-audit-2026-08-02.md`, VERDICT: GAPS NAMED) named
+five items, all now closed: two unwitnessed structural bars (§5 F-D) and two oracle instrument
+defects (§5 F-E), plus this record's own state statements. **Nothing in `css/` or `js/` is touched
+by this work** — the fix is shipped and reviewed.
 
 ## Index
 
@@ -14,31 +20,33 @@ touched by this work.
 2. The Coverage Model realized — every applicable dimension to a cell or a recorded absence
 3. The cells, assertion by assertion
 4. The mutants — registered, executed, and the measured result of each
-5. Findings from authoring (three, all measured)
-6. ⛔ OWED AT THE BUILD — two mutants that cannot exist until the constant changes
+5. Findings (five, all measured)
+6. The build's owed items — discharged, and what the sequence proved
 7. Handoff
 
 ## 1. What was authored, and where it lives
 
-| Artifact | Path | State at HEAD |
+**State is current as of the coverage audit's remediation** (build `2026-08-02.304`; the fix is
+shipped, `SKIP-PENDING-BUILD` is gone, both arithmetic cells are live and green). The derivations
+below are unchanged — only the state statements are.
+
+| Artifact | Path | State now |
 |---|---|---|
-| PARKOUTOFREACH (unit, CSS structural) | `test/parked-page-rides-home-css.test.js` | 6 tests GREEN, **2 tests RED, landed behind `SKIP-PENDING-BUILD`** |
+| PARKOUTOFREACH (unit, CSS structural) | `test/parked-page-rides-home-css.test.js` | **8 tests, all GREEN, all eight mutation-witnessed** |
 | DRAGREACHBOUNDED + NOPARKONHOME (integration, real entry point) | `test/parked-page-rides-home-browse.test.js` | 3 tests GREEN (gates) |
-| PARKCLEARSHOME (the real-engine oracle) | `Claude/Curie/parked-page-rides-home-oracle.probe.js` | standalone; deliberately outside `npm test` |
-| Five mutants | `tools/mutate.mjs`, indices 126–130 | registered, anchors green, **all five executed, all caught** |
-| Two mutants | — | **specified, not registered** — owed at the build (§6) |
+| PARKCLEARSHOME (the real-engine oracle) | `Claude/Curie/parked-page-rides-home-oracle.probe.js` | standalone; deliberately outside `npm test`. **Fail-closed on bench staleness and on animation override** (§5 F-D, F-E) |
+| Nine park-family mutants | `tools/mutate.mjs` 126–134 | registered, anchors green, **all executed and caught** |
 
-**RED, and how it lands.** The two arithmetic assertions are RED at HEAD. They were RUN red before
-any skip was applied — the exact failure output is in §7 — and are then committed behind
-`{ skip: SKIP_* }`, which is this project's established red-first convention (the Stage-2 red
-suite, commit `be7da1c`, landed the same way). The repo's pre-commit hook runs the full suite and
-blocks a red tree, so this is the sanctioned route rather than `--no-verify`. **The builder removes
-both skips FIRST, drives each red, and only then makes them green** — a skip lifted after the
-constant has already changed proves nothing.
+`npm test` = **823 tests, 822 pass, 0 fail, 1 skipped** (the one skip is pre-existing and unrelated).
 
-Baseline at HEAD as committed: `npm test` = **823 tests, 820 pass, 0 fail, 3 skipped** (the two
-above plus one pre-existing). With the skips removed: **2 fail**, both PARKOUTOFREACH's arithmetic
-assertions and nothing else.
+**How the two arithmetic cells got here, since the sequence is the point and not the trivia.** They
+were authored against the shipped `-101vw`, RUN red — the exact failure output is preserved in §7 —
+and landed behind `{ skip: SKIP_* }`, this project's established red-first convention (the Stage-2
+red suite, `be7da1c`, landed the same way). The repo's pre-commit hook runs the full suite and
+blocks a red tree, so that was the sanctioned route rather than `--no-verify`. The build removed
+both skips FIRST, drove each red, and only then made them green; a skip lifted after the constant
+has already changed would have proven nothing. Both cells are now defended by registered mutants
+rather than by that history (§4).
 
 ## 2. The Coverage Model realized
 
@@ -73,26 +81,30 @@ the sweep's own `killed by:` output the attribution, mechanically, at no extra c
 | # | Test | State @HEAD | Witnessed by |
 |---|---|---|---|
 | 1 | fixture sanity — sheet parsed, `#browse` box found, park transform found, scope augmentation real | GREEN | — (it is the anti-vacuity) |
-| 2 | `#browse` is an auto-centred `left:0/right:0` box | GREEN | — |
-| 3 | no rule contributing to `#browse` declares a `width` | GREEN | mutant **#127** |
-| 4 | no rule contributing to `#browse` declares a `min-width` | GREEN | mutant **#128** |
-| 5 | no rule contributing to `#browse` declares a `padding` or `border` | GREEN | — |
-| 6 | `#browse`'s `max-width` is `px`, or `vw` ≤ 100 | GREEN | mutant **#126** |
-| 7 | the park offset STRICTLY exceeds the derived floor | **RED** (skipped) | HEAD itself (= the plan's m1); owed: m1 (§6) |
-| 8 | the park offset is the bench-measured shipped form | **RED** (skipped) | owed: m2 (§6), measured before the skip |
+| 2 | `#browse` is an auto-centred `left:0/right:0` box | GREEN | mutant **#134** PARKINSET |
+| 3 | no rule contributing to `#browse` declares a `width` | GREEN | mutant **#129** PARKM3P |
+| 4 | no rule contributing to `#browse` declares a `min-width` | GREEN | mutant **#130** PARKM4 |
+| 5 | no rule contributing to `#browse` declares a `padding` or `border` | GREEN | mutant **#133** PARKPAD |
+| 6 | `#browse`'s `max-width` is `px`, or `vw` ≤ 100 | GREEN | mutant **#128** PARKM3 |
+| 7 | the park offset STRICTLY exceeds the derived floor | GREEN | mutant **#126** PARKM1 |
+| 8 | the park offset is the bench-measured shipped form | GREEN | mutants **#126** and **#127** PARKM2 (alone) |
 
 **The floor is derived, not typed twice.** Term 2 (`edgeVw`) is computed from `#browse`'s own
 `left/right/margin/max-width` — `edgeVw = (100 + min(M, 100))/2`, which is 100 for every `M`
 because `left:0; right:0` means `max-width` can only CAP the box. Term 1 (100vw) is not derivable
-from CSS and is pinned independently by DRAGREACHBOUNDED. Measured floor at HEAD: **200vw**;
-measured offset: **101vw**.
+from CSS and is pinned independently by DRAGREACHBOUNDED. Derived floor: **200vw**; shipped
+offset: **300vw** (it was 101vw when these cells were authored, which is what made them red).
 
-**The structural bars are preconditions, held at suite level rather than inside the arithmetic.**
-Test 7 computes over the box and does not re-assert tests 2–6, so each mutant reddens exactly one
-test. The refusal to certify an unboundable box is carried by tests 2–6 being required-green
-members of the same suite: add `width: 200vw` to `#browse` and `npm test` fails. Same protection,
-better attribution. This trade is stated here because it is a deliberate departure from the plan's
-"preconditions of (i)" wording, not an omission.
+**⭐ THE BARS CARRY THE WHOLE DETECTION, and that is sharper than "preconditions" suggests.** The
+coverage audit's D6.2 makes the consequence explicit: because `edgeVw` is 100 for every admissible
+box, **the derived floor is invariant at 200vw and can only ever move downward**. `derivedFloorVw()`
+reads `max-width` and nothing else. So a widened `#browse` is detected *entirely* by the five
+structural bars — the arithmetic cell cannot see it at all. Test 7 computes over the box and does
+not re-assert tests 2–6, which is what keeps each mutant reddening exactly one test; the refusal to
+certify an unboundable box is carried by tests 2–6 being required-green members of the same suite.
+That trade is a deliberate departure from the plan's "preconditions of (i)" wording, and it is only
+safe because **every one of the five bars now has a mutant behind it** — two of them did not until
+the audit named it (§5 F-D).
 
 **⭐ THE PARSE SCOPE — the adversary's finding, closed.** The strike's lesser plane 1: *"a second
 rule matching `#browse` added later (media query, body-class variant) carrying `width`/`min-width`
@@ -173,23 +185,64 @@ the shipped CSS comment: the promise is true of pages **composed by the park off
 `report()` refuses to pass until 375, 640 and 1000 each have a run, naming 640 as the tight
 boundary.
 
+**⭐ TWO MORE THINGS ARE NOW ASSERTED RATHER THAN ASSUMED, and both were found by the coverage
+audit EXECUTING this script — which is the first time it had been run by anyone but its author.**
+
+*Which rule the run is testing (`preflight()`).* The oracle recorded `parkDeclaration` and printed
+it, but no failure path depended on it. Measured: one browser profile held two shell caches
+(`…2026-08-01.303` and `…2026-08-02.304`) with the older serving, so the bench applied
+`translateX(-101vw)` while the tree shipped `-300vw`. That direction is loud — the run reports
+hits. **The dangerous direction is the mirror**: a warm good cache over a REGRESSED tree, where
+nothing in the geometry can see the problem and `report()` prints "dimension 10 witnessed at all
+three widths." `preflight()` now asserts the served park offset IS the shipped value, and
+cross-checks the live `build.json` against the shell-cache names — `build.json` being trustworthy
+here **by route, not by luck**: the service worker routes it `'probe'`, network-only and never
+cached (`js/swkit.js` `routeFor`, `sw.js` `probeOnly`), so it reports what the TREE serves while
+`caches.keys()` reports what the PAGE may be running. `run()` and `report()` both FAIL without a
+passing preflight.
+
+*Whether the instrument is exposed to the gesture at all.* An animation beats an inline style in
+the cascade, so a stuck `nav-in-*` PINS every rect the oracle reads while the drag scrolls past
+underneath. Measured: `#browse`'s inline ran `translateX(863px) → translateX(40px)` across 8
+samples while its rect stayed at left 820 for all 8. `js/nav.js:163` removes the class on
+`animationend`, which never fires on a hidden pane — a bench fact the adversary had recorded and
+nobody had carried into the oracle as an assertion. At `V ≤ 640` the pinned position coincidentally
+equals the gesture maximum so the run is still worst-case; **at `V = 1000` it understates
+displacement by 360px — the one width the matrix exists to vary `L` and `W` at.** Contamination is
+now checked PER SAMPLE (so an animation starting mid-drag is caught, not averaged away) and fails
+the run, with `repair()` offered as the fix rather than as the guard.
+
+**Both were verified to FIRE, not merely written.** `run()` without a preflight, a two-cache bench,
+a cache/tree build mismatch, a non-shipped served value, a stuck animation, a live rule that is not
+the value the run claims, and `report()` without a preflight — nine paths, each driven in a stubbed
+jsdom bench and each observed to produce its failure. Writing an assertion whose failure path is
+never executed is the exact defect being repaired here.
+
 ## 4. The mutants — registered, executed, measured
 
-`tools/mutate.mjs` 126–130. Run: `node tools/mutation-sweep.mjs 126 127 128 129 130`
-→ **swept 5: 0 uncaught, 0 unapplied, 0 stale flags. Exit 0.**
+The suite is fully green, so **every `killed by` line below is a true delta** and needs no
+interpretation. Run against the FINAL state of the cells (not an intermediate one):
 
-With the two arithmetic cells behind their skips the baseline is fully green, so **every `killed by`
-line below is a true delta** and needs no interpretation. Four of the five kill exactly ONE test,
-and it is the one they are registered to witness — the per-assertion attribution the plan's F14
-records the gate cannot otherwise reach.
+`node tools/mutation-sweep.mjs 104 105 106 126 127 128 129 130 131 132 133 134`
+→ **swept 12: 0 uncaught, 0 unapplied, 0 stale flags.**
+
+Nine of the twelve kill exactly ONE test, and it is the one they are registered to witness — the
+per-assertion attribution the plan's F14 records the gate cannot otherwise reach.
 
 | # | Mutant | Result | Killed by |
 |---|---|---|---|
-| 126 | `#browse { max-width: 250vw }` | caught (**1** failing) | `PARKOUTOFREACH — max-width is px, or vw ≤ 100` **alone**. The floor did NOT move — confirming by execution the plan's F10 reclassification that a >100vw cap is arithmetically inert. |
-| 127 | `#browse` gains `width: 200vw` (**additive**) | caught (**1**) | `PARKOUTOFREACH — no rule … declares a width` **alone**. |
-| 128 | `#browse` gains `min-width: 200vw` (**additive**) | caught (**1**) | `PARKOUTOFREACH — no rule … declares a min-width` **alone**. |
-| 129 | the drag clamp `t = Math.max(-d.w, Math.min(d.w, t))` removed | caught (**1**) | `DRAGREACHBOUNDED` **alone**. |
-| 130 | `renderDestination`'s home branch also calls `Browse.render(dest)` | caught (2) | `NOPARKONHOME` — plus `LANDEDPAGESHOWS`, a pre-existing cell the mutant legitimately disturbs (it creates a third page keyed `home` and changes which page is shown). |
+| 104 | `.browsepage.parked` re-declares `top: 0` | caught (1) | `PARKBOXEQUAL` (Invariant P, reused) |
+| 105 | `.browsepage.parked` drops `overflow: hidden` | caught (1) | `PARKBOXEQUAL` |
+| 106 | the parked transform is marked `!important` | caught (1) | `PARKLOSESTRANSFORM` |
+| 126 | **PARKM1** — the park offset restored to the shipped defect, `-101vw` | caught (2) | the strict-inequality cell **and** the shipped-form cell — the defect this suite was authored against, now a registered regression guard |
+| 127 | **PARKM2** — `-250vw`: clears the floor, not the shipped form | caught (**1**) | the shipped-form cell **alone**. Proves the two arithmetic assertions are independently reachable — the inequality can be green on a value the shipped-form cell still rejects |
+| 128 | **PARKM3** — `#browse { max-width: 250vw }` | caught (**1**) | the max-width bar **alone**. The floor did NOT move — the plan's F10 reclassification proven by execution rather than argued |
+| 129 | **PARKM3P** — `#browse` gains `width: 200vw` (additive) | caught (**1**) | the no-`width` bar **alone** |
+| 130 | **PARKM4** — `#browse` gains `min-width: 200vw` (additive) | caught (**1**) | the no-`min-width` bar **alone**. Note the correction: an earlier prediction here said it would redden the strict-inequality cell too. It does not — `derivedFloorVw()` never reads `min-width`, so the floor stays 200. Execution corrected a prediction that reading had got wrong, which is the whole reason for the ordering |
+| 131 | **PARKDRAG** — the drag clamp removed | caught (**1**) | `DRAGREACHBOUNDED` **alone** |
+| 132 | **PARKNOHOME** — the home branch also calls `Browse.render(dest)` | caught (2) | `NOPARKONHOME` — plus `LANDEDPAGESHOWS`, a pre-existing cell the mutant legitimately disturbs (it creates a third page keyed `home` and changes which page is shown) |
+| 133 | **PARKPAD** — `#browse` gains `padding-left: 16px` (additive) | caught (2) | the no-`padding`/`border` bar — plus `PAGEISVIEW`, which independently pins that `#browse` carries none of the retired scroller's padding. **The audit predicted this one would kill alone; execution says two.** Not a mis-attribution — the named bar reddened — but a prediction corrected by running it |
+| 134 | **PARKINSET** — `#browse`'s `right: 0` becomes `right: -400px` | caught (**1**) | the centring cell **alone** |
 
 **The plan's m2 was registered and EXECUTED before the skips were applied, and its result is worth
 keeping even though the mutant is now withdrawn (§6).** With both arithmetic cells live, m2
@@ -212,11 +265,13 @@ Verified: no lint cell appears among #131's killers.
 **No `*.mutbak` remains anywhere in the tree**, and `git diff -- css js` is empty: the sweep
 restored cleanly and no production file was touched by this work.
 
-## 5. Findings from authoring (three, all measured)
+## 5. Findings (five, all measured)
+
+F-A to F-C are from authoring; F-D and F-E are from the coverage audit's remediation.
 
 **F-A — the mutant this plan's I10 needed was reachable, and that was settled by execution before
 the cell existed.** Three earlier candidates were provably equivalent (plan F9, F12). Before writing
-NOPARKONHOME, its mutant (now #130) was applied and a throwaway probe drove a real `browse→home` gesture: at
+NOPARKONHOME, its mutant (now #132) was applied and a throwaway probe drove a real `browse→home` gesture: at
 HEAD no page is parked at any sample; under the mutant both cached pages carry `.parked` from the
 first live move through mid-drag, and a third page keyed `home` is created. **This also produced
 the cell's design**: the after-finalize sample is clean under BOTH, so a cell sampling only there
@@ -253,64 +308,60 @@ That is the plan's own scar shape one level out: **a mutation result stops being
 suite around it changes, so the sweep is re-run after any change to the cells, not only after a
 change to the source.**
 
-## 6. ⛔ OWED AT THE BUILD — two mutants that cannot exist until the constant changes
+**F-D — two of the five structural bars were labelled `GATE` with nothing behind them, and that was
+worse than it reads.** The coverage audit's M1/M2. A `GATE` label is a claim that a mutant defends
+the cell; for the no-`padding`/`border` and the centring bars, none did. The sharpening is what
+makes it a gap rather than tidiness: because `edgeVw` is 100 for every admissible box, the derived
+floor is **invariant at 200vw**, so a widened `#browse` is detected *entirely* by the bars — and one
+of the two undefended bars, the centring one, guards **the only admissible edit that genuinely
+breaks `L + W ≤ 100vw`**: a negative inset. With `right: -400px` at V = 375 the used
+`W = min(640, 775) = 640`, `L = 67.5`, `L + W = 707.5px = 188vw`, and the arithmetic cell cannot see
+it because `derivedFloorVw()` never reads `left` or `right`. Both bars now have additive, executed
+mutants (#133, #134). **The code review did not find the centring one** — it took a sweep of the
+coverage model against the mutation registry.
 
-**These are the builder's same-commit obligations, alongside the three anchor migrations the plan's
-§7 already names.** The exact strings are written out so registration is mechanical.
+**F-E — the oracle recorded the value it was testing and never asserted it, and an instrument that
+records without asserting is the defect this whole campaign is about.** Found by the audit RUNNING
+the script — the first time anyone but its author had. Two ways for it to report PASS while
+measuring something other than the shipped rule under a live gesture: a stale shell cache serving a
+different stylesheet, and a stuck `nav-in-*` animation pinning every rect it reads. Both are now
+failure paths, and **all nine were driven and observed to fire** rather than merely written (§3).
+The general form is worth keeping: *a field in a verdict object that no failure path reads is
+decoration, and decoration in an instrument is indistinguishable from a guarantee.*
 
-**Why two mutants cannot exist yet.** Both target the arithmetic cells, which are red at HEAD and
-therefore land behind `SKIP-PENDING-BUILD`. A skipped test cannot be a killer, so a registered
-mutant aimed at one is UNCAUGHT and makes the sweep exit nonzero forever. This is the same shape as
-the Stage-2 red suite (commit `be7da1c`), which specified 24 mutants rather than registering them
-because their anchors targeted text the build had yet to create.
+## 6. The build's owed items — DISCHARGED, and what the sequence proved
 
-**(a) m1 — "restore `-101vw`". NOT REGISTRABLE AT HEAD, twice over.** It is a literal no-op at
-HEAD, which `test/mutation-anchors.test.js`'s no-op gate refuses outright — *because at HEAD the
-source IS m1*. Run the two arithmetic cells with their skips removed and they are red for exactly
-the reason m1 predicts, with the output in §7. That is m1 executed, not m1 asserted. What is owed
-after the build is its REGISTRATION, so that a later revert reddens:
+All five obligations this section carried before the build are closed. Recorded because the *reason*
+they existed is reusable, not because the checklist is:
 
-```js
-{ name: 'PARKM1 PARKOUTOFREACH: the park offset is restored to the shipped defect, -101vw '
-    + '(-> PARKOUTOFREACH strict-inequality AND shipped-form cells)',
-  file: 'css/app.css',
-  from: ".browsepage.parked {\n  transform: translateX(-300vw);",
-  to:   ".browsepage.parked {\n  transform: translateX(-101vw);" },
-```
+- **m1 (`-300vw` → `-101vw`) and m2 (→ `-250vw`) are registered** at `tools/mutate.mjs` 126 and 127,
+  and both are executed (§4). Neither could exist before the build: they target the arithmetic
+  cells, which were red and therefore behind `SKIP-PENDING-BUILD`, and **a skipped test cannot be a
+  killer**. m1 was additionally a literal no-op at HEAD, which the anchors gate refuses outright —
+  *because at HEAD the source WAS m1*.
+- **Five anchors now embed the constant, not three** (S2-6, S2-7, S2-8 migrated, plus m1 and m2).
+- **Both skips were removed before the constant changed**, each cell driven red, then made green.
 
-**(b) m2 — "clears the floor but is not the shipped form". REGISTER IT BACK.** It was registered and
-executed at HEAD (§4) and withdrawn only because its one killer is now skipped. Post-build, both
-arithmetic cells are live and it discriminates exactly as designed:
-
-```js
-{ name: 'PARKM2 PARKOUTOFREACH: the park offset becomes -250vw — clears the derived floor but is '
-    + 'NOT the bench-measured shipped form (-> PARKOUTOFREACH shipped-form cell ALONE)',
-  file: 'css/app.css',
-  from: ".browsepage.parked {\n  transform: translateX(-300vw);",
-  to:   ".browsepage.parked {\n  transform: translateX(-250vw);" },
-```
-
-**(c) THE THREE EXISTING ANCHORS (S2-6, S2-7, S2-8) still migrate**, as the plan's §7 requires.
-With m1 and m2 added, **five registered anchors will embed the constant, not three.**
-`test/mutation-anchors.test.js` is the gate that catches an omission and must be green before the
-commit lands.
-
-**(d) Remove the two `SKIP-PENDING-BUILD` skips FIRST, drive both cells red, and only then make
-them green.** A skip lifted after the constant has already changed proves nothing about whether the
-cell could ever fail.
-
-**(e) Re-run `node tools/mutation-sweep.mjs` over the seven indices after the build.** Post-fix the
-whole suite is green, so every killer line is a true delta. Expected: m1 reddens tests 7 AND 8;
-m2 reddens 8 alone; the `min-width` mutant reddens 4 AND 7 (post-fix the floor really moves to 300
-and the shipped 300 fails the strict inequality — the one mutant non-equivalent in layout as well
-as in the precondition set).
+**The reusable lesson, which cost a withdrawn mutant to learn.** m2 was registered and executed
+*before* the skips were applied and reported `caught (1 failing)`. Applying the skips silently made
+it UNCAUGHT — discovered by re-running the sweep, not by reasoning about it. Had the earlier green
+result been trusted, a mutant witnessing nothing would have shipped with evidence on record. **A
+mutation result stops being true when the suite around it changes, so the sweep is re-run after any
+change to the CELLS, not only after a change to the source.** The coverage audit re-checked exactly
+this across the fix commit and found attribution intact; this pass re-checks it again across the
+audit remediation (§4).
 
 ## 7. Handoff
 
 **Source artifact:** `Claude/Plans/PLAN-parked-page-rides-home.md` (RATIFIED), struck HELD_STONE.
 
-**Status:** the red suite is filed and RED for the right reason. Exact failure output at HEAD, with
-the two `SKIP-PENDING-BUILD` skips removed:
+**Status:** the suite is green and every cell is mutation-witnessed. `npm test` = **823 tests, 822
+pass, 0 fail, 1 skipped** (the skip is pre-existing and unrelated); park family re-swept at the
+final state — **swept 12: 0 uncaught, 0 unapplied, 0 stale flags** (§4).
+
+**The red-first evidence, preserved because it is the proof these cells can fail.** Before the
+build, with the two `SKIP-PENDING-BUILD` skips removed, the suite failed exactly here and nowhere
+else:
 
 ```
 not ok 344 - PARKOUTOFREACH — the park offset STRICTLY exceeds the floor derived from #browse's own box
@@ -320,9 +371,10 @@ not ok 345 - PARKOUTOFREACH — the park offset is the bench-measured shipped fo
 # tests 823 / pass 820 / fail 2
 ```
 
-Both failures name the shipped constant and the derived floor — 200vw, computed from `#browse`'s
-own box rather than typed in. Nothing fails on a parse error, an absent rule, or a mis-stated
-assertion. As committed (skips applied) the tree is green: 823 tests, 820 pass, 0 fail, 3 skipped.
+Both failures named the shipped constant and the derived floor — 200vw, computed from `#browse`'s
+own box rather than typed in. Nothing failed on a parse error, an absent rule, or a mis-stated
+assertion. That redness is now carried forward as mutant **#126 (PARKM1)**, so the same two cells
+are defended by a registered guard rather than by this quotation.
 
 **Decisions made:** eight named tests instead of one cell, so mutant attribution is per-assertion
 (§3). Structural bars held at suite level rather than inside the arithmetic (§3). Parse scope by
@@ -330,18 +382,19 @@ real selector matching rather than by rule-name text (§3). Both integration cel
 gates rather than red cells, matching this project's established `MOVERHASBOX` /
 `PARKLOSESTRANSFORM` shape.
 
-**Open questions:** none for the test author. The plan's R1 (is this the whole of the garbage) and
-R2 (cover retention at the new distance) remain DEVICE-owed and downstream of the build.
+**Open questions:** none for the test author. The plan's R1 (is this the whole of the reported
+garbage) and R2 (cover retention at the new distance) remain **DEVICE-owed**, and the coverage audit
+confirmed that no record, cell or comment over-claims either.
 
-**Next owner: the builder** — the one-declaration change (`-101vw` → `-300vw`), the CSS comment
-(which must say composed **by the park offset**, never that the outgoing-side transitions are
-arithmetically exempt), the three §7 anchor migrations **plus the two obligations in §6**, and the
-two F4 scrub targets. **Then the coverage auditor**, on the suite this record describes. Then the
-device gate.
+**What stands between this change and "fixed": the device gate, and nothing in the suite.** Plan §8
+device item 1 (the user's exact repro shows no garbage over Home) and item 2 (cover retention across
+an aborted `browse→browse` at the new distance). Bench evidence is complete — the oracle has been
+executed at 375, 640 and 1000 px with the instrument proven able to fire first — and is filed as
+bench evidence, not as the gate.
 
-**Required evidence before the build is called done:** these five tests green that are currently
-red or newly registered; `test/mutation-anchors.test.js` green after the five-anchor migration;
-`PARKBOXEQUAL` and `PARKLOSESTRANSFORM` still green; the sweep re-run per §6(c); the real-engine
-oracle run at all three widths with `report()` passing; both device-gate items.
+**One standing obligation for whoever runs the oracle next:** run `await PARKORACLE.preflight()`
+first. It is not a courtesy step — `run()` and `report()` now FAIL without it, because a stale shell
+cache can serve a stylesheet that is not the one the tree ships, and the mirror of that produces a
+silent PASS (§3, §5 F-E).
 
 **Records updated:** this artifact; `Claude/Zelda/Board.md`.

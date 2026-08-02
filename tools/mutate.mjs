@@ -1351,6 +1351,52 @@ const MUTATIONS = [
     + 'browse->home gesture parks every other cached page mid-drag (-> NOPARKONHOME)',
     from: "          if (host === 'home') { $('home').classList.remove('parked'); return $('home'); }",
     to:   "          if (host === 'home') { $('home').classList.remove('parked'); Browse.render(dest); return $('home'); }" },
+
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // The two remaining PARKOUTOFREACH structural bars, from the coverage audit
+  // (Claude/Mendeleev/parked-page-rides-home-coverage-audit-2026-08-02.md §4, findings M1/M2).
+  //
+  // ⭐ WHY THESE TWO MATTER MORE THAN THEIR "PRECONDITION" LABEL SUGGESTS. Under every
+  // admissible box, `edgeVw = (100 + min(M,100))/2` is 100, so the derived floor is INVARIANT
+  // at 200vw and `derivedFloorVw()` reads `max-width` and nothing else. The entire detection
+  // capability for a WIDENED #browse therefore lives in the structural bars, not in the
+  // arithmetic — and these were the last two bars with no mutant behind them.
+  //
+  // APPENDED rather than filed beside PARKM3/M3P/M4 on purpose: inserting there would shift
+  // PARKDRAG and PARKNOHOME from 131/132, and the audit and the test design both cite those
+  // indices. Records that point at an index are as breakable as records that point at a line.
+  // ══════════════════════════════════════════════════════════════════════════════════════
+
+  // ── PARKPAD — the no-`padding`/`border` bar (audit M1) ──
+  // ADDITIVE, for the reason the plan's F13 records: a replacement deletes the `max-width` the
+  // cell's own anti-vacuity check requires, so it would kill through THAT check instead of
+  // through the assertion it is registered to witness.
+  // A precondition-only kill BY DESIGN, exactly like PARKM3P: under `* { box-sizing: border-box }`
+  // padding cannot widen the border box, so the bar's real job is to keep that assumption true —
+  // it forbids the one shape where it fails (`box-sizing: content-box` plus a large padding,
+  // where the border box exceeds the cap).
+  { name: 'PARKPAD PARKOUTOFREACH: #browse gains `padding-left: 16px` beside its max-width — inert '
+    + 'under border-box sizing, so it witnesses the structural padding/border bar that keeps that '
+    + 'assumption true (-> PARKOUTOFREACH no-padding/border cell ALONE)',
+    file: 'css/app.css',
+    from: "  max-width: 640px; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }",
+    to:   "  max-width: 640px; padding-left: 16px; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }" },
+
+  // ── PARKINSET — the centring bar (audit M2) ──
+  // ⭐ THE ONLY NON-CONSERVATIVE ONE IN THE SET, and the only guard against the single admissible
+  // edit that genuinely breaks `L + W <= 100vw`. Derivation, stated exactly because an
+  // approximation here is the difference between a killing mutant and an equivalent one: with
+  // `right: -400px` the available width becomes `V + 400`, so at V = 375 the used
+  // `W = min(640, 775) = 640`, `L = (775 - 640)/2 = 67.5`, and `L + W = 707.5px = 188vw` — far
+  // past the 100vw the floor's second term assumes. The arithmetic cell CANNOT see it:
+  // `derivedFloorVw()` never reads `left` or `right`, so the floor stays 200 while `L + W` really
+  // grows. This bar is the whole detection.
+  { name: 'PARKINSET PARKOUTOFREACH: #browse\'s `right: 0` becomes `right: -400px`, so the available '
+    + 'width exceeds the viewport and L + W really breaks its 100vw bound while the derived floor '
+    + 'stays 200 (-> PARKOUTOFREACH centring cell ALONE)',
+    file: 'css/app.css',
+    from: "#browse {\n  position: fixed; left: 0; right: 0;",
+    to:   "#browse {\n  position: fixed; left: 0; right: -400px;" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

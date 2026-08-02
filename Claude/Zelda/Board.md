@@ -984,7 +984,10 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   re-run the sweep after any change to the CELLS, not only to the source.** Exact strings + the
   post-build sweep re-run in the design artifact §6. **Next: Brunel.**
   Device-owed, unchanged: cover retention at the new distance, and whether this is the whole of the
-  reported garbage.
+  reported garbage. *(SUPERSEDED — this row is the pre-build snapshot. Both skips were removed and
+  driven red by the build, m1/m2 are registered at 126/127, and two further bars gained mutants at
+  133/134 after the coverage audit; current state is in the BUILD_GREEN, CODE REVIEW and COVERAGE
+  AUDIT rows below.)*
 - **parked-page-rides-home BUILD_GREEN (2026-08-02, Brunel, build `2026-08-02.304`).** Both
   `SKIP-PENDING-BUILD` skips removed and driven red first (`101vw does not strictly exceed 200vw`;
   `want translateX(-300vw)` — exact output in the build log), then `css/app.css:118-121`
@@ -1031,6 +1034,35 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   recorded run at 375/640/1000px. The builder's scrub CALL on the seven remaining `-101vw` hits is
   **correct** — each verified `#home.parked`, a historical probe, or PARKM1's deliberate restore.
   **Next: Brunel (apply-review), then the device gate — which is what stands between this and "fixed".**
+- **parked-page-rides-home COVERAGE AUDIT: GAPS NAMED (2026-08-02, Mendeleev, audited at `b55fef9`)
+  — all five findings now CLOSED by Curie.** Case file
+  `Claude/Mendeleev/parked-page-rides-home-coverage-audit-2026-08-02.md`. The suite spans its
+  contract: 43 matrix cells, 35 swept, 4 N/A (two with their reasons corrected), 2 bare, 3 owed.
+  **Dimensions 4 and 10 — genuinely bare in HEAD — were swept by EXECUTING the real-engine oracle** at
+  375/640/1000px with the instrument proven able to fire first (fire drill: 8 class-governed hits,
+  parked page at left −4/right +371, reproducing the measurement record's Δ=−4px independently);
+  `report()` → pass, 0 hits per run, 8 non-degenerate parked samples each. Two bench defects were
+  found by that run and are the audit's M3/M4. **Curie remediation (2026-08-02):** (1) M1/M2 — the
+  no-`padding`/`border` and centring bars were labelled GATE with no mutant; **PARKPAD (#133)** and
+  **PARKINSET (#134)** registered and executed. The centring bar matters most: because `edgeVw` is 100
+  for every admissible box the derived floor is **invariant at 200vw**, so a widened `#browse` is
+  detected ENTIRELY by the bars — and the centring one guards the only admissible edit that really
+  breaks `L + W ≤ 100vw` (a negative inset: `right:-400px` → `L+W = 188vw` at V=375, invisible to the
+  arithmetic because `derivedFloorVw()` never reads `left`/`right`). **The code review did not find
+  it.** (2) M3/M4 — the oracle recorded the park value it was testing and never asserted it, and read
+  `getBoundingClientRect()` through a stuck `nav-in-*` animation without noticing. Both are now
+  failure paths: `preflight()` asserts the SERVED park offset is the shipped value and cross-checks
+  the live `build.json` (network-only by SW route) against the shell-cache names, and `run()`/
+  `report()` FAIL without it; animation contamination is checked PER SAMPLE. **All nine fail-paths
+  driven and observed to fire** in a stubbed jsdom bench — writing an assertion whose failure path is
+  never executed is the defect being repaired. (3) M5/M6 — the stale `SKIP-PENDING-BUILD` block and
+  header table in the css cell, and the design record's pre-build state statements, corrected to
+  current truth. **Whole park family re-swept at the FINAL state: `104 105 106 126–134` → swept 12,
+  0 uncaught, 0 unapplied, 0 stale**; nine kill exactly one named test. Suite 823/822/0-fail/1-skip;
+  no `*.mutbak`; `css/` and `js/` untouched. ⭐ Two predictions corrected by execution: PARKM4 does
+  NOT redden the strict-inequality cell (the floor never reads `min-width`), and PARKPAD kills two
+  cells, not one (`PAGEISVIEW` independently pins `#browse`'s padding). **Next: the device gate — the
+  only thing now standing between this change and "fixed".**
 - **Build-gate spec corrections — RATIFIED + FROZEN (2026-07-24, Charpy FORGE):**
   `Claude/Plans/PLAN-build-gate-spec-corrections.md`, approved wording locked in `~/.claude/frozen-artifacts.txt`
   (freeze-guard verified). Corrects the installed Gate A/B spec (Brunel.md Local §) for the user's
