@@ -985,6 +985,23 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   post-build sweep re-run in the design artifact §6. **Next: Brunel.**
   Device-owed, unchanged: cover retention at the new distance, and whether this is the whole of the
   reported garbage.
+- **parked-page-rides-home BUILD_GREEN (2026-08-02, Brunel, build `2026-08-02.304`).** Both
+  `SKIP-PENDING-BUILD` skips removed and driven red first (`101vw does not strictly exceed 200vw`;
+  `want translateX(-300vw)` — exact output in the build log), then `css/app.css:118-121`
+  `.browsepage.parked` `transform: translateX(-101vw)` → `translateX(-300vw)`, the one declaration the
+  plan specifies; the rule's comment gained the distance law (both floor terms + source lines, the
+  constant-viewport precondition), stating I10 rather than the withdrawn arithmetic exemption, and
+  "composed BY THE PARK OFFSET" rather than "cannot overlap" per the plan's bar. Full suite green: 823
+  tests, 822 pass, 0 fail, 1 pre-existing skip. Anchors S2-6/S2-7/S2-8 migrated to `-300vw`; two new
+  mutants (PARKM1 restore `-101vw`, PARKM2 `-250vw`) registered from Curie's exact §6 strings. All
+  **seven** park-coverage mutants (indices 126–132 post-insertion) swept in the foreground and
+  **CAUGHT**, matching the test design's predicted killers exactly (m1 reddens both arithmetic tests;
+  m2 the shipped-form test alone; the drag-clamp and NOPARKONHOME mutants as designed). No `*.mutbak`
+  anywhere in the tree. Build log: `Claude/Brunel/BUILD-parked-page-rides-home-2026-08-02.md`. **Open
+  item, explicitly out of this build's writable scope:** the plan's two F4 scrub targets
+  (`test/swipe-declone-stage2-css.test.js:301`, `Claude/Linnaeus/PROBE-swipe-reveal-teardown.md:60`,
+  both still quoting `-101vw`) were not touched — the invocation's Writable list did not include them.
+  Device gate (R1, R2) remains owed, unchanged. **Next: Poirot.**
 - **Build-gate spec corrections — RATIFIED + FROZEN (2026-07-24, Charpy FORGE):**
   `Claude/Plans/PLAN-build-gate-spec-corrections.md`, approved wording locked in `~/.claude/frozen-artifacts.txt`
   (freeze-guard verified). Corrects the installed Gate A/B spec (Brunel.md Local §) for the user's

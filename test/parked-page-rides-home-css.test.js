@@ -401,7 +401,7 @@ function derivedFloorVw() {
 }
 
 test('PARKOUTOFREACH — the park offset STRICTLY exceeds the floor derived from #browse\'s own box',
-  { skip: SKIP_FLOOR }, () => {
+  () => {
   const floor = derivedFloorVw();
   assert.notEqual(floor, null, 'the floor could not be derived from #browse\'s box — see the '
     + 'max-width bar cell, which is this assertion\'s precondition');
@@ -425,7 +425,7 @@ test('PARKOUTOFREACH — the park offset STRICTLY exceeds the floor derived from
 const SHIPPED_PARK_VW = 300;
 
 test('PARKOUTOFREACH — the park offset is the bench-measured shipped form, not merely a value '
-  + 'that clears the floor', { skip: SKIP_FORM }, () => {
+  + 'that clears the floor', () => {
   const offsets = parkOffsetsVw();
   const bad = offsets.filter((o) => o.vw !== SHIPPED_PARK_VW)
     .map((o) => `${o.selector} { transform: ${o.value} } — want translateX(-${SHIPPED_PARK_VW}vw)`);

@@ -114,9 +114,34 @@ body.has-player .browsepage { padding-bottom: 20px; }
    the inline write must keep winning the cascade (gated by PARKLOSESTRANSFORM).
    `overflow: hidden` stays, now on the SAME two grounds recorded for #home.parked: it
    keeps the box a scroll container, and it un-suppresses Blink's scroll anchoring
-   under the park transform. */
+   under the park transform.
+
+   PARK-DISTANCE LAW. This page is `position: absolute; inset: 0` inside #browse
+   (css:95-99), so the park transform above composes onto #browse's OWN transform —
+   and #browse is itself a mover on four transitions, the INCOMING mover (base ±w) on
+   home->browse and overlay->browse. The offset must therefore exceed #browse's
+   maximum displacement PLUS this page's own right edge in viewport space:
+     max |displacement of #browse| (100vw; js/app.js:505, :558, :602, :649, :690 —
+       pinned by DRAGREACHBOUNDED) + L + W (<=100vw; css:224-229 — derived by
+       PARKOUTOFREACH) = 200vw, the FLOOR, STRICT.
+   -300vw is that floor plus a full viewport of margin, and the exact form the
+   real-engine measurement's after-run executed (detector silent at every touchmove
+   sample, destination still settling at 0 —
+   Claude/Zelda/MEASUREMENT-parked-page-rides-home-2026-08-02.md). At this offset a
+   parked page cannot be composed onto the viewport BY THE PARK OFFSET, for any
+   displacement #browse can take — a browse->browse OUTGOING mover still overlaps the
+   viewport by DESIGN while this invariant is live, governed by its own inline
+   transform. The two outgoing-side transitions (browse->home, browse->overlay) are
+   exempt for a different reason: a gesture's own destination render parks no page on
+   them at all — `renderDestination`'s home and overlay branches never reach
+   showPage — not because they are arithmetically out of reach (gated by
+   NOPARKONHOME).
+   PRECONDITION: this law holds for a gesture at a CONSTANT viewport width. `d.w` is
+   captured once at touchstart (js/app.js:505) and never revised; nothing in js/
+   listens for resize or orientationchange, so a mid-gesture width change is outside
+   this law, not covered by it. */
 .browsepage.parked {
-  transform: translateX(-101vw);
+  transform: translateX(-300vw);
   overflow: hidden; pointer-events: none; z-index: 0;
 }
 /* HOME while another view is active: parked OFF-SCREEN but STILL PAINTED (its own

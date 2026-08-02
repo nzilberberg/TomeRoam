@@ -1103,18 +1103,18 @@ const MUTATIONS = [
   // ── PARKBOXEQUAL — Invariant P, extended to the page park rule ──
   { name: 'S2-6 PARKBOXEQUAL: .browsepage.parked re-declares top: 0, making the parked box taller than the active one (-> PARKBOXEQUAL)',
     file: 'css/app.css',
-    from: ".browsepage.parked {\n  transform: translateX(-101vw);",
-    to:   ".browsepage.parked {\n  top: 0;\n  transform: translateX(-101vw);" },
+    from: ".browsepage.parked {\n  transform: translateX(-300vw);",
+    to:   ".browsepage.parked {\n  top: 0;\n  transform: translateX(-300vw);" },
   { name: 'S2-7 PARKBOXEQUAL: .browsepage.parked drops overflow:hidden, losing the scroll-container status the anchoring guarantee rests on (-> PARKBOXEQUAL)',
     file: 'css/app.css',
-    from: ".browsepage.parked {\n  transform: translateX(-101vw);\n  overflow: hidden; pointer-events: none; z-index: 0;\n}",
-    to:   ".browsepage.parked {\n  transform: translateX(-101vw);\n  pointer-events: none; z-index: 0;\n}" },
+    from: ".browsepage.parked {\n  transform: translateX(-300vw);\n  overflow: hidden; pointer-events: none; z-index: 0;\n}",
+    to:   ".browsepage.parked {\n  transform: translateX(-300vw);\n  pointer-events: none; z-index: 0;\n}" },
 
   // ── PARKLOSESTRANSFORM — the cascade dependency the whole gesture rests on ──
   { name: 'S2-8 PARKLOSESTRANSFORM: the parked transform is marked !important, so the class beats the inline drag write and the outgoing mover sits off-viewport for the whole gesture (-> PARKLOSESTRANSFORM)',
     file: 'css/app.css',
-    from: ".browsepage.parked {\n  transform: translateX(-101vw);",
-    to:   ".browsepage.parked {\n  transform: translateX(-101vw) !important;" },
+    from: ".browsepage.parked {\n  transform: translateX(-300vw);",
+    to:   ".browsepage.parked {\n  transform: translateX(-300vw) !important;" },
 
   // ── BROWSESURFACE — the indicator and the native-bar suppression ──
   { name: 'S2-9 BROWSESURFACE: .browsepage is dropped from the scrollbar-width suppression list, so a native bar returns and the geometry equality is off by its gutter (-> BROWSESURFACE)',
@@ -1265,22 +1265,34 @@ const MUTATIONS = [
   // they defend, and executed, because every finding after that plan's round 1 was a claim
   // about REACHABILITY and reading was wrong about it four times (its F9/F10/F12/F13).
   //
-  // ⛔ TWO OF THE PLAN'S FIVE PARKOUTOFREACH MUTANTS ARE NOT HERE, and their absence is a
-  // recorded obligation rather than an omission. Both target the arithmetic cells, which are
-  // RED at HEAD and therefore land behind SKIP-PENDING-BUILD — so neither can be caught yet,
-  // and a registered-but-uncatchable mutant makes the sweep exit nonzero forever.
-  //   m1 ("restore -101vw") is additionally a literal NO-OP at HEAD, which the anchors gate
-  //   refuses outright — because AT HEAD THE SOURCE IS m1: run the arithmetic cells with their
-  //   skips removed and they are red for exactly the reason m1 predicts.
-  //   m2 (-250vw, which clears the floor but is not the shipped form) WAS registered and
-  //   EXECUTED here before the skips were applied, and its measured result is recorded; it is
-  //   withdrawn only because its one killer is now skipped. Confirmed by running the sweep, not
-  //   by reasoning about it: with the skip in place it reports UNCAUGHT.
-  // Both are the builder's same-commit obligations, with their exact strings, in
-  // Claude/Curie/parked-page-rides-home-test-design-2026-08-02.md §6. This is the same shape as
-  // the Stage-2 red suite (commit be7da1c), which specified 24 mutants rather than registering
-  // them because their anchors targeted text the build had yet to create.
+  // m1 and m2 (below) were NOT registrable pre-build — both target the arithmetic cells,
+  // which were RED at HEAD and landed behind SKIP-PENDING-BUILD, so neither could be caught
+  // and a registered-but-uncatchable mutant would make the sweep exit nonzero forever. Now
+  // that the build has landed (both arithmetic cells are green and unskipped) they are
+  // registered here, per Claude/Curie/parked-page-rides-home-test-design-2026-08-02.md §6.
   // ══════════════════════════════════════════════════════════════════════════════════════
+
+  // ── PARKOUTOFREACH m1 — restores the shipped defect ──
+  // At pre-build HEAD this was a literal no-op (the source WAS m1) and the anchors gate
+  // refuses a no-op outright. Post-build it is a real mutation: reddens BOTH arithmetic
+  // assertions (the offset no longer clears the floor, and it is no longer the shipped form).
+  { name: 'PARKM1 PARKOUTOFREACH: the park offset is restored to the shipped defect, -101vw '
+      + '(-> PARKOUTOFREACH strict-inequality AND shipped-form cells)',
+    file: 'css/app.css',
+    from: ".browsepage.parked {\n  transform: translateX(-300vw);",
+    to:   ".browsepage.parked {\n  transform: translateX(-101vw);" },
+
+  // ── PARKOUTOFREACH m2 — clears the floor but is not the shipped form ──
+  // Registered and executed once already, pre-build, with both arithmetic cells live: caught
+  // (1 failing), killed by the shipped-form cell ALONE, and it flipped the strict-inequality
+  // cell green (250 > 200) — proof the inequality can be green independently of the shipped
+  // value. Withdrawn when the skips landed (a skipped test cannot be a killer) and reinstated
+  // here now that both cells are unskipped.
+  { name: 'PARKM2 PARKOUTOFREACH: the park offset becomes -250vw — clears the derived floor but is '
+      + 'NOT the bench-measured shipped form (-> PARKOUTOFREACH shipped-form cell ALONE)',
+    file: 'css/app.css',
+    from: ".browsepage.parked {\n  transform: translateX(-300vw);",
+    to:   ".browsepage.parked {\n  transform: translateX(-250vw);" },
 
   // ── PARKOUTOFREACH m3 — the structural max-width BAR, not a term of the arithmetic ──
   // Plan F10: `left:0; right:0` means max-width can only CAP the box, so edgeVw stays 100
