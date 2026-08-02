@@ -162,6 +162,20 @@ session's invocation contract's Writable list is `css/app.css`, `tools/mutate.mj
 Neither file was touched. Flagged rather than silently done or silently dropped: both are now stale
 in the sense the plan predicted (F4), and remain owed.
 
+**Resolved same day, follow-up commit `e11ecf3cb8db71cd771a540b18be8a0780b185b0`.** The coordinator
+extended the Writable list to exactly these two files; both corrected to
+`-300vw`, comment/prose only (neither file's assertions changed). `test/swipe-declone-stage2-css.test.js:301`
+now reads `-300vw` in place of `-101vw`; `Claude/Linnaeus/PROBE-swipe-reveal-teardown.md`'s
+`.browsepage.parked` entry corrected to `-300vw` with its stale `css:91-96` citation updated to
+`css:143-146` and a note that the value moved after the probe was written. A sibling sweep
+(`grep -rn` across `test/`, `tools/`, `js/`) found no other live, non-historical statement of
+`.browsepage.parked`'s distance — every other `-101vw` hit is either about `#home.parked` (unchanged
+by this plan, still `-101vw`), inside the parked-page-rides-home red suite's own historical "RED
+@HEAD" narrative (already correct), or inside `tools/mutate.mjs`'s PARKM1 mutant (which restores the
+old value on purpose). Full suite re-run green (823/822/0-fail/1-skip); all seven park mutants
+re-swept in the foreground and still CAUGHT (comment changes did not disturb any text-matching
+cell); no `*.mutbak`.
+
 ## 8. Handoff
 
 **Source artifact:** `Claude/Plans/PLAN-parked-page-rides-home.md` (RATIFIED); test design
@@ -174,11 +188,13 @@ green; no `*.mutbak` in the tree; build number bumped in lockstep.
 **Decisions made:** none beyond the plan's own — this was a one-declaration change built to
 specification, with the two new mutants registered verbatim from the test design's §6.
 
-**Open questions:** the §7 open item above (two scrub targets, out of this session's writable scope).
-Device gate items (R1, R2 in the plan) remain device-owed and downstream of this build, as the plan
-already states.
+**Open questions:** none remaining from this build — the §7 F4 scrub was resolved in the follow-up
+commit noted above. Device gate items (R1, R2 in the plan) remain device-owed and downstream of this
+build, as the plan already states.
 
 **Next owner: the code reviewer (Poirot).**
 
 **Records updated:** this build log; `css/app.css`; `tools/mutate.mjs`; `test/parked-page-rides-home-css.test.js`
-(skips removed); `build.json` / `sw.js` / `js/debug.js` / `index.html` (build stamp).
+(skips removed); `build.json` / `sw.js` / `js/debug.js` / `index.html` (build stamp);
+`test/swipe-declone-stage2-css.test.js` and `Claude/Linnaeus/PROBE-swipe-reveal-teardown.md` (the F4
+scrub, follow-up commit).
