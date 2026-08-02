@@ -1285,3 +1285,33 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   in viewport space, not "page width" (review F7; the floor is unchanged, checked at 375/640/1000px).
   A third mutant (`#browse { max-width: 250vw }`) reddens the law assertion ALONE; without it the law
   half was dominated by the shipped-value half and detected nothing on its own.
+  ⚠️ **THAT LAST SENTENCE IS SUPERSEDED — 2026-08-02, round-2 review F10.** `max-width` cannot move
+  the floor: `#browse` is `left: 0; right: 0`, so its available width is 100vw and a `max-width` can
+  only CAP the box, never expand it — `edgeVw = (100 + min(M, 100))/2 = 100` for every `M`, including
+  250vw. That mutant is therefore EQUIVALENT on the arithmetic and is retained only as a witness for
+  the separate structural guard that bars a >100vw `max-width` as a red flag. The mutants that redden
+  the law assertion alone are `width: 200vw` and `min-width: 200vw` — see the entry below.
+
+- A MUTANT IS PROVEN BY EXECUTION, NEVER BY THE PLAN THAT NAMES IT — 2026-08-02, standing gate.
+  Two rounds of plan review on `PLAN-parked-page-rides-home.md` each found a named mutant that
+  provably could not redden the cell it was registered against, and both were stated confidently
+  enough to invite being taken on trust. (1) NOPARKONHOME's mutant "make `renderDestination`'s `'home'`
+  branch call `showAppView(dest, true)`" is EQUIVALENT: on a home destination `showAppView` takes its
+  `desc.v === 'home'` branch (`js/app.js:535`), which never reads the `render` argument and never
+  reaches `Browse.render`, so no page parks. (2) `PARKOUTOFREACH`'s `max-width: 250vw` mutant is
+  EQUIVALENT for the reason in the superseded note above. Had either been recorded as verified on the
+  plan's say-so, the result would have been two green cells witnessing nothing in place of one
+  arithmetic proof that was wrong by a sign — strictly WORSE, because a wrong proof reads as a claim
+  someone can check while a vacuous gate reads as settled. DECIDED, as a standing condition on that
+  plan and as a general lesson: a cell counts as coverage only once its mutant is registered in
+  `tools/mutate.mjs` and `tools/mutation-sweep.mjs` has been RUN and reports it killed; the sweep exits
+  nonzero on a survivor, so a surviving mutant is a blocking finding, not a footnote. Registration
+  precedes writing the cell. This is the project's "prove the check can fire before trusting a
+  negative" discipline applied to mutants rather than to instruments.
+
+- A MUTANT MUST REDDEN THE CELL IT NAMES AND NOTHING ELSE — 2026-08-02, mutant-authoring footgun.
+  `npm test` includes `test/lint.test.js`, so a mutant written as `if (false)` trips
+  `no-constant-condition` and reddens the LINT cell rather than its target — the sweep still reports a
+  kill, but the kill is mis-attributed and the named guard stays undefended. Express an
+  unreachable-branch mutant as a value change that lints clean (for the home-destination case:
+  `desc.v === 'home'` → a string that never matches), not as a constant condition.
