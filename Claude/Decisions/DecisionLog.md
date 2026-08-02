@@ -1223,3 +1223,34 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   all five subs") was true at `288504e` and is false at HEAD, and `:1162`'s "Thirteen" is the wrong
   number. The three-co-required-properties derivation at `:1158-1161` holds unchanged at HEAD.
   Amending a ratified entry is the user's call, not a deriver's.
+
+- A PARK EXPRESSED IN A MOVING CONTAINER'S COORDINATE SPACE IS NOT OFF-SCREEN — 2026-08-02, measured.
+  `.browsepage.parked` parks by `transform: translateX(-101vw)` (`css/app.css:118-121`) on a
+  `position: absolute; inset: 0` child of `#browse` (`css/app.css:95-99`), so the offset resolves
+  against `#browse` and not the viewport. On `home→browse` and `overlay→browse` the generated
+  transition matrix makes `#browse` the INCOMING mover at `translateX(w + t)` (`js/app.js:651`), so a
+  parked page renders at `homeX − 0.01w` — on top of the outgoing view, by construction, for the whole
+  gesture. MEASURED in a real Blink engine on deployed build `.303` at 375×812: Δ = −4px at 7 of 7
+  touchmove samples, overlap detector firing at every one
+  (`Claude/Zelda/MEASUREMENT-parked-page-rides-home-2026-08-02.md`). `#home.parked` is unaffected
+  because that rule declares `position: fixed`, which makes its identical `-101vw` viewport-relative.
+  Precondition: a cached non-destination browse page must exist, which is why a cold app never shows
+  it and why six earlier hypotheses — every one of them sampling AT REST — missed it.
+
+- THE PARK OFFSET IS GOVERNED BY A DISTANCE LAW, NOT A CHOSEN NUMBER — 2026-08-02, planned
+  (`Claude/Plans/PLAN-parked-page-rides-home.md`; TEMPERed 2026-08-02,
+  `Claude/Charpy/PLAN-parked-page-rides-home-charpy.md` — the law, the 200vw floor and the `-300vw`
+  value all survived the review; two Structural corrections are owed to the plan's derivation and its
+  floor cell, neither changing the value. Not yet built.)
+  The offset must exceed the maximum displacement its container can take plus the page's own width:
+  `100vw + 100vw = 200vw`, both terms derived (`js/app.js:505/558/602/649/690` and
+  `css/app.css:228/241-244`). The shipped value is `-300vw` — the floor plus a viewport of margin, and
+  the exact form the measurement's after-run executed. Three alternatives were excluded, so they are
+  not reconsidered: clipping at `#browse` (adds a scroll authority or rests on a spec argument about
+  containment on the one element whose containing-block behaviour broke the `.alphaindex` strip in
+  `.195`/`.196`, for zero measured gain); parking only gesture participants (more principled, but its
+  cheap form leaves the mechanism reachable in one step — reach the chapter list, tap Home, swipe
+  forward — and its complete form is a seam contract change across `js/app.js` ↔ `js/browse.js` with
+  no measured gain, so it is DEFERRED rather than rejected on merit); and making the park
+  viewport-relative (violates Invariant P and re-opens the settled `position: absolute` scheme at
+  `:1114-1125`).
