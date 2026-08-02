@@ -26,14 +26,11 @@ global.Plex = {
   onTruncationChange: (fn) => { truncCb = fn; },
 };
 global.window.Plex = global.Plex;
-// Real scroll plumbing for entry-restore tests: applyScrollY writes the PAGE's own
-// scrollTop (PLAN-swipe-declone.md §5.3.4 — each `.browsepage` is its own inset own-scroll
-// box inside the #browse container, #mount here), and a page must report enough
-// scrollHeight that applyScrollY's clamp does not flatten every restore to 0 (jsdom has no
-// layout, so every element measures 0 and clampY would return 0 for any target).
-// Defined on the PROTOTYPE rather than on one element: the pages under test are created by
-// the `page()` helper below and by Browse.render, so there is no single node to stub.
-Object.defineProperty(dom.window.Element.prototype, 'scrollHeight', { get: () => 10e6, configurable: true });
+// Real scroll plumbing for entry-restore tests: applyScrollY now writes #mount's own
+// scrollTop directly (the browse-decouple, PLAN-browse-decouple.md §6 B3 — o.mount is
+// #browse in production, #mount here), and #mount reports enough scrollHeight that
+// applyScrollY's clamp doesn't flatten every restore to 0 (jsdom has no layout).
+Object.defineProperty(dom.window.document.getElementById('mount'), 'scrollHeight', { get: () => 10e6, configurable: true });
 const released = [];
 global.window.ArtLoader = { release: (img) => released.push(img.getAttribute('data-art')), scan: () => {}, observe: () => {} };
 global.ArtLoader = global.window.ArtLoader;
@@ -530,7 +527,7 @@ test('hidden SWR insert above the anchor: returning restores the ROW at its offs
   const a = page(), b = page();
   T.listView(a, 'Books', orig, T.bookRow, false);
   T.listView(b, 'Authors', books(MAXN + 1), T.bookRow, false);
-  T.pageCache.set('books', { el: a, order: 1 });
+  T.pageCache.set('books', { el: a, order: 1, sy: 0 });
   T.pageCache.set('authors', { el: b, order: 2 });
   T.showPage('books');
   // The user scrolls 11px into row b500.
@@ -538,12 +535,7 @@ test('hidden SWR insert above the anchor: returning restores the ROW at its offs
   const p1 = m1.keyIndex.get('b500');
   const oldY = m1.groups[p1.gi].rowsTop + p1.li * vlOpts.strides.row + 11;
   view.scrollY = oldY;
-  // The page RETAINS its own offset natively (Invariant D4, PLAN-swipe-declone.md §5.3.1) —
-  // there is no `sy` cache entry and no passive listener recording one any more. What this
-  // cell proves is unchanged and is the reason `anchorEntryY` is NOT swept up with the `sy`
-  // deletion (plan §4 STAYS): a retained raw offset is the WRONG answer after an SWR update
-  // moved rows above the anchor, and the logical anchor re-resolves against the CURRENT model.
-  a.scrollTop = oldY;
+  T.pageCache.get('books').sy = oldY;              // what the passive listener records
   T.showPage('authors');                           // anchor captured on the way out
   // Revalidation lands while Books is hidden: 10 new titles sort ABOVE b500.
   const fresh = [
@@ -552,15 +544,14 @@ test('hidden SWR insert above the anchor: returning restores the ROW at its offs
   ];
   assert.equal(T.patchInPlace({ v: 'books' }, a, fresh), true, 'virtual page routes to controller.update');
   T.showPage('books');
-  T.positionOnEnter({ v: 'books' }, a);
+  T.positionOnEnter({ v: 'books' }, a, T.pageCache.get('books').sy);
   const m2 = a._vctl.model();
   const p2 = m2.keyIndex.get('b500');
   const wantY = m2.groups[p2.gi].rowsTop + p2.li * vlOpts.strides.row + 11;
   assert.notEqual(wantY, oldY, 'fixture sanity: the insert really moved the row');
-  // applyScrollY writes the PAGE's own scrollTop (PLAN-swipe-declone.md §5.3.4) — not the
-  // #mount host, not window.scrollTo, and not view.scrollY, which here only feeds the
-  // injected VL metrics.
-  assert.equal(a.scrollTop, wantY, 'viewport follows row b500 to its NEW position');
+  // applyScrollY now writes #mount's own scrollTop (the browse-decouple, §6 B3), not
+  // window.scrollTo/view.scrollY — view.scrollY here only feeds the injected VL metrics.
+  assert.equal(document.getElementById('mount').scrollTop, wantY, 'viewport follows row b500 to its NEW position');
   a._vctl.destroy(); b._vctl.destroy(); T.pageCache.clear();
 });
 

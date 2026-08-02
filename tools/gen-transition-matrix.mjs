@@ -61,6 +61,7 @@ function outcomeFor(from, to) {
     incoming: c.expectedConstruction.incoming,
     renderDestination: c.expectedConstruction.renderDestination,
     pane: paneOf(c.expectedConstruction),
+    abortRender: c.expectedFinalization.abortRender,
     decoration: np ? 'np-pill' : '-',
   };
 }
@@ -82,20 +83,21 @@ export function render() {
   }
   L.push('');
   L.push('CONSTRUCTION PLAN by kind (from the frozen spec; abort is frozen finalization data)');
-  L.push('  from     to        outgoing      incoming          render       pane');
+  L.push('  from     to        outgoing      incoming          render       pane   abort');
   L.push('  -------  --------  ------------  ----------------  -----------  -----  --------');
   for (const f of kinds) {
     for (const t of kinds) {
       if (f === 'home' && t === 'home') continue;   // not a transition
       const p = outcomeFor(byKind(f), byKind(t));
       L.push(`  ${f.padEnd(8)} ${t.padEnd(8)}  ${p.outgoing.padEnd(12)}  ${p.incoming.padEnd(16)}  `
-        + `${p.renderDestination.padEnd(11)}  ${p.pane ? 'yes' : 'no'}`);
+        + `${p.renderDestination.padEnd(11)}  ${(p.pane ? 'yes' : 'no').padEnd(5)}  ${p.abortRender}`);
     }
   }
   const pairs = [];
   for (const f of screens) for (const t of screens) if (f.v !== t.v) pairs.push(outcomeFor(f, t));
   L.push('');
   L.push(`concrete pairs building a pane: ${pairs.filter((p) => p.pane).length} of ${pairs.length}`);
+  L.push(`concrete pairs re-rendering on abort: ${pairs.filter((p) => p.abortRender === 'rerender').length}`);
   L.push(`concrete pairs carrying the NP pill: ${pairs.filter((p) => p.decoration === 'np-pill').length}`);
   return L.join('\n') + '\n';
 }

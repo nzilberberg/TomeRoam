@@ -573,28 +573,7 @@ function boot(opts = {}) {
     },
     reset: noop, clearCache: noop,
     beginHold: () => { log.calls.push({ name: 'browse.beginHold', args: [] }); return ++holdSeq; },
-    // RECORDS THE LANDED SCREEN too: it is what decides which browse page is left showing
-    // when a gesture ends (Invariant D6), so a fake that swallowed it would hide the one
-    // argument the abort path now depends on.
-    endHold: (t, landed) => {
-      log.calls.push({ name: 'browse.endHold', args: [t === holdSeq ? 'current' : 'stale', (landed && landed.v) || null] });
-    },
-    pageElFor: (desc) => {
-      const key = desc.v === 'authorBooks' ? 'author:' + desc.author.ratingKey
-        : desc.v === 'files' ? 'files:' + desc.book.ratingKey : desc.v;
-      const host = document.getElementById('browse');
-      let el = host && host.querySelector('.browsepage[data-key="' + key + '"]');
-      if (!el && host) {
-        el = document.createElement('div');
-        el.className = 'browsepage';
-        el.dataset.key = key;
-        host.appendChild(el);
-      }
-      // THROWS rather than returning null, exactly as the real accessor does: a missing page
-      // must fail at the seam, not surface later as a transform write on undefined.
-      if (!el) throw new Error('Browse.pageElFor: no cached browse page for ' + JSON.stringify(desc));
-      return el;
-    },
+    endHold: (t) => { log.calls.push({ name: 'browse.endHold', args: [t === holdSeq ? 'current' : 'stale'] }); },
     deactivate: log.rec('browse.deactivate'), showPage: noop,
     patchRows: () => false,          // never claim the repaint — force the real renderTile path
     bookSig: (b) => JSON.stringify([b && b.thumb, b && b.title, b && b.parentTitle]),

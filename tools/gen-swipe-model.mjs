@@ -190,6 +190,7 @@ function constructionFor(from, to) {
     outgoing: c.expectedConstruction.outgoing,
     incoming: c.expectedConstruction.incoming,
     pane: paneOf(c.expectedConstruction),
+    abortRender: c.expectedFinalization.abortRender,
     decorations: np ? 'np-pill' : '-',
   };
 }
@@ -203,7 +204,7 @@ export function scenarioFor(from, to) {
   const p = constructionFor(from, to);
   return {
     status: 'planned',
-    outgoing: p.outgoing, incoming: p.incoming, pane: p.pane,
+    outgoing: p.outgoing, incoming: p.incoming, pane: p.pane, abortRender: p.abortRender,
     decorations: p.decorations,
     stackEffectOnForward: stackEffect(to, from),   // navigating TO `from` while on `to`
     backReachable: backReachable(from, to),
@@ -231,19 +232,17 @@ export const TERMINATION = [
     basis: 'parity', where: 'move(): releaseGesture(); d = null; return — before start()' },
   { reason: 'touch-cancel (dragging)', nav: 'settle decision', screen: 'from decision', scroll: 'commit/abort', pane: 'normal settle',
     basis: 'parity', where: 'touchcancel shares onEnd with touchend' },
-  { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: 'currentDesc(); never re-rendered', scroll: 'restore d.scroll0 (live)', pane: 'dispose orphan',
+  { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: "currentDesc(); rerender iff finPlan.abortRender==='rerender'", scroll: 'restore d.scroll0 (live)', pane: 'dispose orphan',
     // basis stays 'parity' — the swipe-model gate requires every TERMINATION row to name
     // where its behavior is VERIFIED against current code, and this row does. But its
     // screen/scroll columns now carry the SR/SC repairs, which §10 (the gated §8A ledger)
     // classifies as NEW POLICY. policyRef marks that so the rendered basis is not read as
     // "not a policy change" (Poirot F2 / StandardsDocument §7 within-document consistency).
     basis: 'parity', policyRef: 'screen+scroll = SR/SC, NEW POLICY (§10)',
-    // PLAN-swipe-declone.md Stage 2 retired the re-render entirely: no transition
-    // overwrites its source element, so the recovery has no source CONTENT to rebuild and
-    // the render flag is a literal false. The page SELECTION the re-render also restored is
-    // now owned by Browse.endHold, which dropRowHold hands the landed screen — read after
-    // the applyScreen this row already performs.
-    where: "begin(): releaseGesture, resetSwipeStyles, applyScreen(currentDesc(),{render:false, resetScroll:d?false:undefined}), scrollTo(d.scroll0), dropRowHold LAST (endHold is told the landed screen), session/d=null LAST" },
+    // Stage 6d retired the runtime d.clobbered byproduct: the recovery reader now derives
+    // the render flag from the declared cur.finPlan.abortRender (plus the cur.live
+    // build-ran conjunct), computed at arm time from Swipe.finalizationPlanFor().
+    where: "begin(): releaseGesture, resetSwipeStyles, applyScreen(currentDesc(),{render:cur.live && cur.finPlan.abortRender==='rerender', resetScroll:d?false:undefined}), scrollTo(d.scroll0), dropRowHold LAST, session/d=null LAST" },
 ];
 
 /** §3.7 — recovery is keyed on PHASE, never on reason. ALL ROWS ARE NEW POLICY. */
@@ -269,11 +268,9 @@ export const NEW_POLICIES = [
     text: 'the recovery table (§7), pre/post-stack, all reasons' },
   { id: 'supersession-restore-scroll',
     text: 'restoring the starting scroll when a gesture is SUPERSEDED' },
-  { id: 'supersession-source-content',
-    text: 'the SOURCE content surviving a SUPERSEDED gesture (added after review of .218 '
-        + 'found the first draft had labelled it [parity]); since PLAN-swipe-declone.md '
-        + 'Stage 2 this holds by construction rather than by a re-render — the source is '
-        + 'its own element and the destination render never overwrites it' },
+  { id: 'supersession-rerender-source',
+    text: 're-rendering the SOURCE into #browse when a gesture is SUPERSEDED '
+        + '(added after review of .218 found the first draft had labelled it [parity])' },
 ];
 
 /** §2.6 — the four previously-unresolved rules, resolved from code. */
@@ -380,7 +377,7 @@ export function render() {
     const pair = `${label(from)} -> ${label(to)}`;
     const out = s.status === 'rejected'
       ? `REJECTED ${s.reason}`
-      : `pane=${s.pane ? 'yes' : 'no '} back=${s.backReachable ? 'reachable' : 'UNREACHABLE'}`;
+      : `pane=${s.pane ? 'yes' : 'no '} abort=${pad(s.abortRender, 8)} back=${s.backReachable ? 'reachable' : 'UNREACHABLE'}`;
     P(`   ${pad(name, 32)}  ${pad(pair, 38)}  ${out}`);
   }
   P('');
@@ -415,16 +412,13 @@ export function render() {
   P('            landed the pre-stack recovery): releaseGesture; resetSwipeStyles');
   P('            (dispose the old pane / stray ghosts + clear inline styles); recover the');
   P('            source PRE-STACK while the Browse hold is STILL held —');
-  P('            applyScreen(currentDesc(), {render:false, resetScroll:false}) reconciles');
-  P('            the source screen with NO re-render: since PLAN-swipe-declone.md Stage 2');
-  P('            no transition overwrites its source element, so there is no source CONTENT');
-  P('            to rebuild (stage 6d\'s finalizationPlanFor and its abortRender decision are');
-  P('            retired with the clone), then');
+  P('            applyScreen(currentDesc(), {render: cur.live && cur.finPlan.abortRender===');
+  P('            \'rerender\', resetScroll:false}) re-renders the source into #browse iff the');
+  P('            declared same-browse-host abort decision says so (stage 6d\'s');
+  P('            finalizationPlanFor, retiring the old d.clobbered runtime byproduct), then');
   P('            window.scrollTo(0, d.scroll0) restores the start scroll; dropRowHold');
-  P('            LAST — endHold is TOLD the landed screen read from that applyScreen, so it');
-  P('            reconciles which browse PAGE is shown from the landing rather than from an');
-  P('            inference, and realizes the SUSPENDED source rows against the settled');
-  P('            scroll, reusing them rather than rebuilding; session = null,');
+  P('            LAST (endHold then realizes the SUSPENDED source rows against the');
+  P('            settled scroll, reusing them rather than rebuilding); session = null,');
   P('            d = null LAST of all (both are read by releaseGesture/dropRowHold, so');
   P('            nulling earlier would leak the hold); then the new gesture arms. The nav');
   P('            stack and navbar return to the source; movers are torn down BY OWNERSHIP');
@@ -441,16 +435,13 @@ export function render() {
   P('            session-start scroll (d.scroll0), so a superseded browse->browse drag is');
   P('            no longer left at the DESTINATION\'s scroll (its mid-drag render had run');
   P('            positionOnEnter).');
-  P('   [policy] (2) SOURCE CONTENT — IMPLEMENTED (stage 6a), then made STRUCTURAL by');
-  P('            PLAN-swipe-declone.md Stage 2. Stage 6a re-rendered the source into #browse');
-  P('            on the declared abort decision; Stage 2 gave each browse page its own inset');
-  P('            own-scroll box, so the destination render never overwrites the source and');
-  P('            there is nothing to put back. The host can no longer keep the DESTINATION\'s');
-  P('            content while the stack and navbar say source, because the two are not the');
-  P('            same element. The .218 defect was renders = ["books","authors","books"]');
-  P('            after Authors->Books is superseded — an I11 wrong-page/wrong-tap violation');
-  P('            of the .178 class, now closed by construction. Guarded by tests in');
-  P('            swipe-invariants.test.js.');
+  P('   [policy] (2) SOURCE CONTENT — IMPLEMENTED (stage 6a). The recovery re-renders the');
+  P('            source into #browse when the declared abort decision is \'rerender\' (stage');
+  P('            6d\'s finPlan.abortRender, retiring the old d.clobbered byproduct), so the host');
+  P('            no longer keeps the DESTINATION\'s content while the stack and navbar say');
+  P('            source. The .218 defect was renders = ["books","authors","books"] after');
+  P('            Authors->Books is superseded — an I11 wrong-page/wrong-tap violation of');
+  P('            the .178 class, now closed. Guarded by tests in swipe-invariants.test.js.');
   P('');
   P('6. TERMINATION REASONS (§3.7)');
   P('   basis [parity] = the row is VERIFIED against current code at its `where`. It is NOT');

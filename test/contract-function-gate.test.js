@@ -30,12 +30,19 @@ const CONTRACT = {
     keys: ['decorations', 'incoming', 'outgoing', 'renderDestination'],
     callerArray: 'decorations',   // must be CLONED, not frozen in place
   },
+  finalizationPlanFor: {
+    // Stage 6d (PLAN-swipe-stage6d.md §4b): a HAND-CONSTRUCTED classification, the sole
+    // same-browse-host case, so a direct call proves the contract independent of
+    // classifyTransition/constructionPlanFor.
+    input: () => ({ fromKind: 'browse', toKind: 'browse', decorations: [] }),
+    keys: ['abortRender'],
+  },
 };
 // Exports that are NOT contract-object factories, each with the reason it is exempt.
 const NON_CONTRACT = {
   BROWSE_FAMILY: 'a shared enum array (the browse-family screen names), not a contract-object factory',
   buildConstruction: 'the stage-5 L1 seam — returns a Construction carrying LIVE DOM nodes '
-    + '(the real mover elements), so it is not a deep-frozen exact-keyed contract object; its '
+    + '(built panes / real elements), so it is not a deep-frozen exact-keyed contract object; its '
     + 'shape is pinned by test/swipe-construction.test.js instead',
 };
 

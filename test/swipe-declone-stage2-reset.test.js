@@ -41,6 +41,8 @@ Nav.init({
   browseWillHide: () => {},
 });
 
+const SKIP = 'SKIP-PENDING-BUILD — RED until the builder widens Nav.resetSwipeStyles to cover '
+  + 'every .browsepage (PLAN-swipe-declone.md §5.3.4, step 10). Remove this skip to drive it red.';
 
 /** Write the exact four properties the swipe writes, so the reset has something real to clear. */
 function stampSwipeStyles(el) {
@@ -53,7 +55,7 @@ const stillStamped = (el) => ['transform', 'transition', 'willChange', 'zIndex']
   .filter((p) => el.style[p] !== '');
 
 test('RESETCOVERSPAGES — the swipe style reset clears every .browsepage, not only the elements '
-  + 'that carry an id', () => {
+  + 'that carry an id', { skip: SKIP }, () => {
   const host = $('browse');
   assert.ok(host, 'fixture sanity: index.html ships the #browse host');
 

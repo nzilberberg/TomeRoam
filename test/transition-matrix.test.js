@@ -76,26 +76,23 @@ test('the SETTINGS-SUB half of the registry is derived from nav.js, not hand-lis
 // stated in prose, independently of any implementation — a hand-error in the spec fails
 // here before it can propagate. (Production is checked against the spec separately in
 // test/swipe-transition.test.js.)
-test('the frozen spec builds NO pane for any structural case, and renderDestination follows the destination (PLAN-swipe-declone.md)', async () => {
+test('the frozen spec builds a pane exactly when the GHOST rule says (Stage 1, PLAN-swipe-declone.md)', async () => {
   const spec = await loadSpec();
   const wrong = [];
   for (const c of spec.STRUCTURAL_CASES) {
-    //   NO structural case builds a pane. Stage 6i retired the home-snapshot incoming
-    //   outcome; declone Stage 1 narrowed the outgoing ghost to the one pair sharing a
-    //   single real host (#browse); declone Stage 2 gave each browse page its own inset
-    //   own-scroll box, so that pair moves two real `.browsepage` elements and the ghost
-    //   is gone. `outgoing` is a one-value enum, KEPT as the surface on which a
-    //   re-introduced copy would have to declare itself (plan §6).
+    //   GHOST iff source AND destination are BOTH browse (Stage 1, PLAN-swipe-declone.md
+    //   §5.1 — narrowed from stage 6f's "source not overlay, destination not home": every
+    //   view is already its own position:fixed inset own-scroll box, so only the one pair
+    //   sharing a single real host, #browse, still needs a stand-in). The home-snapshot
+    //   incoming outcome is RETIRED (Stage 6i, PLAN-swipe-noswap-home.md): a →home reveal
+    //   never builds an owned pane, so GHOST is the only pane-building rule.
+    const expectGhost = c.from === 'browse' && c.to === 'browse';
     const ec = c.expectedConstruction;
-    if (ec.outgoing !== 'real-source') wrong.push(`${c.from}->${c.to} outgoing=${ec.outgoing}`);
-    if (spec.paneOf(ec)) wrong.push(`${c.from}->${c.to} pane`);
-    // renderDestination: 'browse-page' exactly when BOTH ends are browse (the destination is
-    // rendered and its own PAGE node is the incoming mover — plan §5.3.6); 'browse-host'
-    // exactly when the destination is browse and the source is not; 'home-host' exactly when
-    // the destination is home (Stage 6i).
-    const browsePair = c.from === 'browse' && c.to === 'browse';
-    if ((ec.renderDestination === 'browse-page') !== browsePair) wrong.push(`${c.from}->${c.to} render-page`);
-    if ((ec.renderDestination === 'browse-host') !== (c.to === 'browse' && !browsePair)) wrong.push(`${c.from}->${c.to} render`);
+    if ((ec.outgoing === 'app-ghost') !== expectGhost) wrong.push(`${c.from}->${c.to} ghost`);
+    if (spec.paneOf(ec) !== expectGhost) wrong.push(`${c.from}->${c.to} pane`);
+    // renderDestination is 'browse-host' exactly when the destination is browse;
+    // 'home-host' exactly when the destination is home (Stage 6i).
+    if ((ec.renderDestination === 'browse-host') !== (c.to === 'browse')) wrong.push(`${c.from}->${c.to} render`);
     if ((ec.renderDestination === 'home-host') !== (c.to === 'home')) wrong.push(`${c.from}->${c.to} render-home`);
   }
   assert.deepEqual(wrong, [], `the spec disagrees with the stated rules: ${wrong.slice(0, 8).join(', ')}`);

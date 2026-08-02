@@ -75,47 +75,17 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
 .app { min-height: calc(100% + 12vh); padding: calc(var(--safe-top) + 12px) 16px calc(var(--nav-pad) + 84px); max-width: 640px; margin: 0 auto; }
 body.has-player .app { padding-bottom: calc(var(--nav-pad) + 190px); }
 .hidden { display: none !important; }
-/* A browse PAGE is the browse SCROLLER (PLAN-swipe-declone.md §5.3.1). #browse keeps
-   its position:fixed inset box and owns the CONTAINER role — the append target, the
-   innerHTML wipe target, the .hidden carrier for Nav.setView, and the transformable
-   mover for every browse<->non-browse transition. Each page is an inset:0 absolutely-
-   positioned child of it and owns the SCROLLER role: the padding, the overflow, and
-   its own scrollTop (so nothing is saved and restored across a page swap).
-   position:absolute and NOT fixed, deliberately: #browse is position:fixed, so it is
-   ALREADY the containing block for an absolutely-positioned descendant whether or not
-   it is transformed — a gesture transform on #browse therefore cannot move the page.
-   A position:fixed page WOULD be re-contained at drag start and lose T+B of height
-   (real-engine-measured at 164px on a notched-iPhone geometry; plan §5.3.2).
-   #browse has no border, so its padding box IS its border box, and an inset:0 child's
-   border box is exactly #browse's — which is why the padding below moves here
-   UNCHANGED from the retired #browse scroller and the content box is preserved. That
-   equality holds only while the page reserves no classic-scrollbar gutter, which is
-   what the native-scrollbar suppression below (scrollbar-width) is a precondition for,
-   not a cosmetic fix. */
-.browsepage {
-  position: absolute; inset: 0;
-  padding: 14px 16px 40px;
-  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-}
-body.has-player .browsepage { padding-bottom: 20px; }
 /* A browse page PARKED for the duration of a swipe: off-viewport but STILL
    PAINTED, so iOS keeps its decoded cover bitmaps. display:none drops them, and
    an aborted swipe then re-decodes every cover at once — the whole list visibly
    pops back in with the DOM untouched. Exactly the reason #home.parked exists
-   below; this is the same technique for the browse pages. Gesture-scoped —
-   browse.js parks on swipe start and the hold's release returns the page to
-   display:none when the gesture ends.
-   INVARIANT P (derived at #home.parked below): this rule declares NO position and NO
-   insets of its own, so every box property cascades from the `.browsepage` base rule
-   above and the parked box is IDENTICAL to the active one rather than a separately-
-   maintained restatement of it. It parks by transform ALONE, and that transform
-   carries no `!important` — the outgoing mover wears `.parked` for the whole of a
-   browse->browse drag while js/app.js writes style.transform on it every frame, so
-   the inline write must keep winning the cascade (gated by PARKLOSESTRANSFORM).
-   `overflow: hidden` stays, now on the SAME two grounds recorded for #home.parked: it
-   keeps the box a scroll container, and it un-suppresses Blink's scroll anchoring
-   under the park transform. */
+   below; this is the same technique for the browse pages. Out of flow, so the
+   document height comes from the page being swiped to, which is what the swipe
+   wants anyway. Gesture-scoped — browse.js parks on swipe start and returns the
+   page to display:none when the gesture ends. */
 .browsepage.parked {
+  position: fixed; top: 0; left: 0; right: 0;
+  max-width: 640px; margin: 0 auto;
   transform: translateX(-101vw);
   overflow: hidden; pointer-events: none; z-index: 0;
 }
@@ -132,11 +102,10 @@ body.has-player .browsepage { padding-bottom: 20px; }
    machinery operates on the box. No `top`/`bottom` are declared here so both insets
    cascade from the base #home rule below (or from body.has-player #home), which is
    what keeps the parked box's geometry IDENTICAL to the active box rather than a
-   separately-maintained restatement of it. `.browsepage.parked` SHARES this
-   invariant rather than diverging from it: since PLAN-swipe-declone.md §5.3.1 a
-   `.browsepage` is an `inset: 0` absolutely-positioned box of its own, so it HAS
-   both insets to inherit and its park rule declares no position and no insets
-   either. Both park rules obey Invariant P, by the same mechanism.
+   separately-maintained restatement of it. `.browsepage.parked` (css:86) does NOT
+   share this invariant: a `.browsepage` is an IN-FLOW element with no `bottom`
+   inset of its own to inherit, so parking it needs its own `top: 0` to size it —
+   the two park rules diverge for that reason, not by oversight.
 
    (b) `overflow: hidden` is REQUIRED, not vestigial, on TWO independent grounds:
    (1) cross-engine — it is what keeps this box a SCROLL CONTAINER (CSS Overflow 3);
@@ -200,17 +169,8 @@ body.has-player .browsepage { padding-bottom: 20px; }
 }
 body.has-player #home { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); padding-bottom: 20px; }
 
-/* Active #browse is a position:fixed inset CONTAINER and VIEW BOX — not a scroller.
-   The browse-decouple made it a fixed own-scroll view (the symmetric completion of
-   #home's Stage 6i move above); PLAN-swipe-declone.md §5.3.1 then split that single
-   role in two and moved the SCROLLER half down to each `.browsepage` (css above), so
-   two browse pages are two independently-scrolled real elements and a browse->browse
-   swipe is a filmstrip of real views instead of a clone. What #browse keeps is the
-   box: the append target, the innerHTML wipe target, the `.hidden` carrier, and the
-   transformable mover for browse->home, browse->overlay, home->browse and
-   overlay->browse. That box is why it must keep `position: fixed` — an element with
-   no principal box cannot be transformed, and four shipped transitions transform this
-   one (Invariant D5, gated by MOVERHASBOX). Deliberately
+/* Active #browse is a position:fixed + overflow-y:auto own-scroll view, the symmetric
+   completion of #home's Stage 6i move above (PLAN-browse-decouple.md §3). Deliberately
    carries NO will-change / non-none transform: the fixed .browsepage .alphaindex strip
    (css below, .alphaindex) needs #browse to establish NO containing block for it
    (Linnaeus PROBE-decouple-browse-scroll Q1 — plain position:fixed/overflow does not;
@@ -225,9 +185,10 @@ body.has-player #home { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); pad
   position: fixed; left: 0; right: 0;
   top: calc(var(--safe-top) + 51px);                 /* bottom edge of the fixed .topbar */
   bottom: calc(var(--nav-h) + var(--nav-pad));       /* top of the nav bar (no transport) */
-  max-width: 640px; margin: 0 auto;
+  max-width: 640px; margin: 0 auto; padding: 14px 16px 40px;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
 }
-body.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }
+body.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); padding-bottom: 20px; }
 
 /* Page-carousel transitions. The incoming view slides in from the side that matches
    the direction (forward = from the right, back = from the left). `.app` clips the
@@ -842,22 +803,13 @@ body.has-player #scrollind { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px)
 #scrollind.on { opacity: 1; }
 #scrollind > i { position: absolute; right: 0; top: 0; width: 100%; border-radius: 3px; background: rgba(255,255,255,.34); }
 /* Hide native scrollbars ONLY on the surfaces the custom indicator supports — the
-   document (Books/Authors/files), the fixed own-scroll #home (Stage 6i), each
-   `.browsepage` (PLAN-swipe-declone.md §5.3.1 moved the browse scroller there; #browse
-   is kept in the list because it is still the box and a stray overflow on it must not
-   paint a bar), and the settings overlays. Higher, differently-shaped scrollers (Now
-   Playing z60, speed popover z50, track-info sheet z80, book menu z85) sit ABOVE
-   #scrollind and have their own geometry, so they KEEP their native scrollbar
-   affordance (scrollbar.js ignores their scroll events).
-   ⛔ `.browsepage` is NOT cosmetic here. A classic (non-overlay) scrollbar is reserved
-   out of the scroll container's PADDING BOX, which is the box an absolutely-positioned
-   descendant resolves against, so a page reserving a gutter is narrower than #browse's
-   border box by it (measured 15px in Blink) and every content-geometry equality in
-   plan §5.3.2 / §5.4 is off by that much. The suppression is a PRECONDITION of the
-   geometry derivation. */
-html, body, #home, #browse, .browsepage, #options, #general, #playback, #buffering, #downloads, #diagnostics { scrollbar-width: none; }
+   document (Books/Authors/files), the fixed own-scroll #home (Stage 6i), the fixed
+   own-scroll #browse (the browse-decouple), and the settings overlays. Higher,
+   differently-shaped scrollers (Now Playing z60, speed popover z50, track-info sheet
+   z80, book menu z85) sit ABOVE #scrollind and have their own geometry, so they KEEP
+   their native scrollbar affordance (scrollbar.js ignores their scroll events). */
+html, body, #home, #browse, #options, #general, #playback, #buffering, #downloads, #diagnostics { scrollbar-width: none; }
 html::-webkit-scrollbar, body::-webkit-scrollbar, #home::-webkit-scrollbar, #browse::-webkit-scrollbar,
-.browsepage::-webkit-scrollbar,
 #options::-webkit-scrollbar, #general::-webkit-scrollbar, #playback::-webkit-scrollbar,
 #buffering::-webkit-scrollbar, #downloads::-webkit-scrollbar, #diagnostics::-webkit-scrollbar { width: 0; height: 0; }
 

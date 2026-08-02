@@ -236,12 +236,55 @@ test('W(armed) — a superseding edge-tap that arms then ends before the lock le
 });
 
 // ============================================================================
-// PG — the DEFERRAL BOUNDARY — DELETED by PLAN-swipe-declone.md Stage 2 (§12 item 27).
-// Its subject was a PANE-OWNING settling session: browse->browse held a real .nav-ghost,
-// and PG pinned that supersession must not dispose it. No transition builds a pane any
-// more, so the cell had no subject left — it could only have been kept by re-creating the
-// clone it was written about. The DEFERRAL BOUNDARY it guarded is still guarded for every
-// reachable session by the pane-less cells above (G1-G3, W), which is now every session.
+// PG — the DEFERRAL BOUNDARY (regression/boundary guard, GREEN now and after).
+// A PANE-OWNING (browse→browse ghost) settling session must stay REJECTED by
+// begin(): supersession must NOT dispose its held pane. Green today because the
+// blanket gate rejects everything; must stay green once the gate is narrowed to
+// admit ONLY pane-less sessions. Non-vacuous: a real `.nav-ghost` must exist.
+// Mutation on the built code: the narrowed gate wrongly supersedes a pane-owning
+// session → the recovery runs and disposes the held pane.
+// ============================================================================
+test('PG — a pane-owning settling session stays rejected by begin() (its held pane is not disposed)', async () => {
+  const spec = await loadSpec();
+  const bb = spec.STRUCTURAL_CASES.find((c) => c.from === 'browse' && c.to === 'browse');
+  assert.equal(spec.paneOf(bb.expectedConstruction), true,
+    'F4 (symmetric): browse→browse must be pane-OWNING (app-ghost) — else PG pins nothing');
+
+  const h = boot({ fakeTimers: true, deferRaf: true, realBrowse: true });
+  try {
+    h.tap('.navbtn[data-nav="books"]'); await ms(h);
+    h.tap('.navbtn[data-nav="authors"]'); await ms(h);   // authors over books — both browse
+    const row = h.document.createElement('div');
+    row.className = 'book'; h.$('browse').appendChild(row);
+
+    // A live browse→browse back-swipe, released to commit → settling with a real owned pane.
+    h.touch.start(10, 300, row);
+    h.touch.move(80, 302); await realSleep(14);
+    h.touch.move(600, 304); await realSleep(14);
+    h.touch.end(600, 304); await ms(h);
+    assert.ok(sess(h) && sess(h).dragging === false, 'A (browse→browse) must be settling');
+    assert.equal(ghosts(h), 1, 'non-vacuous: a real owned .nav-ghost pane must have materialized');
+    const paneEl = h.document.querySelector('.nav-ghost');
+    const starts0 = starts(h).length, resets0 = resets(h).length;
+
+    // A second touch must be REJECTED — no successor armed, no recovery, pane preserved.
+    h.touch.start(10, 300, h.$('browse'));
+    assert.equal(starts(h).length, starts0, 'PG: begin() must not arm a successor over a pane-owning session');
+    assert.equal(resets(h).length, resets0, 'PG: begin() must not run the supersession recovery on a pane-owning session');
+    assert.equal(ghosts(h), 1, 'PG: the held owned pane must not be disposed by the second touch');
+    assert.equal(h.document.querySelector('.nav-ghost'), paneEl, 'PG: the same pane node must survive');
+  } finally { h.dispose(); }
+});
+
+// ============================================================================
+// G-chain (SUPPLEMENTARY, beyond the ratified §9 set) — the guard is not a
+// single-generation special case: across A→B→C, BOTH superseded generations'
+// stale continuations (two settle rAFs, two settleTimers, two {once} listeners)
+// must no-op onto the live successor C. Loki's held probe 9; strengthens the
+// misattribution axis of Identities / Composition (§8) on the pane-less fixture.
+// RED NOW: begin() blanket-rejects, so B (and thus C) never arm.
+// Mutation on the built code: remove the settle-rAF / finalize `cur === session`
+// guard → a stale generation stains or finalizes over C.
 // ============================================================================
 test('G-chain (supplementary) — across A→B→C both superseded generations\' stale callbacks no-op onto C', async () => {
   await assertPaneLessFixture();

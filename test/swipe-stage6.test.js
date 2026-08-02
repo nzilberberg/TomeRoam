@@ -75,22 +75,14 @@ async function goLive(h, target) {
   return row;
 }
 
-// ── OR — the recovery restores the source BEFORE the successor arms ──────────────────
+// ── OR (red-first) — the source re-render PRECEDES the successor arming ──────────────
 // §9 OR (intermediate-state, Engineering Contract §4.7). On a live browse->browse
-// supersession, the recovery must put the source back before the successor renders its own
-// destination, so the successor arms against the SOURCE and not against the stale
-// destination the interrupted mid-drag render left on screen.
-//
-// THE REQUIREMENT IS UNCHANGED; WHAT IT ORDERS IS GONE (PLAN-swipe-declone.md Stage 2).
-// The recovery used to restore the source by RE-RENDERING it into the shared #browse, and
-// this cell pinned that render's position in the sequence. Each browse page is now its own
-// element, so the mid-drag render never overwrote the source and the recovery has nothing to
-// re-render — the source is restored by the transform reset alone, which is Invariant D3.
-// The ordering claim is therefore re-expressed as the property it always stood for: after
-// the supersession, the ONLY render is the successor's own destination, and no re-render of
-// the source appears anywhere in the sequence. A source render reappearing here would mean
-// the source HAD been clobbered, which is precisely the state this cell exists to forbid.
-test('OR — a superseded live browse->browse leaves the source intact, so only the successor renders', async () => {
+// supersession, the recovery must restore the SOURCE into #browse before the successor
+// renders its own destination — so the successor's start() (revealBase = snapBrowse(true))
+// snapshots the RESTORED source, not the stale destination the mid-drag render left there.
+// Mutation: no recovery render (HEAD) → the source is never restored; or the recovery
+// runs after the successor renders → the source restore lands after the destination.
+test('OR — the source re-render precedes the successor arming: recovery restores the source before the new gesture renders its destination', async () => {
   const h = boot({ fakeTimers: true });
   try {
     await onAuthorsOverBooks(h);          // renders: books, authors
@@ -98,15 +90,18 @@ test('OR — a superseded live browse->browse leaves the source intact, so only 
     const base = renders(h).length;
 
     // A NEW gesture supersedes the live one AND is itself driven live.
-    h.touch.start(10, 300, addRow(h));    // begin(): the recovery runs, with NO render
+    h.touch.start(10, 300, addRow(h));    // begin(): the recovery must re-render 'authors' (source)
     await realSleep(12);
     h.touch.move(120, 302);               // successor goes live → mid-drag renders 'books' (dest)
 
     const seq = renders(h).slice(base);
-    assert.deepEqual(seq, ['books'],
-      "after the supersession the ONLY render is the successor's own destination. A render of "
-      + "the SOURCE here would mean the source had been overwritten and needed rebuilding — the "
-      + `state Invariant D3 removes. renders after supersede = ${JSON.stringify(seq)}`);
+    const ai = seq.indexOf('authors');    // the recovery's source re-render
+    const bi = seq.indexOf('books');      // the successor's destination render
+    assert.ok(ai >= 0,
+      'the recovery must re-render the SOURCE into #browse before the successor arms — '
+      + `renders after supersede = ${JSON.stringify(seq)}`);
+    assert.ok(bi < 0 || ai < bi,
+      `the source restore must precede the successor's destination render; got ${JSON.stringify(seq)}`);
   } finally { h.dispose(); }
 });
 

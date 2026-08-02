@@ -21,22 +21,17 @@ const { readRoot, ROOT } = require('./dom-fixture.js');
 
 const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
 
-// The exact contract shapes from plan §3. Asserted by sorted key set so a missing OR a
-// dead/extra field both redden (§4.11 exact-key discipline). The ratified return is TWO live
-// keys: 'classification' is derived and consumed INTERNALLY (never returned), and the 'plan'
-// WRAPPER is dropped — of its fields only 'decorations' has an L3 consumer, so it is HOISTED
-// to the top level and PROJECTED to {kind, base} (the dead 'role' leaf stripped, F2). See
-// PLAN-swipe-stage5.md §3, Poirot F1, Charpy r5 F1.
-//
-// TWO fields have since been RETIRED, each with the mechanism it described.
-// 'sourceWasClobbered' (a RUNTIME-observed abort-re-render byproduct through stage 6c) went
-// at stage 6d. 'capture' goes at PLAN-swipe-declone.md Stage 2 (§6): its only producer was
-// the app-ghost recipe, and no transition builds a copy of a view any more, so a key that
-// could only ever be null is a dead field. It is REMOVED, not nulled — the exact-key
-// assertion here is what makes that difference observable, and NOGHOSTATALL in
-// test/swipe-declone-stage2-construction.test.js asserts its absence directly, over all
-// eight structural cases.
-const CONSTRUCTION_KEYS = ['decorations', 'movers'];
+// The exact contract shapes from plan §3 (the stage-6d CONTRACT REVISION). Asserted by
+// sorted key set so a missing OR a dead/extra field both redden (§4.11 exact-key discipline).
+// The ratified return is THREE live keys: `classification` is derived and consumed INTERNALLY
+// (never returned), and the `plan` WRAPPER is dropped — of its fields only `decorations` has an
+// L3 consumer, so it is HOISTED to the top level and PROJECTED to {kind, base} (the dead `role`
+// leaf stripped, F2). See PLAN-swipe-stage5.md §3, Poirot F1, Charpy r5 F1. `sourceWasClobbered`
+// (a fourth, RUNTIME-observed field through stage 6c) is RETIRED by PLAN-swipe-stage6d.md §2/§9:
+// the abort re-render decision is now the declared `Swipe.finalizationPlanFor(classification)
+// .abortRender`, computed at arm time in app.js (EC §4.16 — no cause + separately-stored
+// derived consequence).
+const CONSTRUCTION_KEYS = ['capture', 'decorations', 'movers'];
 const MOVERS_KEYS = ['decoration', 'incoming', 'outgoing'];
 const MOVER_KEYS = ['element', 'ownership', 'slot'];
 // The returned decoration descriptor is projected to {kind, base}; the classification's `role`
@@ -88,7 +83,7 @@ function mkEnv(opts = {}) {
     navPill: () => { events.push({ call: 'navPill' }); return doc.querySelector('.np-actions'); },
     renderDestination: (dest, host) => {
       // Record whether the outgoing pane already exists at render time (F7a ordering).
-      events.push({ call: 'renderDestination', host, sourceResolvedAtCall: events.some((e) => e.call === 'sourceEl') });
+      events.push({ call: 'renderDestination', host, ghostsAtCall: doc.querySelectorAll('.nav-ghost').length });
       if (opts.renderDestination) return opts.renderDestination(dest, host, doc);
       return doc.getElementById('browse');
     },
@@ -124,13 +119,13 @@ const desc = (v, payload) => ({ v, ...(payload || {}) });
 const build = (from, dest, ctx) => withPoisonedAmbient(() => Swipe.buildConstruction(from, dest, ctx.env));
 
 // ── F1.1 — the exact four-key Construction contract shape (2026-07-24 §3 revision) ───
-test('buildConstruction returns the exact Construction contract shape', () => {
+test('buildConstruction returns the exact four-key Construction contract shape', () => {
   const ctx = mkEnv();
   const c = build(desc('home'), desc('books'), ctx);
   assert.deepEqual(Object.keys(c).sort(), CONSTRUCTION_KEYS,
-    'Construction must carry EXACTLY its two fields {decorations, movers} (plan §3, F1; '
-    + 'stage 6d retired sourceWasClobbered and declone Stage 2 retired capture) — '
-    + 'classification is derived+consumed internally and the plan wrapper is dropped');
+    'Construction must carry EXACTLY its three fields {capture, decorations, movers} '
+    + '(plan §3, F1; stage 6d retires the fourth, sourceWasClobbered) — `classification` is '
+    + 'derived+consumed internally and the `plan` wrapper is dropped');
   assert.deepEqual(Object.keys(c.movers).sort(), MOVERS_KEYS, 'movers must be {outgoing, incoming, decoration}');
   assert.ok(!('classification' in c),
     '`classification` must NOT be a return member — it is derived internally and consumed there (plan §3, F1)');
@@ -174,56 +169,64 @@ test('movers carry the external {element,ownership,slot} shape, not the producti
   assert.equal(c.movers.incoming.ownership, 'borrowed-real', 'home->browse incoming is the real #browse');
 });
 
-// ── F1c — no owned pane ⇒ no capture KEY, both sides borrowed-real ───────────────────
-test('overlay->overlay builds no owned pane: there is no capture key and both sides are borrowed-real', () => {
+// ── F1c — no owned pane ⇒ capture is null, both sides borrowed-real ──────────────────
+test('overlay->overlay builds no owned pane: capture is null and both sides are borrowed-real', () => {
   const ctx = mkEnv({ renderDestination: (d, host, doc) => doc.getElementById('nowplaying') });
   const c = build(desc('options'), desc('nowplaying'), ctx);
-  assert.ok(!('capture' in c), 'no transition builds an owned pane, so capture is not a key at all');
+  assert.equal(c.capture, null, 'overlay<->overlay builds no owned pane, so capture is null');
   assert.equal(c.movers.outgoing.ownership, 'borrowed-real', 'the overlay source moves as its real element');
   assert.equal(c.movers.incoming.ownership, 'borrowed-real', 'the overlay destination is its real element');
 });
 
-// ── F2-r (recipe) — EVERY transition is pane-less; the source's own scroll rides with it ─
-// The browse→browse half used to assert an app-ghost 'capture' carrying 'ghostY', the source
-// scroll baked into the clone's translateY. That number existed ONLY because a clone has no
-// scroll of its own (plan §3 audit). The real outgoing element HAS its scrollTop, so the
-// offset is carried inherently and there is nothing to capture — which is exactly why the
-// field is gone rather than moved.
-test('no transition builds an owned pane: both sides are borrowed-real and nothing is captured', () => {
-  const pairCtx = mkEnv();
-  pairCtx.doc.getElementById('browse').scrollTop = 137;
-  const pair = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), pairCtx);
-  assert.ok(!('capture' in pair), 'browse->browse carries no capture key — no copy is built to bake a scroll into');
-  assert.equal(pair.movers.outgoing.ownership, 'borrowed-real', 'the outgoing browse page is a borrowed-real mover');
-  assert.equal(pair.movers.incoming.ownership, 'borrowed-real', 'the incoming browse page is a borrowed-real mover');
-  assert.equal(pairCtx.doc.querySelectorAll('.nav-ghost').length, 0, 'and no .nav-ghost wrapper is mounted at all');
+// ── F2-r (recipe) — app-ghost capture carries ghostY; →home is pane-less (Stage 6i) ──
+test('an app-ghost capture carries ghostY; a browse→home transition builds no owned pane', () => {
+  const ghostCtx = mkEnv();
+  // The browse-decouple (PLAN-browse-decouple.md §6 B6): a BROWSE source's ghost offset is
+  // read from #browse.scrollTop, not env.scrollY() (that branch is home-only) — mirrors
+  // test/swipe-stage6i.test.js's home-source GHOSTSCROLL cell.
+  ghostCtx.doc.getElementById('browse').scrollTop = 137;
+  const ghost = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ghostCtx);
+  assert.ok(ghost.capture, 'a browse->browse transition builds an app-ghost with a capture');
+  assert.deepEqual(Object.keys(ghost.capture).sort(), ['animRes', 'animSync', 'ghostY'],
+    'the app-ghost capture carries ghostY plus the two animation fields');
+  assert.equal(ghost.capture.ghostY, 137, 'ghostY is the scroll the ghost is frozen at (#browse.scrollTop)');
 
-  // Stage 6i (PLAN-swipe-noswap-home.md, option (a)): browse→home builds NO owned pane —
-  // the outgoing real #browse and the incoming real #home are both borrowed-real.
+  // Stage 6i (PLAN-swipe-noswap-home.md, option (a)): browse→home builds NO owned
+  // pane — the outgoing real #browse and the incoming real #home are both borrowed-real,
+  // so there is nothing to capture (the home-snapshot outcome is retired).
   const homeCtx = mkEnv();
   const home = build(desc('books'), desc('home'), homeCtx);
-  assert.ok(!('capture' in home), 'browse→home is pane-less — no home-snapshot is built (Stage 6i)');
+  assert.equal(home.capture, null, 'browse→home is pane-less — no home-snapshot is built (Stage 6i)');
   assert.equal(home.movers.outgoing.ownership, 'borrowed-real', 'the outgoing real #browse is a borrowed-real mover');
   assert.equal(home.movers.incoming.ownership, 'borrowed-real', 'the incoming real #home is a borrowed-real mover');
 });
 
-// ── F4a — driven with NO ambient DOM ─────────────────────────────────────────────────
-// The DOM-free-at-load guarantee is unchanged by PLAN-swipe-declone.md Stage 2 and is now the
-// whole of this cell: no view pane is built any more, so the fixture drives an NP transition,
-// where the one surviving builder (npPillClone — a navbar PILL, not a view) still touches the
-// document, and proves it reaches it ONLY through env.
-test('buildConstruction runs with no ambient document/window and builds through env.document', () => {
+// ── F4a — driven with NO ambient DOM; the pane is built in env.document ──────────────
+// Stage 1 (PLAN-swipe-declone.md §5.1) narrows the ghost-building case to browse->browse
+// alone, so this fixture drives books->authors rather than home->books to keep exercising
+// an owned pane at all.
+test('buildConstruction runs with no ambient document/window and builds the pane in env.document', () => {
   const ctx = mkEnv();
   // withPoisonedAmbient throws on any global document/window/Element/getComputedStyle read.
-  const c = build(desc('nowplaying'), desc('books'), ctx);
-  assert.equal(ctx.doc.querySelectorAll('.np-pill-float').length, 1,
-    'the owned decoration is mounted into env.document.body, reached only through env');
-  assert.ok(c.movers.outgoing.element, 'the outgoing mover carries its resolved element');
+  const c = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ctx);
+  assert.equal(ctx.doc.querySelectorAll('.nav-ghost').length, 1,
+    'the owned-pane ghost is mounted into env.document.body, reached only through env');
+  assert.ok(c.movers.outgoing.element, 'the outgoing mover carries the built element');
+});
 
-  // And a plain view transition touches the document only through env's resolvers.
-  const plain = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), mkEnv());
-  assert.ok(plain.movers.outgoing.element && plain.movers.incoming.element,
-    'both view movers resolve through env with no ambient DOM read');
+// ── F4b — copyAnimPhase seeks through env.document.defaultView.Element ───────────────
+test('copyAnimPhase syncs animation phase through the env Element, not a global one', () => {
+  const ctx = mkEnv({ scrollY: 0 });
+  const setCt = enableAnims(ctx.win, 500);
+  const app = ctx.doc.querySelector('.app');
+  setCt(addCovers(ctx.doc, app, 4));   // four live covers seeked to t=500
+  const c = build(desc('books'), desc('files', { book: { ratingKey: 'B' } }), ctx);
+  // Global Element stays poisoned during the call; a bare `typeof Element` mutation would
+  // throw. Correct code uses env.document.defaultView.Element (jsdom, stubbed above).
+  assert.ok(c.capture, 'the app-ghost capture exists');
+  assert.ok(c.capture.animSync > 0,
+    'copyAnimPhase must sync at least one cover through env\'s Element — 0 means it took the ambient path');
+  assert.equal(c.capture.animRes, 0, 'each clone animation is seeked to the source currentTime (residual 0)');
 });
 
 // F6 (the recipe layer's abort-re-render byproduct) is RETIRED by PLAN-swipe-stage6d.md
@@ -235,28 +238,49 @@ test('buildConstruction runs with no ambient document/window and builds through 
 // same file) — this recipe-layer test has no successor here because there is no longer a
 // recipe-layer byproduct to assert on.
 
-// ── F7a — the outgoing mover is RESOLVED before env.renderDestination is invoked ──────
-// PRESERVED, with its OBSERVABLE migrated (PLAN-swipe-declone.md §9 item 1). The ordering
-// itself is unchanged and still correctness; what changed is what it protects. It used to be
-// proved by counting mounted ghosts, and no ghost is mounted any more. The ordering is now
-// visible as the CALL ORDER at the seam: env.sourceEl before env.renderDestination.
-//
-// And its GROUND is restated, because the wrong reason teaches the wrong thing. At HEAD the
-// ordering protected the source #browse from being clobbered by the mid-drag render. After
-// Stage 2 the source resolves through a DESCRIPTOR-KEYED page lookup, which returns the
-// identical node before or after the render — so what the ordering now requires is only that
-// the source page still be in the cache, which the eviction policy guarantees for the whole
-// gesture (plan §11).
-test('the outgoing mover is resolved before env.renderDestination is ever called', () => {
+// ── F7a — outgoing captured BEFORE env.renderDestination is invoked ──────────────────
+test('the outgoing pane is mounted before env.renderDestination is ever called', () => {
   const ctx = mkEnv();
   build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ctx);
   const renderCalls = ctx.events.filter((e) => e.call === 'renderDestination');
-  assert.equal(renderCalls.length, 1, 'a browse destination renders exactly once');
-  assert.ok(renderCalls[0].sourceResolvedAtCall,
-    'the outgoing mover must already be resolved when renderDestination runs (plan §6 step 5, §9 item 1)');
-  const order = ctx.events.filter((e) => e.call === 'sourceEl' || e.call === 'renderDestination').map((e) => e.call);
-  assert.deepEqual(order, ['sourceEl', 'renderDestination'],
-    'the seam resolves the source, THEN renders the destination — never the other way round');
+  assert.equal(renderCalls.length, 1, 'a browse-host destination renders exactly once');
+  assert.ok(renderCalls[0].ghostsAtCall >= 1,
+    'the outgoing app-ghost must already be mounted when renderDestination runs — else the '
+    + 'browse->browse ghost would snapshot the POST-render #browse (the flash guard, plan §6 step 5)');
+});
+
+// ── navGhost — the wrapper paints no background of its own (build .272 fix) ──────────
+// F8 (GHOST_BG, resolved through env.getComputedStyle per gesture) is RETIRED along with
+// the wrapper's own background paint: the prior version of this test asserted the wrapper
+// "carries a resolved page background", which encoded the moving-background defect this
+// build fixes (test/page-bg-single-painter.test.js's single-painter rule — body::before,
+// fixed, never moving — was violated by this wrapper's own copy riding the transform).
+// See js/swipe.js ghostWrap() for the reasoning and the device-owed residue.
+// Stage 1 (PLAN-swipe-declone.md §5.1) narrows the ghost-building case to browse->browse
+// alone (home->books no longer builds one) — books->authors is the fixture that still does.
+test('the ghost wrapper carries no background declaration of its own', () => {
+  const ctx = mkEnv();
+  const c = build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ctx);
+  const wrap = ctx.doc.querySelector('.nav-ghost');
+  assert.ok(wrap, 'the ghost wrapper is built');
+  assert.ok(!/background/i.test(wrap.style.cssText),
+    `the wrapper must declare no background at all, so the fixed body::before copy shows `
+    + `through undisturbed instead of a second, moving copy — cssText: ${wrap.style.cssText}`);
+  assert.ok(c.movers.outgoing.element.classList.contains('nav-ghost')
+    || c.movers.outgoing.element === wrap, 'the outgoing owned-pane element IS the nav-ghost wrapper');
+});
+
+test('the nav-ghost wrapper carries its full fixed/clipped/non-interactive contract', () => {
+  const ctx = mkEnv();
+  build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), ctx);
+  const css = ctx.doc.querySelector('.nav-ghost').style.cssText;
+  for (const decl of ['position: fixed', 'inset: 0px', 'overflow: hidden',
+    'pointer-events: none', 'will-change: transform']) {
+    assert.ok(css.replace(/inset:\s*0;/, 'inset: 0px;').includes(decl) || css.includes(decl),
+      `the .nav-ghost wrapper must declare "${decl}"; got "${css}"`);
+  }
+  const z = /z-index:\s*(\d+)/.exec(css);
+  assert.ok(z && Number(z[1]) < 30, `the ghost must sit beneath the persistent bars (z<30); got z-index ${z && z[1]}`);
 });
 
 // ── npPill — the NP decoration recipe ───────────────────────────────────────────────
@@ -280,14 +304,17 @@ test('the NP pill decoration is cloned, stripped, classed, and slotted by endpoi
   assert.equal(dst.movers.decoration.slot, 'incoming', 'NP-as-destination slots the pill at incoming');
 });
 
-// ── RETIRED WITH THE CLONE (PLAN-swipe-declone.md Stage 2, §12 item 27) ─────────────
-// Four cells lived here whose only subject was the BUILT PANE, and each asserted a
-// property the copy needed BECAUSE it was a copy — so each is deleted with it rather than
-// narrowed. copyAnimPhase seeked a clone's cover animations to their live twins' phase (the
-// real nodes carry the running animations themselves); the two .nav-ghost wrapper cells
-// pinned its fixed/clipped/non-interactive contract and its no-background rule (a real view
-// has its own inset box and its own z, and the single-painter rule is guarded by
-// test/page-bg-single-painter.test.js); freezeArt stripped data-art so a cloned cover could
-// not re-trigger the art loader (no nodes are created, so nothing can). NOGHOSTATALL in
-// test/swipe-declone-stage2-construction.test.js is the successor for the property that
-// survives all four: no owned pane is built, for any structural case.
+// ── freezeArt — data-art stripped BEFORE the clone connects to the live document ─────
+// Stage 1 (PLAN-swipe-declone.md §5.1) retires the HOME-source half of this test: a
+// home->browse gesture no longer builds an owned pane at all (the real #home is the
+// outgoing mover directly), so there is no home-source ghost left to strip data-art
+// from. browse->browse is the one remaining case that still clones .app.
+test('the app-ghost recipe strips data-art before the clone is mounted, for a browse-family source', () => {
+  const browseCtx = mkEnv();
+  addCovers(browseCtx.doc, browseCtx.doc.querySelector('.app'), 3);
+  build(desc('books'), desc('authors', { author: { ratingKey: 'A' } }), browseCtx);
+  const browseImgs = browseCtx.doc.querySelectorAll('.nav-ghost img.cover');
+  assert.ok(browseImgs.length > 0, 'the ghost clones the covers');
+  assert.equal([...browseImgs].filter((i) => i.hasAttribute('data-art')).length, 0,
+    'the app-ghost clone must have every img[data-art] stripped, so a cloned cover cannot re-trigger the art loader');
+});

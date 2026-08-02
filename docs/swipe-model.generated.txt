@@ -14,7 +14,7 @@ before this document is trusted again. Never update a pinned constant alone.
   navTo stack rule      0e84abdf6d072586
   begin/nav-relation    ac356cd1a669c2a3
   end/state-routing     9a82592f5d21db7b
-  begin/supersession    b07e422a493b8fff
+  begin/supersession    99b3ddb8778bcb57
 
 1. REGISTRY — PARTLY DERIVED, PARTLY PINNED (say which, and mean it)
    12 screens, 132 ordered name pairs.
@@ -55,23 +55,23 @@ before this document is trusted again. Never update a pinned constant alone.
      js/app.js:140   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
      js/app.js:141   else navStack.push(desc);
      js/app.js:164   navStack.push({ v }); fwdStack.length = 0;
-     js/app.js:781   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
-     js/app.js:782   else navStack.push(fwdStack.pop());
-     js/app.js:1263  navStack = [{ v: 'home' }];
+     js/app.js:819   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:820   else navStack.push(fwdStack.pop());
+     js/app.js:1401  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------
-   different type                    books() -> authors()                    pane=no  back=reachable
-   same type, different identity     authorBooks(A) -> authorBooks(B)        pane=no  back=reachable
-   same type, different identity     files(A) -> files(B)                    pane=no  back=reachable
-   same semantic descriptor          books() -> books()                      pane=no  back=UNREACHABLE
-   same parameterized identity       authorBooks(A) -> authorBooks(A)        pane=no  back=reachable
-   browse -> home                    books() -> home()                       pane=no  back=reachable
-   home -> browse                    home() -> books()                       pane=no  back=reachable
-   overlay -> overlay                general() -> options()                  pane=no  back=reachable
-   overlay -> browse                 options() -> books()                    pane=no  back=reachable
-   browse -> overlay                 books() -> nowplaying()                 pane=no  back=reachable
-   nowplaying -> files (new-forward)  nowplaying() -> files(A)                pane=no  back=reachable
+   different type                    books() -> authors()                    pane=yes abort=rerender back=reachable
+   same type, different identity     authorBooks(A) -> authorBooks(B)        pane=yes abort=rerender back=reachable
+   same type, different identity     files(A) -> files(B)                    pane=yes abort=rerender back=reachable
+   same semantic descriptor          books() -> books()                      pane=yes abort=rerender back=UNREACHABLE
+   same parameterized identity       authorBooks(A) -> authorBooks(A)        pane=yes abort=rerender back=reachable
+   browse -> home                    books() -> home()                       pane=no  abort=none     back=reachable
+   home -> browse                    home() -> books()                       pane=no  abort=none     back=reachable
+   overlay -> overlay                general() -> options()                  pane=no  abort=none     back=reachable
+   overlay -> browse                 options() -> books()                    pane=no  abort=none     back=reachable
+   browse -> overlay                 books() -> nowplaying()                 pane=no  abort=none     back=reachable
+   nowplaying -> files (new-forward)  nowplaying() -> files(A)                pane=no  abort=none     back=reachable
    malformed payload                 authorBooks(—) -> books()               REJECTED source malformed-descriptor:authorBooks-without-author
    malformed payload                 books() -> files(—)                     REJECTED destination malformed-descriptor:files-without-book
    not a transition                  home() -> home()                        REJECTED not-a-transition:home-to-home
@@ -133,16 +133,13 @@ before this document is trusted again. Never update a pinned constant alone.
             landed the pre-stack recovery): releaseGesture; resetSwipeStyles
             (dispose the old pane / stray ghosts + clear inline styles); recover the
             source PRE-STACK while the Browse hold is STILL held —
-            applyScreen(currentDesc(), {render:false, resetScroll:false}) reconciles
-            the source screen with NO re-render: since PLAN-swipe-declone.md Stage 2
-            no transition overwrites its source element, so there is no source CONTENT
-            to rebuild (stage 6d's finalizationPlanFor and its abortRender decision are
-            retired with the clone), then
+            applyScreen(currentDesc(), {render: cur.live && cur.finPlan.abortRender===
+            'rerender', resetScroll:false}) re-renders the source into #browse iff the
+            declared same-browse-host abort decision says so (stage 6d's
+            finalizationPlanFor, retiring the old d.clobbered runtime byproduct), then
             window.scrollTo(0, d.scroll0) restores the start scroll; dropRowHold
-            LAST — endHold is TOLD the landed screen read from that applyScreen, so it
-            reconciles which browse PAGE is shown from the landing rather than from an
-            inference, and realizes the SUSPENDED source rows against the settled
-            scroll, reusing them rather than rebuilding; session = null,
+            LAST (endHold then realizes the SUSPENDED source rows against the
+            settled scroll, reusing them rather than rebuilding); session = null,
             d = null LAST of all (both are read by releaseGesture/dropRowHold, so
             nulling earlier would leak the hold); then the new gesture arms. The nav
             stack and navbar return to the source; movers are torn down BY OWNERSHIP
@@ -159,16 +156,13 @@ before this document is trusted again. Never update a pinned constant alone.
             session-start scroll (d.scroll0), so a superseded browse->browse drag is
             no longer left at the DESTINATION's scroll (its mid-drag render had run
             positionOnEnter).
-   [policy] (2) SOURCE CONTENT — IMPLEMENTED (stage 6a), then made STRUCTURAL by
-            PLAN-swipe-declone.md Stage 2. Stage 6a re-rendered the source into #browse
-            on the declared abort decision; Stage 2 gave each browse page its own inset
-            own-scroll box, so the destination render never overwrites the source and
-            there is nothing to put back. The host can no longer keep the DESTINATION's
-            content while the stack and navbar say source, because the two are not the
-            same element. The .218 defect was renders = ["books","authors","books"]
-            after Authors->Books is superseded — an I11 wrong-page/wrong-tap violation
-            of the .178 class, now closed by construction. Guarded by tests in
-            swipe-invariants.test.js.
+   [policy] (2) SOURCE CONTENT — IMPLEMENTED (stage 6a). The recovery re-renders the
+            source into #browse when the declared abort decision is 'rerender' (stage
+            6d's finPlan.abortRender, retiring the old d.clobbered byproduct), so the host
+            no longer keeps the DESTINATION's content while the stack and navbar say
+            source. The .218 defect was renders = ["books","authors","books"] after
+            Authors->Books is superseded — an I11 wrong-page/wrong-tap violation of
+            the .178 class, now closed. Guarded by tests in swipe-invariants.test.js.
 
 6. TERMINATION REASONS (§3.7)
    basis [parity] = the row is VERIFIED against current code at its `where`. It is NOT
@@ -178,7 +172,7 @@ before this document is trusted again. Never update a pinned constant alone.
    --------------------------  --------  ---------------  ------------  ------------------  --------------
    vertical-intent (pre-drag)  [parity]  unchanged        source        unchanged           none built
    touch-cancel (dragging)     [parity]  settle decision  from decision  commit/abort        normal settle
-   hard-reset (leftover)       [parity] †  unchanged        currentDesc(); never re-rendered  restore d.scroll0 (live)  dispose orphan
+   hard-reset (leftover)       [parity] †  unchanged        currentDesc(); rerender iff finPlan.abortRender==='rerender'  restore d.scroll0 (live)  dispose orphan
    ---
    † hard-reset (leftover): screen+scroll = SR/SC, NEW POLICY (§10) — implemented stage 6a. The [parity] basis covers
      the supersede-not-reject routing + orphan disposal (verified at `where`); the
@@ -218,11 +212,9 @@ before this document is trusted again. Never update a pinned constant alone.
     the gate so none can be silently dropped):
       - the recovery table (§7), pre/post-stack, all reasons
       - restoring the starting scroll when a gesture is SUPERSEDED
-      - the SOURCE content surviving a SUPERSEDED gesture (added after
-      review of .218 found the first draft had labelled it [parity]);
-      since PLAN-swipe-declone.md Stage 2 this holds by construction
-      rather than by a re-render — the source is its own element and the
-      destination render never overwrites it
+      - re-rendering the SOURCE into #browse when a gesture is
+      SUPERSEDED (added after review of .218 found the first draft had
+      labelled it [parity])
     Everything else in this document is preserved deliberately, including the
     1px Home entry scroll and the overlay->browse hidden-host side effect
     (abort leaves #browse holding the destination's content; canonicalizing it

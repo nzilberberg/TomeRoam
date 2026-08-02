@@ -129,29 +129,25 @@ test('keepCover: old cover not finished loading → does NOT transplant', () => 
   assert.strictEqual(newRow.querySelector('img.cover'), newImg);
 });
 
-// ---- the page ENTRY POSITION (each browse page owns its own scroller) -------
-// Rule, since PLAN-swipe-declone.md §5.3.4: write ONLY a DERIVED position. A list page
-// returns to where you left it BY KEEPING ITS OWN scrollTop (Invariant D4), so the rule
-// derives nothing for it and `null` is what says so. A files page still opens at the track
-// playing HERE, else its top. The `savedY` parameter is gone with the `sy` cache: a `0`
-// returned for a list page would OVERWRITE the offset the page element already holds, which
-// is the exact inversion the null exists to prevent.
+// ---- per-page scroll memory (browse pages share ONE document scroll) --------
+// Rule: Books/Authors/an author's books return to where you left them; a files
+// page never restores — it opens at the track playing HERE, else the top.
 const { entryScrollY, clampY } = Browse._test;
 
-test('entryScrollY: a list page derives NOTHING — null, so positionOnEnter writes nothing', () => {
-  assert.equal(entryScrollY('books', null), null);
-  assert.equal(entryScrollY('authors', null), null);
-  assert.equal(entryScrollY('authorBooks', null), null);
+test('entryScrollY: a list page returns to its saved position', () => {
+  assert.equal(entryScrollY('books', 1400, null), 1400);
+  assert.equal(entryScrollY('authors', 220, null), 220);
+  assert.equal(entryScrollY('authorBooks', 90, null), 90);
 });
-test('entryScrollY: null and NOT 0 for a list page — 0 overwrites the page own offset', () => {
-  assert.notEqual(entryScrollY('books', null), 0,
-    'returning 0 here writes the top over a retained scroll position on every re-entry');
+test('entryScrollY: a never-visited list page opens at the top', () => {
+  assert.equal(entryScrollY('books', 0, null), 0);
+  assert.equal(entryScrollY('books', undefined, null), 0);
 });
-test('entryScrollY: a files page opens at the locally-playing track', () => {
-  assert.equal(entryScrollY('files', 830), 830);
+test('entryScrollY: a files page opens at the locally-playing track, NOT a saved position', () => {
+  assert.equal(entryScrollY('files', 5000, 830), 830);   // saved position deliberately ignored
 });
 test('entryScrollY: a files page for a book not playing here opens at the top', () => {
-  assert.equal(entryScrollY('files', null), 0);
+  assert.equal(entryScrollY('files', 5000, null), 0);
 });
 test('clampY: a track near the END lands as close to the top as the document allows', () => {
   // want y=9000 but only 2400 of scroll exists → clamped (can't reach the top)
@@ -163,12 +159,45 @@ test('clampY: never negative, and rounds', () => {
   assert.equal(clampY(500, 400, 600), 0);   // content shorter than the viewport
 });
 
-// ---- overlapping scroll restorations -------------------------------------
-// DELETED by PLAN-swipe-declone.md Stage 2 (plan §10, §12 item 17). The .116 review's
-// finding was about a STALE restore finalizer clearing a NEWER restoration ownership
-// token, and that whole mechanism — the `sy` cache, the `restoring` flag, its
-// begin/end token pair and the two-frame finalizer — existed only because two browse
-// pages shared one scroller. Each page now owns its own scroll box, so showing a
-// different page resizes nothing, clamps nothing and fires no scroll event to suppress:
-// there is no restoration to own and no token to steal. These cells are not narrowed —
-// they have no subject left.
+// ---- overlapping scroll restorations (the .116 review's finding) ------------
+// applyScrollY clears `restoring` from a callback two animation frames later. With
+// no ownership token, an OLDER restore's finalizer clears the flag out from under a
+// NEWER restore that started in between — and the scroll listener then records the
+// swap's transitional/clamped position over the arriving page's remembered `sy`,
+// destroying exactly what this system exists to preserve. Same stale-finalizer class
+// as the .89 connect() probe bug. Driven with a fake rAF so the interleaving is
+// deterministic rather than a race.
+const { applyScrollY, isRestoring } = Browse._test;
+
+let frames = [];
+global.requestAnimationFrame = (cb) => { frames.push(cb); return frames.length; };
+const runOneFrame = () => { const due = frames; frames = []; due.forEach((cb) => cb()); };
+
+test('a stale restore finalizer cannot end a newer restore', () => {
+  frames = [];
+  applyScrollY(100);            // restore A
+  assert.equal(isRestoring(), true);
+  runOneFrame();                // only A's FIRST frame — A's finalizer is still pending
+
+  applyScrollY(900);            // restore B starts before A finished
+  assert.equal(isRestoring(), true);
+
+  runOneFrame();                // A's stale 2nd frame fires here (+ B's 1st)
+  assert.equal(isRestoring(), true, 'A must NOT release B\'s restoration');
+
+  runOneFrame();                // B's own 2nd frame
+  assert.equal(isRestoring(), false, 'B\'s own finalizer ends it');
+});
+
+test('a restore in flight is not ended by an unrelated page swap taking ownership', () => {
+  frames = [];
+  applyScrollY(100);            // restore A
+  runOneFrame();                // A frame 1
+  Browse._test.showPage('nope');   // a swap takes ownership (no finalizer of its own)
+  runOneFrame();                // A's stale finalizer must not clear the swap's guard
+  runOneFrame();
+  assert.equal(isRestoring(), true, 'the swap owns the guard until its applyScrollY clears it');
+  applyScrollY(0);              // the arriving page's restore
+  runOneFrame(); runOneFrame();
+  assert.equal(isRestoring(), false);
+});

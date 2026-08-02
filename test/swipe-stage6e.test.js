@@ -127,12 +127,141 @@ async function liveDragNoRelease(h, startEl) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
+// NOOP — the anti-no-op crux (Loki residual 1). RED @HEAD. Two linked assertions, one cell.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// Loki proved (STRIKE-swipe-stage6e-r1 §6) that no stray .nav-ghost is constructible, so the
+// owned recovery removes the SAME node whether the DOM-global sweep runs or disposeOwnedPanes
+// does — a DOM-outcome cell (DP) cannot tell a real slice from a no-op. These two assertions
+// observe the MECHANISM instead, so a build that leaves the global sweep doing the removal (by
+// failing to thread keepGhosts:true at BOTH :416 and applyScreen's :417) reddens here.
+
+test('NOOP.mechanism — the global .nav-ghost sweep does NOT run on the owned recovery branch (both :416 and applyScreen :417 suppress it)', async () => {
+  const h = boot({ fakeTimers: true, realBrowse: true });
+  try {
+    await onAuthorsOverBooks(h);                    // browse->browse available
+    await liveDragNoRelease(h, addRow(h));          // A: pane-owning DRAGGING browse->browse
+    assert.equal(ghosts(h), 1, 'fixture: the browse->browse drag minted exactly one owned .nav-ghost');
+    assert.ok(sess(h) && sess(h).dragging === true, 'fixture: A is the mid-drag owner (cur = d on supersession)');
+    const hr0 = hardResets(h).length;
+
+    // Count EVERY document.querySelectorAll('.nav-ghost') during the supersession's recovery.
+    // resetSwipeStyles (nav.js:103) is the ONLY caller of that exact selector; the .spent clear
+    // uses '.nav-ghost.spent' and the recovery predicate uses querySelector (singular), so a
+    // count of that exact selector is a faithful "the global sweep ran" probe.
+    const realQSA = h.document.querySelectorAll.bind(h.document);
+    let sweeps = 0;
+    h.document.querySelectorAll = (sel) => { if (sel === '.nav-ghost') sweeps++; return realQSA(sel); };
+    h.touch.start(10, 300, h.$('browse'));          // 2nd touch: supersede -> recovery (cur = d)
+    h.document.querySelectorAll = realQSA;
+
+    assert.ok(hardResets(h).length > hr0, 'fixture: the supersession tripped begin()\'s recovery');
+    assert.equal(ghosts(h), 0, 'the superseded owned pane is gone after the recovery (the removal happened)');
+    assert.equal(sweeps, 0,
+      'RED @HEAD (the sweep runs twice — the explicit resetSwipeStyles at app.js:416 AND applyScreen\'s '
+      + 'internal resetSwipeStyles(opts.keepGhosts) at app.js:417/nav.js:120). The owned branch must suppress '
+      + 'the global .nav-ghost sweep at BOTH sites (keepGhosts:true) so removal is OWNER-DRIVEN via '
+      + 'disposeOwnedPanes; if the sweep still runs at either site, disposeOwnedPanes is a behavioural no-op '
+      + `and the slice's structural value (EC §4.3) is lost. Global sweeps during recovery=${sweeps}`);
+  } finally { h.dispose(); }
+});
+
+test('NOOP.attribution — with the global sweep neutralized, the owned pane is STILL removed (disposeOwnedPanes is the remover)', async () => {
+  const h = boot({ fakeTimers: true, realBrowse: true });
+  try {
+    await onAuthorsOverBooks(h);
+    await liveDragNoRelease(h, addRow(h));
+    assert.equal(ghosts(h), 1, 'fixture: one owned .nav-ghost');
+    const hr0 = hardResets(h).length;
+
+    // Neutralize the DOM-global sweep by making the exact '.nav-ghost' query return an empty
+    // NodeList — the Loki/Loftus causal-attribution move: disable the claimed cause and re-run.
+    // The recovery predicate uses querySelector (singular, NOT neutralized) and d is non-null, so
+    // the recovery still runs; only the sweep's REMOVAL power is removed.
+    const realQSA = h.document.querySelectorAll.bind(h.document);
+    const emptyNL = realQSA('.nav-ghost-NONEXISTENT-attribution-probe');
+    h.document.querySelectorAll = (sel) => (sel === '.nav-ghost' ? emptyNL : realQSA(sel));
+    h.touch.start(10, 300, h.$('browse'));          // supersede -> recovery, sweep is dead
+    h.document.querySelectorAll = realQSA;
+
+    assert.ok(hardResets(h).length > hr0, 'fixture: the supersession tripped the recovery even with the sweep neutralized');
+    assert.equal(ghosts(h), 0,
+      'RED @HEAD: with the global sweep neutralized the owned ghost SURVIVES, because HEAD has no owner-driven '
+      + 'remover — the recovery relies entirely on the sweep. disposeOwnedPanes must remove the owned pane '
+      + 'through cur.movers (el.remove()), independent of the DOM-global query, so the pane is gone even with '
+      + `the sweep dead. This positively attributes the removal to the owner. ghosts after recovery=${ghosts(h)}`);
+  } finally { h.dispose(); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// RSN — the disposal reason is recorded (RED @HEAD). Labelled DIAGNOSTIC (EC §4.10), not behaviour.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// Plan §8 RSN / Charpy F2. The reason 'superseded' is fed to a PBDebug SWIPE trace emitted when
+// an owned pane is disposed. RED @HEAD: no SWIPE line carries 'superseded'. The second assertion
+// pins Charpy's PREDICTION (emit the reason ONLY when a pane is actually disposed) — a pane-less
+// DRAGGING supersession disposes nothing, so no 'superseded' may appear. That second clause is
+// green @HEAD (the token appears nowhere yet) and becomes load-bearing once the trace exists;
+// its defending mutation is a build that emits the reason unconditionally (Brunel, plan §9).
+
+test('RSN [DIAGNOSTIC] — an owned-pane supersession records the disposal reason "superseded", and a pane-LESS one does not', async () => {
+  // (1) owned supersession -> the reason is recorded. RED @HEAD.
+  const h = boot({ fakeTimers: true, realBrowse: true });
+  try {
+    await onAuthorsOverBooks(h);
+    await liveDragNoRelease(h, addRow(h));          // pane-owning DRAGGING browse->browse
+    assert.equal(ghosts(h), 1, 'fixture: an owned pane exists to be disposed');
+    h.touch.start(10, 300, h.$('browse'));          // supersede -> owned pane disposed
+    assert.ok(swipeLog(h).some((m) => /superseded/i.test(m)),
+      'RED @HEAD: disposing an owned pane on supersession must record reason "superseded" in the PBDebug SWIPE '
+      + 'diagnostic (plan §7 retained diagnostics). No SWIPE line carries it at HEAD (disposeOwnedPanes absent). '
+      + `SWIPE lines=${JSON.stringify(swipeLog(h))}`);
+  } finally { h.dispose(); }
+
+  // (2) pane-LESS supersession -> NO disposal, so NO 'superseded' reason (Charpy prediction / F2).
+  const h2 = boot({ fakeTimers: true, realBrowse: true });
+  try {
+    await onOptionsOverBooks(h2);
+    await liveDragNoRelease(h2, h2.$('options'));    // pane-LESS DRAGGING overlay->browse
+    assert.equal(ghosts(h2), 0, 'fixture: a genuinely pane-less DRAGGING session (no owned pane)');
+    h2.touch.start(10, 300, h2.$('options'));        // supersede -> disposeOwnedPanes no-ops
+    assert.ok(!swipeLog(h2).some((m) => /superseded/i.test(m)),
+      'a pane-LESS supersession disposes nothing, so it must NOT emit a "superseded" disposal reason — the trace '
+      + 'is emitted only when a pane is actually disposed (Charpy prediction). A build that emits the reason '
+      + `unconditionally reddens here. SWIPE lines=${JSON.stringify(swipeLog(h2))}`);
+  } finally { h2.dispose(); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
 // DP — the owned pane is disposed on a pane-owning DRAGGING supersession; the successor arms clean.
 // ════════════════════════════════════════════════════════════════════════════════════════════
 // Plan §8 DP (wiring, real DOM). Parity feature oracle: GREEN @HEAD (byte-identical to today's
 // sweep), RED under mutation #13 (the recovery disposes nothing -> the ghost leaks into the
 // successor). browse->browse builds an owned app-ghost; browse->home (Stage 6i) builds NO
 // owned pane at all — disposeOwnedPanes has nothing to dispose there (see DP.browse-home).
+
+test('DP.browse-browse — a pane-owning DRAGGING browse->browse supersession disposes the owned .nav-ghost; the successor arms with no leaked pane', async () => {
+  const h = boot({ fakeTimers: true, realBrowse: true });
+  try {
+    await onAuthorsOverBooks(h);
+    await liveDragNoRelease(h, addRow(h));
+    assert.equal(ghosts(h), 1, 'fixture: the browse->browse drag minted one owned .nav-ghost');
+    const aId = sess(h).id;
+    const hr0 = hardResets(h).length;
+
+    h.touch.start(10, 300, h.$('browse'));          // supersede mid-drag
+    assert.ok(hardResets(h).length > hr0, 'fixture: the supersession tripped begin()\'s recovery');
+    assert.equal(ghosts(h), 0,
+      'the superseded session\'s owned pane must be disposed on supersession. A build whose disposeOwnedPanes '
+      + 'skips the own===\'owned-pane\' filter (removes nothing) leaves the ghost stranded — RED. (Mutation #13 '
+      + `"begin() stops hard-resetting" reddens this at HEAD.) ghosts after recovery=${ghosts(h)}`);
+    // The successor arms clean: no leaked ghost trips a second hard reset when it goes live.
+    h.touch.move(80, 302); await realSleep(14);
+    assert.equal(ghosts(h), 1, 'the successor mints exactly its OWN one pane (a leaked predecessor ghost would make this 2)');
+    assert.ok(sess(h) && sess(h).id !== aId && sess(h).dragging === true, 'the successor is the new dragging owner');
+    assert.ok(/ghosts=0/.test(starts(h).at(-1) || ''),
+      `the successor's start() sees a clean DOM (ghosts=0) before minting its own pane — a leaked ghost would `
+      + `read ghosts=1. successor start=${starts(h).at(-1)}`);
+  } finally { h.dispose(); }
+});
 
 test('DP.browse-home — a browse->home DRAGGING supersession is pane-less (Stage 6i): disposeOwnedPanes no-ops, and #home is re-parked cleanly', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true });
@@ -231,11 +360,8 @@ test('DEC — a transient .np-pill-float decoration is still removed on the owne
   const h = boot({ fakeTimers: true, realBrowse: true });
   try {
     await onAuthorsOverBooks(h);
-    await liveDragNoRelease(h, addRow(h));                  // a LIVE DRAGGING browse->browse
-    assert.equal(ghosts(h), 0,
-      'fixture: no transition builds an owned pane after PLAN-swipe-declone.md Stage 2 — the recovery '
-      + 'still takes the keepGhosts:true branch, which is what this cell is about, and the decoration '
-      + 'removal must not ride on a pane existing');
+    await liveDragNoRelease(h, addRow(h));                  // pane-owning DRAGGING browse->browse (owned branch)
+    assert.equal(ghosts(h), 1, 'fixture: an owned pane exists, so the recovery takes the keepGhosts:true owned branch');
     const pill = h.document.createElement('div'); pill.className = 'np-pill-float';
     h.document.body.appendChild(pill);
     assert.equal(pillFloats(h), 1, 'fixture: a transient pill-float clone is present at recovery');
@@ -249,18 +375,34 @@ test('DEC — a transient .np-pill-float decoration is still removed on the owne
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// RGreveal — RETIRED WITH THE HELD REVEAL (PLAN-swipe-declone.md Stage 2, §12 items 13, 27)
+// RGreveal — the paint-gated release() half is byte-untouched (the flash-surface pin).
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// This pinned that a browse->browse ABORT still took the HELD-reveal choreography — the
-// flash surface stage 6e was forbidden to touch. Stage 2 REMOVES that surface deliberately
-// rather than incidentally: the abort's re-render is gone (the source was never overwritten),
-// so there is nothing to hold a ghost over and no held branch to enter. The cell cannot be
-// narrowed to fit — its subject is the branch itself.
-//
-// ⛔ WHAT IS NOT PROVEN BY ITS ABSENCE, stated so no reader mistakes a green suite for a
-// fixed symptom: whether the abort still REPAINTS on a real device is plan §15 R5, and it is
-// device-owed. Stage 2 removes one recorded trigger and relocates the scroll-anchoring
-// surface; it predicts nothing about the outcome.
+// Plan §8 RGreveal / §2. 6e must not touch the reveal choreography. A browse->browse ABORT takes
+// the HELD-reveal branch (holdGhostUntilPaintable at drop -> the 'hold …' FLASH signature). GREEN
+// @HEAD; RED under mutation #54 (finalizationPlanFor forces abortRender 'none' -> the browse->browse
+// abort no longer enters the held branch, holds delta 0). Its role: if 6e's callee_replacement
+// leaked into the reveal path, the held-reveal signature would move and this reddens.
+
+test('RGreveal — a browse->browse ABORT still takes the held-reveal choreography (holdGhostUntilPaintable fires) — the flash surface is untouched', async () => {
+  const h = boot({ fakeTimers: true, realBrowse: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const hBefore = holds(h).length;                       // delta across THIS abort only
+    // A live browse->browse back-swipe driven out then RETREATED to abort.
+    h.touch.start(10, 300, addRow(h));
+    h.touch.move(80, 302); await realSleep(14);            // live, mid-drag renders the source
+    h.touch.move(200, 304); await realSleep(14);           // out
+    h.touch.move(30, 304); await realSleep(14);            // retreat toward the edge -> aborts
+    h.touch.end(30, 304);
+    await settle(h); await h.clock.advance(700); await settle(h);
+    assert.ok(/abort/.test(settles(h).at(-1) || ''), `fixture: it aborted — got ${settles(h).at(-1)}`);
+    assert.ok(holds(h).length > hBefore,
+      'a browse->browse abort must take the HELD-reveal branch (holdGhostUntilPaintable) — the reveal timing/branch '
+      + 'is the flash surface 6e must NOT touch. A change to whether/where the held reveal fires reddens here '
+      + `(mutation #54 forces abortRender 'none' and drops it). holds delta=${holds(h).length - hBefore}`);
+  } finally { h.dispose(); }
+});
+
 // ── RGsup reconciliation — the shipped 6c/6d behaviour 6e preserves (owned by existing cells) ──
 // Behaviour-preserving extraction (EC §4.19): 6e changes only WHO disposes an owned pane and by
 // WHAT typed call at the pane-owning DRAGGING recovery. The pane-LESS supersession recovery, the

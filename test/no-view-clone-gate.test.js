@@ -29,18 +29,19 @@
 // local — is reported as `UNRESOLVED` and treated as a failure, with the fix being to
 // register the call (if it is provably not a view) or make the receiver resolvable.
 //
-// REGISTERED EXCEPTIONS. Exactly ONE, a literal below with a one-line reason. An
+// REGISTERED EXCEPTIONS. Exactly two, each a literal below with a one-line reason. An
 // unregistered clone of a view host fails. A registered entry whose TEXT no longer occurs
 // in its file also fails, so the list cannot rot into blessing a site that has since moved
 // or been rewritten.
 //   1. `npPillClone`'s `env.navPill().cloneNode(true)` (js/swipe.js) — a navbar PILL
-//      decoration, not a view. PERMANENT.
-//
-// The second entry — a TEMPORARY allowance dated 2026-07-30 for the outgoing app-ghost's
-// `doc.querySelector('.app').cloneNode(true)`, the one transition Stage 1 of
-// PLAN-swipe-declone.md left cloned — is GONE, deleted in the same commit as the clone it
-// allowed (Stage 2, plan §12 item 26 / §16). No transition builds a copy of a view any
-// more, so the gate now runs with no temporary allowance at all.
+//      decoration, not a view.
+//   2. TEMPORARY, dated 2026-07-30 (Stage 1 of PLAN-swipe-declone.md) — the outgoing
+//      app-ghost's `doc.querySelector('.app').cloneNode(true)` (js/swipe.js), the ONE
+//      transition (browse->browse) Stage 1 leaves cloned, because its source and
+//      destination still share the single real `#browse` host. Stage 2 removes the clone
+//      entirely (PLAN-swipe-declone.md §12) and MUST remove this exception with it — a
+//      Mendeleev/coverage pass on Stage 2 that finds this entry still registered has found
+//      an incomplete Stage 2.
 //
 // HONEST LIMIT, stated here as the plan requires (§16). This proves a TEXTUAL property: no
 // first-party script contains a clone-of-a-view-host call this scanner's resolution rules
@@ -208,6 +209,13 @@ const EXCEPTIONS = [
     reason: "npPillClone's navbar PILL decoration clone, not a view",
     file: 'swipe.js',
     text: "env.navPill().cloneNode(true)",
+  },
+  {
+    reason: 'TEMPORARY (dated 2026-07-30, Stage 1 of PLAN-swipe-declone.md) — the '
+      + 'browse->browse outgoing app-ghost, the one transition Stage 1 leaves cloned; '
+      + 'Stage 2 MUST remove this exception when it removes the clone',
+    file: 'swipe.js',
+    text: "doc.querySelector('.app').cloneNode(true)",
   },
 ];
 

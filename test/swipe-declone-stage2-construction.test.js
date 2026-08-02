@@ -34,6 +34,12 @@ const { readRoot, ROOT } = require('./dom-fixture.js');
 const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
 const loadSpec = () => import(pathToFileURL(path.join(ROOT, 'test', 'fixtures', 'swipe-plan-spec.mjs')).href);
 
+const SKIP_DISTINCT = 'SKIP-PENDING-BUILD — RED until the builder extends the kind->host '
+  + 'projection with `browse-page` on both ends and resolves it through Browse.pageElFor '
+  + '(PLAN-swipe-declone.md §5.3.6, step 10). Remove this skip to drive it red.';
+const SKIP_NOGHOST = 'SKIP-PENDING-BUILD — RED until the builder collapses `outgoing` to '
+  + '`real-source` and deletes ghostApp and the `capture` field (PLAN-swipe-declone.md §6, '
+  + 'step 10). Remove this skip to drive it red.';
 
 // Ambient globals a correctly-injected seam must NEVER read (plan §10): everything goes through
 // `env`. Poisoned around the buildConstruction call so a bare read throws loudly instead of
@@ -125,7 +131,7 @@ const build = (from, to, env) => withPoisonedAmbient(() => Swipe.buildConstructi
 // the stack top for it), so a fixture built on it would be asserting distinctness over a pair the
 // planner can never receive.
 test('MOVERSDISTINCT — a browse->browse construction resolves its two mover slots to two DISTINCT '
-  + '.browsepage elements, never to the #browse host', () => {
+  + '.browsepage elements, never to the #browse host', { skip: SKIP_DISTINCT }, () => {
   const { env, host } = mkEnv();
   const c = build({ v: 'books' }, { v: 'authors' }, env);
 
@@ -165,7 +171,7 @@ const EXPECTED_HOSTS = (from, to) => ({
 
 test('MOVERSDISTINCT — the classification pins sourceHost and destinationHost to `browse-page` for '
   + 'the browse->browse pair ONLY, leaving all four shipped transitions exactly as they resolve today',
-async () => {
+{ skip: SKIP_DISTINCT }, async () => {
   const spec = await loadSpec();
   const REP = spec.REPRESENTATIVE;
   const wrong = [];
@@ -192,7 +198,7 @@ async () => {
 // rather than falsy because a nulled key leaves the capture-recording block in app.js reachable
 // and the field alive for a reader to re-populate.
 test('NOGHOSTATALL — no structural transition builds an owned pane, no .nav-ghost node is created, '
-  + 'and the Construction return has no `capture` key', async () => {
+  + 'and the Construction return has no `capture` key', { skip: SKIP_NOGHOST }, async () => {
   const spec = await loadSpec();
   const REP = spec.REPRESENTATIVE;
   const panes = [];

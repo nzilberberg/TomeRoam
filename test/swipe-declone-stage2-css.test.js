@@ -40,6 +40,14 @@ global.window = dom.window;
 global.document = dom.window.document;
 const { surfaceKind } = require('../js/scrollbar.js')._test;
 
+const SKIP_PAGEISVIEW = 'SKIP-PENDING-BUILD — RED until the builder relocates the scroller from '
+  + '#browse to .browsepage (PLAN-swipe-declone.md §5.3.1, step 10). Remove this skip to drive it red.';
+const SKIP_PARKBOX = 'SKIP-PENDING-BUILD — RED until the builder deletes position/top/left/right/'
+  + 'max-width/margin from .browsepage.parked (PLAN-swipe-declone.md §5.3.3, step 10). Remove this '
+  + 'skip to drive it red.';
+const SKIP_SURFACE = 'SKIP-PENDING-BUILD — RED until the builder adds the .browsepage case to '
+  + 'ScrollBar.surfaceKind and to the native-scrollbar suppression selector list '
+  + '(PLAN-swipe-declone.md §10, step 10). Remove this skip to drive it red.';
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
 // CSS READING. Comments are stripped FIRST and that is load-bearing: the build adds source
@@ -195,7 +203,7 @@ const RETIRED_BROWSE_SCROLLER = {
 const RETIRED_HAS_PLAYER_PADDING_BOTTOM = '20px';
 
 test('PAGEISVIEW — each .browsepage is its own inset own-scroll box carrying the retired #browse '
-  + 'scroller declarations, and #browse is no longer a scroller', () => {
+  + 'scroller declarations, and #browse is no longer a scroller', { skip: SKIP_PAGEISVIEW }, () => {
   const page = mapFor('.browsepage');
   assert.ok(page, 'RED @HEAD: there is NO `.browsepage` base rule at all — a browse page is an '
     + 'in-flow div (css:79-80 records exactly that). Stage 2 must add one (plan §5.3.1).');
@@ -256,7 +264,7 @@ const PAGE_PARK_MUST_BE_ABSENT = ['position', 'left', 'right', 'max-width',
 const PARK_MUST_DECLARE = ['transform', 'pointer-events', 'z-index'];
 
 test('PARKBOXEQUAL — .browsepage.parked declares no position and no insets, so its box cascades '
-  + 'from the base rule exactly as #home.parked does', () => {
+  + 'from the base rule exactly as #home.parked does', { skip: SKIP_PARKBOX }, () => {
   const maps = new Map();
   for (const sel of PARK_RULES) {
     const m = mapFor(sel);
@@ -401,7 +409,7 @@ test('MOVERHASBOX [GATE] — every id-resolved swipe mover host generates a prin
 // the gutter, and every "identical rectangle" claim in §5.3.2 and §5.4 is off by it (measured 15px
 // in Blink). The suppression reaching `.browsepage` is a PRECONDITION of the geometry derivation.
 test('BROWSESURFACE — ScrollBar.surfaceKind claims a .browsepage, and the native-scrollbar '
-  + 'suppression selector list covers it', () => {
+  + 'suppression selector list covers it', { skip: SKIP_SURFACE }, () => {
   const el = document.createElement('div');
   el.className = 'browsepage';
   document.body.appendChild(el);
