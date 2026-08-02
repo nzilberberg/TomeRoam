@@ -22,4 +22,10 @@ fi
 # that actually covers the class. Both call the same checker.
 "$NODE" "$DIR/revert-keeps-records.mjs" --msg "$1" || exit 1
 
+# revert-cites-evidence: a revert of APP CODE must say on what basis. Earned by a revert made from
+# "the symptom appeared after this shipped" that discarded eight hours of reviewed work and did not
+# fix the symptom. Same measured limitation as above: `git revert --no-edit` fires no hooks at all,
+# so this covers the --no-commit + `git commit` workflow, which is the one used here.
+"$NODE" "$DIR/revert-cites-evidence.mjs" "$1" || exit 1
+
 exit 0
