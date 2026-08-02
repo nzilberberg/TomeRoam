@@ -1238,10 +1238,11 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   it and why six earlier hypotheses — every one of them sampling AT REST — missed it.
 
 - THE PARK OFFSET IS GOVERNED BY A DISTANCE LAW, NOT A CHOSEN NUMBER — 2026-08-02, planned
-  (`Claude/Plans/PLAN-parked-page-rides-home.md`; TEMPERed 2026-08-02,
-  `Claude/Charpy/PLAN-parked-page-rides-home-charpy.md` — the law, the 200vw floor and the `-300vw`
-  value all survived the review; two Structural corrections are owed to the plan's derivation and its
-  floor cell, neither changing the value. Not yet built.)
+  (`Claude/Plans/PLAN-parked-page-rides-home.md`; TEMPERed twice on 2026-08-02,
+  `Claude/Charpy/PLAN-parked-page-rides-home-charpy.md` and `…-charpy-r2.md` — the law, the 200vw
+  floor and the `-300vw` value survived both rounds unchanged. Round 1's two Structural corrections
+  were applied at `dcebdb1`; round 2 found both replacement witnesses undefended by an equivalent
+  mutant. Not yet built.)
   The offset must exceed the maximum displacement its container can take plus the page's own width:
   `100vw + 100vw = 200vw`, both terms derived (`js/app.js:505/558/602/649/690` and
   `css/app.css:228/241-244`). The shipped value is `-300vw` — the floor plus a viewport of margin, and
