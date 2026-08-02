@@ -33,7 +33,7 @@ const load = () => import(pathToFileURL(path.join(ROOT, 'tools', 'dead-return-fi
 // each must still be a CONTRACT entry in contract-function-gate.test.js. finalizationPlanFor
 // (stage 6d, PLAN-swipe-stage6d.md §4b) joins them here: it is a one-field exact-key CONTRACT
 // seam, so the exact-key gate is what covers it.
-const EXACT_KEY_GATED = ['classifyTransition', 'constructionPlanFor', 'finalizationPlanFor'];
+const EXACT_KEY_GATED = ['classifyTransition', 'constructionPlanFor'];
 
 // A function export whose source returns an object literal — `return {…}` or
 // `return Object.freeze({…})`. These are the seams a dead field can hide on.

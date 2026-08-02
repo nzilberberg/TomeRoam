@@ -121,15 +121,22 @@ test('DF — finalize clears the 340ms settle fallback when transitionend wins',
 
       // transitionend WINS — fire it on the anchor (movers[0].el = the source ghost of a
       // browse->browse abort) so finalize runs while the 340ms is still queued.
-      const anchor = h.document.querySelector('.nav-ghost');
-      assert.ok(anchor, 'fixture: an abort browse->browse builds the source ghost, which is movers[0] (the anchor)');
+      // movers[0] is the OUTGOING mover. Since PLAN-swipe-declone.md §5.3.6 that is the SOURCE
+      // .browsepage node, not a ghost wrapper — the anchor element moved, the anchoring rule did not.
+      const anchor = h.document.querySelector('.browsepage[data-key="authors"]');
+      assert.ok(anchor, 'fixture: an abort browse->browse drags the source PAGE, which is movers[0] (the anchor)');
       anchor.dispatchEvent(new h.window.Event('transitionend', { bubbles: true }));
       assert.equal(settles(h).length, 1, 'fixture: the transitionend must have driven finalize (one settle logged)');
 
-      // The winner's own reveal continuations (the 600ms safety-net) now share the clock
-      // queue — so this is a per-id delta, never emptiness.
-      assert.ok(h.clock.pendingDump().some((t) => t.ms === 600),
-        'the reveal 600ms safety-net (a WINNER continuation) still shares the clock queue — assert a delta, not emptiness');
+      // ANTI-VACUITY, RE-FOUNDED (PLAN-swipe-declone.md Stage 2). This used to name the
+      // reveal's 600ms safety-net as the winner continuation proving the queue is not simply
+      // empty — but that timer belonged to the HELD reveal, which no transition takes now.
+      // Re-founded on the fact the claim actually needs: the settle fallback WAS in the queue
+      // before finalize and is identified by id, so what is asserted is a per-id DELTA. Without
+      // this, "the loser id is gone" would be satisfied perfectly by a queue that never held it.
+      assert.ok(dump.some((t) => t.id === settleId),
+        'anti-vacuity: the 340ms fallback must have been pending BEFORE finalize, or its absence '
+        + 'afterwards proves nothing');
 
       // THE CLAIM: finalize retired its loser.
       const idsAfter = h.clock.pendingDump().map((t) => t.id);
@@ -138,103 +145,17 @@ test('DF — finalize clears the 340ms settle fallback when transitionend wins',
     } finally { h.dispose(); }
   });
 
-// ── RR — the winning reveal drop() cancels its losers, across all THREE interleavings ────
-// PLAN-swipe-stage6b.md §9 cell RR (the F6/F7 three-way split). The reveal paint gate is a
-// double-rAF (app.js:794) racing a 600ms safety-net (app.js:795). Exactly one of {a decode/
-// paint gate, the timeout} calls drop(); the loser continuation(s) must be cancelled.
-
-// RR(a) — the timeout wins with NO frame fired: the reveal OUTER frame is the loser.
-// RED REASON: drop() does not cancelAnimationFrame the reveal frame, so the queued outer
-// frame survives a timeout-driven drop.
-test('RR(a) — timeout wins, no frame fired: drop() cancels the pending reveal frame',
-  async () => {
-    const h = boot({ fakeTimers: true, deferRaf: true });
-    try {
-      await toHeldRevealPending(h);
-
-      // No frame fired: the reveal OUTER frame is queued and unfired — the loser.
-      const before = h.raf.pendingIds();
-      assert.equal(before.length, 1,
-        `fixture: exactly the reveal outer frame must be queued (the settle rAF was cancelled in finalize); got ${JSON.stringify(before)}`);
-      const outerId = before[0];
-
-      // Advance past the 600ms reveal safety-net → drop('timeout') wins.
-      await h.clock.advance(600);
-
-      // The winner's watchFrames chain queued its OWN frame into rafQ — non-empty, so
-      // assert the specific loser id is gone, not emptiness.
-      const after = h.raf.pendingIds();
-      assert.ok(after.length >= 1,
-        'a WINNER continuation (watchFrames) shares the frame queue — assert a delta, not emptiness');
-      assert.ok(!after.includes(outerId),
-        `drop() must cancel the pending reveal frame; outer id ${outerId} still queued in ${JSON.stringify(after)}`);
-    } finally { h.dispose(); }
-  });
-
-// RR(b) — the LOAD-BEARING half-fired interleaving (Loki-KILL, Charpy F7). Fire EXACTLY
-// ONE frame so the outer runs and schedules the inner PAINT frame, then let the 600ms
-// timeout win while the inner is still pending. The loser is the INNER frame — and the
-// killed single-outer-id design cancels the SPENT outer here, leaving the inner pending.
-// Exactly one frame is binding: two frames fire the inner too and collapse this into the
-// gate-win case (RR(c)), where the killed design would not redden.
-// RED REASON: drop() cancels no reveal frame at all today, so the inner survives.
-test('RR(b) — HALF-FIRED (outer spent, inner pending), timeout wins: drop() cancels the INNER frame',
-  async () => {
-    const h = boot({ fakeTimers: true, deferRaf: true });
-    try {
-      await toHeldRevealPending(h);
-
-      const outerId = h.raf.pendingIds()[0];
-      assert.ok(outerId != null, 'fixture: the reveal outer frame must be queued');
-
-      // EXACTLY ONE frame — the outer runs and schedules the inner; the inner has NOT run
-      // (painted stays false), so the timeout can still win with the inner pending.
-      await h.raf.frame();
-      const mid = h.raf.pendingIds();
-      assert.equal(mid.length, 1,
-        `fixture: after exactly one frame the INNER paint frame must be the sole queued frame; got ${JSON.stringify(mid)}`);
-      const innerId = mid[0];
-      assert.notEqual(innerId, outerId, 'fixture: the inner paint frame is a distinct id from the spent outer');
-
-      // The 600ms timeout wins while the inner is pending.
-      await h.clock.advance(600);
-
-      const after = h.raf.pendingIds();
-      assert.ok(after.length >= 1,
-        'a WINNER continuation (watchFrames) shares the frame queue — assert a delta, not emptiness');
-      assert.ok(!after.includes(innerId),
-        `drop() must cancel the CURRENTLY-PENDING reveal frame (the inner), not the spent outer; inner id ${innerId} still queued in ${JSON.stringify(after)}`);
-    } finally { h.dispose(); }
-  });
-
-// RR(c) — a gate wins (both paint frames fire, decode already resolved): the 600ms
-// safety-net is the loser. drop('paint') fires with no clock advance.
-// RED REASON: drop() does not clearTimeout the 600ms safety-net, so it stays pending after
-// the paint gate wins.
-test('RR(c) — the paint gate wins: drop() clears the pending 600ms reveal safety-net',
-  async () => {
-    const h = boot({ fakeTimers: true, deferRaf: true });
-    try {
-      await toHeldRevealPending(h);
-
-      // Identify the 600ms reveal safety-net by its magic delay and capture its id.
-      const timers = h.clock.pendingDump().filter((t) => t.ms === 600);
-      assert.equal(timers.length, 1,
-        `fixture: exactly one 600ms reveal safety-net must be pending; got ${JSON.stringify(h.clock.pendingDump())}`);
-      const revealTimerId = timers[0].id;
-
-      // Fire BOTH reveal frames → the paint gate wins (decode resolved on the microtask
-      // queue during the first frame), so drop('paint') runs with NO clock advance and the
-      // 600ms is the loser it must clear.
-      await h.raf.frame();   // outer → schedules inner; decode resolves → decoded = true
-      await h.raf.frame();   // inner → painted = true → gate('paint') → drop('paint')
-
-      // The reveal diagnostic's 500ms window and the pane-fade timer (WINNER continuations)
-      // still share the clock queue — non-empty, so assert the specific loser id is gone.
-      const after = h.clock.pendingDump();
-      assert.ok(after.length >= 1,
-        'WINNER continuations (the reveal 500ms window / pane-fade timer) still share the clock queue — assert a delta, not emptiness');
-      assert.ok(!after.map((t) => t.id).includes(revealTimerId),
-        `drop() must clear the 600ms reveal safety-net; id ${revealTimerId} still pending in ${JSON.stringify(after)}`);
-    } finally { h.dispose(); }
-  });
+// ── RR — RETIRED WITH THE HELD REVEAL (PLAN-swipe-declone.md Stage 2, §12 items 13, 27) ─
+// Three cells here pinned that the winning reveal drop() cancelled its losers across all
+// three interleavings of the paint gate and the 600ms safety-net. Their whole subject was
+// the HELD reveal, and the held reveal existed for exactly one reason: an aborted
+// browse->browse re-rendered its source into the shared #browse, and the ghost had to keep
+// covering the view until the re-decoded page had PAINTED. Stage 2 removes the cause — the
+// source is its own element, the destination render never touches it, so an abort has
+// nothing to rebuild and nothing to hold. No transition takes a held reveal, so there are
+// no reveal continuations to cancel and no interleaving to test.
+//
+// The DF cell above is NOT retired and is the reason this file still exists: the
+// loser-cancellation rule for the 340ms settle fallback applies to every transition and is
+// unaffected. ABORTNORENDER in test/swipe-declone-stage2-browse.test.js is the successor
+// for the property that replaced the held reveal: an abort renders nothing at all.

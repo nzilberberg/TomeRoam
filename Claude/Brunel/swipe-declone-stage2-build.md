@@ -31,12 +31,12 @@ by popping the nav stack. So the question reduces to: can two adjacent stack ent
   guarded on the current view being `options` and pushes a sub, which is never `options`.
 - A PARAMETERIZED descriptor always pushes, so the census is of its TRIGGERS:
   - `authorBooks(A)` is pushed only by `openAuthor`, whose only trigger is `authorRow`
-    (`js/browse.js:753`), and `authorRow` is rendered only on the **authors** page
+    (`js/browse.js:771`), and `authorRow` is rendered only on the **authors** page
     (`listView(el,'Authors',…)` and its `patchRows` twin). Predecessor key: `authors`.
-  - `files(B)` is pushed only by `openFiles` — triggered by `bookRow` (`js/browse.js:783`), rendered
+  - `files(B)` is pushed only by `openFiles` — triggered by `bookRow` (`js/browse.js:788`), rendered
     only on the **books** and **authorBooks** pages, and by the home-screen tile
-    (`js/app.js:1547`) — and by the Now-Playing forward nav (`filesDescForCurrent`). Predecessor
-    key: `books`, `author:<rk>`, `home` or `nowplaying`.
+    (`js/app.js:1409`, `renderTile` at `:1388`) — and by the Now-Playing forward nav
+    (`filesDescForCurrent`). Predecessor key: `books`, `author:<rk>`, `home` or `nowplaying`.
 
 At every push site the current descriptor's key differs from the pushed one's, so no two adjacent
 entries share a key and `buildConstruction` can never receive a same-key browse pair.
@@ -122,6 +122,51 @@ pill float, whose removal the `DEC` cell defends.
 
 Every other de-registration names the deleted text and the guard's status. Every re-anchor keeps the
 mutation INTENT and states what moved.
+
+## 4a. CI registry reconciliation (2026-08-01, build `.293`)
+
+**CI was RED on `375e11f`** — `test` passed, two mutation shards each reported one uncaught mutant.
+Both were PRE-EXISTING mutants outside the 37 targeted indices swept locally. **That gap is the
+real finding: a targeted sweep cannot see a mutant whose cell this build affected INDIRECTLY.** The
+registry is now reconciled against a FULL sharded sweep, and the local practice is corrected to
+match CI's partitioning.
+
+**`#34` — `r223 1a: settle rAF not cancelled`. CASE 3 *and* a composition, not case 1.**
+The production guard (`cancelAnimationFrame(cur.settleFrame)`) is alive and unmoved. Two things had
+gone wrong at once:
+1. **The cell had rotted.** It asserted on `#browse`, on the stated ground that "the incoming mover
+   is the real `#browse`" — false after Stage 2, where a browse→browse gesture's movers are two
+   `.browsepage` nodes and `#browse` carries no drag transform at all. The stale frame writes onto
+   the PAGES; the cell watched a host that is clean either way. Repaired to derive the MOVER SET
+   (`#home`, `#browse`, every `.browsepage`) instead of naming one id, with an anti-vacuity check
+   that the drag shifted something in the first place.
+2. **Repairing the cell alone did not kill it** — the mutant still survived, and the reason is
+   load-bearing. Before Stage 2 an aborted `browse→browse` took the HELD reveal branch, which set
+   `revealPending` and so did NOT end the session at finalize; `cur === session` still held when the
+   stale frame fired, and the cancel was the only thing stopping the write. Stage 2 deletes that
+   branch, so every finalize now ends its session in the `finally`, and the stage-6c
+   ownership-identity guard (`if (cur !== session) return;`) makes an uncancelled frame inert on
+   that path too. The mutant is therefore now a **TWO-PART** mutation — this file's documented idiom
+   for a doubly-defended guard — removing the cancel AND the identity guard. Killed by its
+   designated `1a` cell (plus `G1`/`G-chain`). ⛔ NOT de-registered: the identity guard has its own
+   separate path (a SUPERSEDED session, where finalize never runs for `cur`), which is mutant
+   `stage6c G1`, unchanged and still killed by its own cell.
+
+**`#60` — `swipe6e RSN-mistag: the disposal reason token is wrong`. CASE 1, de-registered.**
+The reason token has exactly one consumer: the PBDebug SWIPE line inside `disposeOwnedPanes`, gated
+on `disposed` — deliberately, so a no-op call cannot claim a disposal that never happened. No
+transition builds an owned pane, so the line never runs and the token is unobservable. **Not a
+relocation, checked rather than assumed:** the only ownership kind left is `'owned-decoration'` (the
+NP pill float), removed by `resetSwipeStyles`, which takes no reason token. **What remains defended,
+and by what:** `disposeOwnedPanes`' `own` filter (it never removes a borrowed-real mover) by the
+`BR` cell; the pane-less reality by `DP.browse-home`; the NP decoration's removal by `DEC` — all in
+`test/swipe-stage6e.test.js`, all passing. Only the disposal EVENT and its reason lose coverage, and
+they lose it by having no subject. `disposeOwnedPanes` itself stays for step 11 (§12 item 15).
+
+**FULL registry sweep — all 6 shards, foreground, `--shard=I/6` (CI's partitioning):**
+21 + 21 + 21 + 20 + 20 + 20 = **123 of 123, `0 uncaught, 0 unapplied, 0 stale flags` on every
+shard**, and no `*.mutbak` at any point. **No further uncaught mutants beyond the two CI named** —
+the targeted set had missed exactly those two and nothing else. Registry: 124 → 123.
 
 ## 5. The six non-mutation surfaces §10/§12 miss — all migrated
 

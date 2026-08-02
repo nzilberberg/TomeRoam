@@ -39,14 +39,14 @@ export const POLICY_LEDGER = [
   // the app views. Pinned by named GREEN guards (knownRed:false — enforced, not `{todo}`).
   { id: 'PL-swipe-browse-fixed-ownscroll',
     subsystem: 'swipe-reveal',
-    decision: 'Active #browse is a position:fixed overflow-y:auto own-scroll view (not an in-flow shared-document-scroll view), WITHOUT will-change/transform so the fixed .alphaindex strip stays viewport-anchored; the six window-scroll consumers read/write #browse.scrollTop. With #home also fixed (6i), no signed-in app view drives the document height and window.scrollY is always 0 on the app views (home/browse); #signin is a separate in-flow pre-app state outside the swipe flow.',
+    decision: 'Active #browse is a position:fixed inset box (not an in-flow shared-document-scroll view), WITHOUT will-change/transform so the fixed .alphaindex strip stays viewport-anchored. The browse SCROLLER is each .browsepage, an inset:0 absolutely-positioned child of that box carrying the padding and the overflow (PLAN-swipe-declone.md §5.3.1, 2026-08-01); the browse scroll consumers read/write the page element, not #browse and not the window. With #home also fixed (6i), no signed-in app view drives the document height and window.scrollY is always 0 on the app views (home/browse); #signin is a separate in-flow pre-app state outside the swipe flow.',
     reason: 'Completes the 6i fixed-own-scroll move for #browse: removes the Books->Home scroll-clamp flash by construction (hiding a fixed #browse cannot collapse the document), retiring the .266 stable-height probe and its Home->Books band-aid glitch; the .app css:73 runway is retained to seat the fixed bars for both views.',
     status: 'active',
     introduced: '2026-07-29 (browse-decouple)',
-    removalTrigger: 'if #browse returns to the in-flow document-scroll model, or a will-change/transform is added to #browse (which would re-parent the fixed .alphaindex)',
+    removalTrigger: 'if #browse returns to the in-flow document-scroll model, if a will-change/transform is added to #browse (which would re-parent the fixed .alphaindex), or if the scroller returns from the page to the host (which re-creates the shared-scroller save/restore machinery Invariant D4 removed)',
     knownRed: false,
     tests: [
-      'BROWSEFIXED — the active #browse base rule is a position:fixed overflow-y:auto own-scroll view with NO will-change/transform (source)',
+      'BROWSEFIXED — the active #browse base rule is a position:fixed box with NO will-change/transform (source)',
       'REALIZE — a #browse-dispatched scroll reaches the virtual-list realize handler (capture-phase document); the pure windowFor model is correct',
     ] },
 ];

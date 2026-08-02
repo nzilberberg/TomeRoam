@@ -105,6 +105,13 @@ const Nav = (() => {
     if (!keepGhosts) document.querySelectorAll('.nav-ghost').forEach((n) => n.remove());
     document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone
     const els = ['home', 'browse', 'options', 'nowplaying', ...SETTINGS_SUBS].map((id) => d.byId(id));
+    // Every `.browsepage` too. Since PLAN-swipe-declone.md §5.3.4 a browse PAGE is a
+    // swipe mover in its own right (a browse→browse gesture drags two of them), and it
+    // is the first borrowed mover that carries NO id — so an id-keyed list cannot reach
+    // it, and a gesture interrupted before the settle path's own clear would leave a
+    // page stuck at translateX(±w): the "erratic after a while" class this reset exists
+    // to prevent.
+    els.push(...document.querySelectorAll('.browsepage'));
     els.push(document.querySelector('#navbar .np-actions'));
     for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }
   }

@@ -46,21 +46,6 @@ const swipeLog = (h) => h.log.calls
   .filter((c) => c.name === 'debug' && c.args[0] === 'SWIPE').map((c) => c.args[1]);
 const settles = (h) => swipeLog(h).filter((m) => /^#\d+ (abort|commit) /.test(m));
 
-const SKIP_DISTINCT = 'SKIP-PENDING-BUILD — RED until the app-side env literal resolves the '
-  + '`browse-page` hosts through Browse.pageElFor (PLAN-swipe-declone.md §5.3.6, step 10). '
-  + 'Remove this skip to drive it red.';
-const SKIP_OWNS = 'SKIP-PENDING-BUILD — RED until virtualView\'s metrics closure measures the '
-  + 'page it was built for instead of o.mount (PLAN-swipe-declone.md §5.3.4, step 10). Remove '
-  + 'this skip to drive it red.';
-const SKIP_ENTRY = 'SKIP-PENDING-BUILD — RED until entryScrollY returns null for a list page and '
-  + 'positionOnEnter writes only a DERIVED position (PLAN-swipe-declone.md §5.3.4, step 10). '
-  + 'Remove this skip to drive it red.';
-const SKIP_LANDED = 'SKIP-PENDING-BUILD — RED until Browse.endHold takes the landed screen '
-  + 'descriptor and reconciles against it (PLAN-swipe-declone.md §5.3.6, step 10). Remove this '
-  + 'skip to drive it red.';
-const SKIP_ABORT = 'SKIP-PENDING-BUILD — RED until finalizationPlanFor and the abort re-render '
-  + 'are deleted (PLAN-swipe-declone.md §5.3.4, §12 item 15a, step 10). Remove this skip to '
-  + 'drive it red.';
 
 const bigBooks = (n) => Array.from({ length: n }, (_, i) => ({
   ratingKey: 'b' + i, title: 'Book ' + i, titleSort: String(i).padStart(6, '0'),
@@ -141,7 +126,7 @@ function watchActivate(page) {
 // move() writes one for every mover in list order (js/app.js:615), so after the gesture goes live
 // the mover set is exactly the set of elements carrying an inline `style.transform`.
 test('MOVERSDISTINCT — the real env literal resolves a browse->browse gesture to two .browsepage '
-  + 'movers, and #browse carries no drag transform at all', { skip: SKIP_DISTINCT }, async () => {
+  + 'movers, and #browse carries no drag transform at all', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true });
   try {
     await authorsUnderBooks(h);
@@ -204,7 +189,7 @@ test('PAGEOWNSSCROLL — the container role stays bound to the #browse host: res
 });
 
 test('PAGEOWNSSCROLL — a virtual controller reads the scroll offset of the PAGE it was built for, '
-  + 'never a shared host reference', { skip: SKIP_OWNS }, async () => {
+  + 'never a shared host reference', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true, books: bigBooks(700) });
   try {
     // NO injected metrics here, deliberately: the injected-metrics recipe every other virtual
@@ -247,7 +232,7 @@ test('PAGEOWNSSCROLL — a virtual controller reads the scroll offset of the PAG
 // settable property with no box to destroy, so that clause passed on any engine behaviour and
 // witnessed nothing (plan §14 records the correction). Retention is plan §15 R8, device-owed.
 test('ENTRYNOZERO — re-entering a cached list page performs ZERO scroll writes on the page or the '
-  + 'host', { skip: SKIP_ENTRY }, async () => {
+  + 'host', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true });
   try {
     await settle(h);
@@ -337,7 +322,7 @@ test('ENTRYNOZERO — a DERIVED position is still written: a virtual page return
 // discriminator is the OWNER being named rather than inferred, which is the landed descriptor
 // reaching endHold at all.
 test('LANDEDPAGESHOWS — Browse.endHold is TOLD where the gesture landed, on the abort and the '
-  + 'commit branch alike', { skip: SKIP_LANDED }, async () => {
+  + 'commit branch alike', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true });
   try {
     const orig = h.Browse.endHold;
@@ -416,13 +401,25 @@ test('LANDEDPAGESHOWS — an ABORTED browse->browse leaves the page it started o
 // EVERY gesture, not only browse->browse: takeRowHold() is unconditional in start()
 // (js/app.js:535) and dropRowHold calls endHold whenever session.hold is truthy (js/app.js:360-363).
 // So its body also runs on the four SHIPPED, device-confirmed transitions, and adding an argument
-// without saying what it means there would be a change to them made by omission. A landed
-// descriptor that names no cached browse page must run HEAD's inference UNCHANGED. The mutant
-// routes the miss through the landed lookup anyway, so no page is reconciled and the ONE
-// realization the gesture gets is skipped — visible only as a CONTROLLER ACTIVATION CALL COUNT,
-// and only if a controller exists to count. HEAD's count on browse->home is >= 1; the mutant's is 0.
-test('LANDEDPAGESHOWS — a browse->home gesture, which lands on NO browse page, leaves browse page '
-  + 'state and controller activation exactly as HEAD leaves them', async () => {
+// without saying what it means there would be a change to them made by omission.
+//
+// ⚠️ THE TWO PHASES EXERCISE DIFFERENT BRANCHES, and this cell asserts each on its own terms
+// rather than claiming one property for both (Poirot A1 — the ABORT phase was previously a false
+// witness: it claimed to drive the fallback but could not). COMMIT lands on 'home', which is never
+// a browse-page key, so `landedKey` misses the cache and endHold takes the FALLBACK branch — this
+// is the phase the mutant (dropping the cache-lookup discriminator from the fallback's guard) can
+// actually be caught on: the mutant routes the miss through the landed lookup anyway, so no page
+// is reconciled and the ONE realization the gesture gets is skipped, visible only as a CONTROLLER
+// ACTIVATION CALL COUNT. ABORT lands back on the browse source (currentDesc() reverts to it before
+// endHold runs), which is STILL CACHED, so `landedKey` HITS the cache and endHold takes the LANDED
+// branch instead — the mutant is a no-op there. The abort phase still asserts something real and
+// its own: that the source page's controller is correctly reactivated via the LANDED branch, not
+// left stranded — a property this file's other LANDEDPAGESHOWS cells (browse->browse) also cover,
+// but not for a browse->home gesture specifically.
+test('LANDEDPAGESHOWS — a browse->home gesture: COMMIT lands on no cached browse page and takes the '
+  + 'fallback (HEAD\'s activeEntry() inference); ABORT lands back on the still-cached source and '
+  + 'takes the landed branch. Both leave browse page state and controller activation exactly as '
+  + 'HEAD leaves them', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true, books: bigBooks(700) });
   try {
     h.VirtualList.setForceVirtual(true);
@@ -441,10 +438,15 @@ test('LANDEDPAGESHOWS — a browse->home gesture, which lands on NO browse page,
         `fixture sanity: the live gesture must be browse->home — got ${swipeLog(h).at(-1)}`);
       if (phase === 'abort') await abortBack(h); else await commitBack(h);
 
-      assert.ok(counted.n >= 1, `on a browse->home ${phase} the started-from page's controller must `
-        + 'still be activated at the hold\'s release, exactly as HEAD activates it. A landed '
-        + 'descriptor naming no cached page must fall back to HEAD\'s activeEntry() inference, not '
-        + `be routed through the landed lookup and reconcile nothing. activate() calls: ${counted.n}`);
+      const msg = phase === 'abort'
+        ? 'on a browse->home abort the started-from page\'s controller must still be activated at '
+          + 'the hold\'s release, exactly as HEAD activates it — the LANDED branch (the source is '
+          + `still cached), not the fallback. activate() calls: ${counted.n}`
+        : 'on a browse->home commit the started-from page\'s controller must still be activated at '
+          + 'the hold\'s release, exactly as HEAD activates it. A landed descriptor naming no cached '
+          + 'page (home) must fall back to HEAD\'s activeEntry() inference, not be routed through the '
+          + `landed lookup and reconcile nothing. activate() calls: ${counted.n}`;
+      assert.ok(counted.n >= 1, msg);
       assert.equal(books.classList.contains('parked'), false,
         `a browse->home ${phase} never parks a browse page — showPage does not run on this path`);
 
@@ -469,7 +471,7 @@ test('LANDEDPAGESHOWS — a browse->home gesture, which lands on NO browse page,
 // is gated on `finPlan.abortRender === 'rerender'` and calls `applyScreen(dest, { render: true })`
 // (js/app.js:1229-1230), which reaches Browse.render for the source screen.
 test('ABORTNORENDER — an aborted browse->browse re-renders nothing after finger-up, and the source '
-  + 'page node is the same object it was before the gesture', { skip: SKIP_ABORT }, async () => {
+  + 'page node is the same object it was before the gesture', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true });
   try {
     await authorsUnderBooks(h);

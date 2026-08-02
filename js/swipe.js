@@ -11,35 +11,33 @@
 // production's branches — that circular oracle is exactly what this replaces (the old
 // two hand-kept copies a fingerprint could only prove EQUAL, never CORRECT).
 //
-// SCOPE — CONSTRUCTION, plus the first FINALIZATION decision (stage 6d). classifyTransition()
-// normalizes a transition into kinds + decorations; constructionPlanFor() says what start()
-// must BUILD: which representation the outgoing/incoming movers take, whether the
-// destination is rendered into the #browse host, and the Now Playing decoration — every
-// field start() consumes. finalizationPlanFor() (stage 6d) is the first declared field of
-// the rich §3.3 planFor(): `abortRender`, the abort/recovery re-render decision, retiring
-// the RUNTIME BYPRODUCT (a build-time DOM-identity check) buildConstruction used to compute
-// for the same decision through stage 6c. The REST of finalization —
-// commit/abort-scroll/stackEffect/paneRemovalPolicy/reveal — is
-// deliberately NOT here yet: nothing consumes it until its own slice lands, and this
-// project forbids dead fields (the stage-3 review removed unreachable guards for exactly
-// this reason). A later stage composes the unified §3.3 planFor() from every finalization
-// field once ≥2 justify the wrapper.
+// SCOPE — CONSTRUCTION. classifyTransition() normalizes a transition into kinds, the
+// kind→host projection and decorations; constructionPlanFor() says what start() must BUILD:
+// which element each of the outgoing/incoming movers is resolved to, whether the destination
+// is rendered into the #browse host or into its own page node, and the Now Playing
+// decoration — every field start() consumes. FINALIZATION is not modelled here at all:
+// stage 6d's `finalizationPlanFor` declared one field, `abortRender`, and
+// PLAN-swipe-declone.md Stage 2 retired the function with the decision. An abort no longer
+// re-renders anything, because the source element is never overwritten — each browse page is
+// its own scroller, so an abort is a transform reset and nothing else. This project forbids
+// dead fields, so a plan that can only say 'none' is not kept.
 //
 // PARITY. Every mapping below reproduces js/app.js start() (the branch conditions at
 // what was `fromOv`/`toOv`/`incomingBrowse`). classifyTransition is PURE (no DOM). The
 // pane BUILDERS and the render dispatch stay in app.js today; stage 5 (boundary B,
-// ratified 2026-07-22 — Claude/Plans/PLAN-swipe-stage5.md) moves the two capture recipes
-// (ghostApp/snapshotHome), the real overlayEl/appViewEl source resolution, and the
-// npPillClone decoration builder here behind an injected env, while the destination render
-// dispatch (renderScreen/renderNowPlaying/Browse.render) and the Browse hold stay in
-// app.js until stages 6/7. Stage 6i (PLAN-swipe-noswap-home.md) later retires snapshotHome
-// entirely: active #home becomes a position:fixed own-scroll view that is un-parked as the
-// real incoming mover, so a →home reveal needs no snapshot — ghostApp is now the sole
-// owned-pane recipe. Stage 1 of PLAN-swipe-declone.md narrows ghostApp's OWN invocation
-// further still: every view is already its own position:fixed inset own-scroll box, so
-// only browse->browse (the one pair sharing a single real host, #browse) still needs a
-// stand-in — home->browse, home->overlay and browse->overlay move their real element
-// directly instead of cloning it.
+// ratified 2026-07-22 — Claude/Plans/PLAN-swipe-stage5.md) moved the capture recipes, the
+// real overlayEl/appViewEl source resolution and the npPillClone decoration builder here
+// behind an injected env, while the destination render dispatch
+// (renderScreen/renderNowPlaying/Browse.render) and the Browse hold stay in app.js.
+//
+// NO TRANSITION BUILDS A COPY OF A VIEW (PLAN-swipe-declone.md, Invariant D1). Stage 6i
+// retired snapshotHome (active #home is a position:fixed own-scroll view un-parked as the
+// real incoming mover); declone Stage 1 narrowed the remaining app-ghost recipe to the one
+// pair sharing a single real host; declone Stage 2 gave each browse page its own inset
+// own-scroll box, so browse→browse moves two real `.browsepage` elements and the recipe —
+// with `ghostWrap`, the clone-fidelity helper cluster and the `capture` field — is deleted.
+// `npPillClone` is retained: it clones a navbar PILL, not a view. Gated by
+// test/no-view-clone-gate.test.js.
 const Swipe = (() => {
   'use strict';
 
@@ -85,9 +83,12 @@ const Swipe = (() => {
   // join the signature then. The output exposes the fields a current-slice consumer reads:
   // `fromKind`/`toKind` (constructionPlanFor), `sourceHost`/`destinationHost` (stage-5
   // buildConstruction, which reads them to resolve the real source element and the render
-  // host — plan §3, F1-r), and `decorations` (start()). §3.3 also lists sameBrowseHost, but
-  // its only consumer is the stage-6 abort re-render, so per the no-dead-fields rule it is
-  // NOT emitted here — it is reintroduced in that stage with its consumer and test.
+  // host — plan §3, F1-r), and `decorations` (start()). §3.3 also lists sameBrowseHost. Its
+  // only planned consumer, the stage-6 abort re-render, was itself retired with the clone by
+  // PLAN-swipe-declone.md Stage 2 (finalizationPlanFor and its abortRender decision are gone),
+  // so per the no-dead-fields rule sameBrowseHost stays unemitted here with no current or
+  // planned consumer — not "reintroduced later," since the stage that was going to do so no
+  // longer exists in that form.
   function classifyTransition({ from, to }) {
     const fromKind = kindOf(from.v);
     const toKind = kindOf(to.v);
@@ -96,9 +97,21 @@ const Swipe = (() => {
     // The kind→host projection (plan §3, F1-r), the single place the kind→host mapping
     // policy lives. sourceHost picks overlay vs in-flow source resolution; destinationHost
     // picks the render host. Pinned per structural case in the frozen spec (expectedHosts).
-    const sourceHost = fromKind === 'overlay' ? 'overlay' : 'in-flow';
+    //
+    // 'browse-page' (PLAN-swipe-declone.md §5.3.6) is keyed on the PAIR, not on either kind
+    // alone: for browse→browse both slots resolve to the two `.browsepage` NODES rather than
+    // to the one #browse host they share. Without it `sourceHost` is 'in-flow' → appViewEl →
+    // #browse and `destinationHost` is 'browse-host' → $('browse'), so ONE element lands in
+    // TWO mover slots — the second transform write wins, the view slides off and nothing
+    // arrives (Invariant D6 distinctness, gated by MOVERSDISTINCT). It is keyed on the pair
+    // rather than re-pointing appViewEl because a browse SOURCE must still resolve to
+    // #browse when the destination is not browse: browse→home and browse→overlay ship that
+    // today. The resolution is a property of the pair, which is what this boundary knows.
+    const browsePair = fromKind === 'browse' && toKind === 'browse';
+    const sourceHost = fromKind === 'overlay' ? 'overlay' : browsePair ? 'browse-page' : 'in-flow';
     const destinationHost = toKind === 'overlay' ? 'overlay'
-      : toKind === 'browse' ? 'browse-host' : 'home';
+      : browsePair ? 'browse-page'
+        : toKind === 'browse' ? 'browse-host' : 'home';
     // The Now Playing pill is cloned when NP is EITHER endpoint (app.js start(): the
     // fromV and toV nowplaying branches). It is a mover with the same lifetime as
     // outgoing/incoming — based at the outgoing slot when NP is the source, the incoming
@@ -118,27 +131,32 @@ const Swipe = (() => {
 
   // constructionPlanFor — what start() must BUILD. Immutable. No default branch; an
   // unhandled classification THROWS (plan §3.3).
-  //   outgoing         'app-ghost'        freeze the source as a ghost (owned-pane) —
-  //                                        Stage 1 (PLAN-swipe-declone.md §5.1) narrows
-  //                                        this to the ONE case whose source and
-  //                                        destination still share the real #browse host:
-  //                                        fromKind==='browse' && toKind==='browse'. Every
-  //                                        view is already its own position:fixed inset
-  //                                        own-scroll box, so every other pair moves its
-  //                                        real element directly instead of covering it
-  //                                        with a copy.
-  //                    'real-source'      move the real source element (borrowed-real):
-  //                                        an overlay, an in-flow view going to home
-  //                                        (Stage 6i), or (Stage 1) an in-flow view going
-  //                                        to browse or to an overlay — anything that is
-  //                                        not the browse->browse case above
+  //   outgoing         'real-source'      move the real source element (borrowed-real).
+  //                                        The ONLY value: Stage 2 of
+  //                                        PLAN-swipe-declone.md gave each browse page its
+  //                                        own inset own-scroll box, so browse→browse — the
+  //                                        last pair whose two ends shared the real #browse
+  //                                        host — now moves two real `.browsepage` elements
+  //                                        and needs no stand-in either. NO transition
+  //                                        builds a copy of a view (Invariant D1). The
+  //                                        FIELD is deliberately kept at one value: it is
+  //                                        the frozen spec's per-case assertion surface and
+  //                                        what the anti-cloning gate reads, so collapsing
+  //                                        it away would delete the place a re-introduced
+  //                                        clone would have to declare itself.
   //   incoming         'real-destination' the real overlay element, the real #browse
   //                                        with the destination rendered into it, or
   //                                        (Stage 6i, PLAN-swipe-noswap-home.md) the
   //                                        real fixed #home un-parked as the incoming
   //                                        mover — 'home-snapshot' is RETIRED: a →home
   //                                        reveal never builds an owned pane
-  //   renderDestination 'browse-host'     render the destination INTO #browse mid-drag
+  //   renderDestination 'browse-page'     browse→browse only: render the destination and
+  //                                        take the destination PAGE node as the incoming
+  //                                        mover (PLAN-swipe-declone.md §5.3.6). Declared
+  //                                        here as well as projected by classifyTransition
+  //                                        so the declared field and the operative host
+  //                                        cannot disagree on the one row Stage 2 changes
+  //                    'browse-host'      render the destination INTO #browse mid-drag
   //                    'home-host'        un-park the real fixed #home as the incoming
   //                                        mover (Stage 6i) — #browse is NOT hidden
   //                    'none'             no live render (overlay renders itself)
@@ -152,26 +170,25 @@ const Swipe = (() => {
     if (KINDS.indexOf(c.fromKind) === -1) {
       throw new Error('Swipe.constructionPlanFor: unhandled source kind "' + c.fromKind + '"');
     }
-    // outgoing is an app-ghost iff the transition shares the #browse host on BOTH ends
-    // (fromKind==='browse' && toKind==='browse') — Stage 1, PLAN-swipe-declone.md §5.1,
-    // narrowing stage 6f's wider "in-flow source, non-home destination" rule. That
-    // browse->browse case is the one pair whose source and destination are the SAME real
-    // element, so the outgoing page needs a stand-in while the live host is overwritten
-    // for the incoming render (Stage 2 removes even this, once each browse page owns its
-    // own scroller). Every other pair — home->browse, home->overlay, browse->overlay,
-    // in-flow->home (Stage 6i), overlay->* — moves its real element directly: every view
-    // is already its own position:fixed inset own-scroll box already sitting in the DOM,
-    // so covering it with a copy bought nothing (plan §3 audit) and cost the ghost's own
-    // id-stripped, differently-laid-out geometry (the 7px gap, the 53px patch, the
-    // reported swipe-start reflow).
-    const outgoing = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'app-ghost' : 'real-source';
+    // EVERY transition moves its real source element. Stage 1 narrowed the copy to the one
+    // pair whose two ends shared the real #browse host (browse→browse); Stage 2 gave each
+    // browse page its own inset own-scroll box, so that pair moves the two real
+    // `.browsepage` nodes and the copy is gone entirely (PLAN-swipe-declone.md §5.1,
+    // Invariant D1). Covering a view with a copy bought nothing (plan §3 audit: nine of the
+    // eleven things the copy supplied were needed only BECAUSE it was a copy) and cost the
+    // clone's own id-stripped, differently-laid-out geometry — the 7px gap, the 53px patch,
+    // the reported swipe-start reflow.
+    const outgoing = 'real-source';
     let incoming, renderDestination;
     if (c.toKind === 'overlay') { incoming = 'real-destination'; renderDestination = 'none'; }
     // Stage 6i (PLAN-swipe-noswap-home.md §4): active #home is a position:fixed
     // own-scroll view that never leaves the DOM, so →home no longer needs a snapshot —
     // the real fixed #home is un-parked as the incoming mover via 'home-host'.
     else if (c.toKind === 'home') { incoming = 'real-destination'; renderDestination = 'home-host'; }
-    else if (c.toKind === 'browse') { incoming = 'real-destination'; renderDestination = 'browse-host'; }
+    else if (c.toKind === 'browse') {
+      incoming = 'real-destination';
+      renderDestination = c.fromKind === 'browse' ? 'browse-page' : 'browse-host';
+    }
     else throw new Error('Swipe.constructionPlanFor: unhandled destination kind "' + c.toKind + '"');
     // Independently immutable: CLONE the caller's decorations and freeze the copy, so the
     // plan's "Immutable" contract holds on a DIRECTLY-built classification too — it does not
@@ -182,155 +199,21 @@ const Swipe = (() => {
     return Object.freeze({ outgoing, incoming, renderDestination, decorations });
   }
 
-  // finalizationPlanFor — the declared finalization decision (plan §3.3, stage 6d). Pure,
-  // DOM-free, no stored flag: retires the RUNTIME BYPRODUCT (a build-time DOM-identity
-  // check) buildConstruction used to compute mid-build through stage 6c (EC §4.16 — no
-  // cause + separately-stored derived consequence). No default branch on EITHER kind — an
-  // unhandled classification THROWS, mirroring constructionPlanFor's own-contract guard.
-  //   abortRender   'rerender'   the sole same-browse-host transition (fromKind==='browse'
-  //                              && toKind==='browse') — the mid-drag render overwrote the
-  //                              shared #browse host, so an abort must re-render the
-  //                              source back into it
-  //                 'none'       every other transition — nothing was overwritten to
-  //                              restore
-  function finalizationPlanFor(c) {
-    if (KINDS.indexOf(c.fromKind) === -1) {
-      throw new Error('Swipe.finalizationPlanFor: unhandled source kind "' + c.fromKind + '"');
-    }
-    if (KINDS.indexOf(c.toKind) === -1) {
-      throw new Error('Swipe.finalizationPlanFor: unhandled destination kind "' + c.toKind + '"');
-    }
-    const abortRender = (c.fromKind === 'browse' && c.toKind === 'browse') ? 'rerender' : 'none';
-    return Object.freeze({ abortRender });
-  }
-
-  // ── STAGE 5 (plan §3/§7) — the pane BUILDERS, private to the L1 seam ────────────────
-  // The owned-pane capture recipe (app-ghost — Stage 6i, PLAN-swipe-noswap-home.md,
-  // retired the second recipe, home-snapshot, along with the home-snapshot outcome: a
-  // →home reveal now un-parks the real fixed #home instead), the shared helper cluster,
-  // and the NP decoration builder, relocated from js/app.js start() behind an injected `env`.
-  // They read the world ONLY through env (env.document / env.scrollY / env.navPill), never
-  // an ambient document/window/Element/getComputedStyle — so the module stays DOM-free at
-  // load and the recipes are drivable against a fake env (plan §7; the require() no-DOM gate
-  // and test/swipe-construction.test.js). Each returns its built element plus the capture
-  // data the L3 adapter records onto the session; no builder touches the session itself.
+  // ── STAGE 5 (plan §3/§7) — the DECORATION builder, private to the L1 seam ───────────
+  // ONE builder is left. PLAN-swipe-declone.md Stage 2 retired the last view-copy recipe
+  // (app-ghost) along with its clone-fidelity helper cluster — the id strip, the 53px
+  // #library alignment constant, the topbar/hidden/parked/alphaindex prunes, the art
+  // freeze, the carousel scrollLeft copy, the cover-animation phase seek and the
+  // .nav-ghost wrapper. Every one of those existed only to make a COPY resemble the
+  // original, and a real element that is simply moved supplies each of them inherently
+  // (plan §3, §8). What remains is `npPillClone`, which clones a navbar PILL — a
+  // decoration, not a view — and is deliberately retained.
+  // It reads the world ONLY through env (env.document / env.navPill), never an ambient
+  // document/window/Element/getComputedStyle — so the module stays DOM-free at load and
+  // the recipe is drivable against a fake env (plan §7; the require() no-DOM gate and
+  // test/swipe-construction.test.js). No builder touches the session itself.
   function paneBuilders(env) {
     const doc = env.document;
-    const win = doc.defaultView;
-    // Clones must NOT re-trigger the art loader: strip data-art so loaded covers still show
-    // via their copied src while unloaded ones stay as the skeleton.
-    const freezeArt = (root) => root.querySelectorAll('img[data-art]').forEach((i) => i.removeAttribute('data-art'));
-    // cloneNode does not copy carousel scrollLeft. Copy it across (after the clone is in the
-    // DOM), preferring the saved dataset.sl (survives display:none, where scrollLeft reads 0).
-    function copyScroll(src, dst) {
-      const s = src.querySelectorAll('.carousel'), c = dst.querySelectorAll('.carousel');
-      s.forEach((el, i) => { if (c[i]) c[i].scrollLeft = (+el.dataset.sl || el.scrollLeft || 0); });
-    }
-    // …nor animation PHASE. A clone restarts every cover animation at t=0; seek each clone
-    // animation to its live twin's currentTime so the ghost is not out of phase at the swap.
-    // Pair covers that SURVIVE the .hidden/.parked prune (walk up to, but never test, the
-    // root itself) so index `i` cannot pair covers in two differently-shaped trees. Reads
-    // Element through env's window, never a global one (F4b).
-    // Returns { synced, residual }: residual is the max gap measured AT the seek (0 = it took).
-    function copyAnimPhase(src, dst) {
-      const El = win && win.Element;
-      if (!El || !El.prototype.getAnimations) return { synced: 0, residual: 0 };
-      const kept = (root) => (el) => {
-        let n = el;
-        while (n && n !== root) {
-          if (n.classList && (n.classList.contains('hidden') || n.classList.contains('parked'))) return false;
-          n = n.parentElement;
-        }
-        return true;
-      };
-      const s = Array.from(src.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(src));
-      const c = Array.from(dst.querySelectorAll('.cover, .authoravatar, .np-art')).filter(kept(dst));
-      let synced = 0, residual = 0;
-      s.forEach((el, i) => {
-        const twin = c[i];
-        if (!twin) return;
-        try {
-          const a = el.getAnimations(), b = twin.getAnimations();
-          if (!a.length || !b.length || a[0].currentTime == null) return;
-          b[0].currentTime = a[0].currentTime;
-          residual = Math.max(residual, Math.abs((b[0].currentTime || 0) - (a[0].currentTime || 0)));
-          synced++;
-        } catch { /* an unsynced cover is the old behaviour, never a broken ghost */ }
-      });
-      return { synced, residual: Math.round(residual) };
-    }
-    // The fixed full-viewport pane both snapshot builders mount into (beneath the persistent
-    // bars, clipped, non-interactive, transform-capable — the .nav-ghost contract, navGhost).
-    // TRANSPARENT BY DESIGN (build .272 fix): the wrapper used to paint its own copy of
-    // --page-bg (GHOST_BG, resolved fresh per gesture) here, which made a second, moving
-    // page background — this project's single-page-background rule (test/page-bg-single-
-    // painter.test.js) says exactly one painter exists, body::before, fixed and never
-    // moving. Leaving this wrapper transparent lets that fixed layer show through in any
-    // area the cloned content doesn't cover, instead of riding along with the transform.
-    // ⚠️ DEVICE-OWED, NOT HERE (established pattern elsewhere in this file, e.g. swipe-
-    // stage6f/6e/6i's flash notes): jsdom has no layout/paint, so nothing here can confirm
-    // the destination never peeks through a gap in the outgoing clone during the animation
-    // (e.g. a shorter outgoing snapshot against a taller destination). Untested by this
-    // change; a device check of app-ghost transitions between differently-sized destination
-    // panes closes that residue.
-    function ghostWrap() {
-      const wrap = doc.createElement('div');
-      wrap.className = 'nav-ghost';
-      wrap.style.cssText = 'position:fixed;inset:0;z-index:28;overflow:hidden;pointer-events:none;will-change:transform;';
-      return wrap;
-    }
-    // A ghost of the current #browse (minus the shared topbar), shifted up by the current
-    // scroll to match what's on screen. Stage 1 (PLAN-swipe-declone.md §5.1) narrows this
-    // recipe's own invocation to the ONE remaining owned-pane case, browse->browse — every
-    // other transition (home->browse, home->overlay, browse->overlay, in-flow->home) now
-    // moves its real element directly (constructionPlanFor above), so a HOME source can
-    // never reach this function any more; the `fromKind` parameter and its home-offset
-    // branch are retired with it (the browse-decouple, PLAN-browse-decouple.md §6 B6,
-    // established the browse-offset branch this collapses to). The offset is always
-    // #browse.scrollTop (a fixed own-scroll view, not the document — window.scrollY is
-    // always 0 for it and would build the ghost at top, the 500px jump-to-top Loki's
-    // counterexample found). Feeds the whole-clone content-translate; the clone is a
-    // static id-stripped content tree, never a scroll container, so the offset is carried
-    // by the transform, not by a clone scrollTop (a clone's #browse id is stripped, so
-    // `overflow-y:auto` never applies to it — a scrollTop write on the clone would be
-    // inert). Returns { wrap, capture:{ ghostY, animSync, animRes } }.
-    function ghostApp() {
-      const clone = doc.querySelector('.app').cloneNode(true);
-      // Align the clone's content-top to the REAL active view's content-top
-      // (calc(var(--safe-top) + 51px) [#home top, css:128] + 14px [#home padding-top, css:131]),
-      // replacing the vestigial pre-6i in-flow 46px. `.app`'s own padding-top (calc(--safe-top +
-      // 12px), css:75) is NOT stripped from the clone (only ids are removed) and DOES contribute
-      // in normal flow, so --safe-top cancels: (51 + 14) - 12 = 53. Measured against the real
-      // layout in a live engine (Brunel, PLAN-home-shift-fix.md §3): with this value the clone's
-      // first rendered content lands at the identical viewport-Y as the real #home/#browse, at
-      // safe-top 0 and at a simulated notch, with zero delta. Still load-bearing for the
-      // browse->browse ghost this recipe now exclusively builds; its dedicated CI cell
-      // (M2ALIGN, test/ghost-clone-geometry.test.js) drove the retired HOME-source path
-      // and was deleted rather than migrated (PLAN-swipe-declone.md §12 item 16) — this
-      // constant is scheduled for deletion with the rest of ghostApp in Stage 2.
-      const lib = clone.querySelector('#library'); if (lib) lib.style.paddingTop = '53px';
-      clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
-      const tb = clone.querySelector('.topbar'); if (tb) tb.remove();
-      clone.querySelectorAll('.hidden, .parked').forEach((n) => n.remove());
-      // Exclude the fixed .alphaindex A–Z strip (PLAN-browse-decouple.md §9): a non-none
-      // transform on the clone (below) becomes the containing block for a position:fixed
-      // descendant, which would re-parent the strip and misposition it by the browse-source
-      // offset. The REAL .alphaindex (in the live #browse) is unaffected — it re-renders
-      // correctly when the source page comes back. The ghost is a transient visual cover;
-      // the strip is not essential mid-swipe.
-      clone.querySelectorAll('.alphaindex').forEach((n) => n.remove());
-      freezeArt(clone);
-      clone.style.margin = '0 auto';
-      const ghostY = doc.getElementById('browse').scrollTop || 0;
-      clone.style.transform = 'translateY(' + (-ghostY) + 'px)';
-      const wrap = ghostWrap();
-      wrap.appendChild(clone);
-      doc.body.appendChild(wrap);
-      copyScroll(doc.querySelector('.app'), clone);
-      // AFTER insertion: a detached clone has no CSS animations to seek.
-      const { synced, residual } = copyAnimPhase(doc.querySelector('.app'), clone);
-      return { wrap, capture: { ghostY, animSync: synced, animRes: residual } };
-    }
     // A detached, non-interactive clone of the Now Playing pill for the duration of an NP
     // swipe: it rides with NP as a mover. Removes any stale float first, strips ids, classes it.
     function npPillClone() {
@@ -341,7 +224,7 @@ const Swipe = (() => {
       doc.body.appendChild(clone);
       return clone;
     }
-    return { ghostApp, npPillClone };
+    return { npPillClone };
   }
 
   // buildConstruction — the L1 seam (plan §3). Given the canonical gesture descriptors and
@@ -355,35 +238,25 @@ const Swipe = (() => {
     const classification = classifyTransition({ from, to: dest });
     const plan = constructionPlanFor(classification);
     const { sourceHost, destinationHost } = classification;
-    const { ghostApp, npPillClone } = paneBuilders(env);
+    const { npPillClone } = paneBuilders(env);
     const mover = (element, ownership, slot) => ({ element, ownership, slot });
 
-    // Resolve the real source element at most once, for a borrowed-real outgoing mover.
-    // env.sourceEl selects overlay vs in-flow by sourceHost.
-    let realSource, sourceResolved = false;
-    const resolveSource = () => {
-      if (!sourceResolved) { realSource = env.sourceEl(sourceHost, from.v); sourceResolved = true; }
-      return realSource;
-    };
-
-    // ── OUTGOING — built to completion FIRST, before any destination render can clobber the
-    // source #browse (plan §6 step 5, F7a). At most one owned pane produces capture per
-    // transition (the outgoing app-ghost; Stage 6i retired the incoming home-snapshot, so
-    // →home now builds NO owned pane at all — `capture` is a single object or null).
-    let capture = null, outgoing, incoming, decoration = null;
-    if (plan.outgoing === 'app-ghost') {
-      const g = ghostApp();
-      outgoing = mover(g.wrap, 'owned-pane', 'outgoing');
-      capture = g.capture;
-    } else {
-      outgoing = mover(resolveSource(), 'borrowed-real', 'outgoing');
-    }
+    // ── OUTGOING — resolved to completion FIRST, before any destination render runs
+    // (plan §6 step 5, F7a). NO transition builds an owned pane any more, so there is
+    // nothing to capture and every view mover is borrowed-real. env.sourceEl selects
+    // overlay / browse-page / in-flow source resolution by sourceHost; for a
+    // browse→browse pair that is the SOURCE PAGE node, resolved from the descriptor-keyed
+    // cache and therefore independent of what the destination render then shows.
+    let outgoing, incoming, decoration = null;
+    outgoing = mover(env.sourceEl(sourceHost, from.v), 'borrowed-real', 'outgoing');
 
     // ── INCOMING — always the real destination element as a borrowed-real mover (Stage 6i
     // retired the home-snapshot owned-pane outcome). env.renderDestination dispatches by host:
-    // 'browse-host' renders the destination into #browse, 'home-host' un-parks the real fixed
-    // #home (without hiding #browse), an overlay host renders the real overlay — every case
-    // returns the real element, so the mover shape is identical for all three. ──
+    // 'browse-page' renders the destination and returns its PAGE node (browse→browse — the
+    // second half of Invariant D6's distinctness), 'browse-host' renders the destination into
+    // #browse, 'home-host' un-parks the real fixed #home (without hiding #browse), an overlay
+    // host renders the real overlay — every case returns a real element, so the mover shape
+    // is identical for all four. ──
     incoming = mover(env.renderDestination(dest, destinationHost), 'borrowed-real', 'incoming');
 
     // ── DECORATIONS — the NP pill; zero or one (plan §3). Its np-locked unlock stays in L3.
@@ -392,20 +265,18 @@ const Swipe = (() => {
       decoration = mover(npPillClone(), 'owned-decoration', deco.base);   // slot: outgoing | incoming
     }
 
-    // The THREE-key Construction contract (plan §3, stage 6d revision): `classification` is
-    // derived and consumed above (host resolution, plan derivation) and is NOT returned; the
-    // `plan` WRAPPER is dropped — of its fields only `decorations` has an L3 consumer (the
-    // outgoing-NP `np-locked` unlock, app.js:474), so it is HOISTED to the top level and
-    // PROJECTED to `{ kind, base }` (the `role` leaf stripped — no L3 consumer reads it, F2).
-    // The fourth field this used to carry (a RUNTIME-observed abort-re-render flag through
-    // stage 6c) is RETIRED — the abort re-render decision is now the declared
-    // `finalizationPlanFor(classification).abortRender`, computed at arm time in app.js and
-    // stored on the session (EC §4.16).
+    // The TWO-key Construction contract (plan §3; PLAN-swipe-declone.md §6): `classification`
+    // is derived and consumed above (host resolution, plan derivation) and is NOT returned;
+    // the `plan` WRAPPER is dropped — of its fields only `decorations` has an L3 consumer
+    // (the outgoing-NP `np-locked` unlock), so it is HOISTED to the top level and PROJECTED
+    // to `{ kind, base }` (the `role` leaf stripped — no L3 consumer reads it, F2). `capture`
+    // is REMOVED, not nulled: its only producer was the app-ghost recipe, which no longer
+    // exists, and a key that is always null is a dead field.
     const decorations = plan.decorations.map(({ kind, base }) => ({ kind, base }));
-    return { decorations, movers: { outgoing, incoming, decoration }, capture };
+    return { decorations, movers: { outgoing, incoming, decoration } };
   }
 
-  return { classifyTransition, constructionPlanFor, buildConstruction, finalizationPlanFor, BROWSE_FAMILY };
+  return { classifyTransition, constructionPlanFor, buildConstruction, BROWSE_FAMILY };
 })();
 
 if (typeof window !== 'undefined') window.Swipe = Swipe;

@@ -77,42 +77,19 @@ test('F5a — the mid-drag render forwards the FULL dest descriptor payload (not
   } finally { h.dispose(); }
 });
 
-// ── F1a-L3 — toMover emits the `own` key (teardown by ownership type) ─────────────────
-// An ABORTED browse->browse swipe (Authors<->Books) is a HELD reveal that builds an
-// owned-pane app-ghost (own==='owned-pane'). Stage 6i (PLAN-swipe-noswap-home.md §5/§12)
-// retired the commit→home held reveal this test used to drive — browse→home no longer
-// holds (the real fixed #home is the un-parked incoming mover, never covered by a
-// snapshot or a ghost). On the held path applyScreen runs with keepGhosts:true (app.js),
-// so resetSwipeStyles does NOT remove the ghost — the own-gated fadePanes (app.js,
-// `m.own !== 'owned-pane'` → skip) is the SOLE disposer. So the ghost leaves the DOM only
-// because toMover stamped `own`; a toMover emitting just {el, base} would strand it
-// (fadePanes matches nothing). The borrowed-real #browse (re-rendered under the ghost) is
-// never removed (it is not owned-pane). Requires deferRaf (the paint gate) + a clock
-// advance (the fade-removal timer).
-test('F1a-L3 — toMover emits the `own` key: a held-reveal owned-pane is disposed by its own type, borrowed-real views survive', async () => {
-  const h = boot({ fakeTimers: true, deferRaf: true });
-  try {
-    await onAuthorsOverBooks(h);
-    const row = addRow(h);
-    h.touch.start(10, 300, row);
-    h.touch.move(80, 302); await realSleep(12);
-    h.touch.move(200, 304); await realSleep(12);   // out
-    h.touch.move(30, 304); await realSleep(12);    // retreat → ABORT
-    h.touch.end(30, 304);
-    await settle(h); await h.clock.advance(400); await settle(h);   // finalize → held reveal covers
-    assert.equal(ghosts(h), 1, 'fixture sanity: the abort→browse reveal is holding one owned-pane app-ghost');
-
-    for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();   // paint gate → drop() → fadePanes
-    await h.clock.advance(100);              // the FADE_MS+60 removal timer
-    await settle(h);
-
-    assert.equal(ghosts(h), 0,
-      'the owned-pane app-ghost must be removed via its own===owned-pane type — a toMover that '
-      + 'dropped the `own` key would leave fadePanes matching nothing and strand the pane');
-    assert.ok(h.$('browse'), 'the borrowed-real #browse view (not owned-pane) is never removed by teardown');
-  } finally { h.dispose(); }
-});
-
+// ── F1a-L3 — RETIRED WITH THE OWNED PANE (PLAN-swipe-declone.md Stage 2, §12 item 27) ─
+// This proved that start()'s toMover stamps the `own` key by driving the one path that
+// could observe it: an aborted browse->browse built an owned-pane app-ghost, applyScreen
+// ran with keepGhosts:true so the global sweep skipped it, and the own-gated fadePanes was
+// its SOLE disposer — a toMover emitting just {el, base} would have stranded it. Every
+// element of that fixture is gone: no pane is built, and fadePanes was deleted with it
+// (§12 item 12).
+//
+// The `own` key itself is NOT retired and is still load-bearing — it is what keeps teardown
+// from touching a borrowed-real view. Its remaining owned kind is the NP pill decoration,
+// and the DEC cell in test/swipe-stage6e.test.js is what observes that disposal; the
+// borrowed-real half (a real view is never removed by teardown) is pinned by the BR cell in
+// the same file.
 // ── npLock — the outgoing-NP np-locked unlock (c.decorations consumer effect) ─────────
 // When NP is the SOURCE of a swipe, start()'s decorations loop removes document.body's
 // `np-locked` class so the real nav buttons show as the pill slides out (app.js:491-492).

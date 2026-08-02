@@ -560,6 +560,15 @@ function boot(opts = {}) {
   // and endHold ignores a stale one) because the hazard being tested is a hold that
   // is never released — a fake that accepted any token would pass a leak.
   let holdSeq = 0;
+  // A key->element cache mirroring js/browse.js's real `pageCache`, so `pageElFor` genuinely
+  // MISSES (and throws) for a descriptor this fake has never "rendered" instead of synthesizing
+  // one on demand (Poirot A5: a fake kinder than reality hides the seam it fakes). `render`
+  // populates it SYNCHRONOUSLY, before any await — matching the real Browse.render's documented
+  // guarantee that a cache-miss page exists before its first await, which is what makes
+  // `env.renderDestination`'s immediately-following `pageElFor(dest)` call safe in production.
+  const pageKeyOf = (d) => (d && d.v === 'authorBooks' ? 'author:' + d.author.ratingKey
+    : d && d.v === 'files' ? 'files:' + d.book.ratingKey : d && d.v);
+  const fakePageCache = new Map();
   const browse = {
     // RECORDED. An unrecorded no-op made "which descriptor is actually rendered into
     // the shared #browse" invisible, so a gesture could leave the nav on one screen and
@@ -569,11 +578,34 @@ function boot(opts = {}) {
     // two same-named descriptors different screens.
     init: noop,
     render: async (desc) => {
+      const key = pageKeyOf(desc);
+      if (key != null && !fakePageCache.has(key)) {
+        const host = document.getElementById('browse');
+        const el = document.createElement('div');
+        el.className = 'browsepage';
+        el.dataset.key = key;
+        if (host) host.appendChild(el);
+        fakePageCache.set(key, el);
+      }
       log.calls.push({ name: 'browse.render', args: [desc && desc.v, (desc && (desc.author || desc.book)) || null] });
     },
     reset: noop, clearCache: noop,
     beginHold: () => { log.calls.push({ name: 'browse.beginHold', args: [] }); return ++holdSeq; },
-    endHold: (t) => { log.calls.push({ name: 'browse.endHold', args: [t === holdSeq ? 'current' : 'stale'] }); },
+    // RECORDS THE LANDED SCREEN too: it is what decides which browse page is left showing
+    // when a gesture ends (Invariant D6), so a fake that swallowed it would hide the one
+    // argument the abort path now depends on.
+    endHold: (t, landed) => {
+      log.calls.push({ name: 'browse.endHold', args: [t === holdSeq ? 'current' : 'stale', (landed && landed.v) || null] });
+    },
+    // THROWS rather than returning null, exactly as the real accessor does: a missing page
+    // must fail at the seam, not surface later as a transform write on undefined. Only a
+    // descriptor `render()` has already cached resolves.
+    pageElFor: (desc) => {
+      const key = pageKeyOf(desc);
+      const el = key == null ? null : fakePageCache.get(key);
+      if (!el) throw new Error('Browse.pageElFor: no cached browse page for ' + JSON.stringify(desc));
+      return el;
+    },
     deactivate: log.rec('browse.deactivate'), showPage: noop,
     patchRows: () => false,          // never claim the repaint — force the real renderTile path
     bookSig: (b) => JSON.stringify([b && b.thumb, b && b.title, b && b.parentTitle]),

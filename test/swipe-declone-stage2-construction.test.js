@@ -34,12 +34,6 @@ const { readRoot, ROOT } = require('./dom-fixture.js');
 const Swipe = require(path.join(ROOT, 'js', 'swipe.js'));
 const loadSpec = () => import(pathToFileURL(path.join(ROOT, 'test', 'fixtures', 'swipe-plan-spec.mjs')).href);
 
-const SKIP_DISTINCT = 'SKIP-PENDING-BUILD — RED until the builder extends the kind->host '
-  + 'projection with `browse-page` on both ends and resolves it through Browse.pageElFor '
-  + '(PLAN-swipe-declone.md §5.3.6, step 10). Remove this skip to drive it red.';
-const SKIP_NOGHOST = 'SKIP-PENDING-BUILD — RED until the builder collapses `outgoing` to '
-  + '`real-source` and deletes ghostApp and the `capture` field (PLAN-swipe-declone.md §6, '
-  + 'step 10). Remove this skip to drive it red.';
 
 // Ambient globals a correctly-injected seam must NEVER read (plan §10): everything goes through
 // `env`. Poisoned around the buildConstruction call so a bare read throws loudly instead of
@@ -131,7 +125,7 @@ const build = (from, to, env) => withPoisonedAmbient(() => Swipe.buildConstructi
 // the stack top for it), so a fixture built on it would be asserting distinctness over a pair the
 // planner can never receive.
 test('MOVERSDISTINCT — a browse->browse construction resolves its two mover slots to two DISTINCT '
-  + '.browsepage elements, never to the #browse host', { skip: SKIP_DISTINCT }, () => {
+  + '.browsepage elements, never to the #browse host', () => {
   const { env, host } = mkEnv();
   const c = build({ v: 'books' }, { v: 'authors' }, env);
 
@@ -157,6 +151,35 @@ test('MOVERSDISTINCT — a browse->browse construction resolves its two mover sl
     + bad.join('\n  '));
 });
 
+// Same-KEY parameterized pair (Poirot F2, filed for the planner — NOT resolved here). Distinct from
+// the bare-`v` exclusion above: books->books is IMPOSSIBLE-BEFORE-THE-PLANNER by construction (navTo
+// replaces the stack top for it), but authorBooks(A)->authorBooks(A) is a PARAMETERIZED-identity pair
+// the frozen spec (test/fixtures/swipe-plan-spec.mjs:105) states IS reachable — a coordinate NEITHER
+// fixture in this file drives (both use two DIFFERENT keys, per Poirot's finding).
+//
+// This does NOT decide reachability and does NOT guard the defect — it is a PIN, not a guard: it
+// records what buildConstruction currently returns for this exact input, so an unrelated future
+// change cannot silently move that behaviour without this cell noticing. Whether the pinned
+// collision is acceptable, and whether/how to close it, is Vitruvius's call (F2).
+//
+// The env override closes over the known `from` descriptor, exactly as app.js's real `sourceEl`
+// closes over the live gesture's `d.from` (Poirot A7: buildConstruction's seam passes `sourceEl`
+// only the screen NAME, `from.v`, never the full descriptor — mkEnv()'s own `sourceEl` reconstructs
+// `{v}` from that bare name and would throw on `d.author.ratingKey` for a parameterized pair). This
+// is a faithful recipe-layer stand-in for that production behaviour, not a workaround of A7 itself.
+test('MOVERSDISTINCT — same-key regression pin (Poirot F2, a PIN not a guard): a same-identity '
+  + 'authorBooks(A)->authorBooks(A) pair resolves both mover slots to the SAME cached page today', () => {
+  const { env, pageElFor } = mkEnv();
+  const from = { v: 'authorBooks', author: { ratingKey: 'A1' } };
+  const to = { v: 'authorBooks', author: { ratingKey: 'A1' } };   // independently allocated, same identity
+  env.sourceEl = (h) => (h === 'browse-page' ? pageElFor(from) : env.document.getElementById('browse'));
+  const c = build(from, to, env);
+  assert.equal(c.movers.outgoing.element, c.movers.incoming.element,
+    'PIN, not a guard (Poirot F2): if this ever becomes false without a deliberate fix landing, '
+    + 'update this pin in the same commit — do not let the same-key coordinate drift silently '
+    + 'either direction');
+});
+
 // The classification half — the projection is the ONE place the kind->host mapping policy lives
 // (js/swipe.js:96-98), so `browse-page` is added THERE and nowhere else. The expected hosts below
 // are written BY HAND from plan §5.3.6, deliberately NOT read from the frozen spec fixture: the
@@ -171,7 +194,7 @@ const EXPECTED_HOSTS = (from, to) => ({
 
 test('MOVERSDISTINCT — the classification pins sourceHost and destinationHost to `browse-page` for '
   + 'the browse->browse pair ONLY, leaving all four shipped transitions exactly as they resolve today',
-{ skip: SKIP_DISTINCT }, async () => {
+async () => {
   const spec = await loadSpec();
   const REP = spec.REPRESENTATIVE;
   const wrong = [];
@@ -198,7 +221,7 @@ test('MOVERSDISTINCT — the classification pins sourceHost and destinationHost 
 // rather than falsy because a nulled key leaves the capture-recording block in app.js reachable
 // and the field alive for a reader to re-populate.
 test('NOGHOSTATALL — no structural transition builds an owned pane, no .nav-ghost node is created, '
-  + 'and the Construction return has no `capture` key', { skip: SKIP_NOGHOST }, async () => {
+  + 'and the Construction return has no `capture` key', async () => {
   const spec = await loadSpec();
   const REP = spec.REPRESENTATIVE;
   const panes = [];

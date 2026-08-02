@@ -57,20 +57,12 @@ const Browse = (() => {
     if (el && el._vctl) { el._vctl.destroy(); el._vctl = null; }
   }
 
+  // o.mount (#browse) is the browse CONTAINER: the append target, the innerHTML wipe
+  // target, and the `.hidden` carrier. It is NOT the scroller — since
+  // PLAN-swipe-declone.md §5.3.1 each `.browsepage` is an inset:0 own-scroll box inside
+  // it, so a page owns its scroll offset natively and there is nothing to record.
   function init(opts) {
     o = opts;
-    // The browse scroll recorder (moved here from module-load so it can bind directly to
-    // the injected #browse element — o.mount does not exist until init() runs). #browse is
-    // its own position:fixed overflow-y:auto scroller (the browse-decouple), so its scroll
-    // event is heard by listening on the element itself (scroll doesn't bubble; a listener
-    // on window would never fire for it).
-    if (o.mount) {
-      o.mount.addEventListener('scroll', () => {
-        if (restoring || !browseVisible()) return;
-        const cur = activeEntry();
-        if (cur) cur.sy = o.mount.scrollTop || 0;
-      }, { passive: true });
-    }
   }
   function reset() {
     dropHold();                  // these controllers are going away; no hold may outlive them
@@ -106,28 +98,13 @@ const Browse = (() => {
     return desc.v === 'files' ? spinnerHTML : `<div class="browselist">${skelRows(9)}</div>`;
   }
 
-  // ---- per-page scroll memory ----------------------------------------------
-  // Browse pages all ride #browse's own fixed scroll box (the browse-decouple), so a
-  // page's position is lost the moment another page swaps in (another browse page
-  // overwrites #browse.scrollTop). Remember it per cache entry (`sy`) and put it back
-  // on return.
-  //
-  // Captured from a passive scroll listener rather than a "leaving" hook because
-  // there is no single leave path — you can swap pages, tap Home, open Options, or
-  // swipe. `restoring` gates it: swapping pages changes #browse's scrollHeight, so the
-  // browser clamps #browse.scrollTop and fires a scroll event that would otherwise
-  // record a bogus position against the page we're arriving at.
-  let restoring = false;
-  let restoreGen = 0;
-  // ONE owned restoration operation. beginRestore() takes ownership and hands back a
-  // token; only the CURRENT owner may end it. Without the token an older restore's
-  // delayed (2-frame) finalizer clears the flag out from under a NEWER restore that
-  // started in the meantime — the scroll listener then records the swap's transitional
-  // /clamped position over the arriving page's `sy`, losing exactly what this system
-  // exists to keep. Same stale-finalizer class as the .89 connect() bug, where a
-  // superseded probe's finalizer cleared a newer probe's state; fixed the same way.
-  function beginRestore() { restoring = true; return ++restoreGen; }
-  function endRestore(token) { if (token === restoreGen) restoring = false; }
+  // ---- per-page scroll ------------------------------------------------------
+  // A browse page owns its scroll offset NATIVELY (Invariant D4, PLAN-swipe-declone.md
+  // §5.3.1): each `.browsepage` is its own inset:0 overflow-y:auto box inside the
+  // #browse container, so showing a different page resizes no shared scroller, clamps
+  // nothing, and loses nothing. There is no saved offset, no restore, and therefore no
+  // clamp-event suppression — the whole `sy` / `restoring` mechanism that existed only
+  // because two pages shared one scroller is gone.
 
   // ── ROW HOLD (swipe-scoped) ─────────────────────────────────────────────────
   // While a swipe gesture is live, showPage() SUSPENDS the outgoing page's
@@ -137,8 +114,8 @@ const Browse = (() => {
   // of "images flash on each aborted swipe return" (at reveal the page had 36
   // images and ZERO with a src).
   //
-  // Same owned-token idiom as beginRestore above, for the same reason: a stale
-  // gesture's finalizer must not release a newer gesture's hold. Held state is
+  // An OWNED token, so a stale gesture's finalizer cannot release a newer gesture's
+  // hold — the same stale-finalizer class as the .89 connect() bug, fixed the same way. Held state is
   // bounded — one overscan window per suspended page — and a LEAKED hold degrades
   // to what the classic (≤600-item) renderer already does today, which is keep
   // every row of every cached page. So the failure mode is bounded, not unbounded.
@@ -161,38 +138,106 @@ const Browse = (() => {
     if (VL && VL.setScrollSuspended) VL.setScrollSuspended(true);
     return ++holdGen;
   }
-  function endHold(token) {
+  // The landed screen's page key. Deliberately NOT pageElFor: that THROWS, and a throw on
+  // the hold-release path runs inside the finalize `finally`, PAST
+  // `if (!ok) finishing = false;` (js/app.js) — it would leave `finishing` true and wedge
+  // every future swipe. A miss has to be a value, not an exception.
+  //
+  // ⛔ THE PROBE IS THE CACHE LOOKUP, and nothing else decides the miss. A key is computed
+  // for EVERY well-formed descriptor — 'home' and 'options' key to themselves — and it is
+  // `pageCache.has()` that then reports no browse page. Pre-filtering by view name here
+  // would move the decision off the cache and leave the cache test unreachable, which is a
+  // guard nothing can defend: the registered mutant that drops the cache test would apply
+  // cleanly and change no behaviour. `null` is returned ONLY where keyOf itself cannot run —
+  // a parameterized descriptor with no payload — which is what keeps this non-throwing.
+  function keyFor(d) {
+    if (!d || !d.v) return null;
+    if (d.v === 'authorBooks' && !d.author) return null;
+    if (d.v === 'files' && !d.book) return null;
+    return keyOf(d);
+  }
+  // `landed` = the screen descriptor the gesture LANDED on (Invariant D6,
+  // PLAN-swipe-declone.md §5.3.6). The caller reads it AFTER the synchronous
+  // applyScreen, so it is the settled screen on the commit branch, the abort branch and
+  // the hard reset alike. It is what REPLACES the abort re-render: at HEAD the only
+  // thing that put the page selection back after an aborted browse→browse was
+  // applyScreen(..., {render:true}) reaching showPage(sourceKey), and Stage 2 deletes it.
+  function endHold(token, landed) {
     if (token !== holdGen || !holdRows) return;
     holdRows = false;                       // cleared FIRST, or the deferred repaints re-defer
     if (VL && VL.setScrollSuspended) VL.setScrollSuspended(false);
-    // Now do the teardown the hold deferred: any page still suspended is off screen
-    // for good, so it goes to the normal dematerialized resting state. The VISIBLE
-    // page is skipped — it is the one the gesture landed on.
-    // It activates FIRST, now that the swipe has put the real scroll back, so its
-    // realize computes the right window and reuses the rows it kept instead of
-    // releasing them against a transient offset. activate() is a no-op for a page
-    // that was never suspended (swiping back to Home never hides it), so realize
-    // explicitly — this is the ONE realization the gesture gets, against the
-    // settled scroll.
-    // Parking is gesture-scoped: hand the pages back to display:none now, or every
-    // cached page stays painted for the rest of the session.
-    const stillShown = activeEntry();
-    for (const v of pageCache.values()) {
-      if (!v.el.classList.contains('parked')) continue;
-      v.el.classList.remove('parked');
-      if (v !== stillShown) v.el.classList.add('hidden');
-    }
-    const shown = activeEntry();
-    if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }
-    for (const v of pageCache.values()) {
-      const c = v.el._vctl;
-      if (c && c.state && c.state() === 'suspended') c.deactivate();
+    // Parking is gesture-scoped either way: hand the pages back to display:none now, or
+    // every cached page stays painted for the rest of the session.
+    const landedKey = keyFor(landed);
+    if (landedKey != null && pageCache.has(landedKey)) {
+      // THE LANDING DECIDES. Exactly the landed page is shown; every other cached page
+      // is un-parked and hidden. Controllers settle FIRST, while their boxes still
+      // measure: deactivate() captures the scroll anchor from geometry and a
+      // display:none box measures zero, which would silently rewrite a good anchor to
+      // row 0 (the same ordering rule showPage states).
+      for (const [k, v] of pageCache) {
+        const c = v.el._vctl;
+        if (k !== landedKey && c) c.deactivate();
+      }
+      for (const [k, v] of pageCache) {
+        v.el.classList.remove('parked');
+        v.el.classList.toggle('hidden', k !== landedKey);
+      }
+      // The landed page activates last and realizes explicitly — this is the ONE
+      // realization the gesture gets, against the settled scroll, and it reuses the rows
+      // the hold kept instead of releasing them against a transient offset.
+      const shown = pageCache.get(landedKey);
+      if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }
+    } else {
+      // A landing that names NO cached browse page. Of the four shipped, device-confirmed
+      // transitions where browse participates on exactly one end, only ONE OUTCOME of each
+      // reaches here, not the whole transition: browse→home and browse→overlay on COMMIT
+      // (the destination — home/overlay — is never a browse page); home→browse and
+      // overlay→browse on ABORT (the gesture lands back on the non-browse source). The other
+      // outcome of each pair — an abort of browse→home/browse→overlay, or a commit of
+      // home→browse/overlay→browse — lands ON a cached browse page (the source, still
+      // cached, or the destination, cached by the drag-start render) and takes the LANDED
+      // branch above instead. Those keep the inference they ship with, unchanged: Stage 2 is
+      // not chartered to change them, and on this path showPage never ran, so no page is
+      // parked, the loop below iterates to nothing and activeEntry() is the page the gesture
+      // started from. activate() is a no-op for a page that was never suspended, so realize
+      // explicitly.
+      const stillShown = activeEntry();
+      for (const v of pageCache.values()) {
+        if (!v.el.classList.contains('parked')) continue;
+        v.el.classList.remove('parked');
+        if (v !== stillShown) v.el.classList.add('hidden');
+      }
+      const shown = activeEntry();
+      if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }
+      for (const v of pageCache.values()) {
+        const c = v.el._vctl;
+        if (c && c.state && c.state() === 'suspended') c.deactivate();
+      }
     }
     // Now apply whatever the revalidates wanted to do. Each re-runs the real repaint,
     // which re-checks page identity, so one evicted/replaced meanwhile is dropped.
     const pending = [...heldRepaints.values()];
     heldRepaints.clear();
     for (const fn of pending) fn();
+  }
+  // The cached `.browsepage` node for a descriptor — the element a swipe resolves as a
+  // `browse-page` mover (PLAN-swipe-declone.md §5.3.6). THROWS rather than returning
+  // null: a missing page must fail at the seam, not surface much later as a transform
+  // write on `undefined`. Callers on the hold-release path use keyFor() instead, for
+  // the reason recorded there.
+  function pageElFor(desc) {
+    const k = keyFor(desc);
+    const hit = k == null ? null : pageCache.get(k);
+    if (!hit) {
+      // A descriptor is plain in production, so JSON.stringify never throws in practice — but
+      // this accessor's whole point is to fail LOUDLY and BY NAME at a miss, and letting a
+      // cyclic descriptor turn that into an unrelated JSON TypeError would defeat it silently.
+      let d;
+      try { d = JSON.stringify(desc); } catch { d = String(desc); }
+      throw new Error('Browse.pageElFor: no cached browse page for ' + d);
+    }
+    return hit.el;
   }
   // Destructive cache operations invalidate any outstanding hold: their controllers
   // are being destroyed, and a hold surviving them would wrongly govern whatever
@@ -216,16 +261,18 @@ const Browse = (() => {
     const max = Math.max(0, scrollHeight - innerHeight);
     return Math.max(0, Math.min(max, Math.round(y || 0)));
   }
-  // Pure: the Y a page opens at. Files pages never restore a saved position — they
-  // open at the locally-playing track, else the top; every other page returns to
-  // where you left it.
-  function entryScrollY(descV, savedY, trackY) {
+  // Pure: the Y a page opens at, or null for "do not write anything". A files page opens
+  // at the locally-playing track, else its top. Every other page returns to where you
+  // left it BY KEEPING ITS OWN scrollTop (Invariant D4) — so the rule is to write
+  // nothing rather than to write a remembered number, and `null` is what says so. A `0`
+  // here would overwrite the offset the page element already holds, which is the exact
+  // inversion this rule exists to prevent.
+  function entryScrollY(descV, trackY) {
     if (descV === 'files') return trackY == null ? 0 : trackY;
-    return savedY || 0;
+    return null;
   }
-  function applyScrollY(y) {
-    const mine = beginRestore();
-    o.mount.scrollTop = clampY(y, o.mount.scrollHeight, o.mount.clientHeight);
+  function applyScrollY(page, y) {
+    page.scrollTop = clampY(y, page.scrollHeight, page.clientHeight);
     // This is a DELIBERATE placement — the page's real entry position — which is the
     // opposite of the transient scrolls the swipe freezes realization for (iOS
     // granting a native scroll, or a shorter page clamping scrollY). So realize
@@ -234,12 +281,11 @@ const Browse = (() => {
     // with its rows built for another. MEASURED: entering Books at y=11209 mid-swipe
     // left 21 rows sitting 11,059px above the viewport — group shells reserving
     // space with nothing in them, i.e. empty bars until the gesture ended.
-    const cur = activeEntry();
-    if (cur && cur.el._vctl && cur.el._vctl._realize) cur.el._vctl._realize();
-    // Two frames: the scroll + any clamp it provokes must both land first.
-    requestAnimationFrame(() => requestAnimationFrame(() => endRestore(mine)));
+    // The page whose position was just written is the one to realize — never
+    // activeEntry(), which is an inference about a DIFFERENT element.
+    if (page._vctl && page._vctl._realize) page._vctl._realize();
   }
-  // #browse.scrollTop Y that puts the locally-playing track's row just under the fixed
+  // The page-scrollTop Y that puts the locally-playing track's row just under the fixed
   // title bar. null when this book isn't the one loaded here (or its row isn't built).
   function playingTrackY(book, page) {
     if (!o.playingTrackKey || !book) return null;
@@ -249,10 +295,10 @@ const Browse = (() => {
     if (!row) return null;
     const bar = document.querySelector('.topbar');
     const clear = (bar ? bar.getBoundingClientRect().bottom : 0) + 8;   // sit just below it
-    return o.mount.scrollTop + row.getBoundingClientRect().top - clear;
+    return page.scrollTop + row.getBoundingClientRect().top - clear;
   }
   // Where a page sits when you arrive at it (see entryScrollY for the rule).
-  function positionOnEnter(desc, page, savedY) {
+  function positionOnEnter(desc, page) {
     const trackY = desc.v === 'files' ? playingTrackY(desc.book, page) : null;
     // A virtual page's logical anchor {row, offsetPx} beats the raw recorded
     // scrollY: an SWR update that landed while the page was hidden may have
@@ -261,23 +307,16 @@ const Browse = (() => {
     // scrolled into the list / anchor row gone → the raw Y is the right call).
     const ctl = page._vctl;
     const anchorY = ctl && ctl.anchorEntryY ? ctl.anchorEntryY() : null;
-    applyScrollY(anchorY != null ? anchorY : entryScrollY(desc.v, savedY, trackY));
+    // Write ONLY a DERIVED position. Nothing derived → nothing written, and the page
+    // keeps the scrollTop it already holds (Invariant D4).
+    const y = anchorY != null ? anchorY : entryScrollY(desc.v, trackY);
+    if (y != null) applyScrollY(page, y);
   }
 
   function showPage(key) {
-    // NB: do NOT save the outgoing page's scroll here. The scroll listener above
-    // already records it continuously while browse is on screen, and saving here is
-    // actively WRONG when we're re-ENTERING browse from elsewhere: applyScreen calls
-    // setView('browse') before render, so browse already counts as visible, while
-    // activeEntry() still points at the page we're about to show (leaving browse
-    // hides the #browse CONTAINER, never the page node) and window.scrollY still
-    // belongs to Home/Options. That saved Home's scroll over the page's own and made
-    // the nav-button path always land at the top (swiping was fine — there the
-    // outgoing really is another browse page).
-    beginRestore();   // the swap resizes the document → ignore the clamp's scroll event.
-    // Takes ownership too, so a previous restore's in-flight finalizer can't end
-    // ours; the applyScrollY that follows (immediately on a cache hit, or after the
-    // fetch on a fresh page) owns it from there and clears it.
+    // NB: nothing about scroll happens here. The outgoing page keeps its own scrollTop
+    // on its own element, and showing a different page resizes no shared scroll box, so
+    // there is no position to save and no clamp event to suppress (Invariant D4).
     // Virtual controllers follow visibility — but the OUTGOING controller must
     // deactivate BEFORE `.hidden` (display:none) lands: deactivate() captures
     // the scroll anchor from the container's geometry, and a hidden box
@@ -486,7 +525,7 @@ const Browse = (() => {
       hit.order = ++orderSeq;
       showPage(key);
       o.onRender();                   // refresh live resume/peer numbers on the shown page
-      positionOnEnter(desc, hit.el, hit.sy);   // back where you left it (files: at the playing track)
+      positionOnEnter(desc, hit.el);   // the page kept its own offset (files: at the playing track)
       return;
     }
     // CACHE MISS → fetch, then build into a fresh page node and show it. A brief
@@ -532,18 +571,20 @@ const Browse = (() => {
     // A fresh page has no saved position → top; a files page for the book playing
     // here opens at its current track. Positioned AFTER onRender so the rows are
     // built and laid out (the files case measures a row).
-    // ONLY if this page is actually on screen: positionOnEnter → applyScrollY →
-    // window.scrollTo, so a slow fetch for page A resolving after the user moved to
-    // page B would otherwise yank B's scroll to a Y measured from a display:none
-    // node. showPage() marks the shown page by REMOVING .hidden. The cache-identity
-    // check above is not enough here — the superseded page is still cached and still
-    // connected, just hidden, which is exactly how this got through the first time.
+    // ONLY if this page is actually on screen: positionOnEnter → applyScrollY writes THIS
+    // page's OWN scrollTop (Invariant D4) — since each page is its own inset:0 own-scroll
+    // box, a slow fetch for page A can only ever move page A's scroll, never another page's
+    // (there is no shared scroller left to yank). The guard still matters: without it, a
+    // fetch resolving after the user moved elsewhere would reposition and force-realize a
+    // page nobody is looking at. showPage() marks the shown page by REMOVING .hidden. The
+    // cache-identity check above is not enough here — the superseded page is still cached
+    // and still connected, just hidden, which is exactly how this got through the first time.
     // BOTH conditions. Page-level .hidden covers Browse page A -> Browse page B, but
     // leaving Browse entirely (-> Home / Options) hides the #browse CONTAINER and
     // leaves the active page node WITHOUT .hidden — so the page check alone still let
-    // a late fetch scroll the window while Home was on screen. showPage()/the virtual
+    // a late fetch position the page while Home was on screen. showPage()/the virtual
     // controllers already combine these two the same way (see line ~258).
-    if (browseVisible() && !offscreen(page)) positionOnEnter(desc, page, 0);
+    if (browseVisible() && !offscreen(page)) positionOnEnter(desc, page);
   }
 
   // ---- grouping by first sort-letter --------------------------------------
@@ -644,18 +685,23 @@ const Browse = (() => {
       strides: vStrides(list),
       release: releaseRow,
       onMaterialized: pingRender,
-      // #browse-relative metrics (the browse-decouple, PLAN-browse-decouple.md §6 B1):
-      // the controller's own default falls back to window.scrollY/innerHeight, which is
-      // wrong now that #browse is its own fixed overflow-y:auto scroller. scrollY/scrollTo
-      // read/write o.mount.scrollTop directly; listTop is the list's offset within the
-      // scroller's CONTENT (o.mount.scrollTop + the list's rect top minus o.mount's rect
-      // top) — the exact analog of the document version's window.scrollY + rect.top.
+      // PAGE-relative metrics. The controller's own default falls back to
+      // window.scrollY/innerHeight, which is wrong for an own-scroll box; the
+      // browse-decouple pointed these at #browse, and PLAN-swipe-declone.md §5.3.4 moves
+      // them down to `m` — the PAGE NODE this controller was built for, already
+      // virtualView's first parameter. Each controller therefore measures ITS OWN page
+      // and no two share a pointer: with a shared reference the OUTGOING page's
+      // controller captures its anchor against the INCOMING page's box the moment two
+      // pages are on screen at once, which is exactly what a browse→browse filmstrip is.
+      // listTop is the list's offset within the page's CONTENT (the page's scrollTop
+      // plus the list's rect top minus the page's rect top) — the exact analog of the
+      // document version's window.scrollY + rect.top.
       metrics: {
-        scrollY: () => o.mount.scrollTop,
-        viewportH: () => o.mount.clientHeight,
-        listTop: () => o.mount.scrollTop + list.getBoundingClientRect().top - o.mount.getBoundingClientRect().top,
+        scrollY: () => m.scrollTop,
+        viewportH: () => m.clientHeight,
+        listTop: () => m.scrollTop + list.getBoundingClientRect().top - m.getBoundingClientRect().top,
       },
-      scrollTo: (y) => { o.mount.scrollTop = y; },
+      scrollTo: (y) => { m.scrollTop = y; },
     }, vlOpts || {}));
     m._vctl = ctl;
     if (letters) m.appendChild(buildIndex(m, letters));
@@ -915,10 +961,10 @@ const Browse = (() => {
   }
 
   return { init, reset, render, clearCache, patchRows, bookSig, deactivate, activate,
-    beginHold, endHold,
+    beginHold, endHold, pageElFor,
     // internals exposed for unit tests only (no runtime behaviour change)
     _test: { keepCover, authorSig, bookSig, bookRow, authorRow, entryScrollY, clampY,
-      applyScrollY, showPage, positionOnEnter, updateTruncNote, isRestoring: () => restoring,
+      applyScrollY, showPage, positionOnEnter, updateTruncNote,
       listView, authorView, patchInPlace, groupedFor, pageCache,
       setVlOpts: (v) => { vlOpts = v; } } };
 })();

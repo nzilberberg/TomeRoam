@@ -50,10 +50,24 @@ const VERIFIED = {
   // NOT change: supersession is still reject-while-finishing, else hard-reset-and-arm, with the
   // same render/scroll/pane-disposal outcome on every reachable transition (byte-identical
   // parity — the owner-driven removal set equals the set the old sweep removed). So the parity
-  // claim stands and only the pin moves. Was 'a470962594518cb9' (pre-stage-3), then
-  // 'd455d0d197ea3af8' (before the comment fix), then 'c5ab2fae0fd03654' (pre-stage-6d), then
-  // '502467fc1286f5e1' (pre-stage-6e).
-  supersession: '99b3ddb8778bcb57',
+  // claim stands and only the pin moves.
+  //
+  // RE-VERIFIED 2026-08-01 for PLAN-swipe-declone.md Stage 2, line by line against
+  // js/app.js begin()'s recovery reader, and the mirrored rule in tools/gen-swipe-model.mjs
+  // updated to match in the same commit. TWO changes inside the region, both mirrored:
+  // (1) the re-render condition is GONE — `applyScreen(currentDesc(), {render:false, …})`
+  //     replaces `render: cur.live && cur.finPlan.abortRender === 'rerender'`, because no
+  //     transition overwrites its source element any more, so there is no source CONTENT to
+  //     rebuild and `finalizationPlanFor` is retired with the clone;
+  // (2) `dropRowHold()` — still LAST, still after the applyScreen — now hands
+  //     `Browse.endHold` the LANDED screen, which is what restores the browse page
+  //     SELECTION the re-render also used to restore (Invariant D6).
+  // The model's §5 supersession prose and its §4 hard-reset TERMINATION row were rewritten
+  // to say exactly that, so the document still describes the code it mirrors.
+  // Was 'a470962594518cb9' (pre-stage-3), then 'd455d0d197ea3af8' (before the comment fix),
+  // then 'c5ab2fae0fd03654' (pre-stage-6d), then '502467fc1286f5e1' (pre-stage-6e), then
+  // '99b3ddb8778bcb57' (pre-declone-stage-2).
+  supersession: 'b07e422a493b8fff',
 };
 
 // Every line in js/app.js that appends to or rebinds navStack, as it stood when the
@@ -214,8 +228,14 @@ test('§8A ledger — the EXACT set of new policies, asserted as data not prose'
   const ids = gen.NEW_POLICIES.map((p) => p.id).sort();
   assert.deepEqual(ids, [
     'phase-aware-recovery',
-    'supersession-rerender-source',   // the .219 finding — must never fall out silently
     'supersession-restore-scroll',
+    // The .219 finding — must never fall out silently. RENAMED 2026-08-01 from
+    // 'supersession-rerender-source' by PLAN-swipe-declone.md Stage 2: the GUARANTEE is
+    // unchanged (a superseded gesture must not leave the DESTINATION's content on screen
+    // while the stack and navbar say source), but the MECHANISM is no longer a re-render —
+    // the source is its own element and was never overwritten, so the repair is structural.
+    // The classification did not move; only the name of the thing being classified did.
+    'supersession-source-content',
   ], 'the set of new-policy repairs changed. If that is intended, update this assertion '
    + 'IN THE SAME COMMIT and say which classification moved and why — do not let the '
    + 'exact-document test bless a silent regeneration.');
