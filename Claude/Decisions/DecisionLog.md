@@ -1254,3 +1254,33 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   no measured gain, so it is DEFERRED rather than rejected on merit); and making the park
   viewport-relative (violates Invariant P and re-opens the settled `position: absolute` scheme at
   `:1114-1125`).
+
+- AN OUTGOING SWIPE MOVER FOLLOWS THE GESTURE'S DIRECTION, NOT ITS SLOT — 2026-08-02, correction.
+  `js/app.js:648` is `t = d.dir === 'back' ? Math.max(0, dx) : Math.min(0, dx)`, and a left-edge grab
+  sets `dir = 'back'` (`:494-500`). So on a BACK gesture the outgoing mover (base 0) travels
+  `0 → +w`, sliding RIGHT. `PLAN-parked-page-rides-home.md` had asserted `t ∈ [−w, 0]` for the
+  outgoing slot regardless of direction and concluded that `browse→home` and `browse→overlay` could
+  not overlap; substituting the correct range gives `+0.99w` of overlap, so those two transitions were
+  never arithmetically exempt. Found by the plan review
+  (`Claude/Charpy/PLAN-parked-page-rides-home-charpy.md` F1) and confirmed independently at source.
+  WHAT ACTUALLY EXEMPTS THEM: a gesture parks a page only when its destination is a browse page —
+  `showPage` has exactly two call sites (`js/browse.js:526`, `:538`), both reached only via
+  `Browse.render`, which a gesture reaches only via `showAppView`, which `renderDestination` calls
+  only on its `'browse-page'` and `'browse-host'` branches (`js/app.js:573-580`); the `'home'` branch
+  (`:585`) only un-parks `#home` and the overlay branch only un-hides the overlay. That reason covers
+  both outgoing-side transitions rather than only `browse→home`, and it is stronger than the
+  arithmetic one. The 200vw floor is UNAFFECTED — it takes `max |displacement|`, which is `w` for
+  either sign — so the shipped `-300vw` does not change.
+
+- A PARK-DISTANCE GATE MUST DERIVE BOTH TERMS, NOT SUM TWO LITERALS — 2026-08-02, correction.
+  `PLAN-parked-page-rides-home.md`'s `PARKOUTOFREACH` cell was specified to compute
+  `FLOOR = 100 + 100` with the provenance of each term in a comment, while the plan's coverage model
+  and its risk registry both claimed the cell derived the floor from its terms. A comment does not
+  move when the source moves: the displacement term was genuinely pinned by a second cell, but the
+  container-box term was pinned by nothing, so a change to `#browse`'s box would have re-entered reach
+  with every cell green — the same shape as the defect the plan fixes. Found by the plan review (F2).
+  RESOLVED: the cell parses the `#browse` rule (`css/app.css:224-229`) and derives the term, which is
+  properly `L + W` — `#browse` is centred above 640px, so the quantity is the parked page's right edge
+  in viewport space, not "page width" (review F7; the floor is unchanged, checked at 375/640/1000px).
+  A third mutant (`#browse { max-width: 250vw }`) reddens the law assertion ALONE; without it the law
+  half was dominated by the shipped-value half and detected nothing on its own.

@@ -875,25 +875,30 @@ reverts the record. A failed experiment's record is MORE valuable after the reve
 | iOS lock-screen play-from-paused | med | AVAudioSession PLATFORM limit, not web-fixable (WebKit #198277 / Apple DevForums 762582); `.99` mitigates (defer + auto-resume on unlock); true fix = native audio. | `[[tomeroam-lockscreen-resume-kill-bug]]` |
 | resume plays nothing (1st tap dead) | med | download-index restore race → a downloaded book streams; cold-relay stream stalls with no retry (stall ≠ error). Fix = `Downloads.whenReady()` gate. | `[[tomeroam-resume-stream-race-bug]]` |
 | cross-device resume ~10s out of sync | med | relay-degraded device reads peer board stale → falls back to un-extrapolated durable pos; NOT a sync-math bug; `.157`/`.164` fixed contributing mechanisms, primary diagnosis untouched — re-measure on device. | `[[tomeroam-crossdevice-stale-sync-bug]]` |
-| parked browse page rides on top of Home for a whole forward swipe | high | MEASURED on `.303` (7/7 touchmove samples, Δ = −4px): `.browsepage.parked`'s `translateX(-101vw)` is relative to `#browse`, which is itself the incoming mover at `+w` on `home→browse`, so a parked page composes onto Home by construction. Fix planned: `-300vw` (out of reach of any container displacement), one CSS declaration. Plan reviewed 2026-08-02: **TEMPER** — value and floor confirmed, two Structural corrections owed (F1 outgoing-mover sign, F2 the floor cell pins a number not a law). | `Claude/Plans/PLAN-parked-page-rides-home.md` + `Claude/Charpy/PLAN-parked-page-rides-home-charpy.md` + `Claude/Zelda/MEASUREMENT-parked-page-rides-home-2026-08-02.md` |
+| parked browse page rides on top of Home for a whole forward swipe | high | MEASURED on `.303` (7/7 touchmove samples, Δ = −4px): `.browsepage.parked`'s `translateX(-101vw)` is relative to `#browse`, which is itself the incoming mover at `+w` on `home→browse`, so a parked page composes onto Home by construction. Fix planned: `-300vw` (out of reach of any container displacement), one CSS declaration. Plan reviewed 2026-08-02: **TEMPER, now APPLIED** — value and floor confirmed unchanged; both Structural corrections resolved (F1 outgoing-mover sign → exemption re-based on I10 + a NOPARKONHOME cell; F2 the floor cell now derives term 2 from the `#browse` rule + mutant m3). | `Claude/Plans/PLAN-parked-page-rides-home.md` + `Claude/Charpy/PLAN-parked-page-rides-home-charpy.md` + `Claude/Zelda/MEASUREMENT-parked-page-rides-home-2026-08-02.md` |
 
 The latter two share a root — **conn flapping relay↔local**; pinning board reads to the fast local path would help both.
 
 ## 🔭 Planned / backlog (designed, not built)
-- **Parked-page-rides-Home fix — TEMPER (2026-08-02), back with the planner:**
+- **Parked-page-rides-Home fix — TEMPER APPLIED (2026-08-02), PLAN_READY again:**
   `Claude/Plans/PLAN-parked-page-rides-home.md`, review at
   `Claude/Charpy/PLAN-parked-page-rides-home-charpy.md`. One CSS declaration —
   `.browsepage.parked` `translateX(-101vw)` → `-300vw` — derived as a distance LAW (the offset must
-  exceed `#browse`'s max displacement, 100vw, plus the page width, 100vw). **The value, the 200vw
-  floor, Invariant P compatibility and the option set all survived the strike; the shipped constant
-  does not change.** Two blocking corrections: F1 — §4's proof that `browse→home`/`browse→overlay`
-  cannot overlap has the wrong sign (a BACK gesture drives the outgoing mover to `+w`, not `−w`), so
-  dimension 8's exemption rests on false arithmetic; the real reason is that `browse→home` never calls
-  `showPage`, so no page is parked. F2 — `PARKOUTOFREACH` does not compute the floor from its terms as
-  §8/R3 claim: term 2 is an unpinned literal and assertion (i) has zero marginal detection under the
-  stated mutants. Four Weak + two Note besides. Next owner: Vitruvius (the plan is his to temper);
-  then Curie, then Brunel. Device-owed, unchanged: cover retention at the new distance, and whether
-  this is the whole of the reported garbage.
+  exceed `#browse`'s max displacement, 100vw, plus the parked page's right edge `L + W`, 100vw).
+  **The value, the 200vw floor, Invariant P compatibility and the option set all survived the strike;
+  the shipped constant did not change.** Both blocking findings are resolved in the plan (§11 tables
+  F1–F8): **F1** — the outgoing-side arithmetic exemption is WITHDRAWN (a BACK gesture drives the
+  outgoing mover to `+w`, so the true figure was `+0.99w` of overlap, not `−0.01w`) and re-based on
+  invariant I10, that a gesture parks a page only when the destination is a browse page — which covers
+  `browse→overlay` too, not just `browse→home` — now asserted by a new NOPARKONHOME cell instead of
+  assumed, and the false derivation is explicitly BARRED from the shipped CSS comment. **F2** —
+  `PARKOUTOFREACH` now DERIVES term 2 by parsing the `#browse` rule, asserts a strict inequality, and
+  gains mutant m3 (`max-width: 250vw`) that reddens the law-half ALONE; §8 dim 6 and R3 restated to
+  match. Four Weak + two Notes folded (F3 the retention premise + its prior-casebook citation; F4 two
+  stale `-101vw` records added as scrub targets; F5 the constant-viewport precondition; F6 in-script
+  non-degeneracy for the oracle; F7 `L + W`; F8 recorded, not acted on). Next owner: Charpy round 2
+  (the two resolutions only); then Curie, then Brunel. Device-owed, unchanged: cover retention at the
+  new distance, and whether this is the whole of the reported garbage.
 - **Build-gate spec corrections — RATIFIED + FROZEN (2026-07-24, Charpy FORGE):**
   `Claude/Plans/PLAN-build-gate-spec-corrections.md`, approved wording locked in `~/.claude/frozen-artifacts.txt`
   (freeze-guard verified). Corrects the installed Gate A/B spec (Brunel.md Local §) for the user's
