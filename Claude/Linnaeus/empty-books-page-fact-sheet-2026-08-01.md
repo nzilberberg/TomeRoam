@@ -63,7 +63,14 @@ absent at one of those two instants.** Note `snapBrowse` tests only `hidden` —
 
 ---
 
-## 3. The step that produces rows=0 with the structure intact
+## 3. How a built page can be left with structure and no rows
+
+> **Scope correction, 2026-08-01 (device log, 48k lines).** F11–F13 below describe a
+> **real and reachable** way to empty a built page — an SWR repaint reaching `ctl.update()`.
+> It is **not what happened on gesture #15**: the log contains no
+> `FLASH repaint deferred (books)` line, and §10 shows the rows were destroyed by the ordinary
+> `deactivate()` on the preceding commit→home instead. Read F8–F10 as the general facts (they
+> stand and are load-bearing for §10 too) and F11–F13 as a second, unexercised door.
 
 **F8 [LB]** The reported visual — header, section letter, row containers at correct heights,
 A–Z strip, no row content — is precisely the virtualizer's shell output plus `listView`'s chrome.
@@ -145,14 +152,18 @@ separate reason.
 
 ---
 
-## 5. Why a cache write inside the gesture is the discriminator
+## 5. The cache write — what it does and does not tell us
 
-**F18 [LB]** The books pair in the log carries **no `cache-first` line**, and that is a decisive
-signal. `withCache` logs `<kind> cache-first (revalidating)` on every unforced read that finds a
-cache (`js/plex.js:448`), and `opts.force` skips that entire branch (`js/plex.js:433`). The
-authors pair the user quotes as the contrast — `CACHE authors cache-first (revalidating)` →
-`CACHE wrote 18 authors` — is the ordinary shape. **The books read on gesture #15 was a FORCED
-read.**
+**F18 [LB] — CORRECTED 2026-08-01. My original inference was wrong and I withdraw it.** I wrote
+that the absence of a `cache-first` line near the books pair proved a FORCED read. That does not
+follow, because **the two lines are not adjacent in time.** `withCache` logs
+`<kind> cache-first (revalidating)` at `js/plex.js:448` the instant it serves the cache, while the
+background `runLive` logs `getBooks live:` only when the network answers (`js/plex.js:684`) — one
+whole round-trip later. So a `cache-first` line for the same kind can sit hundreds of milliseconds
+earlier in the log and belong to the very pair in question. The authors pair looked "adjacent"
+only because its round-trip was fast. **Correct form of the test:** a read is forced only if there
+is no `books cache-first` line anywhere between the previous `getBooks live` and this one — a
+window question, not a proximity question, and answerable only against the full log.
 
 **F19 [LB]** A forced `getBooks` comes from `loadHomeData({ force: true })`
 (`js/home-screen.js:124`), whose callers are `enterApp`, pull-to-refresh (`js/app.js:1384`),
@@ -181,9 +192,24 @@ stale-token no-op against a matching-token control.
 browse DOM with no gesture awareness (the SWR repaint's rebuild, `Net.onReconnect` → `clearCache`,
 `evictLRU`)."*
 
+> **REFUTED 2026-08-01 — `Net.onReconnect` did not fire, and I name that plainly: my leading
+> producer was wrong.** The device STATE snapshot for that session (build `2026-08-01.298`,
+> `2026-08-02T01:34:11.890Z`) carries `"lastReconnectAt": 0` with `plexReachable: true` and
+> `lastPlexResult: "ok"`, and 48k log lines contain no `RECONNECT pass` line
+> (`js/net.js:132`). `lastReconnectAt` is written at the top of `reconnectPass`
+> (`js/net.js:131`), **before** its first await, so a value of 0 proves the function was never
+> entered — the field cannot be missed by a pass that ran. F19–F22 remain a correct enumeration
+> of what those callers *would* do; none of them ran. §10 supersedes this as the account of the
+> incident.
+
 ---
 
-## 6. Why it is intermittent
+## 6. The reachability edge — a correct mechanism that did NOT fire here
+
+> **Superseded as the trigger, 2026-08-01.** F24–F28 correctly describe the reconnect edge, and
+> they remain the right account of *when a reconnect fires*. They are **not** the trigger for this
+> defect: no reconnect ever fired on this device (see the note at F23). The operative
+> intermittency is in §10.6.
 
 **F24 [LB]** The trigger is an **edge**, not a timer and not a TTL. `noteFresh` fires a reconnect
 pass on a false→true transition: `if (was === false) reconnectPass('data-path-recovered');`
@@ -282,19 +308,198 @@ not the cause of the observed defect, and reverting it would not remove the defe
 
 ---
 
-## 9. Underived facts
+## 9. Superseded
 
-**U1** Which of `Net.onReconnect` and pull-to-refresh produced the forced read on gesture #15
-(F29). Settleable from the full device log: the `RECONNECT pass (…)` line, `js/net.js:132`.
+The original §9 listed four underived facts. Three are now settled by the 48k-line device log
+(§10.7); the current list is §11.
 
-**U2** Which end-state the device actually reached — E1 (emptied container) or E2 (shells with no
-rows) — F15/F16. Settleable from the screenshot plus the two log lines named in F17. Source cannot
-discriminate them because both produce the same three instrument numbers.
+---
 
-**U3** Whether `localStorage['pb_forceVirtual']` is set on the device (F14). Settleable from
-Diagnostics, or from the presence of `.vshell`/`.vrows` in the screenshot. E2 is unreachable
-without it.
+## 10. The account of gesture #15, re-derived against the full device log (2026-08-01)
 
-**U4** Whether the failing gesture's `revealBase` was null at gesture start (F7a). Not readable
-from source — it depends on the DOM state left by the preceding gesture in the burst. The FLASH
-lines for #13 and #11 printed a full `ROWS KEPT` string, so `revealBase` was non-null on those.
+The log the coordinator pulled refutes two of my claims and supplies the sequence that replaces
+them. Reproduction checks **E/F/G** in `repro-empty-books-page.js` execute this whole sequence
+against the real modules; 7/7 pass at HEAD.
+
+### 10.1 The destroyer is named in the log, and it is not a repaint
+
+**F39 [LB]** The FLASH line for gesture **#14** — `commit→home`, 18:34:05.885 — reads
+`rows=0 imgs=46 … realized 15→0 released=15`. `realized` and `released` are the fields of
+`snapBrowse`'s comparison and of `ArtLoader.stats()` (`js/app.js:297`, `js/app.js:957-960`).
+**15 realizations became 0 and exactly 15 covers were released, on the commit to Home.** That is
+`deactivate() → dematerialize()`, which removes every row and calls `opts.release(el)` per row
+(`js/virtuallist.js:251-263, 203-206`) through `releaseRow` (`js/browse.js:44-47`). The counts
+match one-for-one.
+
+**F40 [LB]** That deactivate is ordinary and intended. Leaving Browse calls `browseWillHide()`
+before `display:none` lands (`js/nav.js:55-61`), wired to `Browse.deactivate()`
+(`js/browse.js:371`). **Nothing is wrong at this step** — a hidden page is supposed to hold zero
+rows.
+
+**F41 [LB]** So the SWR repaint is out as the producer for this incident, independently of F18:
+the guard's own diagnostic never fired. The only `FLASH repaint deferred` lines in 48k lines are
+at 19:46 for `files:6240`, an hour later on a different view. **I withdraw the repaint as the
+cause here.**
+
+### 10.2 The step that turns a normal deactivate into a stuck empty page
+
+**F42 [LB]** On a commit to Home the hold is released **after** `#browse` has been hidden.
+`runFinalize()` calls `applyScreen(dest, …)` at `js/app.js:1120`; `dropRowHold()` runs in
+`finalize`'s `finally` at `js/app.js:1163-1164`, i.e. strictly later. `dropRowHold` calls
+`Browse.endHold(t, currentDesc())` (`js/app.js:371-375`) with `currentDesc()` now `home`.
+
+**F43 [LB]** `keyOf({v:'home'})` returns `'home'` (`js/browse.js:22-23` — not `authorBooks`, not
+`files`, so the descriptor's own `v`), and `pageCache.has('home')` is false. `endHold` therefore
+takes its **else** branch (`js/browse.js:191-217`), whose last act is
+`const shown = activeEntry(); if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }`
+(`js/browse.js:211-212`). `activeEntry()` returns the first page that is neither `hidden` nor
+`parked` (`js/browse.js:253-256`) — on a browse→home commit `showPage` never ran, so that is the
+Books page.
+
+**F44 [LB] Therefore `endHold` activates and realizes the Books page while `#browse` is already
+`display:none`.** This contradicts the ordering rule the same file states twice in its own words —
+*"a hidden box measures zero"* (`js/browse.js:174-177`, `js/nav.js:56-58`) — which is exactly why
+`deactivate()` is called *before* the hide. The else branch does the opposite, *after* it.
+
+**F45 [LB]** A zero-measuring box realizes **zero rows**, by arithmetic, not by guess.
+`overscan()` is `Math.round(metrics.viewportH() * 1.5)` when not injected
+(`js/virtuallist.js:177`; production never injects — `vlOpts` is test-only, `js/browse.js:32`), so
+a `clientHeight` of 0 gives an overscan of 0. `windowFor(model, top, 0, 0)` then has `from === to`,
+and the first group fails `if (g.top >= to) break` immediately at `top = 0`
+(`js/virtuallist.js:79-94`). The window is empty.
+
+**F46 [LB]** The controller is left in the state that blocks every later refill: `activate()` sets
+`state = 'active'` and `activeCtl = api` **before** realizing (`js/virtuallist.js:238-240`). So it
+ends `active`, registered as the active controller, holding zero rows.
+
+### 10.3 Why the re-entry 42 ms later does not refill it — answering the coordinator's Q2
+
+**F47 [LB]** Yes, the 42 ms re-entry explains it, but **not** as a race against a rebuild: there is
+no rebuild to race. The page node, its shells, its letterheads and its A–Z strip are all intact —
+only the rows are gone, and the *only* things that re-create rows are `_realize()` and `update()`.
+The re-entry path calls neither:
+
+1. `showPage('books')` reaches `c.activate()` because `returningFromSwipe` requires state
+   `'suspended'` and the state is `'active'` (`js/browse.js:355-356`).
+2. `activate()` **returns without realizing**: `if (state === 'active' && activeCtl === api) return;`
+   (`js/virtuallist.js:236`). Both conditions were set by F46.
+3. `positionOnEnter` writes nothing: `anchorEntryY()` needs `savedAnchor`, and `captureAnchor()`
+   returned `null` at the deactivate because `top > 0` was false in a zero-measuring box
+   (`js/virtuallist.js:247-249`). With `anchorY` null and `entryScrollY('books', null)` also null
+   (`js/browse.js:270-273`), the `y != null` guard fails and `applyScrollY` — the only other
+   `_realize()` caller on this path (`js/browse.js:286`) — is never reached
+   (`js/browse.js:310-313`).
+
+**F48 [LB]** Reproduction check **F** executes exactly 1–3 and measures
+`rows=0 imgs=0 withSrc=0` with the chrome intact. Check **E** executes F42–F46. The `end=input`
+on #14's line is only the watch window closing early at the next touchstart
+(`js/app.js:1018-1021`) — a diagnostic, with no behavioural coupling to the hold.
+
+**F49 [LB]** There is exactly **one** remaining refill opportunity in the whole gesture, and it is
+`endHold`'s *landed* branch, which calls `_realize()` **directly**, bypassing `activate()`'s early
+return (`js/browse.js:189-190`). Reproduction check **G** shows it does refill when the box
+measures. Whether it fired on #15 is §11 U6.
+
+### 10.4 The fork is resolved: empty shells, not an emptied container
+
+**F50 [LB]** E1 is out. Gesture #14 printed a **full** comparison string (`realized 15→0 …`), and
+that string is only reachable when `revealBase` **and** `now` are non-null (`js/app.js:971`), i.e.
+a `.browsepage` existed at 18:34:05.885. For E1 the node would have to be removed in the following
+947 ms, and the only removers are `Browse.clearCache`/`reset`/`evictLRU` (`js/browse.js:68, 79,
+374-383`) — reconnect is refuted, and `evictLRU` needs more than `MAX_PAGES = 12` pages
+(`js/browse.js:20`). **E2 — the page survives with empty shells — is the end-state**, which is also
+what the screenshot shows.
+
+### 10.5 Discriminator 4 is already settled by the log; no device check needed
+
+**F51 [LB]** The Books page **is** virtual, so `pb_forceVirtual` is on. `snapBrowse` reports
+`realized: p._vctl && p._vctl.realizedCount ? p._vctl.realizedCount() : -1` and
+`state: … : 'classic'` (`js/app.js:296-297`). A classic page therefore prints `realized -1` and
+`state classic`. #14 printed `realized 15→0`, which only a live virtual controller can produce.
+This also independently confirms F14 and makes the whole shells-without-rows shape reachable at 145
+books. **Do not spend a device check on it.**
+
+**F52 [C]** The corollary matters for scope: with "Windowed browse" **off**, `listView` builds rows
+inline (`js/browse.js:724-732`), there is no controller, nothing dematerializes, and this defect is
+structurally unreachable.
+
+### 10.6 Intermittency, restated — answering the coordinator's Q1 and Q3
+
+**F53 [LB]** The trigger is not a network event at all. It is the **descriptor the gesture lands
+on**: `endHold`'s else branch runs whenever `keyFor(landed)` names no cached browse page
+(`js/browse.js:171-172`), which for a commit means **any transition landing on Home or an
+overlay** while a browse page is the current `activeEntry()`. That is a routine, high-frequency
+navigation, which is why the arming half happens constantly.
+
+**F54 [LB]** What makes the *visible* failure rare is the second half: the next entry into that
+same browse page must take the cache-hit path with no anchor to restore (F47.3) and must not reach
+`endHold`'s landed `_realize()` in a state where it can measure. Rapid back-and-forth swiping
+maximises it because it pairs a →Home commit with a →Books commit inside a few tens of
+milliseconds, with no intervening scroll — and a scroll is the one other thing that would call
+`_realize()` (`js/virtuallist.js:144-149`).
+
+**F55 [LB] Answer to Q1 — every source path that can emit `getBooks live:` with no `cache-first`
+line of its own.** Enumerated from `js/plex.js:417-461` and `js/plex.js:670-689`:
+1. **Forced** — `opts.force` skips the whole cache branch (`js/plex.js:433`). Reached only from
+   `Plex.getBooks({force})` in `HomeScreen.load` (`js/home-screen.js:124`), whose forcing callers
+   are `refreshHome` (`js/app.js:1384`), `doResetProgress` (`js/app.js:2523`) and `Net.onReconnect`
+   (`js/app.js:3127`). `enterApp` calls `loadHomeData()` with **no** opts (`js/app.js:1317`), so it
+   is not forced.
+2. **Warm prefetch with no cache** — `opts.warm` returns the cache if present and otherwise runs
+   live with `silent: true` (`js/plex.js:428-431`). Sole caller: `js/warmer.js:127`
+   `Plex.getBooks({ warm: true })`. ⭐ `silent` suppresses `cacheHook.fresh` (`js/plex.js:381-385`),
+   so this path **cannot** drive reachability and **cannot** fire a reconnect — which is precisely
+   consistent with `lastReconnectAt: 0`.
+3. **No cache at all** — an unforced read whose `fromCache()` is `undefined` falls through to
+   `await trackFg(runLive(...))` with no cache-first line (`js/plex.js:452-454`). Reachable from
+   any `getBooks` caller: `js/browse.js:397`, `js/home-screen.js:124`, `js/app.js:2561`,
+   `js/logpipe.js:58`.
+4. **A revalidate whose `cache-first` line is simply earlier in the log** — the F18 correction.
+   Not a distinct path; the commonest explanation.
+5. Not a producer: the session short-circuit `if (booksCache && !opts.force) return booksCache;`
+   (`js/plex.js:671`) logs nothing at all, and `runLive`'s in-flight coalescing
+   (`js/plex.js:375-390`) collapses concurrent callers to one live read, so the log line names the
+   read, never the caller.
+
+**F56 [LB]** None of paths 2–4 touches `Browse.clearCache` or the row hold. **On the corrected
+account the cache write at 18:34:06.432/.444 is a bystander, not a participant** — it lands inside
+the watch window and does nothing to the DOM. The coordinator's reading that it is "downstream" is
+right that it is not upstream; the stronger statement is that it is **off the causal path
+entirely**. Its correlation with the failing gesture is not yet explained (§11 U5) and should not
+be leaned on.
+
+### 10.7 What the log settled
+
+| Original claim | Status |
+|---|---|
+| `Net.onReconnect` → `Browse.clearCache()` is the producer | **Refuted** (F23 note) |
+| No `cache-first` line ⇒ forced read | **Withdrawn**, replaced by a window test (F18) |
+| An SWR repaint emptied the page | **Refuted for this incident** (F41); still a reachable door (F11–F13) |
+| E1 (emptied container) vs E2 (empty shells) | **Resolved: E2** (F50) |
+| Discriminator 4 needs a device check | **Settled from the log** (F51) |
+| De-clone is neutral on commits (§8) | **Unchanged** — byte-identical line, independent of all the above |
+
+---
+
+## 11. Underived facts
+
+**U5 [U]** Why a `getBooks` live read landed in #15's window at all, and which of F55's paths it
+was. Settleable from the full log: the `books cache-first` line preceding it, if any, and whether
+a `WARM` line from `js/warmer.js:131` sits nearby.
+
+**U6 [U]** Whether `endHold`'s landed `_realize()` (F49) ran on #15 and still realized nothing, or
+ran and realized rows the user never saw. The field that answers it is the `realized X→Y` in the
+comparison string — which #15 suppressed by printing `base n/a`. **The elided middle of #15's own
+FLASH line is in the coordinator's log** and carries the `COVERED`/`EXPOSED`/`hidden +img` buckets
+that bound it.
+
+**U7 [U]** Why #15 printed `base n/a` at all. Under E2 a non-hidden `.browsepage` existed at both
+sampling instants, so `snapBrowse` should have returned an object twice (F6). This is the one fact
+the corrected account does **not** explain, and it is the highest-value remaining question. The
+`state=` field on **#14's** line bounds it: it reads `active→…`, and whether the right-hand side is
+`active` says directly whether F46 left the controller stuck. Both fields are already in hand.
+
+**U8 [C→U]** Whether any transition **other** than →Home/→overlay reaches `endHold`'s else branch
+in production. Derivable only by enumerating landed descriptors against `pageCache`; the source
+comment at `js/browse.js:192-204` claims the set is exactly four, and that claim is worth
+re-checking against §10 rather than inherited.

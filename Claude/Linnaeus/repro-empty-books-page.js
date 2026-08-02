@@ -24,7 +24,8 @@ global.Plex = {
 };
 global.window.Plex = global.Plex;
 Object.defineProperty(dom.window.Element.prototype, 'scrollHeight', { get: () => 10e6, configurable: true });
-global.window.ArtLoader = { release: () => {}, scan: () => {}, observe: () => {} };
+const released = [];
+global.window.ArtLoader = { release: (img) => released.push(img.getAttribute('data-art')), scan: () => {}, observe: () => {} };
 global.ArtLoader = global.window.ArtLoader;
 global.VirtualList = require(path.join(ROOT, 'js', 'virtuallist.js'));
 global.window.VirtualList = global.VirtualList;
@@ -50,9 +51,12 @@ const books = (n, tag) => Array.from({ length: n }, (_, i) => ({
 // Injected metrics: jsdom has no layout, so the controller is given a real
 // viewport the same way test/browse-virtual.test.js does.
 const view = { scrollY: 0, viewportH: 600 };
+// NB: `overscan` is deliberately NOT injected. Production never injects it, so it
+// derives from the viewport: `Math.round(metrics.viewportH() * OVERSCAN_FACTOR)`
+// (js/virtuallist.js:177) — which is 0 exactly when the box measures zero, and that
+// is the property checks E/F turn on. Injecting a constant overscan would mask it.
 T.setVlOpts({
   strides: { header: 30, row: 80 },
-  overscan: 200,
   metrics: { scrollY: () => view.scrollY, viewportH: () => view.viewportH, listTop: () => 0 },
   scrollTo: (y) => { view.scrollY = y; },
 });
@@ -190,6 +194,82 @@ check('D: dropHold via clearCache empties #browse outright — rows=0, imgs=0, s
   Browse.endHold(fresh, { v: 'books' });
   assert.strictEqual(q.classList.contains('parked'), false,
     'control: a matching token DOES un-park (so the stale-token check is load-bearing)');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E/F/G — the sequence the 2026-08-01 device log actually shows: a commit
+// books→home immediately followed (42 ms) by a commit home→books. No repaint is
+// involved; the rows are destroyed by the ORDINARY deactivate on the way to Home,
+// and the re-entry never realizes them again.
+//
+// `view.viewportH = 0` models the page measuring zero because `#browse` is
+// display:none. That is not a jsdom artifact being papered over — it is the rule
+// the source states in its own words at js/browse.js:174-177 and js/nav.js:56-58
+// ("a hidden box measures zero"). jsdom has no layout, so the metric is injected
+// rather than measured; every other assertion is a node count.
+// ─────────────────────────────────────────────────────────────────────────────
+let pageE = null; let tok15 = null;
+check('E: commit->home — deactivate strips the rows, then endHold RE-ACTIVATES the page while #browse is hidden and realizes ZERO', () => {
+  T.pageCache.clear(); mount.innerHTML = ''; released.length = 0;
+  view.viewportH = 600; view.scrollY = 0;
+  const p = newPage(); pageE = p;
+  T.listView(p, 'Books', books(145), T.bookRow, false);
+  T.pageCache.set('books', { el: p, order: 1 });
+  p._vctl.activate();
+  const realized0 = p._vctl.realizedCount();
+  assert.ok(realized0 > 0, 'baseline realized (' + realized0 + ')');
+  // Count releases from HERE — an earlier check may have left another controller
+  // active, and activate() deactivates it (js/virtuallist.js:237), which releases
+  // ITS rows into the same counter.
+  const relBefore = released.length;
+
+  // --- gesture #14: books -> home, COMMIT ---
+  const tok14 = Browse.beginHold();                 // app.js:548 takeRowHold
+  // runFinalize -> applyScreen(home) -> Nav.setView('home') -> browseWillHide()
+  Browse.deactivate();                              // js/nav.js:60 -> js/browse.js:371
+  view.viewportH = 0;                               // ...and #browse is now display:none
+  assert.strictEqual(p._vctl.state(), 'inactive');
+  assert.strictEqual(p._vctl.realizedCount(), 0, 'rows dematerialized');
+  assert.strictEqual(released.length - relBefore, realized0,
+    'released === the realized count  (the log: "realized 15->0 ... released=15")');
+
+  // finalize's `finally` -> dropRowHold() -> endHold(token, currentDesc()==='home')
+  // 'home' is not a cached browse page, so endHold takes its ELSE branch and
+  // activates + realizes activeEntry() — with #browse already hidden.
+  Browse.endHold(tok14, { v: 'home' });
+  assert.strictEqual(p._vctl.state(), 'active',
+    'endHold ELSE branch re-ACTIVATED a page inside a hidden #browse (js/browse.js:211-212)');
+  assert.strictEqual(p._vctl.realizedCount(), 0,
+    'and realized ZERO rows, because the box measures zero (js/virtuallist.js:79-94, 177)');
+});
+
+check('F: re-entry 42ms later — showPage activate() EARLY-RETURNS, positionOnEnter writes nothing, page revealed with 0 rows', () => {
+  const p = pageE;
+  view.viewportH = 600;                             // #browse un-hidden by the drag-start render
+  tok15 = Browse.beginHold();                       // gesture #15
+  T.showPage('books');                              // CACHE HIT path, js/browse.js:524-526
+  assert.strictEqual(p._vctl.realizedCount(), 0,
+    'activate() returned without realizing (js/virtuallist.js:236)');
+  assert.strictEqual(p._vctl.state(), 'active');
+  assert.strictEqual(p._vctl.anchor(), null,
+    'savedAnchor is null — captureAnchor saw top<=0 (js/virtuallist.js:247-249)');
+  T.positionOnEnter({ v: 'books' }, p);             // js/browse.js:528
+  assert.strictEqual(p._vctl.realizedCount(), 0,
+    'positionOnEnter wrote nothing, so applyScrollY never realized (js/browse.js:310-313)');
+
+  const n = revealNumbers();
+  assert.strictEqual(n.rows, 0, 'reveal rows=0');
+  assert.strictEqual(n.imgs, 0, 'reveal imgs=0');
+  assert.strictEqual(n.withSrc, 0, 'reveal withSrc=0');
+  assert.ok(chrome(p).letterheads > 0 && chrome(p).alphaindex === 1, 'chrome intact');
+});
+
+check('G: the ONE remaining refill — endHold landed branch realizes explicitly, and it works when the box measures', () => {
+  const p = pageE;
+  Browse.endHold(tok15, { v: 'books' });            // js/browse.js:189-190
+  assert.ok(p._vctl.realizedCount() > 0,
+    'endHold landed branch calls _realize() DIRECTLY, bypassing activate()\'s early return');
+  assert.ok(revealNumbers().rows > 0, 'rows are back');
 });
 
 let bad = 0;
