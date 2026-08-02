@@ -1259,6 +1259,85 @@ const MUTATIONS = [
     + '(-> EMPTYAFTERHOME cell 1, then cell 2)',
     from: "        dropRowHold();\n        // dest already rendered live",
     to:   "        if (!commit) dropRowHold();   /* mutated: EMPTYAFTERHOME-b — wired to abort only */\n        // dest already rendered live" },
+
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // PLAN-parked-page-rides-home.md §8 — the park-distance law. Registered BEFORE the cells
+  // they defend, and executed, because every finding after that plan's round 1 was a claim
+  // about REACHABILITY and reading was wrong about it four times (its F9/F10/F12/F13).
+  //
+  // ⛔ TWO OF THE PLAN'S FIVE PARKOUTOFREACH MUTANTS ARE NOT HERE, and their absence is a
+  // recorded obligation rather than an omission. Both target the arithmetic cells, which are
+  // RED at HEAD and therefore land behind SKIP-PENDING-BUILD — so neither can be caught yet,
+  // and a registered-but-uncatchable mutant makes the sweep exit nonzero forever.
+  //   m1 ("restore -101vw") is additionally a literal NO-OP at HEAD, which the anchors gate
+  //   refuses outright — because AT HEAD THE SOURCE IS m1: run the arithmetic cells with their
+  //   skips removed and they are red for exactly the reason m1 predicts.
+  //   m2 (-250vw, which clears the floor but is not the shipped form) WAS registered and
+  //   EXECUTED here before the skips were applied, and its measured result is recorded; it is
+  //   withdrawn only because its one killer is now skipped. Confirmed by running the sweep, not
+  //   by reasoning about it: with the skip in place it reports UNCAUGHT.
+  // Both are the builder's same-commit obligations, with their exact strings, in
+  // Claude/Curie/parked-page-rides-home-test-design-2026-08-02.md §6. This is the same shape as
+  // the Stage-2 red suite (commit be7da1c), which specified 24 mutants rather than registering
+  // them because their anchors targeted text the build had yet to create.
+  // ══════════════════════════════════════════════════════════════════════════════════════
+
+  // ── PARKOUTOFREACH m3 — the structural max-width BAR, not a term of the arithmetic ──
+  // Plan F10: `left:0; right:0` means max-width can only CAP the box, so edgeVw stays 100
+  // for ANY max-width and the floor does not move. A >100vw max-width is therefore inert
+  // arithmetically and is barred as a RED FLAG — someone has misread the box. This mutant
+  // witnesses that bar and nothing else.
+  { name: 'PARKM3 PARKOUTOFREACH: #browse gets a >100vw max-width — arithmetically inert, so it '
+    + 'witnesses the structural max-width bar (-> PARKOUTOFREACH max-width-bar cell ALONE)',
+    file: 'css/app.css',
+    from: "  max-width: 640px; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }",
+    to:   "  max-width: 250vw; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }" },
+
+  // ── PARKOUTOFREACH m3' — the no-`width` precondition ──
+  // ⛔ ADDITIVE, and that is load-bearing (plan F13). Specified as a REPLACEMENT it would
+  // delete the `max-width` its own justification appeals to, trip the cell's anti-vacuity
+  // check instead, and leave the no-`width` assertion with no discriminating mutant — the
+  // sweep cannot see that, because both texts kill the cell either way.
+  { name: 'PARKM3P PARKOUTOFREACH: #browse gains `width: 200vw` beside its max-width — used width is '
+    + 'still 640px, so this is a PRECONDITION-only kill (-> PARKOUTOFREACH no-width cell ALONE)',
+    file: 'css/app.css',
+    from: "  max-width: 640px; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }",
+    to:   "  max-width: 640px; width: 200vw; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }" },
+
+  // ── PARKOUTOFREACH m4 — the no-`min-width` precondition, AND a real layout change ──
+  // Also ADDITIVE (F13). The only mutant in this set non-equivalent in LAYOUT as well as in
+  // the precondition set: CSS 2.1 §10.4 re-solves the used width with `min-width` when the
+  // max-width result is smaller, so W = 200vw beats the max-width left in place; the box is
+  // then over-constrained and §10.3.7 sets margin-left to 0 rather than a negative -50vw, so
+  // L = 0 and L + W = 200vw exactly, FLOOR = 300 and even the shipped 300 fails the STRICT
+  // inequality. Had the margins centred, the floor would be 250 and this mutant would be
+  // equivalent — the §10.3.7 clause is load-bearing, not a detail.
+  { name: 'PARKM4 PARKOUTOFREACH: #browse gains `min-width: 200vw` beside its max-width — min-width '
+    + 'beats max-width, so the box really becomes 200vw and the floor really moves to 300 '
+    + '(-> PARKOUTOFREACH no-min-width cell; post-fix also the strict-inequality cell)',
+    file: 'css/app.css',
+    from: "  max-width: 640px; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }",
+    to:   "  max-width: 640px; min-width: 200vw; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }" },
+
+  // ── DRAGREACHBOUNDED — the floor's FIRST term, pinned against the real entry point ──
+  // Without the clamp an over-drag writes |translateX| > w on #browse, and the floor's
+  // "max |displacement| = 100vw" stops being a fact about the code.
+  { name: 'PARKDRAG DRAGREACHBOUNDED: the drag clamp is removed, so an over-drag writes a #browse '
+    + 'transform beyond +/-w and the floor\'s first term is no longer bounded (-> DRAGREACHBOUNDED)',
+    from: "      t = Math.max(-d.w, Math.min(d.w, t));\n",
+    to:   "      /* mutated: the drag clamp is removed — t is no longer bounded by +/-d.w */\n" },
+
+  // ── NOPARKONHOME — invariant I10, the outgoing-side exemption ──
+  // Three earlier candidates for this cell were EQUIVALENT (plan F9, F12): `showAppView`
+  // never runs on a browse->home gesture at all, so mutating anything inside it — or its
+  // guard — is unobservable. This mutates the branch the invariant is actually about, the
+  // DISPATCH that really runs. Deliberately a string change and NOT `if (false)`: `npm test`
+  // runs test/lint.test.js and a constant condition would redden the LINT cell instead,
+  // mis-attributing the kill.
+  { name: 'PARKNOHOME NOPARKONHOME: renderDestination\'s home branch also renders browse content, so a '
+    + 'browse->home gesture parks every other cached page mid-drag (-> NOPARKONHOME)',
+    from: "          if (host === 'home') { $('home').classList.remove('parked'); return $('home'); }",
+    to:   "          if (host === 'home') { $('home').classList.remove('parked'); Browse.render(dest); return $('home'); }" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation
