@@ -358,16 +358,25 @@
     // leftover-cleanup reason. (takeRowHold runs in start(), where session is current.)
     const takeRowHold = () => { if (session && window.Browse && Browse.beginHold) session.hold = Browse.beginHold(); };
     // The SINGLE wrapper around Browse.endHold, and therefore the one place the LANDED
-    // screen is read (Invariant D6, PLAN-swipe-declone.md §5.3.6). Both of this wrapper's
-    // callers apply the screen FIRST — the finalize `finally` lands after the SYNCHRONOUS
-    // applyScreen, and the hard-reset path calls applyScreen(currentDesc(), …) immediately
-    // before dropRowHold() — so ONE read here is the settled screen on the commit branch,
-    // the abort branch and the hard reset alike, PROVIDED applyScreen itself did not throw.
-    // dropRowHold sits in finalize's `finally` (below), so it also runs when runFinalize()
-    // threw: on a commit the stack mutation precedes applyScreen, so a throwing applyScreen
-    // hands endHold the DESTINATION descriptor while the destination was never actually
-    // applied. Reading it before applyScreen would hand endHold the pre-commit descriptor
-    // and park the page the gesture just landed on.
+    // screen is read (Invariant D6, PLAN-swipe-declone.md §5.3.6). currentDesc() is the
+    // read: on a commit the stack mutation runs at the top of runFinalize (well before
+    // either call site below), so the descriptor is already the settled destination by
+    // the time either caller reaches it. The hard-reset path calls
+    // applyScreen(currentDesc(), …) immediately before dropRowHold() — a restore onto the
+    // SOURCE, which applyScreen never hides, so ordering against it is not load-bearing.
+    // The finalize path calls dropRowHold from INSIDE runFinalize, before the
+    // applyScreen(dest, …) that can hide #browse (js/nav.js:55-69) — not from the
+    // `finally` after it. Browse.endHold's fallback branch (no landed browse page — a
+    // commit to home/overlay, or an abort back to one) activates and realizes whichever
+    // browse page is still shown (js/browse.js:205-212); calling it once #browse is
+    // already `display:none` realizes zero rows into a box that cannot measure and
+    // leaves the controller stuck `active` with none, closing every later refill
+    // (js/virtuallist.js:236-240) — the empty-Books-page defect. Calling it first, while
+    // the container still measures, lets that fallback activation land cleanly, and the
+    // ordinary deactivate() applyScreen triggers next tears it down correctly instead of
+    // leaving it wedged. The `finally` below still calls dropRowHold as a leak guard for
+    // a throw earlier in runFinalize; it is a no-op on the normal path, because dropRowHold
+    // clears session.hold on its first call.
     const dropRowHold = () => {
       if (!session || !session.hold) return;
       const t = session.hold; session.hold = 0;
@@ -1112,6 +1121,11 @@
         // compared AGAINST — "covers reload on every transition" and "covers reload
         // only on aborts" call for completely different fixes.
         reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'), cover);
+        // Release the row hold BEFORE applyScreen can hide #browse, not after (see the
+        // comment on dropRowHold's declaration above). currentDesc() already reads the
+        // settled destination here — the stack mutation for a commit is at the top of
+        // this function, well before this line.
+        dropRowHold();
         // dest already rendered live → reconcile only. Home keeps whatever scroll it showed
         // during the drag (resetScroll:false) — a committed swipe is not a fresh navigation,
         // and #home is a scroll-neutral park (css:98), so there is nothing to restore, only
@@ -1131,8 +1145,11 @@
       // try/finally so the row hold can never be stranded. runFinalize has THREE
       // exits — the two ghost-held reveals return early — and none is guaranteed to
       // run if applyScreen or Browse.render throws. A finally covers every return AND
-      // the throw. It lands after the SYNCHRONOUS applyScreen, which is the part that
-      // must still see the hold; the deferred ghost drop does not need it.
+      // the throw. runFinalize itself now calls dropRowHold before its own
+      // applyScreen(dest, …) (see that call site); this one is a leak guard for a
+      // throw earlier in runFinalize — dropPanes, watchFrames, reportReveal — before
+      // that call is reached, and is a no-op otherwise (dropRowHold clears
+      // session.hold on its first call).
       const endOwnership = () => { if (!revealPending) sessionDone(cur); };   // held paths end in drop()
       const finalize = () => {
         if (done) return; done = true;

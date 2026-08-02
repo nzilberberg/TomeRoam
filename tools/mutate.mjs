@@ -1225,6 +1225,40 @@ const MUTATIONS = [
     file: 'js/browse.js',
     from: "      const shown = pageCache.get(landedKey);\n      if (shown && shown.el._vctl) { shown.el._vctl.activate(); shown.el._vctl._realize(); }",
     to:   "      const shown = pageCache.get(landedKey);\n      if (shown && shown.el._vctl) { /* mutated: the landed page is neither activated nor realized */ }" },
+
+  // ── EMPTYAFTERHOME-a — the shipped fix: full revert ──
+  // The fix (js/app.js) reorders dropRowHold() to run inside runFinalize, BEFORE the
+  // applyScreen(dest, …) call that can hide #browse — not from finalize's `finally`
+  // after it. This mutant removes the early call, so the only remaining dropRowHold()
+  // is the `finally` one, which runs after applyScreen — reproducing HEAD's shipped
+  // ordering (and therefore the shipped defect) exactly.
+  { name: 'EMPTYAFTERHOME-a: the early dropRowHold() is removed, so the hold release again '
+    + 'runs only in finalize\'s `finally`, after applyScreen has already hidden #browse '
+    + '(-> EMPTYAFTERHOME cell 1, then cell 2)',
+    from: "        // this function, well before this line.\n        dropRowHold();",
+    to:   "        // this function, well before this line.\n        /* mutated: EMPTYAFTERHOME-a — early release removed */" },
+
+  // ── EMPTYAFTERHOME-b — the half fix: the reorder applied to only one branch ──
+  // Curie's RED-suite note specifies -b as "activate() reached, _realize() suppressed" —
+  // a shape that presumes a NEW conditional guard around endHold's fallback activation.
+  // The shipped fix is a reorder instead (dropRowHold moved ahead of applyScreen in
+  // runFinalize), and under it that literal mutation is UNREACHABLE for this defect:
+  // activate() (js/virtuallist.js:234-241) early-returns without calling _realize() at all
+  // whenever the controller is ALREADY active and IS activeCtl — which it is throughout a
+  // browse->home gesture, because nothing suspends the Books controller for that
+  // transition (js/browse.js:194-204) and the reorder means endHold's fallback now always
+  // runs BEFORE the deactivate() that would otherwise flip it to inactive. Verified, not
+  // assumed: registering that exact mutation and sweeping it left both EMPTYAFTERHOME
+  // cells green — UNCAUGHT, because activate() never transitions state there either way.
+  // The reorder's real fragility is a HALF-APPLIED reorder: the early release wired to
+  // only one branch of the commit/abort split. This mutant reproduces exactly that on the
+  // COMMIT branch these cells drive — the release stays late, applyScreen still hides
+  // #browse first, and the fallback re-activates into the hidden box, same as -a.
+  { name: 'EMPTYAFTERHOME-b: the early dropRowHold() is wired to the ABORT branch only, so a '
+    + 'COMMIT still reaches applyScreen (and the #browse hide) before the hold releases '
+    + '(-> EMPTYAFTERHOME cell 1, then cell 2)',
+    from: "        dropRowHold();\n        // dest already rendered live",
+    to:   "        if (!commit) dropRowHold();   /* mutated: EMPTYAFTERHOME-b — wired to abort only */\n        // dest already rendered live" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

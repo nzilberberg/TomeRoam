@@ -55,12 +55,10 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const { boot } = require('./app-harness.js');
 
-// ⚠️ SKIP-PENDING-BUILD. Both cells below are RED at HEAD for the defect above. They carry
-// `{ skip: SKIP }` so the pre-commit battery stays green (core.hooksPath = tools/hooks; this
-// project does not use `--no-verify`). THE BUILDER REMOVES THE SKIP to drive them red, then
-// builds to green. No assertion may be weakened to green them.
-const SKIP = 'SKIP-PENDING-BUILD — RED until the hold release stops activating a browse '
-  + 'controller inside a hidden #browse (Claude/Curie/RED-browse-empty-after-home-commit.md)';
+// Both cells were authored red-first, carrying `{ skip: SKIP }` until the builder removed it to
+// drive them red and build to green (Claude/Curie/RED-browse-empty-after-home-commit.md). The fix
+// (js/app.js) reorders the row-hold release ahead of the applyScreen call that can hide #browse,
+// so the hold-release fallback never runs against an already-hidden container.
 
 // REAL wall clock, captured before boot() patches setTimeout — app.js's move() resamples
 // velocity only after >8ms of REAL time, so back-to-back synthetic moves leave vx holding the
@@ -172,7 +170,7 @@ async function commitToHome(h, page) {
 // active-with-rows is the correct state of a shown one. The cell therefore asserts the
 // CONJUNCTION is absent, which is what keeps it agnostic about where the fix lands.
 test('EMPTYAFTERHOME — a commit that leaves Browse must not leave the Books controller ACTIVE '
-  + 'with zero realized rows', { skip: SKIP }, async () => {
+  + 'with zero realized rows', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true, books: bigBooks(145) });
   try {
     const page = await booksShowing(h);
@@ -210,7 +208,7 @@ test('EMPTYAFTERHOME — a commit that leaves Browse must not leave the Books co
 // state 'active' → positionOnEnter writes nothing because the anchor is null, so applyScrollY
 // never runs and _realize() is never reached (js/browse.js:310-313). Zero rows, forever.
 test('EMPTYAFTERHOME — returning to Books after a commit to Home shows a page WITH ROWS, and it '
-  + 'stays that way with no gesture to repair it', { skip: SKIP }, async () => {
+  + 'stays that way with no gesture to repair it', async () => {
   const h = boot({ fakeTimers: true, realBrowse: true, books: bigBooks(145) });
   try {
     const page = await booksShowing(h);
