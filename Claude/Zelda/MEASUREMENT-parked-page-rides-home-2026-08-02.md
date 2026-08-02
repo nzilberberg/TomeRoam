@@ -103,3 +103,23 @@ evidence.
 Mid-run, the Browser pane was hidden; `document.hidden === true` throttles `setTimeout` to ~1/s and
 blocks compositing entirely (screenshots time out). The capture still completed — `getBoundingClientRect`
 is unaffected by tab visibility — but it ran ~20× slower. Already recorded as trap #4 in the swipe saga.
+
+## Realized by PLAN-parked-page-rides-home.md — 2026-08-02
+
+Built at commit `1c0b62a` (build `2026-08-02.304`); reviewed PASS — fix-then-ship
+(`Claude/Poirot/POIROT-parked-page-rides-home-b358f73.md`). The four open items above, answered:
+
+1. **Cover-retention preservation** — ANSWERED at the bench, DEVICE-owed for the raster claim. The
+   plan's §4 derives that the property is carried by the inline-transform path plus a no-paint-between
+   ordering (invariant I11), not by the park constant this build changed, so a distance change cannot
+   regress it by construction. The raster half — that iOS actually keeps the bitmaps warm at 3 viewports
+   away exactly as it did at 1.01 — is still device gate item 2, unrun.
+2. **Whether a distance change is the right fix** — ANSWERED. The plan weighed clipping at `#browse`
+   and not parking non-participant pages (§5) and rejected both for larger blast radius or no measured
+   gain; the distance change shipped.
+3. **Invariant P compatibility** — CONFIRMED and GATED, not merely looking preserved. `css/app.css:144-147`
+   declares no position, no insets, and no `!important` on the transform — read at source and defended
+   by mutation (`PARKBOXEQUAL`/`PARKLOSESTRANSFORM`, `tools/mutate.mjs` indices 104-106, re-swept caught
+   after the build).
+4. **Whether this is the whole of the reported garbage** — STILL OPEN, device-owed (plan risk R1). The
+   fix removes one measured contributor; only the user's device can answer whether anything else remains.

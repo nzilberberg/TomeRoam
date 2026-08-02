@@ -167,7 +167,7 @@ extended the Writable list to exactly these two files; both corrected to
 `-300vw`, comment/prose only (neither file's assertions changed). `test/swipe-declone-stage2-css.test.js:301`
 now reads `-300vw` in place of `-101vw`; `Claude/Linnaeus/PROBE-swipe-reveal-teardown.md`'s
 `.browsepage.parked` entry corrected to `-300vw` with its stale `css:91-96` citation updated to
-`css:143-146` and a note that the value moved after the probe was written. A sibling sweep
+`css:144-147` and a note that the value moved after the probe was written. A sibling sweep
 (`grep -rn` across `test/`, `tools/`, `js/`) found no other live, non-historical statement of
 `.browsepage.parked`'s distance — every other `-101vw` hit is either about `#home.parked` (unchanged
 by this plan, still `-101vw`), inside the parked-page-rides-home red suite's own historical "RED

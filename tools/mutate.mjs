@@ -1325,8 +1325,9 @@ const MUTATIONS = [
   // inequality. Had the margins centred, the floor would be 250 and this mutant would be
   // equivalent — the §10.3.7 clause is load-bearing, not a detail.
   { name: 'PARKM4 PARKOUTOFREACH: #browse gains `min-width: 200vw` beside its max-width — min-width '
-    + 'beats max-width, so the box really becomes 200vw and the floor really moves to 300 '
-    + '(-> PARKOUTOFREACH no-min-width cell; post-fix also the strict-inequality cell)',
+    + 'beats max-width, so the box really becomes 200vw in a real engine, but derivedFloorVw() never '
+    + 'reads min-width, so the strict-inequality cell stays green '
+    + '(-> PARKOUTOFREACH no-min-width cell ALONE — executed, tools/mutation-sweep.mjs 130)',
     file: 'css/app.css',
     from: "  max-width: 640px; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }",
     to:   "  max-width: 640px; min-width: 200vw; margin: 0 auto;\n}\nbody.has-player #browse { bottom: calc(var(--nav-h) + var(--nav-pad) + 106px); }" },

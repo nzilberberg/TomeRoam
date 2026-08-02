@@ -1004,7 +1004,7 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   **F4 scrub CLOSED same day (commit `e11ecf3`):** the coordinator extended the Writable list to
   exactly those two files; both corrected to `-300vw` (comment/prose only, no assertion changed);
   `Claude/Linnaeus/PROBE-swipe-reveal-teardown.md`'s stale `css:91-96` citation corrected to
-  `css:143-146`. A sibling sweep of `test/`, `tools/`, `js/` found no other live statement of the
+  `css:144-147`. A sibling sweep of `test/`, `tools/`, `js/` found no other live statement of the
   `.browsepage.parked` distance — every other `-101vw` hit is `#home.parked` (unchanged, still
   `-101vw`), the parked-page-rides-home suite's own historical narrative, or PARKM1's intentional
   restore. Suite re-run green (823/822/0-fail/1-skip); all seven mutants re-swept in the foreground,

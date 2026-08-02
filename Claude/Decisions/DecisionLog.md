@@ -1237,17 +1237,17 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   Precondition: a cached non-destination browse page must exist, which is why a cold app never shows
   it and why six earlier hypotheses — every one of them sampling AT REST — missed it.
 
-- THE PARK OFFSET IS GOVERNED BY A DISTANCE LAW, NOT A CHOSEN NUMBER — 2026-08-02, planned
+- THE PARK OFFSET IS GOVERNED BY A DISTANCE LAW, NOT A CHOSEN NUMBER — 2026-08-02, planned and BUILT
   (`Claude/Plans/PLAN-parked-page-rides-home.md`; TEMPERed three times on 2026-08-02,
   `Claude/Charpy/PLAN-parked-page-rides-home-charpy.md`, `…-charpy-r2.md` and `…-charpy-r3.md` — the
-  law, the 200vw floor and the `-300vw` value survived every round unchanged, and `css/app.css` is
-  still untouched. Round 1's two Structural corrections were applied at `dcebdb1` and round 2's at
-  `ba10c72`. Every finding after round 1 has been the same class: a claim about REACHABILITY — whether
-  a mutant's code path runs, or whether an assertion is reached given what else fails first. Not yet
-  built.)
+  law, the 200vw floor and the `-300vw` value survived every round unchanged. Round 1's two Structural
+  corrections were applied at `dcebdb1` and round 2's at `ba10c72`. Every finding after round 1 has
+  been the same class: a claim about REACHABILITY — whether a mutant's code path runs, or whether an
+  assertion is reached given what else fails first. Built at commit `1c0b62a` (build `2026-08-02.304`)
+  — see the BUILT entry below for the record of the build itself.)
   The offset must exceed the maximum displacement its container can take plus the page's own width:
   `100vw + 100vw = 200vw`, both terms derived (`js/app.js:505/558/602/649/690` and
-  `css/app.css:228/241-244`). The shipped value is `-300vw` — the floor plus a viewport of margin, and
+  `css/app.css:250-255/267-270`). The shipped value is `-300vw` — the floor plus a viewport of margin, and
   the exact form the measurement's after-run executed. Three alternatives were excluded, so they are
   not reconsidered: clipping at `#browse` (adds a scroll authority or rests on a spec argument about
   containment on the one element whose containing-block behaviour broke the `.alphaindex` strip in
@@ -1372,3 +1372,17 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   load-bearing promise (§12): a parked page cannot compose onto the viewport because
   300vw > 100vw + (L + W), both terms bounded by construction -- softest at the two ENUMERATIONS that
   bound is built from, since this plan's own history is three complete-looking sets that were not.
+
+- PLAN-parked-page-rides-home.md IS BUILT — 2026-08-02, Brunel, commit `1c0b62a` (build `2026-08-02.304`).
+  `css/app.css:144-147`, `.browsepage.parked`: `transform: translateX(-101vw)` -> `translateX(-300vw)`,
+  the one CSS declaration the plan specified. The three PARKBOXEQUAL/PARKLOSESTRANSFORM mutation
+  anchors (`tools/mutate.mjs` S2-6/S2-7/S2-8) were migrated to the new constant, and the two mutants
+  the plan could not register before the build (PARKM1 restoring `-101vw`; PARKM2 clearing the floor
+  at `-250vw` without matching the shipped form) were registered from the test author's exact strings.
+  All seven park-coverage mutants (`tools/mutate.mjs` indices 126-132) and the three migrated anchors
+  (104-106) were swept and CAUGHT, each by the cell it names. Full suite green (823 tests, 822 pass, 0
+  fail, 1 pre-existing skip). The plan's two same-commit scrub targets
+  (`test/swipe-declone-stage2-css.test.js:301`, `Claude/Linnaeus/PROBE-swipe-reveal-teardown.md:60`)
+  were corrected at commit `e11ecf3`, same day. Device gate items (R1: whether this is the whole of
+  the reported garbage; R2: cover retention at the new distance) remain OPEN and device-owed, as the
+  plan states. Poirot: PASS — fix-then-ship (`Claude/Poirot/POIROT-parked-page-rides-home-b358f73.md`).

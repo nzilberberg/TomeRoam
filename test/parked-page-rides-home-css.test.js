@@ -328,7 +328,7 @@ test('PARKOUTOFREACH — #browse is an auto-centred left:0/right:0 box, which is
   }
   assert.deepEqual(bad, [], 'the floor\'s second term is L + W with L = (V - W)/2, which holds only '
     + 'while the box is stretched between left:0 and right:0 and centred by auto margins '
-    + `(css:224-229). Change the box and the derivation must change with it:\n  ${bad.join('\n  ')}`);
+    + `(css:250-255). Change the box and the derivation must change with it:\n  ${bad.join('\n  ')}`);
 });
 
 test('PARKOUTOFREACH — no rule contributing to #browse declares a `width`', () => {
@@ -379,11 +379,6 @@ test('PARKOUTOFREACH — #browse\'s max-width is expressed in px, or in vw at no
 // Claude/Curie/parked-page-rides-home-test-design-2026-08-02.md §7. The skip is what lets a
 // red-first suite live in a green tree; THE BUILDER REMOVES BOTH SKIPS FIRST, drives each red,
 // and only then makes them green. A skip removed after the constant changes proves nothing.
-const SKIP_FLOOR = 'SKIP-PENDING-BUILD — RED until the builder changes .browsepage.parked to '
-  + 'translateX(-300vw). At HEAD: 101vw does not strictly exceed the 200vw floor this cell derives '
-  + 'from #browse\'s own box.';
-const SKIP_FORM = 'SKIP-PENDING-BUILD — RED until the same one-declaration change lands. At HEAD '
-  + 'the offset is 101vw, not the bench-measured 300vw.';
 /** The park offset in vw, magnitude, for every rule that declares one on a parked page. */
 function parkOffsetsVw() {
   return declaredOn(PARKED_RULES).filter((d) => d.prop === 'transform').map((d) => {
@@ -408,13 +403,15 @@ test('PARKOUTOFREACH — the park offset STRICTLY exceeds the floor derived from
   const offsets = parkOffsetsVw();
   const bad = offsets.filter((o) => o.vw === null || !(o.vw > floor))
     .map((o) => `${o.selector} { transform: ${o.value} } — ${o.vw === null ? 'not a translateX in vw' : o.vw + 'vw'} does not strictly exceed ${floor}vw`);
-  assert.deepEqual(bad, [], 'RED @HEAD: the park is `translateX(-101vw)` (css:119) against a '
-    + `${floor}vw floor. #browse is the INCOMING mover on a home->browse drag, at translateX(w + t), `
-    + 'so the park composes to `homeX - 0.01w` and the page rides ON Home for the whole gesture '
-    + '(measured: 7/7 touchmove samples, real Blink engine). STRICT, because at exactly the floor '
-    + 'the right edge lands exactly on the viewport\'s left edge (the 640px boundary case). This '
-    + 'assertion\'s preconditions are the four box cells above; it computes over them rather than '
-    + `re-asserting them, so each mutant reddens exactly one test:\n  ${bad.join('\n  ')}`);
+  assert.deepEqual(bad, [], 'the park offset (css:145) must STRICTLY exceed the '
+    + `${floor}vw floor derived from #browse's own box. #browse is the INCOMING mover on a `
+    + 'home->browse drag, at translateX(w + t), so a park that fails to clear the floor composes '
+    + 'to `homeX - 0.01w` and the parked page rides ON Home for the whole gesture — the shipped '
+    + '`-101vw` defect this cell was authored to catch (measured: 7/7 touchmove samples, real '
+    + 'Blink engine). STRICT, because at exactly the floor the right edge lands exactly on the '
+    + 'viewport\'s left edge (the 640px boundary case). This assertion\'s preconditions are the '
+    + 'four box cells above; it computes over them rather than re-asserting them, so each mutant '
+    + `reddens exactly one test:\n  ${bad.join('\n  ')}`);
 });
 
 // ⭐ WHY A SECOND ASSERTION AND NOT JUST THE INEQUALITY. `-201vw` clears the floor with 4px to
@@ -429,7 +426,7 @@ test('PARKOUTOFREACH — the park offset is the bench-measured shipped form, not
   const offsets = parkOffsetsVw();
   const bad = offsets.filter((o) => o.vw !== SHIPPED_PARK_VW)
     .map((o) => `${o.selector} { transform: ${o.value} } — want translateX(-${SHIPPED_PARK_VW}vw)`);
-  assert.deepEqual(bad, [], `RED @HEAD: the shipped park is -101vw. -${SHIPPED_PARK_VW}vw is the `
+  assert.deepEqual(bad, [], `the shipped park (css:145) must be exactly -${SHIPPED_PARK_VW}vw — the `
     + 'floor plus a full viewport of margin AND the exact form the measurement\'s after-run '
     + 'executed (Claude/Zelda/MEASUREMENT-parked-page-rides-home-2026-08-02.md). A value that '
     + 'clears the floor but was never driven through an engine is a variant of a tested fix, which '
