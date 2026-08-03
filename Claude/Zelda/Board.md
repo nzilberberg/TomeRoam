@@ -777,8 +777,24 @@ defect**, it went stale at `de84349`. F26 — §3.5's `js/nav.js:60-65` span; th
 **Three rounds, and A1b's design never moved:** it is still the deletion of the two `if (!npOpen)`
 guards at `js/nav.js:51` and `:78`.
 
-**Still open in this campaign:** r2's successor stages — A1b (NP parks/hides beneath itself, **plan
-FORGE'd r3 — build gate open; red suite owed first**), A2
+**Stage A1b BUILT + SHIPPED (build `2026-07-31.290`, `Claude/Brunel/one-screen-type-stageA1b-build.md`,
+BUILD_GREEN) — its adversary/code-review/coverage gates skipped at ship time are being cleared
+retroactively, in that order.** **Adversary gate CLEARED (2026-08-03): Loki HELD_STONE**
+(`Claude/Loki/STRIKE-one-screen-type-a1b.md`, struck blind at HEAD `cef1093`). Both enumerations
+verified exhaustively at source (`js/nav.js:71` is the sole `hidden`-adder on `#nowplaying` in all of
+`js/`, vendor included; the synchrony claim holds across every re-entry point) and the behavior
+executed in real Blink: at-rest exclusivity after every NP open/abort/commit leg (the §5.3.1
+accumulation is dead on glass), §9 edge 5 (supersession with NP current) executed and benign as
+claimed, the filmstrip-window residue closed and its reconcile idempotent, and a plane the plan's
+cost census never named — Books scroll across the new `display:none` — executed and PRESERVED
+(engine primitive + full path, 900→900). Named residual for the step-9 device gate: the scroll proof
+is Blink; the device is WebKit — *scroll Books deep, open NP, close it, you must come back where you
+were*. Four un-prosecuted lesser planes in the casebook (incl. nothing gates single-writer-ness — a
+future second `hidden` writer greens the suite; Mendeleev's). **Next per the dispatcher: the code
+reviewer (step 10), then the coverage audit.**
+
+**Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary gate
+cleared HELD_STONE 2026-08-03; code review + coverage audit + the step-9 device gate owed**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —
