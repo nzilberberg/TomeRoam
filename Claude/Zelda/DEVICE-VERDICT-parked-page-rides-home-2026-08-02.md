@@ -51,10 +51,23 @@ threshold is unknown here and unmeasurable on the bench. Stage 6g's `translateZ(
 precedent for a compositing spec argument that real iOS falsified, which is why this stays labelled
 spec-derived rather than settled.
 
-**The honest ask, which replaces the fabricated test:** no scripted gesture. If a cover list is ever
-seen to visibly pop or re-decode after an **aborted swipe between two browse pages** (not from Home
-into a list), that is the symptom, and it should be reported. Absence of that report over ordinary use
-is weak evidence, and must be recorded as weak.
+**The honest ask, which replaces the fabricated test — stated in the two fields the gate now requires,
+including the admission that the gesture is not a scripted one:**
+
+- **Gesture:** ordinary use, with one thing watched for — an **aborted swipe between two browse
+  pages** (drill into a book list, begin a swipe to another browse page, release it back). ⛔ NOT a
+  swipe from Home into a list: aborting that returns to Home and reveals no covers at all. There is
+  no single scripted run that settles this, and that is a property of the item, not an omission.
+- **Observable:** on that abort, the returning list's covers visibly **pop in / re-decode** — a
+  perceptible blank-then-fill of the whole grid at once, rather than covers that are simply already
+  there. If they are already there, nothing is wrong.
+- **Why it exercises the property:** the covers survive an abort because the page is parked rather
+  than `display:none`d; a tile-discard heuristic keyed on distance rather than visibility would drop
+  the bitmaps at 3 viewports where it kept them at 1.01, and the abort is the only moment the
+  difference would surface.
+
+Absence of that report over ordinary use is **weak** evidence at best — and for the period before this
+correction it is **no** evidence at all, because the user was never given a workable instruction.
 
 **Durable lesson from this exchange, routed rather than left here:** a device-gate item must name the
 exact gesture AND the observable, both derived from source, at the time it is filed. This one named a

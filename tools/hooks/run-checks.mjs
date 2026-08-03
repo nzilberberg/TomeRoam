@@ -81,6 +81,12 @@ function defaultSteps() {
     // purpose was to remove it — the deploy notes named the old paths in order to
     // say "delete these". Intent is no defence; the token is checked, not trusted.
     ['retired-name', [join(ROOT, 'tools', 'hooks', 'retired-name-check.mjs')]],
+    // A device-gate item recorded as OWED must be RUNNABLE — it must name the gesture and the
+    // observable. Filed as a bare property it has no instruction, so a gesture gets invented at
+    // the moment of asking, and on 2026-08-02 the invented one revealed nothing ("if you abort
+    // the swipe into books you won't see the books"). Deriving the gesture at filing time is
+    // also what surfaces "there is no such gesture" while it can still change the plan.
+    ['device-gate', [join(ROOT, 'tools', 'hooks', 'device-gate-check.mjs')]],
   ];
 }
 
