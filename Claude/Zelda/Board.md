@@ -790,11 +790,31 @@ cost census never named — Books scroll across the new `display:none` — execu
 (engine primitive + full path, 900→900). Named residual for the step-9 device gate: the scroll proof
 is Blink; the device is WebKit — *scroll Books deep, open NP, close it, you must come back where you
 were*. Four un-prosecuted lesser planes in the casebook (incl. nothing gates single-writer-ness — a
-future second `hidden` writer greens the suite; Mendeleev's). **Next per the dispatcher: the code
-reviewer (step 10), then the coverage audit.**
+future second `hidden` writer greens the suite; Mendeleev's).
+
+**Code-review gate CLEARED (2026-08-03): PASS — fix-then-ship**
+(`Claude/Poirot/POIROT-one-screen-type-a1b-e6a2f2e.md`, target `e6a2f2e`, reviewed at HEAD `690162c`).
+The product change is two deleted conditions and nothing else — no fourth category in the diff — and
+all nine touched/registered mutants were re-swept **in the foreground at HEAD this pass** (indices
+re-derived from names; the build log's numbers have shifted): 0 uncaught, 0 unapplied, 0 stale, tree
+clean throughout. Both generators reproduce HEAD content-identically; the full battery is green;
+`NPUNTOUCHED`'s source-scan cell is untouched and still mutation-killed (`NOSETTINGSBG-b`). Each of
+the five test casualties is a genuine casualty of the design change — three unskips with no weakened
+assertion, two retirements whose subject A1b abolishes — and the casualty the plan's §6a table missed
+(`test/nav.test.js`) was **inverted, not deleted**, and is a live killer of `NPPARKS-b`. **Four false
+statements in HEAD to scrub, two created by this commit**, none blocking the device gate: F1 a
+"CONFIRMED" claim naming the mutant this commit de-registered; F2 the red suite's `js/nav.js:81`/`:78`
+citations, which at HEAD land on the navbar's own `hidden` toggle; F3 the plan's Status table still
+saying A1b's build is not open (`:39`, `:98`) while §13 steps 1/8 in the same file say it is; F4 the
+CELL MAP still describing the retired NP-back-reveal behaviour. Two Observations routed to Mendeleev
+(§14 vs the shipped cells; the ungated single-writer property). **Next per the dispatcher: the
+coverage audit (`Claude/Mendeleev/AUDIT-one-screen-type-a1b.md`), then the step-9 device gate —
+which should carry the adversary's added item (scroll Books deep, open NP, close it) and has no
+`DEVICE-*` record.**
 
 **Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary gate
-cleared HELD_STONE 2026-08-03; code review + coverage audit + the step-9 device gate owed**), A2
+cleared HELD_STONE and code review PASS 2026-08-03; coverage audit + the step-9 device gate owed;
+four scrub items owed to Brunel/Zelda**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —
