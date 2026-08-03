@@ -87,6 +87,13 @@ function defaultSteps() {
     // the swipe into books you won't see the books"). Deriving the gesture at filing time is
     // also what surfaces "there is no such gesture" while it can still change the plan.
     ['device-gate', [join(ROOT, 'tools', 'hooks', 'device-gate-check.mjs')]],
+    // A staged change to a file whose bytes reach a DEVICE must bump the build number.
+    // `stamp` above proves the three stamped files agree with each other — coherence, not
+    // freshness; it is happy when they all agree on a number that no longer describes the
+    // tree. On 2026-08-03 a comment-only css/app.css edit landed after the stamp, so the
+    // deployed `.304` and the tree's `.304` were two different files under one label, and
+    // a device report naming that build would have been unanswerable.
+    ['shipping-bump', [join(ROOT, 'tools', 'hooks', 'shipping-change-bumps-check.mjs')]],
   ];
 }
 
