@@ -892,10 +892,53 @@ unapplied, 0 stale, no `.mutbak`. ⚠️ Registering `NPNAVBAR` before the `FILM
 every later mutant index by one** — M3's `#90/#93/#94/#95` citations must be re-derived by NAME.
 **Next: the coverage auditor, for the re-audit the `coverage-audit` gate needs to accept `ADEQUATE`.**
 
-**Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary gate
-cleared HELD_STONE and code review PASS 2026-08-03; F1–F4 scrubbed 2026-08-03; coverage audit RUN
-2026-08-03 → GAPS_NAMED; **G1/G2/G3 + M1 FILLED by Curie 2026-08-03, re-audit now owed to
-Mendeleev**; M2/M3 still owed to the planner; the step-9 device gate still owed**), A2
+**Coverage-audit ROUND 2 — ⭐ ADEQUATE, 2026-08-03**
+(`Claude/Mendeleev/AUDIT-one-screen-type-a1b-r2.md`, re-audited at HEAD `4250401`; round 1 is not
+edited and is superseded). All three bare cells **closed**, each verified by a mutant this seat
+applied itself rather than read: full suite 830/829 pass, family re-swept in two foreground batches
+(`76 85–91`, `92–99`, indices re-derived from names against the 140-entry registry) → 0 uncaught, 0
+unapplied, 0 stale, tree clean, no `.mutbak`. **G1** — `NPRECONCILE` gains an absolute
+`parked('home')` after abort 1 plus a settings-source companion; `#89 NPPARKS-a` goes from **1
+killer to 2** (the acceptance test named in advance, met) and `#91` from 2 to 3. ⭐ Curie's own catch
+inside the fill: the companion had to use the **back** swipe, because on the forward NP→files abort
+`showAppView`'s sweep hides `#options` whatever `setView` does — the forward direction would have
+passed vacuously. **G2** — new gate `NPHIDDENWRITER` (5 tests, `test/np-hidden-writer-set.test.js`,
+mutants `#96`–`#99`), each caught by that cell **alone**. ⭐ `#99` (a `setView` reorder that breaks
+the reveal without changing the writer count) is caught by **one test in the whole suite** and by
+none before this round. Verified independently that the gate is **not** in `SOURCE_TEXT_GATES` and
+appears as a killer of **none** of `#76`/`#85`–`#95` despite eight of those mutating the files it
+scans — so it carries real sweep evidence where `M1WRITERSET` needed an exclusion. Its
+registration-only-where-underivable departure is **upheld as equal-or-stronger**: the identity
+inventory keeps all three directions and is the backstop, the write inventory is the reach, and the
+two cross-check. Residuals **upheld as an honest bound** (`className` disclosure says ~50, measured
+47; `index.html` has 33 script tags, all `src=`). **G3** — `NPUNTOUCHED` gains a derived
+strictly-greater navbar-vs-NP z-index comparison; `#95 NPNAVBAR` caught by that cell alone. **M1**
+was **four** sites, not the two filed — all corrected. New: **N4** two inline-style routes
+(`style.cssText`, `setAttribute('style'…)`) escape the alias closure and are unnamed in `RESIDUALS`
+— executed; Note not Gap (zero such sites at HEAD, and every naming route is still caught), one-line
+fix stated. **N5** the write inventory's missing rot/group-count directions judged sound, recorded so
+it is not re-opened. **C1** correcting my own M3: only **one** index shifted, not four — the
+`FILMSTRIPDRAG` 340ms mutant is now `#100`; `#90`/`#93`/`#94` still address what M3 says.
+
+⛔⛔ **THE GATE CANNOT READ THE VERDICT — the F14 defect, on a second gate.**
+`Claude/Campaigns/one-screen-type-a1b.json`'s **`coverage-audit`** gate is the **only one of the six**
+whose `verdictArtifactGlob` carries no wildcard (`Claude/Mendeleev/AUDIT-one-screen-type-a1b.md`).
+`globFiles` compiles it to an exact-filename anchor, so `-r2.md` never matches and
+`artifactsOfRecord` never sees it — the gate reports round 1's `GAPS_NAMED` forever. This is exactly
+what `3c89349` fixed on this manifest's `plan-review` gate; that fix was applied to the one gate that
+had just failed and the other five were never swept. **Fix is one token:**
+`…/AUDIT-one-screen-type-a1b*.md`. **Proven by execution against a scratch copy, the campaign file
+untouched:** as shipped → `INCOMPLETE: 1 gate(s) not cleared`; with the wildcard → the gate reads
+`ADEQUATE` and **all six report COMPLETE**. ⛔ **Deliberately NOT applied by the auditing seat** — a
+seat widening the glob that gates its own verdict is a shape not to accept, however right the fix.
+Owner: whoever owns the campaign record, and the same sweep should check every other manifest in
+`Claude/Campaigns/` for the literal-glob class.
+
+**Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary HELD_STONE,
+code review PASS, F1–F4 scrubbed, G1/G2/G3+M1 filled by Curie, coverage audit round 2 **ADEQUATE**
+2026-08-03 — coverage is no longer the blocker. Owed: the one-token campaign-manifest glob fix so the
+gate can read the verdict; M2/M3/C1/N3 to the planner; N1/N4 to Curie; and the step-9 device
+gate**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —
