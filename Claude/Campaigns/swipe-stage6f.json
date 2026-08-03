@@ -4,10 +4,10 @@
   "note": "Definition of done for Stage 6f (the reveal/transform structural slice — the long-identified 'never transform the real in-flow view' fix, the strongest candidate for the aborted-swipe flash; scoped by Vitruvius on the merits). HIGH-RISK surface (memory tomeroam-swipe-repaint-saga: the flash is compositor-level, invisible to in-page instruments, ~8 retracted verifications, named dead-ends). Coverage pins the STRUCTURAL INVARIANT (the real in-flow view is never transformed during the gesture), NOT the flash itself (unobservable in CI — device-only). Checked by tools/campaign/stage-gate-check.mjs. Every required gate must carry a machine-readable verdict token (a \"verdict\":\"TOKEN\" block OR a Verdict: **TOKEN** line). Adversary (Loki) required. Poirot glob permissive.",
   "gates": [
     { "gate": "plan-review",    "owner": "charpy",    "required": true, "verdictArtifactGlob": "Claude/Charpy/PLAN-swipe-stage6f-*.md",  "acceptVerdict": ["FORGE"] },
-    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6f.md",       "acceptVerdict": ["RED_SUITE_READY"] },
+    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6f*.md",       "acceptVerdict": ["RED_SUITE_READY"] },
     { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-stage6f-*.md",        "acceptVerdict": ["BUILD_GREEN"] },
     { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage6f*.md",        "acceptVerdict": ["PASS", "SHIP"] },
-    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6f.md", "acceptVerdict": ["ADEQUATE"] },
+    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6f*.md", "acceptVerdict": ["ADEQUATE"] },
     { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-stage6f-*.md",   "acceptVerdict": ["HELD_STONE"] }
   ]
 }

@@ -4,10 +4,10 @@
   "note": "Definition of done for Stage 6c (the I12 consumer: null-on-retire bookkeeping + transitionListener ownership + finishing-gate/cur===session stale-callback enforcement that reads the nulled handles). Checked by tools/campaign/stage-gate-check.mjs. Every required gate must have a filed, accepted verdict. The adversary (Loki) gate is required — the load-bearing promise is stale-callback/retirement correctness; if the ratified plan has no load-bearing promise worth a strike, set the adversary gate \"waived\": {\"reason\": \"...\"} (a recorded decision), never delete it. NOTE: the poirot glob is deliberately permissive (*swipe-stage6c*.md) so a hash-prefixed casebook with no -suffix still matches (the 6b stage-gate-check flagged the stricter pattern).",
   "gates": [
     { "gate": "plan-review",    "owner": "charpy",    "required": true, "verdictArtifactGlob": "Claude/Charpy/PLAN-swipe-stage6c-*.md",  "acceptVerdict": ["FORGE"] },
-    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6c.md",       "acceptVerdict": ["RED_SUITE_READY"] },
+    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6c*.md",       "acceptVerdict": ["RED_SUITE_READY"] },
     { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-stage6c-*.md",        "acceptVerdict": ["BUILD_GREEN"] },
     { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage6c*.md",        "acceptVerdict": ["PASS", "SHIP"] },
-    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6c.md", "acceptVerdict": ["ADEQUATE"] },
+    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6c*.md", "acceptVerdict": ["ADEQUATE"] },
     { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-stage6c-*.md",   "acceptVerdict": ["HELD_STONE"] }
   ]
 }

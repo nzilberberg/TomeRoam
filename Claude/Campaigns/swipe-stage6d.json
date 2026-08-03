@@ -4,10 +4,10 @@
   "note": "Definition of done for Stage 6d (the next bounded slice of the deferred swipe-finalization work — scoped by Vitruvius on the merits). Checked by tools/campaign/stage-gate-check.mjs. Every required gate must have a filed, accepted verdict. Adversary (Loki) required by default; waive only with a recorded reason, never delete. Poirot glob is permissive (*swipe-stage6d*.md) per the 6b lesson.",
   "gates": [
     { "gate": "plan-review",    "owner": "charpy",    "required": true, "verdictArtifactGlob": "Claude/Charpy/PLAN-swipe-stage6d-*.md",  "acceptVerdict": ["FORGE"] },
-    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6d.md",       "acceptVerdict": ["RED_SUITE_READY"] },
+    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6d*.md",       "acceptVerdict": ["RED_SUITE_READY"] },
     { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-stage6d-*.md",        "acceptVerdict": ["BUILD_GREEN"] },
     { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage6d*.md",        "acceptVerdict": ["PASS", "SHIP"] },
-    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6d.md", "acceptVerdict": ["ADEQUATE"] },
+    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6d*.md", "acceptVerdict": ["ADEQUATE"] },
     { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-stage6d-*.md",   "acceptVerdict": ["HELD_STONE"] }
   ]
 }

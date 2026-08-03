@@ -45,7 +45,7 @@
       "gate": "coverage-audit",
       "owner": "mendeleev",
       "required": true,
-      "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-one-screen-type-a1b.md",
+      "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-one-screen-type-a1b*.md",
       "acceptVerdict": [
         "ADEQUATE"
       ]

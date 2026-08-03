@@ -4,10 +4,10 @@
   "note": "Definition of done for Stage 6. Checked by tools/campaign/stage-gate-check.mjs before the stage may be called complete. Every required gate must have a filed, accepted verdict artifact. The adversary (Loki) gate is required by default because Stage 6 introduces new user-visible behavior across a coordination seam; if the ratified plan contains no load-bearing promise worth a strike, set the adversary gate \"waived\": {\"reason\": \"...\"} (a recorded decision), never delete it.",
   "gates": [
     { "gate": "plan-review",    "owner": "charpy",    "required": true, "verdictArtifactGlob": "Claude/Charpy/PLAN-swipe-stage6-*.md",  "acceptVerdict": ["FORGE"] },
-    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6.md",       "acceptVerdict": ["RED_SUITE_READY"] },
+    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6*.md",       "acceptVerdict": ["RED_SUITE_READY"] },
     { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-stage6-*.md",        "acceptVerdict": ["BUILD_GREEN"] },
     { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage6-*.md",       "acceptVerdict": ["PASS", "SHIP"] },
-    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6.md", "acceptVerdict": ["ADEQUATE"] },
+    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6*.md", "acceptVerdict": ["ADEQUATE"] },
     { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-stage6-*.md",   "acceptVerdict": ["HELD_STONE"] }
   ]
 }

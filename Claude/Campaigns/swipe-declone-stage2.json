@@ -8,7 +8,7 @@
     { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-declone-stage2*.md",          "acceptVerdict": ["RED_SUITE_READY"] },
     { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-declone-stage2*-build.md",       "acceptVerdict": ["BUILD_GREEN"] },
     { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-declone-stage2*.md",            "acceptVerdict": ["PASS", "SHIP"] },
-    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-declone-stage2.md",     "acceptVerdict": ["ADEQUATE"] },
+    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-declone-stage2*.md",     "acceptVerdict": ["ADEQUATE"] },
     { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-declone-stage2*.md",        "acceptVerdict": ["HELD_STONE"] }
   ]
 }

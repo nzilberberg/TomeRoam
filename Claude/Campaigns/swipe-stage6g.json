@@ -4,10 +4,10 @@
   "note": "Definition of done for Stage 6g — REDIRECTED after the .256 device A/B: keep #home a STABLE compositing layer through the reveal so removing .parked does NOT demote it. DEVICE-CONFIRMED fix for the home->books ABORT flash (build .256 `#home{will-change:transform}` probe made it CLEAN; navbar did not pop). This slice formalizes that into a properly built+reviewed change (production-correct form). The commit books->home flash is a SEPARATE, ruled-out-different cause (the home-snapshot-pane path) — deferred to its own controlled experiment. HIGH-RISK surface (memory tomeroam-swipe-repaint-saga; the log->speculative-fix loop is the enemy — every step a controlled A/B). Coverage pins the STRUCTURAL INVARIANT (#home retains its compositing promotion across the reveal / removing .parked does not demote it), CI-observable via computed style/DOM; the flash itself is DEVICE-confirmed (cite the .256 A/B). Checked by tools/campaign/stage-gate-check.mjs. Every required gate must carry a machine-readable verdict token. Adversary (Loki) required. Poirot glob permissive.",
   "gates": [
     { "gate": "plan-review",    "owner": "charpy",    "required": true, "verdictArtifactGlob": "Claude/Charpy/PLAN-swipe-stage6g-*.md",  "acceptVerdict": ["FORGE"] },
-    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6g.md",       "acceptVerdict": ["RED_SUITE_READY"] },
+    { "gate": "red-suite",      "owner": "curie",     "required": true, "verdictArtifactGlob": "Claude/Curie/RED-swipe-stage6g*.md",       "acceptVerdict": ["RED_SUITE_READY"] },
     { "gate": "build",          "owner": "brunel",    "required": true, "verdictArtifactGlob": "Claude/Brunel/swipe-stage6g-*.md",        "acceptVerdict": ["BUILD_GREEN"] },
     { "gate": "code-review",    "owner": "poirot",    "required": true, "verdictArtifactGlob": "Claude/Poirot/*swipe-stage6g*.md",        "acceptVerdict": ["PASS", "SHIP"] },
-    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6g.md", "acceptVerdict": ["ADEQUATE"] },
+    { "gate": "coverage-audit", "owner": "mendeleev", "required": true, "verdictArtifactGlob": "Claude/Mendeleev/AUDIT-swipe-stage6g*.md", "acceptVerdict": ["ADEQUATE"] },
     { "gate": "adversary",      "owner": "loki",      "required": true, "verdictArtifactGlob": "Claude/Loki/STRIKE-swipe-stage6g-*.md",   "acceptVerdict": ["HELD_STONE"] }
   ]
 }
