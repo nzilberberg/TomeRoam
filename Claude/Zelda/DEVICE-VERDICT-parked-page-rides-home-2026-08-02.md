@@ -26,21 +26,40 @@ first half, and it comes from the only instrument that can give it.
 - No claim is made about the rotation edge (the plan's admitted constant-viewport clause, which Loki
   executed and quantified at a 50px strip when the viewport shrinks 812→375 mid-gesture).
 
-### Item 2 — iOS cover-bitmap retention at the new distance. **STILL OWED. NOT ANSWERED.**
+### Item 2 — iOS cover-bitmap retention at the new distance. **OWED, and NOT CRISPLY OBSERVABLE — the item was mis-stated when it was filed as a watchable test.**
 
-The whole reason `.browsepage.parked` exists is that `display:none` makes iOS drop decoded cover
-bitmaps, so an aborted swipe re-decodes every cover at once and the list visibly pops back in
-(`css/app.css`, the park rule's own comment). The fix moved the park from 1.01 viewports away to 3.
+⛔⛔ **CORRECTION, and the reason this section was rewritten.** Zelda asked the user to *"start a swipe
+into a book list and abort it, then watch the covers."* The user answered: **"if you abort the swipe
+into books you won't see the books. I don't understand."** They are right, and the instruction was
+never derived — it was written as though the item were a simple watchable test. It is not, on two
+counts:
 
-⛔ **The user was asked to watch for this and did not report on it. Silence is not a pass.** They
-reported on what they went looking for — the swipe garbage — and this is a different observation on a
-different gesture (abort a swipe into a book list; watch whether the covers pop).
+1. **The gesture named nothing.** Abort a `home→books` swipe and you land back on Home; the Books
+   covers are never revealed, so there is nothing to observe.
+2. **The observable is far narrower than the gate item implies.** Per the plan's own §9 (in its
+   corrected **[F3]** form): the page whose retention is exercised is always a **mover**, and a mover
+   carries an inline transform that beats the class rule on every rendered frame. In the two windows
+   where such a page briefly wears `.parked` with no inline transform — finalize and hard reset — no
+   frame paints, because both windows are entirely synchronous (invariant I11). So for the pages whose
+   covers actually matter, **the constant that changed largely does not govern what is composited.**
 
-The bench cannot close it. The plan's §4 argument is that retention is carried by the inline-transform
-path plus a no-paint-between ordering (invariant I11) rather than by the park constant, so a distance
-change cannot regress it *by construction* — but that is a **spec argument about compositing, and this
-project has had exactly that kind of argument falsified on real iOS before** (stage 6g's
-`translateZ(0)`, which was "spec-identical" to `will-change: transform` and flashed on device anyway).
+**What is therefore genuinely owed is not a test but an unresolved compositing question,** stated in
+§9 and unchanged by this record: both distances are entirely outside the viewport, so any interest-rect
+or tile-discard heuristic keyed on **visibility** treats `-101vw` and `-300vw` identically — but one
+keyed on **distance** would need a threshold between 1.01 and 3 viewports. Whether WebKit has such a
+threshold is unknown here and unmeasurable on the bench. Stage 6g's `translateZ(0)` is the standing
+precedent for a compositing spec argument that real iOS falsified, which is why this stays labelled
+spec-derived rather than settled.
+
+**The honest ask, which replaces the fabricated test:** no scripted gesture. If a cover list is ever
+seen to visibly pop or re-decode after an **aborted swipe between two browse pages** (not from Home
+into a list), that is the symptom, and it should be reported. Absence of that report over ordinary use
+is weak evidence, and must be recorded as weak.
+
+**Durable lesson from this exchange, routed rather than left here:** a device-gate item must name the
+exact gesture AND the observable, both derived from source, at the time it is filed. This one named a
+property instead, and the gap was papered over at the moment of asking by inventing a gesture. See
+[[device-gate-item-must-name-gesture-and-observable]].
 
 ## Standing rule this record exists to honour
 
