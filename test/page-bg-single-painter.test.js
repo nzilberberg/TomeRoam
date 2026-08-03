@@ -1,5 +1,5 @@
-// NOSETTINGSBG -- --page-bg is painted by body::before plus .nowplaying, the one
-// deliberate additive-overlay exception (PLAN-one-screen-type.md, Stage A1).
+// NOSETTINGSBG -- --page-bg is painted by body::before plus .nowplaying, the one screen that
+// keeps a background of its own (PLAN-one-screen-type.md, Stage A1).
 //
 // THE MODEL (nav.js's setView(), the source of truth for this split). Every screen is the
 // same type: shown by removing one class, hidden by adding it, never co-visible with a
@@ -9,9 +9,13 @@
 // deliberate exception to co-visibility is a live filmstrip (Nav.overlayFilmstrip): both
 // panes are briefly un-hidden together so the slide has something to show, and a pending
 // reconcile must not disturb a live gesture's mover (Stage A1-fix, PLAN-one-screen-type.md
-// §5.4). Now Playing is the deliberate exception to painting: it alone stays an additive
-// overlay, mounted over an untouched settings screen for the NP-back reveal, so it alone
-// still needs to paint its own copy.
+// §5.4). Now Playing is the deliberate exception to painting: an opaque background, `inset: 0`
+// and `z-index: 60` are three CO-REQUIRED properties, and together they are what covers the
+// topbar and the transport -- one of the load-bearing differences the user's ratified "Now
+// Playing stays unique" decision protects (Claude/Decisions/DecisionLog.md; css/app.css's
+// .nowplaying rule records the same reason at the declaration itself). Entering Now Playing
+// parks #home and hides every other screen exactly as entering any other screen does
+// (Stage A1b), so nothing live is behind it either.
 //
 // IT FAILS IN BOTH DIRECTIONS, deliberately: a screen that regains a background enters the
 // painter set and reddens the equality; .nowplaying losing its background leaves the set
@@ -50,11 +54,13 @@ test('NOSETTINGSBG -- exactly body::before and .nowplaying paint --page-bg; no o
   const painters = selectorsFor(css, 'background: var(--page-bg)').slice().sort();
   assert.deepEqual(painters, PAINTERS.slice().sort(),
     'the legal painter set of --page-bg is exactly body::before (the fixed, never-moving '
-    + 'base keeper) and .nowplaying (the one deliberate additive overlay). A settings screen '
-    + 'that still paints its own copy renders the gradient at its own box\'s scale and origin '
-    + 'and moves with it during a swipe; .nowplaying that stops painting exposes the settings '
-    + `screen it is mounted over. Expected: ${JSON.stringify(PAINTERS)}, `
-    + `found: ${JSON.stringify(painters)}`);
+    + 'base keeper) and .nowplaying (the one screen that keeps a background of its own). A '
+    + 'settings screen that still paints its own copy renders the gradient at its own box\'s '
+    + 'scale and origin and moves with it during a swipe; .nowplaying that stops painting '
+    + 'stops covering the topbar and the transport, which is one of the load-bearing '
+    + 'differences the user\'s ratified "Now Playing stays unique" decision protects -- its '
+    + 'background, its `inset: 0` and its `z-index: 60` are co-required for that coverage. '
+    + `Expected: ${JSON.stringify(PAINTERS)}, found: ${JSON.stringify(painters)}`);
 });
 
 test('NOSETTINGSBG -- #home, #browse, #options and the five-sub group declare no background '

@@ -971,6 +971,42 @@ const MUTATIONS = [
     from: "      if (d.browseWillHide) d.browseWillHide();\n    }\n    // The `.266` stable-height probe",
     to:   "    }\n    // The `.266` stable-height probe" },
 
+  // NPNAVBAR — the coverage audit's gap G3 (Claude/Mendeleev/AUDIT-one-screen-type-a1b.md).
+  // §14's NPUNTOUCHED row has always required "and that the body np-locked navbar rule still
+  // raises the navbar above it", and the cell never carried it, so deleting the navbar's
+  // `z-index: 70` reddened nothing. This is the ADDITIVE-in-reverse direction of the same
+  // preservation guard NOSETTINGSBG-b defends: a deletion of one declaration from a rule that must
+  // keep it. The anchor is the whole np-locked navbar declaration list, which is unique in
+  // css/app.css (the two neighbouring `body.np-locked .navbar ...` rules are descendant selectors
+  // with different bodies).
+  { name: 'one-screen-type NPNAVBAR: the np-locked navbar loses its z-index: 70, so the navbar stops stacking above Now Playing (z-index 60) and Now Playing becomes an ordinary screen (-> NPUNTOUCHED navbar-outstacks assertion)',
+    file: 'css/app.css',
+    from: 'body.np-locked .navbar { background: transparent; border-top: 0; backdrop-filter: none; z-index: 70; padding-bottom: 0; }',
+    to:   'body.np-locked .navbar { background: transparent; border-top: 0; backdrop-filter: none; padding-bottom: 0; }' },
+
+  // ── NPHIDDENWRITER — the coverage audit's gap G2 (Claude/Mendeleev/AUDIT-one-screen-type-a1b.md).
+  // test/np-hidden-writer-set.test.js gates claim C6: `hidden` is added to #nowplaying in exactly
+  // ONE place in js/, and the same synchronous setView body un-hides the destination first. C6 is
+  // what licenses retiring ratified probe mark §4.2, so the gate is a LOCK (green at HEAD by
+  // design) and its ability to fail has to be carried by mutants. All four below are chosen to be
+  // BEHAVIOURALLY INERT, so each is attributable to that gate and to nothing else — a mutant that
+  // also broke behaviour would be caught by twenty cells and prove nothing about this one.
+  { name: "NPHIDDENWRITER-a: a SECOND, redundant `hidden` writer on #nowplaying is injected into setView — behaviourally identical, textually a second writer (-> NPHIDDENWRITER identity group-count direction)",
+    file: 'js/nav.js',
+    from: "    $('nowplaying').classList.toggle('hidden', !npOpen);\n    document.body.classList.toggle('np-locked', npOpen);",
+    to:   "    $('nowplaying').classList.toggle('hidden', !npOpen);\n    $('nowplaying').classList.toggle('hidden', !npOpen);   /* mutated: a second writer */\n    document.body.classList.toggle('np-locked', npOpen);" },
+  { name: "NPHIDDENWRITER-b: the #nowplaying ALIAS (js/app.js's npEl) is made to write the hidden class — the route that reaches the element without naming it (-> NPHIDDENWRITER alias closure)",
+    file: 'js/app.js',
+    from: "    const npEl = $('nowplaying');",
+    to:   "    const npEl = $('nowplaying');\n    npEl.classList.add('hidden');   /* mutated: a write through the alias */" },
+  { name: "NPHIDDENWRITER-c: showAppView's stale-overlay sweep is WIDENED BY ONE WORD to include nowplaying — the coverage audit's named highest-probability next defect on this surface (-> NPHIDDENWRITER loop-list direction)",
+    from: "      for (const s of ['options', ...SETTINGS_SUBS]) if (!d || d.from.v !== s) $(s).classList.add('hidden');",
+    to:   "      for (const s of ['options', 'nowplaying', ...SETTINGS_SUBS]) if (!d || d.from.v !== s) $(s).classList.add('hidden');" },
+  { name: "NPHIDDENWRITER-d: setView is REORDERED so #nowplaying is hidden BEFORE the destination is un-hidden — the writer count is unchanged and the synchrony half of C6 is broken (-> NPHIDDENWRITER synchrony cell)",
+    file: 'js/nav.js',
+    from: "    browseEl.classList.toggle('hidden', v !== 'browse');\n    for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);\n    $('nowplaying').classList.toggle('hidden', !npOpen);",
+    to:   "    $('nowplaying').classList.toggle('hidden', !npOpen);\n    browseEl.classList.toggle('hidden', v !== 'browse');\n    for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);" },
+
   // ── PLAN-one-screen-type.md §14 — the FILMSTRIPDRAG cell (Stage A1-fix / A1-fix-r2, plan §5.4).
   //
   // FILMSTRIPDRAG-a and FILMSTRIPDRAG-b were registered at step 6b — the build that introduced the

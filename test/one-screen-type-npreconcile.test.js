@@ -59,15 +59,19 @@ const liveBeneathNP = (h) => SCREENS.filter((id) => {
   return !c.contains('hidden') && !c.contains('parked');
 });
 
-/** Open a book so the transport exists, then open Now Playing from Home by tapping it. */
-async function homeThenNowPlaying(h) {
+/** Start playback so the transport exists (the tap target that opens Now Playing). */
+async function startPlayback(h) {
   await settle(h);
   const tile = h.document.querySelector('[data-book="bookA"] .covertap');
   assert.ok(tile, 'fixture sanity: a real book tile must exist to start playback from');
   tile.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true, cancelable: true }));
   await settle(h);
   h.audio.setBuffered(0, 600); h.audio.reachPlaying(100); await settle(h);
+}
 
+/** Open a book so the transport exists, then open Now Playing from Home by tapping it. */
+async function homeThenNowPlaying(h) {
+  await startPlayback(h);
   h.tap('#player'); await settle(h);
   assert.equal(isHidden(h, 'nowplaying'), false, 'fixture sanity: Now Playing must be open');
 }
@@ -100,6 +104,33 @@ async () => {
       `fixture sanity: the back-swipe must have ABORTED — got ${settles(h).at(-1)}`);
 
     const after1 = liveBeneathNP(h);
+
+    // ⭐ THE ABSOLUTE HALF (coverage-audit gap G1, Claude/Mendeleev/AUDIT-one-screen-type-a1b.md).
+    // The `after1 === entry` assertion below is RELATIVE, and a relative assertion cannot fail
+    // when the defect is present AT ENTRY TOO, because the defective entry moves the baseline with
+    // it: with the park toggle re-guarded on `npOpen`, NP entry leaves #home un-parked, so
+    // `entry` is ['home'], abort 1 un-parks an already-un-parked #home, and `after1 === entry`
+    // holds. MEASURED: at the audit, mutant "one-screen-type NPPARKS-a" had exactly ONE killer
+    // (NPPARKS from Home) and this cell passed under it. So the ONLY cell that drives
+    // applyScreen('nowplaying') on a gesture-finalize path proved the #browse re-hide and nothing
+    // else, and step 1 of the accumulation narrative quoted in this file's own header — the #home
+    // RE-PARK — was proven on the button-nav path only. That is the exact shape of gap
+    // PEERFINALIZE was written to close for Stage A1 ("a change to this guard that is proven only
+    // on the button-nav path is the same shape of gap"), re-created on the NP path.
+    //
+    // This assertion is ABSOLUTE and therefore immune to a moved baseline. It cannot halt the cell
+    // early for the reason the relative form was chosen: it runs AFTER a gesture has been driven,
+    // so it cannot stop the cell reaching a gesture. The relative growth assertions are unchanged;
+    // this is purely additive.
+    assert.equal(h.$('home').classList.contains('parked'), true,
+      'THE DEFECT, step 1, ABSOLUTELY (plan §5.3.1 step 1): the aborted NP→home gesture\'s own '
+      + 'finalize ran applyScreen(currentDesc()) = setView(\'nowplaying\'), and setView must '
+      + 'RE-PARK the #home its own mid-drag render un-parked (asserted un-parked as fixture '
+      + 'sanity above). An un-parked #home under Now Playing is a screen left mounted in the '
+      + 'layout beneath it — the residue that accumulates across repeated aborted NP gestures. '
+      + 'This is asserted against the CONSTANT `true`, not against the entry reading, because a '
+      + 'relative assertion is blind whenever Now Playing\'s ENTRY already failed to park it.');
+
     assert.deepEqual(after1, entry,
       'THE DEFECT, step 1 (plan §5.3.1): the abort\'s finalize ran applyScreen(currentDesc()) = '
       + 'setView(\'nowplaying\'), and at HEAD its `if (!npOpen)` guard skips the park-and-hide '
@@ -131,5 +162,69 @@ async () => {
       + `2 [${after2.join(', ')}]. That growth across gestures IS the three-plus-screens render, `
       + 'and it is why the defect appeared only after several swipes rather than on the first. '
       + 'Repeated aborts must leave the set exactly where Now Playing\'s entry left it.');
+  } finally { h.dispose(); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// NPRECONCILE — THE SETTINGS AXIS (coverage-audit gap G1, companion cell)
+//
+// The cell above drives Now Playing from HOME, so the two screens it can put back are #home (the
+// park toggle) and #browse (the browse-hide toggle). The SIX-WAY SETTINGS LOOP — the third
+// statement A1b un-guarded, and the one the ratified-mark supersession turns on (plan §5.3, probe
+// §9.1) — is reachable only from a settings source, and at the audit NO cell drove it on a
+// finalize path: mutant "one-screen-type NPPARKS-b" was killed by test/nav.test.js and by NPPARKS
+// from a settings screen, both button-nav cells, and this file passed under it.
+//
+// ⚠️ THE DIRECTION MATTERS, AND ONLY ONE OF THE TWO WORKS. The forward NP→chapter-list abort
+// CANNOT witness this: its mid-drag showAppView (js/app.js:522) hides every settings overlay that
+// is not the gesture's own source, so #options ends up hidden by app.js whatever setView does, and
+// the assertion would pass under a re-guarded loop — a cell green for a reason that has nothing to
+// do with its claim. The BACK swipe NP→options is the one that works: its mid-drag
+// renderDestination UN-HIDES #options (js/app.js:551), so the abort's own
+// applyScreen('nowplaying') is the only thing that can put it back.
+//
+// ⛔ SCOPE: identical to the cell above. Class state only; nothing here asserts paint, occlusion
+// or stacking, which jsdom cannot fail on.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+test('NPRECONCILE — an aborted Now Playing gesture re-hides the settings screen its own mid-drag '
+  + 'render un-hid, absolutely', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await startPlayback(h);
+    h.tap('.navbtn[data-nav="options"]'); await settle(h);
+    assert.equal(isHidden(h, 'options'), false, 'fixture sanity: the Options hub is the shown screen');
+
+    h.tap('#player'); await settle(h);               // open Now Playing over the settings screen
+    assert.equal(isHidden(h, 'nowplaying'), false, 'fixture sanity: Now Playing must be open');
+    // What NP's ENTRY does to the settings screen it opened over is NPPARKS's subject and is
+    // deliberately not re-asserted here — this cell's subject is what the ABORT does, and pinning
+    // the entry would make it halt on another cell's claim before driving a gesture.
+
+    // ── THE ABORT — the back-swipe NP→options. renderDestination un-hides #options mid-drag. ──
+    h.touch.start(2, 300, h.document.body);
+    h.touch.move(90, 302); await realSleep(12);
+    h.touch.move(300, 304); await realSleep(12);
+    assert.equal(isHidden(h, 'options'), false,
+      'fixture sanity: the mid-drag destination render must have UN-HIDDEN #options '
+      + '(js/app.js:551) — without that this cell is not driving the settings axis at all');
+    h.touch.move(20, 306); await realSleep(12);
+    h.touch.end(8, 306);
+    await settle(h); await h.clock.advance(700); await settle(h);
+    assert.match(settles(h).at(-1) || '', /abort back nowplaying→options/,
+      `fixture sanity: the back-swipe must have ABORTED — got ${settles(h).at(-1)}`);
+
+    assert.equal(isHidden(h, 'options'), true,
+      'THE SETTINGS AXIS of the abort reconcile (plan §5.3.1, §5.3.3): the abort\'s own '
+      + 'applyScreen(currentDesc()) = setView(\'nowplaying\') must re-hide the settings screen its '
+      + 'own mid-drag render un-hid, through the SAME six-way loop that hides it on a button nav. '
+      + 'The exemption A1b deleted (the `if (!npOpen)` guard on that loop) is what left it mounted '
+      + 'beneath Now Playing, and its stated ground — that the NP-back reveal needs the screen '
+      + 'kept mounted — is refuted at its root: `hidden` is added to #nowplaying in exactly one '
+      + 'place and the same synchronous setView body un-hides the destination two lines earlier. '
+      + 'Asserted against the CONSTANT `true`: a comparison against the entry state cannot fail '
+      + 'when the entry itself failed to hide it.');
+    assert.equal(isHidden(h, 'nowplaying'), false,
+      'and Now Playing is still the shown screen — the gesture ABORTED, so the reconcile put the '
+      + 'world back to Now Playing rather than completing a navigation');
   } finally { h.dispose(); }
 });

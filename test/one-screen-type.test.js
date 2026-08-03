@@ -29,7 +29,8 @@
 //   NPUNTOUCHED   unit+source  NARROWED AT STAGE A1b: the back-reveal behaviour this cell once
 //                              asserted is retired (its subject moved to NPPARKS); what remains is
 //                              that .nowplaying's own rule still declares its inset, its z-index
-//                              and its background. ⚠️ PRESERVATION cell — GREEN at HEAD by
+//                              and its background, AND that the body.np-locked navbar rule still
+//                              outstacks it. ⚠️ PRESERVATION cell — GREEN at HEAD by
 //                              construction; see the note on the cell.
 //
 // ⚠️ WHY THE GESTURE CELLS ARE IN A SEPARATE FILE. test/app-harness.js's boot() replaces
@@ -195,12 +196,31 @@ test('PEERPARK — browseWillHide fires exactly once on the browse→settings sh
 // NOSETTINGSBG-b" — Stage A1b's replacement for the retired "one-screen-type NPUNTOUCHED"
 // mutant, per plan §14's NPUNTOUCHED row), which deletes .nowplaying's own `background`
 // declaration and is CONFIRMED, by execution, to redden this cell — evidence of the same kind,
-// obtained the same way, as a red. Narrowly: only the `background` assertion is mutant-defended
-// this way; `position: fixed`, `inset: 0` and `z-index: 60` have no registered mutant at HEAD.
-// The confirmation is recorded in Claude/Brunel/one-screen-type-a1b-findings-apply.md.
+// obtained the same way, as a red. The navbar-stacking assertion added below carries a second
+// registered mutant of its own ("one-screen-type NPNAVBAR"), likewise confirmed by execution.
+// Narrowly: `position: fixed`, `inset: 0` and `z-index: 60` still have no registered mutant at
+// HEAD (the coverage audit's note N1). The confirmations are recorded in
+// Claude/Brunel/one-screen-type-a1b-findings-apply.md and in
+// Claude/Curie/one-screen-type-a1b-gapfill-test-design-2026-08-03.md.
+//
+// THE NAVBAR ASSERTION (coverage-audit gap G3, plan §14's NPUNTOUCHED row). §14 specifies this
+// cell's fixture as reading the shipped stylesheet and asserting the Now Playing rule declares its
+// background, its inset and its z-index "and that the body np-locked navbar rule still raises the
+// navbar above it". The cell had never carried the second half, so deleting `z-index: 70` from the
+// `body.np-locked .navbar` rule reddened nothing. The navbar takeover is one of the 24
+// load-bearing differences invariant S4 protects (probe §4.3 marks `np-locked` load-bearing): a
+// navbar that stops outstacking Now Playing is Now Playing becoming an ordinary screen, which is
+// what S4 forbids.
 // ═══════════════════════════════════════════════════════════════════════════════════════
-test('NPUNTOUCHED — the .nowplaying rule still declares its own inset, z-index and background '
-  + '(source)', () => {
+
+/** The numeric value of a `z-index` declaration in a rule body, or null if it declares none. */
+function zIndexOf(body) {
+  const m = /(?:^|;)\s*z-index\s*:\s*(-?\d+)\s*(?:;|$)/.exec(body);
+  return m ? Number(m[1]) : null;
+}
+
+test('NPUNTOUCHED — the .nowplaying rule still declares its own inset, z-index and background, '
+  + 'and the body.np-locked navbar rule still outstacks it (source)', () => {
   const css = readRoot('css/app.css').replace(/\/\*[\s\S]*?\*\//g, ' ');
   const body = ruleBody(css, '.nowplaying');
   assert.ok(body != null, 'fixture: a `.nowplaying` rule must exist in css/app.css');
@@ -213,4 +233,27 @@ test('NPUNTOUCHED — the .nowplaying rule still declares its own inset, z-index
     'Now Playing is the ONE screen that keeps a page background (invariant S2). It is the '
     + 'deliberate exception, and the whole point of the settings-screen deletions is that they '
     + 'are not it');
+
+  // The navbar takeover — plan §14's second half of this cell's fixture (gap G3).
+  const navBody = ruleBody(css, 'body.np-locked .navbar');
+  assert.ok(navBody != null,
+    'fixture: a `body.np-locked .navbar` rule must exist in css/app.css — the same anti-vacuity '
+    + 'guard the .nowplaying read above applies. A vanished rule must fail here rather than pass '
+    + 'a comparison against nothing');
+  const navZ = zIndexOf(navBody);
+  const npZ = zIndexOf(body);
+  assert.notEqual(navZ, null,
+    'the `body.np-locked .navbar` rule must declare a z-index. The navbar takeover is one of the '
+    + '24 load-bearing differences the user\'s ratified "Now Playing stays unique" decision '
+    + 'protects: on Now Playing the bar itself goes chromeless and RISES ABOVE the overlay, which '
+    + 'is what makes the transport pill reachable over a screen whose own rule is `inset: 0; '
+    + `z-index: ${npZ}`
+    + '`. A navbar that stops outstacking Now Playing is Now Playing becoming an ordinary screen, '
+    + `which is what invariant S4 forbids. Rule body: ${navBody}`);
+  assert.ok(navZ > npZ,
+    `the np-locked navbar must stack STRICTLY ABOVE Now Playing — navbar z-index ${navZ}, `
+    + `.nowplaying z-index ${npZ}. This is a SOURCE assertion by design: jsdom has no layout and `
+    + 'no compositing, so a rendered-stacking cell could not fail here and would be a false '
+    + 'witness (the observed result is plan §15/step 9, device-owed). What is asserted is the '
+    + 'declared relationship the decision names.');
 });

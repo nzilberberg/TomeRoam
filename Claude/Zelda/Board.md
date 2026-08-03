@@ -862,10 +862,40 @@ to the planner. **The campaign `coverage-audit` gate accepts `ADEQUATE` alone, s
 filed verdict `GAPS_NAMED`. That is the gate working.** Proceeding to step 9 with the gaps in view is
 the user's call.
 
+**Curie gap-fill COMPLETE — G1/G2/G3 + M1 authored, every new mutant EXECUTED (2026-08-03)**
+(`Claude/Curie/one-screen-type-a1b-gapfill-test-design-2026-08-03.md`). **G1** — `NPRECONCILE` gains
+an ABSOLUTE `parked('home') === true` after abort 1 plus a settings-source companion cell (from the
+Options hub, open NP, back-swipe NP→options to abort, assert `hidden('options')` absolutely — the
+FORWARD abort cannot witness it, `js/app.js:522`'s sweep hides `#options` whatever `setView` does).
+Acceptance met by execution: `#89` `NPPARKS-a` now `caught (2)` with `NPRECONCILE` as its second
+killer (it had exactly one), and `#91` `NPPARKS-b` `caught (3)` with the companion. **G2** — new cell
+`test/np-hidden-writer-set.test.js` (`NPHIDDENWRITER`, 5 tests): the FULL inventory, not the cheaper
+half, plus the synchrony pin. It registers BY CLASS according to whether the derivation can resolve
+the target — a `$('someid')` receiver's id is derived (invariant: exactly one names `nowplaying`), a
+`$(v)`-over-a-same-line-list receiver has the LIST checked for the token, and only unresolvable
+receivers (16 locals + 1 query selector) carry hand-written reasons. Plus an ALIAS closure covering
+all five write routes including `className =`, a spread-constant closure, three directions,
+anti-vacuity, four residuals stated in the cell, and a selftest. ⭐ **MEASURED, not assumed: it does
+NOT need a `SOURCE_TEXT_GATES` exclusion** — exactly five of the 140 registry entries inject a
+hidden-write or `nowplaying` payload (`#85 #87 #88 #90 #91`), each was applied and this gate ran
+green under all five, so `tools/mutation-sweep.mjs` was left untouched and the gate carries real
+executed sweep evidence. Four behaviourally-inert mutants `NPHIDDENWRITER-a/-b/-c/-d` (duplicate
+writer / alias write / a sweep widened by one word / setView reordered) — all four `caught`, each by
+this cell ALONE. **G3** — `NPUNTOUCHED` gains a `ruleBody('body.np-locked .navbar')` assertion with
+its own anti-vacuity guard, asserting the navbar's z-index is STRICTLY above `.nowplaying`'s; mutant
+`one-screen-type NPNAVBAR` deletes `z-index: 70` and is `caught (1)` by that cell alone. **M1** — the
+retired NP-back-reveal mechanism was in FOUR places in `test/page-bg-single-painter.test.js`
+(`:1-2`, `:12-14`, and twice in the assertion message at `:53`/`:55-56`), all replaced with the
+current co-required-properties reason. Suite **830/829 pass, 0 fail, 1 pre-existing skip**; the whole
+family re-swept against the FINAL state (`76 85–99`, two foreground batches): 0 uncaught, 0
+unapplied, 0 stale, no `.mutbak`. ⚠️ Registering `NPNAVBAR` before the `FILMSTRIPDRAG` block **shifted
+every later mutant index by one** — M3's `#90/#93/#94/#95` citations must be re-derived by NAME.
+**Next: the coverage auditor, for the re-audit the `coverage-audit` gate needs to accept `ADEQUATE`.**
+
 **Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary gate
 cleared HELD_STONE and code review PASS 2026-08-03; F1–F4 scrubbed 2026-08-03; coverage audit RUN
-2026-08-03 → GAPS_NAMED, three cells owed to Curie + M1 to Brunel + M2/M3 to the planner; the step-9
-device gate still owed**), A2
+2026-08-03 → GAPS_NAMED; **G1/G2/G3 + M1 FILLED by Curie 2026-08-03, re-audit now owed to
+Mendeleev**; M2/M3 still owed to the planner; the step-9 device gate still owed**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —
