@@ -9,8 +9,8 @@
 // js/nav.js:51 around the park-and-hide block and js/nav.js:78 around the six-way settings
 // visibility loop. A1b deletes BOTH, so entering Now Playing parks #home, hides #browse and hides
 // all six settings screens exactly as entering any other screen does. Nothing else changes: the
-// `npOpen` variable, the `hidden` toggle on #nowplaying (js/nav.js:81) and the `np-locked` body
-// toggle (js/nav.js:82) all stay.
+// `npOpen` variable, the `hidden` toggle on #nowplaying (js/nav.js:71) and the `np-locked` body
+// toggle (js/nav.js:72) all stay.
 //
 // ⛔ NOW PLAYING STAYS UNIQUE (the user's decision, Claude/Decisions/DecisionLog.md). A1b removes
 // the PARKING EXEMPTION and nothing else. NP keeps its own background, its `inset: 0`, its
@@ -125,8 +125,8 @@ test('NPPARKS — entering Now Playing from a settings screen hides that screen 
     'entering Now Playing must hide ALL SIX settings screens. The retained exemption at '
     + 'js/nav.js:78 kept whichever settings screen was showing mounted underneath, on the '
     + 'stated ground that the NP-back reveal needs it — a reason refuted at its root: `hidden` '
-    + 'is ADDED to #nowplaying in exactly one place (js/nav.js:81) and the same synchronous '
-    + 'setView body un-hides the destination three lines earlier (js/nav.js:78-80), so the '
+    + 'is ADDED to #nowplaying in exactly one place (js/nav.js:71) and the same synchronous '
+    + 'setView body un-hides the destination two lines earlier (js/nav.js:69-70), so the '
     + 'destination is mounted at the instant NP is hidden on every path (plan §5.3, probe §9.1)');
   assert.equal(hidden('nowplaying'), false, 'Now Playing must be the shown screen');
   assert.equal(parked('home'), true, 'and #home must be parked');

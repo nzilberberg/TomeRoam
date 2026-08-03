@@ -812,9 +812,26 @@ coverage audit (`Claude/Mendeleev/AUDIT-one-screen-type-a1b.md`), then the step-
 which should carry the adversary's added item (scroll Books deep, open NP, close it) and has no
 `DEVICE-*` record.**
 
+**Findings F1–F4 applied (2026-08-03, Brunel apply-review of `POIROT-one-screen-type-a1b-e6a2f2e.md`;
+no product code touched, per the review's own verdict).** F1: `test/one-screen-type.test.js`'s
+NPUNTOUCHED preservation-cell comment now names its live registered mutant, `one-screen-type
+NOSETTINGSBG-b` (plan §14's stated replacement for the retired `NPUNTOUCHED` mutant), and states the
+narrower truth (only the `background` assertion is mutant-defended); confirmed by execution — mutant
+`#86`, killed by NPUNTOUCHED's source-scan cell together with NOSETTINGSBG. F2: the two stale
+`js/nav.js:81`/`:78-80` citations in `test/one-screen-type-npparks.test.js` (the header at `:12-13`
+and the NPPARKS-from-settings assertion message at `:128-129`) are corrected to `:71`/`:69-70`,
+re-verified against `js/nav.js` at HEAD (`:71` is the sole `#nowplaying` `hidden`-adder; `:78` is the
+navbar's own toggle). F3: the plan's Status table (`:39`), the "next stage" sentence (`:98`), and
+§13 steps 1, 8 and 10 now read the shipped truth — round 3 FORGE, build `e6a2f2e` / `.290` SHIPPED,
+code review PASS fix-then-ship, adversary HELD_STONE; step 9 also gains Loki's named residual
+(scroll Books deep, open NP, close it — WebKit-owed, Blink-proven). F4: the CELL MAP no longer states
+the retired NP-back-reveal behaviour. Full suite green, mutant `#86` executed this pass, tree clean,
+no `.mutbak`. Build log `Claude/Brunel/one-screen-type-a1b-findings-apply.md`. **F5/F6 are NOT this
+pass's — they stay routed to the coverage auditor.**
+
 **Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary gate
-cleared HELD_STONE and code review PASS 2026-08-03; coverage audit + the step-9 device gate owed;
-four scrub items owed to Brunel/Zelda**), A2
+cleared HELD_STONE and code review PASS 2026-08-03; F1–F4 scrubbed 2026-08-03; coverage audit
+(F5/F6) + the step-9 device gate owed**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —

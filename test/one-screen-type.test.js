@@ -26,10 +26,11 @@
 //   PEERPARK      unit         entering a settings screen parks #home and hides #browse, and the
 //                              browseWillHide hook fires exactly once on the shown→hidden edge,
 //                              observed while #browse was still un-hidden. TWO mutants.
-//   NPUNTOUCHED   unit+source  applying Now Playing leaves whichever settings screen was showing
-//                              exactly as it was (the NP-back reveal), and .nowplaying keeps its
-//                              inset, its z-index and its background. ⚠️ PRESERVATION cell —
-//                              GREEN at HEAD by construction; see the note on the cell.
+//   NPUNTOUCHED   unit+source  NARROWED AT STAGE A1b: the back-reveal behaviour this cell once
+//                              asserted is retired (its subject moved to NPPARKS); what remains is
+//                              that .nowplaying's own rule still declares its inset, its z-index
+//                              and its background. ⚠️ PRESERVATION cell — GREEN at HEAD by
+//                              construction; see the note on the cell.
 //
 // ⚠️ WHY THE GESTURE CELLS ARE IN A SEPARATE FILE. test/app-harness.js's boot() replaces
 // global.window / global.document with its own JSDOM and closes it on dispose(), while these unit
@@ -191,8 +192,12 @@ test('PEERPARK — browseWillHide fires exactly once on the browse→settings sh
 // at HEAD, because every property it asserts is already true and must REMAIN true; an assertion
 // contrived to fail today would be asserting something the plan forbids changing. Its ability to
 // fail is therefore carried by its registered MUTANT (tools/mutate.mjs, "one-screen-type
-// NPUNTOUCHED"), which is CONFIRMED to redden it — evidence of the same kind, obtained the same
-// way, as a red. The confirmation is recorded in Claude/Curie/RED-one-screen-type.md.
+// NOSETTINGSBG-b" — Stage A1b's replacement for the retired "one-screen-type NPUNTOUCHED"
+// mutant, per plan §14's NPUNTOUCHED row), which deletes .nowplaying's own `background`
+// declaration and is CONFIRMED, by execution, to redden this cell — evidence of the same kind,
+// obtained the same way, as a red. Narrowly: only the `background` assertion is mutant-defended
+// this way; `position: fixed`, `inset: 0` and `z-index: 60` have no registered mutant at HEAD.
+// The confirmation is recorded in Claude/Brunel/one-screen-type-a1b-findings-apply.md.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 test('NPUNTOUCHED — the .nowplaying rule still declares its own inset, z-index and background '
   + '(source)', () => {
