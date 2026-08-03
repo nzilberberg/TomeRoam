@@ -5,7 +5,7 @@ Date: 2026-08-03
 Audit of record: `Claude/Mendeleev/AUDIT-one-screen-type-a1b.md` — GAPS_NAMED (G1, G2, G3; M1)
 Plan of record: `Claude/Plans/PLAN-one-screen-type.md` — §5.3, §9, §14
 Red suite of record for the stage: `Claude/Curie/RED-one-screen-type-a1b.md`
-Authored from HEAD `551f582`; committed at the SHA recorded in §7.
+Authored from HEAD `551f582`; the cells, the mutants and this artifact are commit `48b19f9`.
 
 Status: **GAPS_FILLED** — the three occupants the audit specified are authored, every new mutant is
 registered and **executed**, and the acceptance test the audit named for G1 passes.
