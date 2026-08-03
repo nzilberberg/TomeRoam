@@ -829,9 +829,43 @@ the retired NP-back-reveal behaviour. Full suite green, mutant `#86` executed th
 no `.mutbak`. Build log `Claude/Brunel/one-screen-type-a1b-findings-apply.md`. **F5/F6 are NOT this
 pass's — they stay routed to the coverage auditor.**
 
+**Coverage-audit gate RUN, NOT CLEARED (2026-08-03): GAPS_NAMED**
+(`Claude/Mendeleev/AUDIT-one-screen-type-a1b.md`, audited at HEAD `6fb3b21`). The suite proves the
+stage's **statements** — all eleven mutants on the `one-screen-type` family re-swept in the
+foreground at HEAD (indices re-derived from names; `76 85–94`): 0 uncaught, 0 unapplied, 0 stale,
+tree clean, no `.mutbak`; full battery 824/823 pass, the one skip pre-existing and unrelated. Every
+one of the five test casualties leaves its dimension defended. The device-owed set is **not**
+over-claimed at any of the four sites that state it. **Three bare cells, each filed with the
+properties of the test that fills it, all routed to Curie.** **G1** — `NPRECONCILE` asserts a
+*relative* property (`after === entry`), so it cannot fail wherever the defect is already present at
+entry: mutants `#89` (`NPPARKS-a`, the `#home` park) and `#91` (`NPPARKS-b`, the settings loop) both
+**pass** it, and its `after1 === entry` assertion has never failed under any mutant or at pre-A1b
+HEAD. The abort-reconcile path therefore proves the `#browse` re-hide and nothing else; the `#home`
+re-park is proven on the button-nav path only — the exact gap shape `PEERFINALIZE` exists to close.
+Occupant: one **absolute** `parked('home')` assertion after abort 1, which must make `#89` gain
+`NPRECONCILE` as a second killer. **G2** — Loki's routed finding upheld: nothing gates
+single-writer-ness of `hidden` on `#nowplaying`, and that enumeration **is** the licence for
+retiring ratified probe mark §4.2. Occupant: a source-derived writer-set gate on the
+`test/scroll-writer-set.test.js` (`M1WRITERSET`) pattern — three directions, a named textual bound,
+anti-vacuity, an additive mutant and a selftest. **G3** — Poirot's F5 first half confirmed: §14's
+`NPUNTOUCHED` row requires a `body.np-locked .navbar` stacking assertion (`css/app.css:629`,
+`z-index: 70`) the cell has never carried; deleting it today reddens nothing. Also filed: **M1**
+Poirot's F6 **widened** — `test/page-bg-single-painter.test.js` states the retired NP-back-reveal
+mechanism at `:12-14` **and again at `:55-56`, inside the assertion message**, which carries no
+"additive overlay" phrase and so escapes step 17's scrub (owner Brunel, not deferrable). **M2** §14's
+`NPRECONCILE` fixture spec says "exactly one screen element besides nowplaying lacks both hidden and
+parked" — under A1b that number is **zero**; "one" describes the defective state, and it is the model
+sentence directly upstream of G1. **M3** Poirot's F5 second half is one instance of a wider drift:
+§14's mutation column declares 17 mutants whose total is right only by coincidence — four registered
+mutants (`#90`, `#93`, `#94`, `#95`) appear in no §14 row and three are double-counted. M2/M3 route
+to the planner. **The campaign `coverage-audit` gate accepts `ADEQUATE` alone, so it reads FAIL —
+filed verdict `GAPS_NAMED`. That is the gate working.** Proceeding to step 9 with the gaps in view is
+the user's call.
+
 **Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary gate
-cleared HELD_STONE and code review PASS 2026-08-03; F1–F4 scrubbed 2026-08-03; coverage audit
-(F5/F6) + the step-9 device gate owed**), A2
+cleared HELD_STONE and code review PASS 2026-08-03; F1–F4 scrubbed 2026-08-03; coverage audit RUN
+2026-08-03 → GAPS_NAMED, three cells owed to Curie + M1 to Brunel + M2/M3 to the planner; the step-9
+device gate still owed**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —
