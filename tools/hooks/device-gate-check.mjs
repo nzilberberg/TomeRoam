@@ -16,10 +16,30 @@
 // is a fact which, derived at FILING time, would have changed the plan; derived at ask-time it
 // only wasted the user's attention.
 //
-// THE RULE. In a device-gate record, an item still marked OWED must carry both:
+// THE RULE. In a device-gate record, an item still marked OWED must carry all three:
 //     Gesture:    what a human physically does, in app terms.
 //     Observable: what they would SEE if it failed.
+//     Source:     the file:line that IMPLEMENTS the gesture's target or governs its outcome.
 // Anything else is a wish, and a wish gets a fabricated gesture bolted on later.
+//
+// ⛔ WHY `Source:` WAS ADDED, 2026-08-03 — the two-field version passed two more unusable
+// instructions in a row, both fabricated the same way: describing UI from imagination rather
+// than from the listener that implements it.
+//   (a) "half-swipe back from Now Playing and abort, repeatedly and AS FAST AS IS COMFORTABLE"
+//       — js/app.js:198 defines FLICK_V = 0.4 px/ms, so a FAST release COMMITS the swipe. The
+//       instruction told the user to do the exact opposite of the test. Also unnamed: EDGE = 44,
+//       without which the gesture never arms at all.
+//   (b) "tap a book so Now Playing covers it" — user: *"another nonsense instruction."* Tapping
+//       a book opens its chapter list. Now Playing is opened ONLY by tapping the mini-player bar
+//       (js/app.js:2837, `$('player')` click, excluding `.controls` and `.seekrow`), and only
+//       when a book is loaded. There is no Now Playing navbar button (index.html:176-193).
+// Both had `Gesture:` and `Observable:` and passed. The fields were present; the content was
+// invented. Citing the implementing line is the cheapest thing that forces the derivation —
+// in both cases the citation IS the correction: you cannot cite js/app.js:2837 and still write
+// "tap a book."
+//
+// This is a FORMAT gate, and its honest limit is unchanged: it cannot judge whether prose is
+// runnable. What it can do is make the author look at the code first.
 //
 // SCOPE — deliberately narrow, and that is the design. This gates the RECORD FORMAT of files
 // this project owns (`Claude/**/DEVICE-*.md`), where the check is textual and exact. It does
@@ -81,7 +101,12 @@ export function checkText(text, path) {
     // OWED is the trigger: an item still owed is one somebody will be asked to run.
     const whole = heading + '\n' + body;
     if (!/\bOWED\b/.test(whole)) continue;
-    const missing = ['Gesture', 'Observable'].filter((f) => !hasField(body, f));
+    const missing = ['Gesture', 'Observable', 'Source'].filter((f) => !hasField(body, f));
+    // `Source:` must actually CITE something — a path with a line number. A prose sentence
+    // there would restore exactly the hand-waving the field exists to prevent.
+    if (!missing.includes('Source') && !/\b[\w./-]+\.(?:js|css|html|mjs):\d+/.test(body)) {
+      missing.push('Source (present, but cites no path:line)');
+    }
     if (missing.length) bad.push(`${path} :: "${heading.trim().slice(0, 70)}" is OWED but has no ${missing.join(' and no ')} field`);
   }
   return bad;

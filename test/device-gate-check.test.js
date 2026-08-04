@@ -51,8 +51,29 @@ const THE_FIX = THE_DEFECT.replace(
   'That a page parked 3 viewports away',
   `**Gesture:** abort a swipe between two browse pages (NOT from Home into a list — that reveals
 no covers). **Observable:** the returning list's covers visibly pop in / re-decode all at once.
+**Source:** css/app.css:144 (the park rule), js/app.js:198 (EDGE/THRESH/FLICK_V).
 
 That a page parked 3 viewports away`,
+);
+
+// ── The SECOND incident, 2026-08-03. Both of these carry Gesture AND Observable and are still
+// unusable, because the UI they describe was imagined rather than read. Verbatim from what was
+// actually sent to the user, who replied "another nonsense instruction. what is the step to
+// follow?" — tapping a book opens its CHAPTER LIST; Now Playing opens only from the mini-player
+// bar (js/app.js:2837). And "as fast as is comfortable" inverts the test: FLICK_V (js/app.js:198)
+// makes a fast release COMMIT the swipe rather than abort it.
+const IMAGINED_UI = `# Device gate verdict — fixture
+
+### Item 3 — the repeated half-swipe. **OWED.**
+
+- **Gesture:** on a long Books list, tap a book so Now Playing covers it, then half-swipe back
+  from Now Playing and abort, repeatedly and as fast as is comfortable.
+- **Observable:** the list gets progressively slower or emptier across the repeats.
+`;
+
+const PROSE_SOURCE = IMAGINED_UI.replace(
+  '- **Observable:**',
+  '- **Source:** the swipe handler in the app.\n- **Observable:**',
 );
 
 test('the gate REDDENS on an OWED item that names only a property', () => {
@@ -67,6 +88,23 @@ test('the gate REDDENS on an OWED item that names only a property', () => {
 test('the gate PASSES once the item names a Gesture and an Observable', () => {
   const r = runOn(THE_FIX);
   assert.strictEqual(r.status, 0, 'a properly-filed item was rejected:\n' + r.stderr);
+});
+
+test('the gate REDDENS on an instruction whose UI was IMAGINED, not read', () => {
+  // Gesture and Observable are both present. The two-field version accepted this, and the user
+  // could not act on it. Requiring the implementing line is what forces the derivation: you
+  // cannot cite js/app.js:2837 and still write "tap a book".
+  const r = runOn(IMAGINED_UI);
+  assert.notStrictEqual(r.status, 0,
+    'an item with both fields but no source citation was accepted — this is the 2026-08-03 defect');
+  assert.match(r.stderr, /Source/, 'the failure must name the missing Source field');
+});
+
+test('a Source that cites no path:line is not a Source', () => {
+  // Otherwise the field degrades to the hand-waving it exists to prevent.
+  const r = runOn(PROSE_SOURCE);
+  assert.notStrictEqual(r.status, 0, 'a prose-only Source was accepted');
+  assert.match(r.stderr, /cites no path:line/);
 });
 
 test('an item that is no longer OWED is not gated', () => {

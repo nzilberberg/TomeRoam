@@ -82,7 +82,31 @@ that the fields exist, not that a stranger could act on them.**
 ⭐ `FLICK_V = 0.4` px/ms — **a fast release COMMITS even a short drag.** So flicking and letting go
 completes the swipe, which is the opposite of the test. The release must be slow.
 
-**Setup:** open a long Books list, tap a book so Now Playing covers it.
+⛔⛔ **SECOND unusable instruction, same cause.** The re-issue above still said *"tap a book so Now
+Playing covers it."* The user: ***"another nonsense instruction. what is the step to follow?"***
+Tapping a book opens its **chapter list**, not Now Playing. Derived properly this time:
+**Now Playing is opened ONLY by tapping the mini-player bar** — `js/app.js:2837`, a click on
+`$('player')` that is not inside `.controls` or `.seekrow` — and only when a book is loaded
+(`js/app.js:2225` toggles `body.has-player`). **There is no Now Playing navbar button**; the navbar
+holds Home, Authors, Books, Options (`index.html:176-193`), and while NP is open CSS swaps those out
+for the `.np-actions` pill (`index.html:194-203`).
+
+**Source:** `js/app.js:2837` (the only opener), `js/app.js:2225` (when the bar exists),
+`index.html:133` (`#player`, the tap target: cover thumbnail + title + `.controls`),
+`index.html:176-193` (the navbar has no NP button), `js/app.js:198` (`EDGE`, `THRESH`, `FLICK_V`),
+`js/app.js:496-500` (a back swipe arms only from the left edge; its destination is the previous
+screen).
+
+**Setup — the exact steps:**
+1. Start a book playing, so the **mini-player bar** appears at the bottom, just above the navbar
+   (cover thumbnail, title, transport buttons).
+2. Tap **Books** in the navbar. You are now on the Books list with the mini-player bar below it.
+3. Tap the **mini-player bar** — on the cover thumbnail or the title text. **Not** the play/pause or
+   skip buttons, and **not** the seek slider; those are excluded by the listener and do something
+   else. Now Playing opens over Books.
+
+Because the back destination is the previous screen (`js/app.js:500`), a back swipe from here returns
+to **Books** — which is what items 3a–3c need.
 
 **3a and 3b — one close each, no repetition needed.**
 - **Gesture:** close Now Playing back to Books, once, by completing the back swipe (or the back
