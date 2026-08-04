@@ -94,6 +94,13 @@ function defaultSteps() {
     // deployed `.304` and the tree's `.304` were two different files under one label, and
     // a device report naming that build would have been unanswerable.
     ['shipping-bump', [join(ROOT, 'tools', 'hooks', 'shipping-change-bumps-check.mjs')]],
+    // Editing the decision log in place shifts every line below it, silently invalidating
+    // the ~20 records that cite it by line. No error, and nothing at all in the citing files'
+    // diffs — which is why it is a gate and not a rule. Measured 2026-08-03: a live plan's
+    // `:1147-1167` had come to land on unrelated `cur.ghostY` text. Fires only when a hunk
+    // actually changes a line count (an equal-size in-place edit shifts nothing), and lists
+    // only LIVE records — a casebook's citation is a record of what was true when filed.
+    ['decisionlog-citations', [join(ROOT, 'tools', 'hooks', 'decisionlog-citation-shift-check.mjs')]],
   ];
 }
 
