@@ -757,8 +757,9 @@ mover's inline transform is wiped and re-applied on the next `move` — a one-fr
 **pre-existing**. And `#browse`, **the incoming mover the user is dragging toward**, is given
 `display: none` and **stays hidden for the rest of the gesture**, because only a `move` re-applies
 transforms and nothing re-un-hides it. The user drags, the destination never arrives, and it snaps in
-at release. **That half is A1's**, proven by re-running the identical probe under registered mutant
-`#106` (which restores the pre-A1 guard), where `browseHidden` stays false at every step: before A1,
+at release. **That half is A1's**, proven by re-running the identical probe under the registered mutant
+`one-screen-type PEERPARK/PEERFINALIZE-a` (which restores the pre-A1 guard; it was `#106` in the
+pre-A1b registry and its index has moved since), where `browseHidden` stays false at every step: before A1,
 `setView('options')` did not touch `#browse`; after A1 it hides it.
 
 **Reachability.** 0–340ms after a hub↔sub tap — sooner in a real browser, where `transitionend` fires
@@ -984,6 +985,11 @@ defect. It is listed here so that stop is *expected* rather than diagnosed.
 Structural rather than a note: §6a's stated purpose is that the builder's stop be *expected*, and a
 red in a file this table does not mention is the diagnosed kind — an hour and a diagnosis, spent
 working out whether A1b was supposed to do that.
+
+⚠️ **The two mutant indices in this table are the PRE-A1b registry's and do not resolve against
+`tools/mutate.mjs` at HEAD** — one was de-registered and one re-pointed by the A1b commit itself, and
+the registry has grown since. They are identified by the cell names beside them, which is why §14
+rules that mutants are cited by name and never by index.
 
 | Artifact | What A1b does to it | Action, in the A1b commit |
 |---|---|---|
