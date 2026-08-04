@@ -1073,6 +1073,30 @@ both stand-ins re-implement the throw, so a `return null` ships green. Owner: th
 **M3 (Gap)** — the `CLB` source-text purge gate (`clobbered`/`sourceWasClobbered` absent from `js/`)
 went out with `test/swipe-stage6d.test.js`; §12 never listed it and its subject is still live. Owner:
 the planner. Watch-list **W12** is discharged by deletion — close it.
+
+**Step 11 — the SUBTRACTION PASS is DESIGNED, not built (2026-08-04, the planner, plan HEAD
+`b539f71`).** `Claude/Plans/PLAN-swipe-declone-stage2-subtraction.md`, **PLAN_READY — next is the plan
+reviewer.** Twelve source deletions in `js/app.js` + `js/nav.js` and five test/tooling/generated
+surfaces, each admitted only on a stated proof of unreachability (a value argument where a grep would
+not do). ⭐ **One cascade §12 does not name:** deleting the `.nav-ghost` disjunct from `begin()`'s
+recovery predicate makes its ORPHAN branch unreachable and collapses three ternaries — including
+`resetScroll: cur ? false : undefined`, whose orphan value is the pre-6a home-scroll-to-top parity the
+code review's F1 preserved. That collapse is admissible ONLY behind a new source-scan gate
+(`NOGHOSTCLASS`), which turns the reachability reading into a structure; four reachability readings
+have already been wrong in this campaign. ⛔ **Step 10b (the device gate on the shipped Stage-2 form)
+has NOT run** — there is no device verdict for this campaign in `Claude/Zelda/` — **and it gates the
+build**, because the cheapest repairs if it fails are exactly the branches this pass deletes.
+Planner-owned inheritances all CLOSED in the plan §13 + DecisionLog: audit **M1** (no new guard; widen
+the cell, `DESTROYEDMOVER`), audit **M3** (the CLB purge gate is re-homed, `NOCLB`), addendum **A8**
+(`constructionPlanFor.outgoing` retained as a stated exemption under Rule R), **A2 does not ride
+along** (never batch two removals into one build), and §12 item 14's `nav.js:105`/`:106` mis-citation
+(independently = code review **W50**). Still OPEN with the planner and OUT of this pass: **W46** (the
+same-key `browse→browse` mover collision — a correctness question, needs its own plan), **A7**
+(`sourceEl` ignores its `v` arg), audit **M5** (mechanise the sweep's designated-killer check). Seven
+coverage cells, seventeen mutants, all source/key-set/class-state/call-count/DOM-identity — no
+geometry. ⚠️ `Claude/Campaigns/swipe-declone-stage2.json`'s `note` still claims `display: contents`
+and "THE PLAN WAS NEVER REVIEWED"; both falsified — owed to the assistant at the records scrub.
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.

@@ -1442,3 +1442,66 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   no error and no diff to notice. `PLAN-one-screen-type.md`'s eighteen citations were re-derived
   against five independent anchors and corrected. **NOT swept: `Claude/Linnaeus/PROBE-np-uniqueness.md`,
   the A1b audits and casebooks, and `Claude/Zelda/Board.md` still carry the pre-shift numbers.**
+
+- THE DECLONE STAGE 2 SUBTRACTION PASS IS A SUB-PLAN, NOT AN EDIT TO §12 — 2026-08-04, the planner.
+  `Claude/Plans/PLAN-swipe-declone-stage2-subtraction.md` designs `PLAN-swipe-declone.md` §13 step 11.
+  It does not restate §12; §12 stays the authoritative inventory and every deletion row cites the §12
+  item it discharges. The form was chosen for three reasons: step 11 needs its own inverted Coverage
+  Model, which no table row can hold; the parent plan is FORGE'd and its §12/§18 are review-anchored,
+  so an in-place rewrite would shift citations into a ratified artifact; and every prior stage in this
+  campaign got its own plan file.
+
+- A DELETION'S COVERAGE MODEL IS INVERTED, AND A CELL MAY NOT MERELY ASSERT ABSENCE — 2026-08-04,
+  the planner, in the declone Stage 2 subtraction plan §10.
+  Code that no longer exists cannot be mutated, so each deletion states either that an existing cell
+  already witnesses the surviving behaviour, or that the deletion is textual and gated by a
+  source-scan cell, or that nothing witnesses it and that is a named risk. A cell asserting that code
+  is absent is authored ONLY where something depends on the absence — in this pass, the recovery
+  collapse and the mover-shape ruling both do.
+
+- A MOVER FIELD SURVIVES THE SUBTRACTION IFF A CONSUMER READS IT AFTER THE PASS — 2026-08-04, the
+  planner, Rule R of the declone Stage 2 subtraction plan §6.
+  A production reader or a gate that executes on every commit counts; a prospective future-stage
+  reader does not. Applied three times: `mover.ownership` at the classification seam STAYS (it is
+  `NOGHOSTATALL`'s subject), `constructionPlanFor.outgoing` STAYS as a stated exemption (its consumer
+  is the frozen spec's structural comparison over all eight cases), and `mover.own` on the L3 session
+  mover is DELETED (no reader of any kind remains once the four `owned-pane` filters go). The stated
+  exemption answers the adversary addendum's A8, whose point was that an exact-key gate cannot see a
+  key with no consumer, so silence would leave the rule unenforced where the change stressed it.
+
+- A MID-GESTURE DESTRUCTION OF A SWIPE MOVER REQUIRES NO NEW GUARD — 2026-08-04, the planner, closing
+  coverage-audit finding M1 on `Claude/Mendeleev/AUDIT-swipe-declone-stage2.md`.
+  The invariant is already this project's, stated at `test/swipe-gesture.test.js:24-25`: a gesture
+  must settle even when the DOM it started on is destroyed mid-drag, because the gesture does not own
+  that node. Stage 2 widened the set of destructible non-owned nodes from the touch target alone to
+  the touch target plus both movers, and the correct response is to widen the CELL, not to add a
+  guard: a detached mover receives inert style writes, the `transitionend` listener on a detached
+  anchor never fires and the 340ms settle timer is the backstop that already exists for it, and the
+  session is released from the finalize `finally`. `gestureOwnsMovers` is deliberately NOT extended to
+  the three refresh handlers — that is the code review's W44, a pre-existing class with its own owner,
+  and a behaviour change folded into a no-behaviour-change pass destroys attribution.
+
+- THE RETIRED-CONCEPT PURGE GATE IS STILL OWED AND IS RE-HOMED — 2026-08-04, the planner, closing
+  coverage-audit finding M3.
+  The `CLB` source-text sweep asserting that the two retired clobber identifiers occur nowhere in
+  `js/` was deleted with `test/swipe-stage6d.test.js` while its subject stayed live. It returns as one
+  of three registered claims in a single purge file, alongside the two tokens the subtraction pass
+  retires. The file must exclude itself by FILE IDENTITY rather than by a path pattern, and every one
+  of its failure paths must be driven and observed to fire before it is accepted.
+
+- STAGE A2 DOES NOT RIDE ALONG WITH THE DECLONE SUBTRACTION PASS — 2026-08-04, the planner.
+  A2's premise-coupling to declone Stage 2 was resolved on 2026-08-01, which makes A2 UNBLOCKED, not
+  MERGED. Three reasons it stands alone: the standing working rule in
+  `Claude/Zelda/OBSOLESCENCE-CANDIDATES.md` is that two removals are never batched into one build,
+  because attribution is the whole point; A2's discriminator is a device observation about settings
+  stacking while the subtraction's is a device observation about swipes, so batching puts two
+  independent variables into one device session; and batching does not reduce churn, because a failed
+  gate then costs two rollbacks instead of one.
+
+- `PLAN-swipe-declone.md` §12 ITEM 14's RETENTION CLAUSE CITES THE WRONG LINE — 2026-08-04, measured
+  against HEAD `b539f71` and against `b9b0682`, the HEAD the item was written for.
+  The item reads "the `nav.js:105` sweep line stays for the NP pill float". At `js/nav.js` line 105 is
+  the `.nav-ghost` sweep and line 106 is the `.np-pill-float` sweep, in both revisions. Line 106 stays
+  and is load-bearing — it is the only sweeper of the retained pill clone on the recovery path, and it
+  is deliberately unguarded by `keepGhosts`. Line 105 is a clean deletion. Found independently by the
+  planner and by the code review, which files it as W50 with the same reading.
