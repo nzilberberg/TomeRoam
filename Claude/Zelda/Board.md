@@ -934,11 +934,37 @@ seat widening the glob that gates its own verdict is a shape not to accept, howe
 Owner: whoever owns the campaign record, and the same sweep should check every other manifest in
 `Claude/Campaigns/` for the literal-glob class.
 
+**Planner tail CLOSED — M2, M3 (with C1) and N3, 2026-08-04** (`Claude/Plans/PLAN-one-screen-type.md`,
+records-only, no build bump). **M2** — §14's `NPRECONCILE` fixture said "exactly one screen element
+besides nowplaying lacks both hidden and parked" after each abort; under A1b that number is **zero**,
+so the model stated the pre-A1b defect as the expectation and a literal reading of it authors a
+permanently-red cell. Rewritten to what A1b guarantees, with the shipped cell's **absolute**
+assertions specified beside the relative ones and the reason for both. ⭐ **Same staleness found in a
+second row the audit did not name: `PEERFINALIZE`'s fixture listed three gestures and never the
+A1b-relocated edge-3 scenario** the shipped cell has driven since `e6a2f2e` — corrected. **M3** — the
+"seventeen mutants" total reconciled only because four unlisted mutants cancelled three
+double-counted ones. §14 now carries a per-cell accounting table: **nineteen distinct registered
+mutants across nine shipped cells**, shared mutants named in both rows and counted in exactly one,
+plus the **new `NPHIDDENWRITER` row** owed since round 1's G2 (it existed in `test/` and in no §14
+row). ⛔ **Mutants are now cited by NAME, never by index** — every index in the plan was re-derived
+against `tools/mutate.mjs --list`; the Status section's `#113`/`#111`/`#112` all addressed different
+mutants and are now named. **C1 confirmed independently: the `FILMSTRIPDRAG` 340ms net is `#100`**
+(`#95` is `NPNAVBAR`), and `#90`/`#93`/`#94` still address what M3 said. **N3** — edge 5's exclusion
+STANDS; what was missing was a trigger, since §9's re-open condition was re-checked only at step 16,
+which runs once at the end of Stage B and then closes with the plan. §9 now states the identity as
+**two source predicates** (`setView` takes exactly one parameter, `js/nav.js:45`; `applyScreen`'s NP
+branch passes the literal `'nowplaying'` and no options, `js/nav.js:150`) which close it by
+construction, and **new §13 step 10a** routes both to Curie as two assertions in `NPHIDDENWRITER`'s
+synchrony cell plus one mutant. ⚠️ **Found in passing: every line citation into the decision log
+moved by +12** — the ratified NP entry is `:1159-1179`, not `:1147-1167`; an entry was INSERTED above
+it instead of appended. The plan's eighteen citations are corrected; **the probe, the A1b audits and
+this board still carry the pre-shift numbers.**
+
 **Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary HELD_STONE,
 code review PASS, F1–F4 scrubbed, G1/G2/G3+M1 filled by Curie, coverage audit round 2 **ADEQUATE**
-2026-08-03 — coverage is no longer the blocker. Owed: the one-token campaign-manifest glob fix so the
-gate can read the verdict; M2/M3/C1/N3 to the planner; N1/N4 to Curie; and the step-9 device
-gate**), A2
+2026-08-03, device gate step 9 **PASSED all four items** 2026-08-03, planner tail M2/M3/C1/N3
+**CLOSED** 2026-08-04. Owed: the one-token campaign-manifest glob fix so the `coverage-audit` gate can
+read the verdict; **§13 step 10a to Curie** (the edge-5 predicates); N1/N4 to Curie**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —

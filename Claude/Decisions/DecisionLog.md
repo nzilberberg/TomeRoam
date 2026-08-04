@@ -1386,3 +1386,59 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   were corrected at commit `e11ecf3`, same day. Device gate items (R1: whether this is the whole of
   the reported garbage; R2: cover retention at the new distance) remain OPEN and device-owed, as the
   plan states. Poirot: PASS — fix-then-ship (`Claude/Poirot/POIROT-parked-page-rides-home-b358f73.md`).
+
+- MUTANTS ARE CITED BY REGISTRY NAME, NEVER BY REGISTRY INDEX — 2026-08-04, the planner, closing
+  coverage-audit finding M3 on `PLAN-one-screen-type.md` §14.
+  `tools/mutate.mjs` is an ORDERED ARRAY, so registering an entry shifts every later index with no
+  error and no diff signal. Measured: `one-screen-type NPNAVBAR` was inserted ahead of the
+  `FILMSTRIPDRAG` block and moved the 340ms safety-net mutant from `#95` to `#100`, after which
+  three records still cited `#95`. DECIDED: this plan cites mutants by NAME only and an index is
+  derived at the moment of use (`node tools/mutate.mjs --list`). §14 now states the total ONCE —
+  **nineteen distinct registered mutants across the nine shipped cells** — in a per-cell table whose
+  parts are checkable against the rows, with a shared mutant named in both rows and counted in
+  exactly one.
+  ⚠️ THE TRANSFERABLE PART: the count it replaces was "seventeen" and RECONCILED, because four
+  registered mutants appearing in no row (`NPPARKS-a'`, `NOSETTINGSBG-a'`, `PEERPARK-c`, the
+  `FILMSTRIPDRAG` 340ms net) cancelled three that were double-counted (the `PEERPARK`/`PEERFINALIZE`
+  pair counted as two pairs; `NOSETTINGSBG-b` counted once as `NOSETTINGSBG`'s and again as
+  `NPUNTOUCHED`'s). A total that reconciles while its parts do not is the shape to distrust, and the
+  fix is to enumerate the parts rather than to re-add the total.
+
+- A COVERAGE MODEL MUST STATE THE POST-CHANGE EXPECTATION, NOT THE DEFECT IT REMOVES — 2026-08-04,
+  the planner, closing coverage-audit finding M2 on `PLAN-one-screen-type.md` §14.
+  §14's `NPRECONCILE` fixture specified that after each aborted Now Playing gesture "exactly one
+  screen element besides nowplaying lacks both the hidden and the parked class". Under Stage A1b
+  that number is **ZERO** — Now Playing's entry parks `#home` and hides `#browse` and hides all six
+  settings screens — and "one" describes the PRE-A1b accumulation. A test author following §14
+  literally would have authored a permanently-red cell; the shipped cell instead used a relative
+  form that matched no part of §14, and that relative form is what produced gap G1. The row now
+  states what A1b guarantees and specifies the ABSOLUTE assertions beside the relative ones, with
+  the reason: a relative assertion cannot fail wherever the defect is already present at entry,
+  because the defective entry moves the baseline with it.
+  `PEERFINALIZE`'s row carried the same class of staleness and is corrected in the same pass — its
+  fixture named three gestures and never the A1b-relocated edge-3 scenario the shipped cell has
+  driven since `e6a2f2e`.
+
+- EDGE 5'S EXCLUSION IS CONDITIONAL AND ITS CONDITION IS NOW MECHANICAL — 2026-08-04, the planner,
+  closing coverage-audit note N3 on `PLAN-one-screen-type.md` §9.
+  §9 rules edge 5 (supersession while Now Playing is current) deliberately uncovered because its
+  `setView` body is byte-identical to edge 4's, which `NPPARKS` proves. The ruling STANDS. What
+  changes is its trigger: the re-open condition was prose re-checked at §13 step 16, a step that
+  runs once at the end of Stage B and then closes with the plan, so a future reader would meet the
+  ruling with nothing behind it. DECIDED: the identity rests on two source facts, now stated as
+  predicates — `setView` is declared with EXACTLY ONE parameter (`js/nav.js:45`) and `applyScreen`'s
+  Now Playing branch passes it the LITERAL `'nowplaying'` and no options (`js/nav.js:150`) — which
+  together make an option or a caller identity unable to reach the park and hide statements by
+  construction. §13 step 10a routes both to the test author as two assertions inside
+  `NPHIDDENWRITER`'s existing synchrony cell, plus one mutant that gives `setView` a second
+  parameter. Residual, stated in the plan: a branch inside `setView` keyed on module-scope state
+  would pass both predicates; none exists at HEAD.
+
+- LINE CITATIONS INTO THIS DECISION LOG SHIFTED BY +12 — 2026-08-04, measured.
+  The ratified "ONE SCREEN TYPE" entry is at `:1159-1179` at HEAD `3ba4c6e`; records written earlier
+  cite it as `:1147-1167`, and the supersession entry as `:1195-1213` where it is now `:1207-1225`.
+  An entry was INSERTED above them rather than appended, which is exactly the failure the
+  append-never-insert records rule exists to prevent: a citation into a record breaks silently, with
+  no error and no diff to notice. `PLAN-one-screen-type.md`'s eighteen citations were re-derived
+  against five independent anchors and corrected. **NOT swept: `Claude/Linnaeus/PROBE-np-uniqueness.md`,
+  the A1b audits and casebooks, and `Claude/Zelda/Board.md` still carry the pre-shift numbers.**
