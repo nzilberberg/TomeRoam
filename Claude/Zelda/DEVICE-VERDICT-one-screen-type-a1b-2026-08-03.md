@@ -66,7 +66,27 @@ other. Loki executed it on glass (one un-hidden screen every time) but on Blink,
 
 ---
 
-### Item 3 — the three R-H performance questions. **OWED — re-issued 2026-08-03 after the first wording proved unusable.**
+### Item 3 — the three R-H performance questions. **ANSWERED — PASS.**
+
+> *"3a and 3b pass, 3c seems fine too"* — the user, 2026-08-03, on build `.306`.
+
+**3a (covers re-decode on close) and 3b (restore flash): PASS.** Both are single-close observations
+with a sharp failure mode; a clean report is a clean result.
+
+**3c (the compounding cost): PASS, and the hedge is kept — "seems fine too", not "is fine".**
+R-H hazard 3 is therefore **not observed**, which is not the same as disproven: the test is a human
+judgement of *progressive* degradation across repeats, so it rules out a degradation large enough to
+notice, not a small one. That is the honest ceiling of this instrument and no stronger claim is
+recorded. **No further work is owed on it** — the hazard was a predicted cost of A1b's teardown, and
+the prediction did not materialise at a visible scale.
+
+**With this, every item of plan step 9 is answered and Stage A1b is fully gated.**
+
+---
+
+<details><summary>The item as re-issued (retained for re-runs)</summary>
+
+**Was: OWED — re-issued 2026-08-03 after the first wording proved unusable.**
 
 ⛔ **The first version of this item was not runnable, and the user said so: *"I need clearer
 instructions for 3."*** It said *"half-swipe back from Now Playing and abort, repeatedly and as fast
@@ -133,15 +153,24 @@ single try therefore proves nothing — a first pass looks fine whether the haza
 
 ---
 
-## Status
+</details>
+
+---
+
+## Status — COMPLETE
 
 - **Item 1: PASS** — the accumulation defect is gone on the device.
 - **Item 2: PASS** — aborted NP gestures leave no stack.
+- **Item 3: PASS** — no cover re-decode, no restore flash, no visible compounding cost (hedged).
 - **Item 4: PASS** — scroll survives the new `#browse` `display:none` on WebKit.
-- **Item 3: OWED** — the three R-H *performance* questions, re-issued above with a runnable gesture.
-  Correctness is answered; what remains is whether A1b costs anything under repetition.
-- Stage A1b's other three gates: **cleared.** This device gate is the only thing outstanding, and only
-  its performance third of it.
+
+**Stage A1b is fully gated:** plan-review FORGE, red-suite RED_SUITE_READY, build BUILD_GREEN,
+adversary HELD_STONE, code-review PASS, coverage-audit ADEQUATE (r2), **device gate PASS**.
+
+⚠️ **One thing this does NOT close.** `PLAN-parked-page-rides-home.md` risk **R1** — whether the
+park-distance fix cleared *all* of the reported swipe garbage — remains open on its own terms. It is
+a separate change with its own device gate, and the user's report there was likewise bounded
+(*"the bugs I was able to easily reproduce last round seem fixed"*). Nothing here speaks to it.
 
 ## The lesson this record earned twice
 
