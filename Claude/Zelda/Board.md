@@ -960,11 +960,47 @@ moved by +12** — the ratified NP entry is `:1159-1179`, not `:1147-1167`; an e
 it instead of appended. The plan's eighteen citations are corrected; **the probe, the A1b audits and
 this board still carry the pre-shift numbers.**
 
+**Curie tail CLOSED — §13 step 10a, N1 and N4, 2026-08-04**
+(`Claude/Curie/one-screen-type-a1b-tail-test-design-2026-08-04.md`; test + tooling only, no product
+code read for editing and none changed, no build bump — `test/`, `tools/` and `Claude/` are outside
+`shipping-change-bumps-check.mjs`'s shipping set by construction). **Step 10a** — §9's two edge-5
+predicates are now asserted inside `NPHIDDENWRITER`'s synchrony cell: `setView`'s declared parameter
+list is exactly `['v']`, and `applyScreen`'s NP branch passes exactly `['nowplaying']`. Each message
+names §9's ruling and states that the green is what keeps edge 5 uncovered, so a red reads as "the
+ruling has lapsed, route it to the planner". ⭐ **The cell's `setView` locator had to change first,
+and this is the finding**: it spelled `indexOf('function setView(v)')`, so the acceptance mutant made
+it fail on the FIXTURE guard with neither predicate evaluated — a red for the wrong reason, which is
+no evidence. It is now signature-agnostic and the captured parameter list IS assertion 1's subject.
+**TWO mutants, not one**, because `assert` throws on the first failure and one mutant would leave
+assertion 2 unproven: `NPHIDDENWRITER-e` (two-part — second parameter + option threaded) kills
+assertion 1, `NPHIDDENWRITER-e'` (option threaded into a still-one-parameter `setView`, legal and
+ignored) kills assertion 2. ⚠️ **§13 step 10a's "reddens this cell alone" is NOT literally met and is
+disclosed rather than tuned away** — each also reddens the identity cell on Direction 1, because
+registered entry #11 is the whole NP-branch line, so a changed argument list reads as a new
+unregistered site. That firing is correct; ⛔ shortening entry #11 to let the mutant past would be
+tuning the baseline to the test. Attribution was established the stronger way, by reading each
+mutant's synchrony-cell failure message. **N1** — `NPUNTOUCHED`'s three undefended assertions gain
+`one-screen-type NPFIXED`, `NPINSET` and `NPZ60`, each deleting one declaration from `.nowplaying`'s
+shared line; **no assertion was found unmutatable**. The one needing care was `z-index: 60`: with the
+declaration gone `zIndexOf` returns `null` and the cell's `navZ > npZ` comparison still passes on
+coercion, so the kill had to be confirmed to land on the `z-index: 60` match assertion itself — it
+does. The cell's note claiming those three had no mutant was scrubbed. **N4** — the audit's one-line
+fix applied: `ALIAS_WRITE_SUFFIX` widened to `(?:display|cssText)` and `['"](?:class|style)`, so both
+routes the audit measured as escaping are caught; `NPHIDDENWRITER-f` proves the new arm bites on real
+source. Deliberately NOT added to `WRITE_PATTERNS` — site-inventorying `cssText` would derive every
+DOM-builder call in `js/debug.js`; same treatment as `className =`, and the asymmetry is now stated.
+**The residual bound is MEASURED**: the selftest executes the two routes that still escape
+(`style.setProperty`, a computed `el.style['display']`) and the scope cell now requires them to be
+named in `RESIDUALS`. Suite **835/834 pass, 0 fail, 1 pre-existing skip**; twelve mutants re-swept
+against the FINAL state in two foreground batches (`86 95–99`, `100–105`, indices re-derived from
+names against the 146-entry registry) → 0 uncaught, 0 unapplied, 0 stale, no `.mutbak`. ⛔ Those
+indices are of-this-commit only — cite by name.
+
 **Still open in this campaign:** r2's successor stages — A1b (**shipped `.290`; adversary HELD_STONE,
 code review PASS, F1–F4 scrubbed, G1/G2/G3+M1 filled by Curie, coverage audit round 2 **ADEQUATE**
 2026-08-03, device gate step 9 **PASSED all four items** 2026-08-03, planner tail M2/M3/C1/N3
-**CLOSED** 2026-08-04. Owed: the one-token campaign-manifest glob fix so the `coverage-audit` gate can
-read the verdict; **§13 step 10a to Curie** (the edge-5 predicates); N1/N4 to Curie**), A2
+**CLOSED** 2026-08-04, Curie tail step 10a/N1/N4 **CLOSED** 2026-08-04. Owed: the one-token
+campaign-manifest glob fix so the `coverage-audit` gate can read the verdict**), A2
 (delete `z-index: 25`/`26`), Stage B (taxonomy: `overlay` becomes NP alone, 8→14 kind rows); and
 `PLAN-swipe-declone.md` Stage 2, `browse→browse`, the last remaining clone and the last home of the
 tuned `paddingTop = '53px'`. **Stage 2 plan review round 3 (`6e37b25`, the round-2 fold): TEMPER** —

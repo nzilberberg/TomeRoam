@@ -198,10 +198,15 @@ test('PEERPARK — browseWillHide fires exactly once on the browse→settings sh
 // declaration and is CONFIRMED, by execution, to redden this cell — evidence of the same kind,
 // obtained the same way, as a red. The navbar-stacking assertion added below carries a second
 // registered mutant of its own ("one-screen-type NPNAVBAR"), likewise confirmed by execution.
-// Narrowly: `position: fixed`, `inset: 0` and `z-index: 60` still have no registered mutant at
-// HEAD (the coverage audit's note N1). The confirmations are recorded in
+// EVERY assertion in this cell now carries one: `position: fixed`, `inset: 0` and `z-index: 60`
+// gained "one-screen-type NPFIXED", "NPINSET" and "NPZ60" (the coverage audit's note N1, closed
+// 2026-08-04). Each deletes its one declaration from `.nowplaying` and was confirmed by execution
+// to redden this cell and nothing else in the suite — and to fail on its OWN assertion, not on a
+// neighbouring one. ⛔ Cite these mutants BY NAME: registry indices move whenever an entry is
+// inserted above them. The confirmations are recorded in
 // Claude/Brunel/one-screen-type-a1b-findings-apply.md and in
-// Claude/Curie/one-screen-type-a1b-gapfill-test-design-2026-08-03.md.
+// Claude/Curie/one-screen-type-a1b-gapfill-test-design-2026-08-03.md and
+// Claude/Curie/one-screen-type-a1b-tail-test-design-2026-08-04.md.
 //
 // THE NAVBAR ASSERTION (coverage-audit gap G3, plan §14's NPUNTOUCHED row). §14 specifies this
 // cell's fixture as reading the shipped stylesheet and asserting the Now Playing rule declares its

@@ -984,6 +984,27 @@ const MUTATIONS = [
     from: 'body.np-locked .navbar { background: transparent; border-top: 0; backdrop-filter: none; z-index: 70; padding-bottom: 0; }',
     to:   'body.np-locked .navbar { background: transparent; border-top: 0; backdrop-filter: none; padding-bottom: 0; }' },
 
+  // ── NPUNTOUCHED's three remaining assertions — the coverage audit's note N1
+  // (Claude/Mendeleev/AUDIT-one-screen-type-a1b.md). NOSETTINGSBG-b defends the `background`
+  // assertion and NPNAVBAR the navbar-outstacks one; `position: fixed`, `inset: 0` and
+  // `z-index: 60` had none. NPUNTOUCHED is a PRESERVATION cell — green at HEAD by construction,
+  // because every property it asserts must REMAIN true — so a mutant is the only evidence its
+  // assertions can fail at all. Each deletes ONE declaration from the shared `.nowplaying`
+  // declaration line, which is unique in css/app.css; all three are invisible to every unit cell,
+  // since jsdom has no layout and no compositing.
+  { name: 'one-screen-type NPFIXED: .nowplaying loses `position: fixed`, so Now Playing stops being its own fixed box (-> NPUNTOUCHED position assertion)',
+    file: 'css/app.css',
+    from: '  position: fixed; inset: 0; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;',
+    to:   '  inset: 0; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;' },
+  { name: 'one-screen-type NPINSET: .nowplaying loses `inset: 0`, so it stops stretching to cover the topbar and the transport (-> NPUNTOUCHED inset assertion)',
+    file: 'css/app.css',
+    from: '  position: fixed; inset: 0; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;',
+    to:   '  position: fixed; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;' },
+  { name: 'one-screen-type NPZ60: .nowplaying loses `z-index: 60`, so it stops declaring its own stacking and one of the three co-required covering properties is gone (-> NPUNTOUCHED z-index assertion)',
+    file: 'css/app.css',
+    from: '  position: fixed; inset: 0; height: 100%; min-height: 100dvh; z-index: 60; overflow-y: auto;',
+    to:   '  position: fixed; inset: 0; height: 100%; min-height: 100dvh; overflow-y: auto;' },
+
   // ── NPHIDDENWRITER — the coverage audit's gap G2 (Claude/Mendeleev/AUDIT-one-screen-type-a1b.md).
   // test/np-hidden-writer-set.test.js gates claim C6: `hidden` is added to #nowplaying in exactly
   // ONE place in js/, and the same synchronous setView body un-hides the destination first. C6 is
@@ -1006,6 +1027,53 @@ const MUTATIONS = [
     file: 'js/nav.js',
     from: "    browseEl.classList.toggle('hidden', v !== 'browse');\n    for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);\n    $('nowplaying').classList.toggle('hidden', !npOpen);",
     to:   "    $('nowplaying').classList.toggle('hidden', !npOpen);\n    browseEl.classList.toggle('hidden', v !== 'browse');\n    for (const s of ['options', ...SETTINGS_SUBS]) $(s).classList.toggle('hidden', v !== s);" },
+  // NPHIDDENWRITER-e — PLAN-one-screen-type.md §13 step 10a. §9 rules edge 5 of its browseWillHide
+  // enumeration (a supersession while Now Playing is current) deliberately uncovered, on the
+  // ground that edge 5's setView body is BYTE-IDENTICAL to edge 4's. Two source facts make that
+  // true: setView takes exactly one parameter, and applyScreen's NP branch passes it the literal
+  // 'nowplaying' and nothing else. This mutant breaks BOTH AT ONCE — which is why it is two-part:
+  // a second parameter with no caller passing anything is not the defect §9 fears, and an argument
+  // passed to a one-parameter function does not parse as a new channel into setView. Together they
+  // are the channel. BEHAVIOURALLY INERT: setView never reads the new parameter, so no unit cell
+  // can see it.
+  //
+  // ⚠️ BOTH -e AND -e' KILL TWO CELLS, NOT ONE, and that is disclosed rather than tuned away.
+  // Plan §13 step 10a asks for a mutant that reddens the synchrony cell ALONE; MEASURED, each also
+  // reddens NPHIDDENWRITER's identity cell, on Direction 1 — registered identity entry #11 is the
+  // whole `applyScreen` NP-branch LINE, so a changed argument list makes the derived site match no
+  // registered entry and read as a new, unregistered one. That firing is correct and is the
+  // identity inventory doing its stated job. ⛔ The repair is NOT to shorten entry #11's registered
+  // text so the mutant slips past it: every one of the 13 entries registers a whole line, and
+  // re-cutting one to suit a mutant is tuning the baseline to the test. Attribution is established
+  // instead by EXECUTION — each mutant's synchrony-cell failure was read and is the step-10a
+  // assertion's own message (Claude/Curie/one-screen-type-a1b-tail-test-design-2026-08-04.md).
+  { name: "NPHIDDENWRITER-e: setView gains a SECOND PARAMETER and applyScreen's Now Playing branch threads its own opts through it — behaviourally inert, and it destroys the byte-identity on which plan §9 rules edge 5 deliberately uncovered (-> NPHIDDENWRITER synchrony cell, step-10a predicates)",
+    file: 'js/nav.js',
+    from: "  function setView(v) {   // 'home' | 'browse' | 'options' | a settings sub | 'nowplaying'",
+    to:   "  function setView(v, opts) {   // 'home' | 'browse' | 'options' | a settings sub | 'nowplaying'",
+    also: {
+      from: "    if (desc.v === 'nowplaying') { setView('nowplaying'); if (render) d.renderNowPlaying(); return; }",
+      to:   "    if (desc.v === 'nowplaying') { setView('nowplaying', opts); if (render) d.renderNowPlaying(); return; }" } },
+  // NPHIDDENWRITER-e' — the SECOND step-10a predicate, on its own. Necessary because `assert`
+  // throws on the FIRST failure: under -e the parameter-list assertion fires and the NP-branch
+  // argument assertion is never evaluated, so -e alone leaves the second predicate with no
+  // evidence it can fail — which is exactly the complaint (note N1) that these mutants exist to
+  // answer, one level up. Threading an option to a still-one-parameter function is legal JS and
+  // silently ignored, so this half is behaviourally inert on its own.
+  { name: "NPHIDDENWRITER-e': applyScreen's Now Playing branch threads its own opts into setView while setView still takes one parameter — the argument half of plan §9's edge-5 byte-identity, alone (-> NPHIDDENWRITER synchrony cell, step-10a NP-branch predicate)",
+    file: 'js/nav.js',
+    from: "    if (desc.v === 'nowplaying') { setView('nowplaying'); if (render) d.renderNowPlaying(); return; }",
+    to:   "    if (desc.v === 'nowplaying') { setView('nowplaying', opts); if (render) d.renderNowPlaying(); return; }" },
+  // NPHIDDENWRITER-f — the coverage audit's note N4
+  // (Claude/Mendeleev/AUDIT-one-screen-type-a1b-r2.md). `npEl.style.cssText = 'display:none'`
+  // ESCAPED the shipped ALIAS_WRITE_SUFFIX, measured by execution, and `style.cssText` is live
+  // first-party code (js/debug.js:431, :570, :733). The suffix now carries the route; this mutant
+  // is what proves the widened arm bites on real source rather than only in the selftest.
+  // Distinct from NPHIDDENWRITER-b, which drives the same alias through `classList.add`.
+  { name: "NPHIDDENWRITER-f: the #nowplaying ALIAS (js/app.js's npEl) hides the element through `style.cssText` — the inline-style route that escaped the shipped alias suffix (-> NPHIDDENWRITER alias closure)",
+    file: 'js/app.js',
+    from: "    const npEl = $('nowplaying');",
+    to:   "    const npEl = $('nowplaying');\n    npEl.style.cssText = 'display:none';   /* mutated: an inline-style write through the alias */" },
 
   // ── PLAN-one-screen-type.md §14 — the FILMSTRIPDRAG cell (Stage A1-fix / A1-fix-r2, plan §5.4).
   //

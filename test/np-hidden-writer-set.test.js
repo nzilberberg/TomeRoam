@@ -88,12 +88,26 @@ const WRITE_PATTERNS = [
   ['H3', /\.hidden\s*=(?!=)/g],
   ['H4', /\.setAttribute\s*\(\s*(['"])class\1/g],
 ];
-// The same five routes, as a suffix applied to a known #nowplaying ALIAS. The classList arm
-// requires the `hidden` LITERAL, exactly as H1 does: `el.classList.add(cls)` with a variable class
-// is a different, registered residual (js/nav.js's slideInView adds animation classes that way).
-// The other four arms stay broad, because `className =` and `setAttribute('class'…)` can carry any
-// class at all and `style.display`/`el.hidden` are hiding routes whatever their value.
-const ALIAS_WRITE_SUFFIX = String.raw`\s*\.\s*(?:classList\s*\.\s*(?:add|toggle)\s*\(\s*['"]hidden|style\s*\.\s*display\s*=(?!=)|className\s*=(?!=)|hidden\s*=(?!=)|setAttribute\s*\(\s*['"]class)`;
+// The same five routes as a suffix applied to a known #nowplaying ALIAS, PLUS TWO. The classList
+// arm requires the `hidden` LITERAL, exactly as H1 does: `el.classList.add(cls)` with a variable
+// class is a different, registered residual (js/nav.js's slideInView adds animation classes that
+// way). The other arms stay broad, because `className =` and `setAttribute('class'|'style'…)` can
+// carry anything at all and `style.display`/`style.cssText`/`el.hidden` are hiding routes whatever
+// their value.
+//
+// ⭐ THE ALIAS ARM IS DELIBERATELY BROADER THAN THE SITE INVENTORY, and this is where the two
+// extra routes come from (the coverage audit's note N4,
+// Claude/Mendeleev/AUDIT-one-screen-type-a1b-r2.md). Measured against the previously shipped
+// suffix, `npEl.style.cssText = 'display:none'` and `npEl.setAttribute('style', 'display:none')`
+// both ESCAPED while all five listed routes were caught — and `style.cssText` is live first-party
+// code (js/debug.js:431, :570, :733), so the route was not hypothetical. Both are now caught here.
+// They are NOT added to S2's WRITE_PATTERNS: an alias is a reference the derivation has already
+// proven points AT #nowplaying, so any hiding route through it counts, whereas site-inventorying
+// `cssText` would derive every DOM-builder call in js/debug.js and demand a registered reason for
+// each. Same treatment as `className =` — covered where it can reach the element, not everywhere.
+// The selftest below EXECUTES both routes against this suffix, and executes the two that still
+// escape it (S5's residual), so neither the catch nor the bound is a reading.
+const ALIAS_WRITE_SUFFIX = String.raw`\s*\.\s*(?:classList\s*\.\s*(?:add|toggle)\s*\(\s*['"]hidden|style\s*\.\s*(?:display|cssText)\s*=(?!=)|className\s*=(?!=)|hidden\s*=(?!=)|setAttribute\s*\(\s*['"](?:class|style))`;
 
 // The #nowplaying ELEMENT IDENTITY as it can appear in code: the id as a string literal, or a
 // selector string naming it. Case-SENSITIVE and quote-anchored on purpose — `NowPlayingScreen`,
@@ -352,6 +366,12 @@ const RESIDUALS = [
   + 'a variable, a DOM traversal (parentNode/children/closest), or an element passed in as a '
   + 'function parameter',
   'a write through `Object.assign(el, {...})` or a computed property (`el["className"]`)',
+  'an inline-style write that does not name its property syntactically — `el.style.setProperty('
+  + '"display", "none")` or a computed `el.style["display"]`. MEASURED, not read: the selftest '
+  + 'below executes both against ALIAS_WRITE_SUFFIX and asserts they escape it. The two routes the '
+  + 'coverage audit measured as escaping — `el.style.cssText =` and `el.setAttribute("style", …)` '
+  + '— are now CAUGHT through a registered alias, and like `className =` they are covered ONLY '
+  + 'there: neither is site-inventoried in S2',
   'a class added from a VARIABLE rather than a literal — `el.classList.add(cls)`. js/nav.js\'s '
   + 'slideInView does exactly this with animation class names, so the pattern must require the '
   + '`hidden` literal or the gate is red on arrival against code that cannot hide anything',
@@ -543,8 +563,14 @@ test('NPHIDDENWRITER — the #nowplaying ALIAS closure: no reference bound to th
 test('NPHIDDENWRITER — the SYNCHRONY half of claim C6: setView un-hides the destination BEFORE it '
   + 'hides Now Playing, in one synchronous body', () => {
   const src = stripComments(readSrc('js/nav.js'));
-  const start = src.indexOf('function setView(v)');
-  assert.ok(start >= 0, 'fixture: js/nav.js must declare setView');
+  // ⭐ THE LOCATOR IS SIGNATURE-AGNOSTIC ON PURPOSE. The declaration is found by NAME, never by
+  // spelling its parameter list, so the parameter assertion added below (§13 step 10a) is what
+  // fails when a second parameter appears. A locator that spelled `setView(v)` would turn that
+  // mutant into a FIXTURE failure — the cell would go red without either predicate having been
+  // evaluated, which is a red obtained for the wrong reason and therefore no evidence at all.
+  const decl = /function\s+setView\s*\(([^)]*)\)/.exec(src);
+  assert.ok(decl, 'fixture: js/nav.js must declare setView');
+  const start = decl.index;
   const rest = src.slice(start + 1);
   const end = rest.indexOf('\n  function ');
   assert.ok(end > 0, 'fixture: the end of the setView body must be locatable (the next top-level function)');
@@ -571,6 +597,54 @@ test('NPHIDDENWRITER — the SYNCHRONY half of claim C6: setView un-hides the de
       + 'the flash the retired exemption existed to prevent (and plan §5.3.6: A1b adds no timer, '
       + 'listener, rAF or promise)');
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────────────
+  // §9's EDGE-5 RE-OPEN CONDITION, MADE MECHANICAL — PLAN-one-screen-type.md §13 step 10a.
+  //
+  // §9 enumerates five edges on which `d.browseWillHide` is newly reached, and rules the fifth —
+  // a SUPERSESSION while Now Playing is the current screen, `applyScreen(currentDesc(), …)` at
+  // js/app.js:459 — DELIBERATELY UNCOVERED. The ground is that edge 5's `setView` body is
+  // byte-identical to edge 4's, which `NPPARKS` already drives, so edge 5 adds a second ROUTE to
+  // an already-proven behaviour and nothing else.
+  //
+  // ⭐ A GREEN HERE IS WHAT KEEPS EDGE 5 UNCOVERED. §9 reduces that byte-identity to exactly two
+  // source predicates, and until this cell existed neither was asserted anywhere — the ruling was
+  // enforced by a re-check at plan step 16, which runs once and then closes with the plan. A RED
+  // HERE IS NOT A BUG REPORT: it is edge 5 acquiring an effect edge 4's path does not have, which
+  // is precisely the moment §9 says the ruling lapses and edge 5 owes a cell of its own. ⛔ Do not
+  // repair a red by relaxing either assertion — route it to the planner with the new signature.
+  //
+  // ⛔ WHAT THESE TWO DO NOT REACH, so their silence is not read as coverage. §9 lists three ways
+  // the identity could break; these close the second (a new option reaching the park/hide block)
+  // and the third (a caller-specific hook) BY CONSTRUCTION. The first — a branch inside setView
+  // keyed on MODULE-SCOPE state that only the supersession path sets — would leave both predicates
+  // green and still break the identity. That is a STATED residual, not an oversight: no such
+  // branch exists at HEAD (setView's body reads `v`, the `npOpen` it derives from `v` on its first
+  // line, the injected `d`, the module constant SETTINGS_SUBS and `document`, and nothing else),
+  // and closing it would need an identifier-set pin over the whole body — a heavier instrument
+  // than §9 judges the ruling worth.
+  // ─────────────────────────────────────────────────────────────────────────────────────
+  const params = decl[1].split(',').map((s) => s.trim()).filter(Boolean);
+  assert.deepEqual(params, ['v'],
+    'setView is no longer declared with EXACTLY ONE parameter. PLAN-one-screen-type.md §9 rules '
+    + 'edge 5 of its browseWillHide enumeration (a supersession while Now Playing is current) '
+    + 'deliberately uncovered, on the ground that no caller can hand setView anything that '
+    + 'distinguishes edge 5 from edge 4 — and a second parameter is exactly that. THE GREEN HERE '
+    + 'IS WHAT KEEPS EDGE 5 UNCOVERED, so this red retires the ruling: route it to the planner, '
+    + `who owes edge 5 a cell of its own. Declared parameters: [${params.join(', ')}]`);
+
+  const npCall = /desc\s*\.\s*v === 'nowplaying'[^\n]*?setView\(([^)]*)\)/.exec(src);
+  assert.ok(npCall,
+    "fixture: applyScreen must still have a Now Playing branch that calls setView — if the branch "
+    + 'moved or was restructured, the predicate below is measuring nothing');
+  const npArgs = npCall[1].split(',').map((s) => s.trim()).filter(Boolean);
+  assert.deepEqual(npArgs, ["'nowplaying'"],
+    "applyScreen's Now Playing branch no longer passes setView the LITERAL 'nowplaying' and "
+    + 'nothing else. §9 rules edge 5 uncovered because `opts.render`, `opts.resetScroll` and '
+    + '`opts.keepGhosts` are consumed by applyScreen itself and never reach the park-and-hide '
+    + 'statements at js/nav.js:52-70 — an option threaded through this call is the second way that '
+    + 'identity breaks. THE GREEN HERE IS WHAT KEEPS EDGE 5 UNCOVERED; this red hands the ruling '
+    + `back to the planner. Arguments passed: [${npArgs.join(', ')}]`);
 });
 
 test('NPHIDDENWRITER scope — the scoping clauses are part of the cell, not preamble', () => {
@@ -599,6 +673,10 @@ test('NPHIDDENWRITER scope — the scoping clauses are part of the cell, not pre
     'the un-inventoried `className =` class must be named as a residual, not left implicit');
   assert.ok(RESIDUALS.some((r) => /RUNTIME/.test(r)),
     'the runtime-resolved receiver must be named as a residual');
+  assert.ok(RESIDUALS.some((r) => /setProperty/.test(r)),
+    'the inline-style routes that escape the alias suffix must be named as a residual — the '
+    + "coverage audit's note N4 was a completeness defect in this cell's DISCLOSURE, and the "
+    + 'disclosure is the standard this cell sets for itself');
 
   // Every registered entry carries its required fields.
   for (const e of IDENTITY) {
@@ -687,6 +765,25 @@ test('NPHIDDENWRITER selftest — the derivations see a second writer, a widened
     'and a non-visibility use of the alias is not a false positive (js/app.js does exactly this)');
   assert.ok(!aliasWrite.test("other.npEl.classList.add('hidden');"),
     'a DIFFERENT object\'s property that happens to be named npEl is not the alias');
+
+  // THE TWO INLINE-STYLE ROUTES the coverage audit measured as ESCAPING the shipped suffix
+  // (note N4). Both are executed here rather than argued, because that is how the audit found
+  // them: reading the regex had already declared the alias closure complete.
+  assert.ok(aliasWrite.test("npEl.style.cssText = 'display:none';"),
+    'an alias `style.cssText =` write is detected. This route ESCAPED the shipped suffix and is '
+    + 'live first-party code (js/debug.js:431, :570, :733), so its omission was a real hole in the '
+    + "cell's disclosure, not a hypothetical one");
+  assert.ok(aliasWrite.test("npEl.setAttribute('style', 'display:none');"),
+    'an alias `setAttribute("style", …)` write is detected — the second route that escaped');
+  assert.ok(!aliasWrite.test("npEl.setAttribute('data-x', '1');"),
+    'and widening the setAttribute arm did not make every attribute write a visibility write');
+
+  // AND THE BOUND, executed too — S5's inline-style residual is a MEASURED statement about this
+  // regex, so a future widening that closes one of these must move the residual with it.
+  assert.ok(!aliasWrite.test("npEl.style.setProperty('display', 'none');"),
+    'S5 residual: `style.setProperty` names the property as a STRING and still escapes this suffix');
+  assert.ok(!aliasWrite.test("npEl.style['display'] = 'none';"),
+    'S5 residual: a COMPUTED inline-style property still escapes this suffix');
 
   assert.equal(one().length, 1, 'the selftest file list is a single synthetic file');
 });
