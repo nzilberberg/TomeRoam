@@ -40,8 +40,18 @@ function declaredGlobs() {
   return out;
 }
 
-/** The rule, isolated so it can be tested against a known-bad value as well as the tree. */
-const seesLaterRounds = (glob) => glob.includes('*');
+/**
+ * The rule, isolated so it can be tested against a known-bad value as well as the tree.
+ *
+ * ⚠️ `*` is not the property — SEEING A LATER ROUND is. A bare `*` achieves it, but so does an
+ * explicit optional round group, and that form is strictly better where two stage names share a
+ * prefix: `globFiles` only escapes `.` and translates `*`, so `AUDIT-x(-r[0-9]+)?.md` compiles to
+ * a regex that matches the base and its rounds while REFUSING a longer stem like `AUDIT-x-sub`.
+ * Measured 2026-08-05: `AUDIT-swipe-declone-stage2*.md` swallowed the subtraction pass's audit and
+ * the gate reported a pass while that audit said GAPS_NAMED. Testing for the literal `*` would now
+ * redden the very globs written to fix it — the rule must describe the capability, not one spelling.
+ */
+const seesLaterRounds = (glob) => glob.includes('*') || /\(-r\[0-9\]\+\)\?/.test(glob);
 
 test('the rule itself rejects a wildcard-free glob', () => {
   // Without this, a bug that made `seesLaterRounds` always true would leave the suite
