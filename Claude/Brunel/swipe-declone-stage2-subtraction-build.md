@@ -232,3 +232,12 @@ cells, net matches the item-by-item deletion list above).
 Bumped: `2026-08-03.306` → `2026-08-05.1`. Judged CODE (js/app.js, js/nav.js changed) — required by
 `tools/hooks/shipping-change-bumps-check.mjs`'s own rule. `test/`, `tools/`, `docs/`, `Claude/`
 changes in this same commit do not themselves require it, but the js/ changes do.
+
+### Commit
+
+`49efe4f` — all pre-commit gates passed (no-mutbak, no-partial-sequence, stamp, staged-stamp, lint,
+typecheck, tests, campaign-gates, stage-manifest, retired-name, device-gate, shipping-bump,
+decisionlog-citations). HEAD verified via `git rev-parse HEAD`, not the commit command's exit code.
+Not pushed. Handoff: the code reviewer (Poirot), then the coverage auditor (Mendeleev), then the
+records scrub (this plan's status, the parent's §12/§13, the campaign manifest's falsified `note`,
+the decision log — §11 step 8).
