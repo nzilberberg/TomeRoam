@@ -171,3 +171,62 @@ test('resolveAnchor refuses a non-unique anchor and accepts one that disambiguat
   assert.strictEqual(missing.occurrences, 0);
   assert.match(missing.error, /ANCHOR NOT FOUND/);
 });
+
+// ── THE SECOND ANCHOR REGISTRY, added 2026-08-04.
+//
+// This file has always read `tools/mutate.mjs` and nothing else. But there are TWO anchor
+// registries: the behavioural one, and `tools/source-gate-sweep.mjs`, which carries the only
+// runnable mutation evidence for the source-text FINGERPRINT gates. Nothing watched the second
+// one, so it rotted invisibly — exactly the failure this file exists to prevent, one level up.
+//
+// MEASURED: `tools/source-gate-sweep.mjs`'s `transition branches` entry anchors on
+// `const incomingBrowse = !toOv && toV !== 'home';`, which left `js/app.js` at 14257f2 (.227,
+// stage 4, "retire the branch mirror") when the predicate moved into `classifyTransition` in
+// js/swipe.js. The tool has exited 1 ever since — NINE stages — and `test/transition-matrix.test.js`'s
+// fingerprint has held no mutation evidence for that whole span. Nobody ran it, because nothing
+// made them.
+//
+// The rot is recorded below rather than hidden: it is a KNOWN entry with an owner, so a NEW rot
+// still reddens. Re-anchoring it needs a `file` field the tool does not have (all five entries
+// target js/app.js and the predicate now lives in js/swipe.js), which is a design change and
+// belongs to the plan, not to this gate.
+const KNOWN_ROTTED = new Map([
+  ['transition branches (transition-matrix + swipe-model)',
+    'anchor left js/app.js at 14257f2 (.227) when the predicate moved into classifyTransition '
+    + '(js/swipe.js:92). Re-anchoring needs a per-entry `file` field the tool lacks — owned by '
+    + 'PLAN-swipe-declone-stage2-subtraction.md (Charpy r2, R1). Remove this exemption with the fix.'],
+]);
+
+test('every source-gate anchor still matches its target, or is a KNOWN rot', async () => {
+  const mod = await import(pathToFileURL(path.join(ROOT, 'tools', 'source-gate-sweep.mjs')).href);
+  const { ENTRIES, APP } = mod;
+  assert.ok(Array.isArray(ENTRIES) && ENTRIES.length > 0,
+    'the source-gate entry list is empty or not exported — this gate would be vacuous');
+
+  const lf = (s) => s.replace(/\r\n/g, '\n');
+  const src = lf(fs.readFileSync(APP, 'utf8'));
+  const rotted = ENTRIES.filter((e) => !src.includes(lf(e.from))).map((e) => e.region);
+
+  const unexpected = rotted.filter((r) => !KNOWN_ROTTED.has(r));
+  assert.deepEqual(unexpected, [],
+    'these source-gate anchors no longer match js/app.js, so the FINGERPRINT gates they defend '
+    + 'have no runnable mutation evidence — and `tools/source-gate-sweep.mjs` exits 1 without '
+    + 'anyone noticing:\n  ' + unexpected.join('\n  '));
+
+  // A fixed rot must have its exemption removed, or the list rots in the other direction.
+  const staleExemptions = [...KNOWN_ROTTED.keys()].filter((k) => !rotted.includes(k));
+  assert.deepEqual(staleExemptions, [],
+    'these entries are listed as KNOWN_ROTTED but their anchors match again — delete the '
+    + 'exemption so a future rot is caught:\n  ' + staleExemptions.join('\n  '));
+});
+
+test('importing the source-gate sweep does not run it', async () => {
+  // The CLI MUTATES js/app.js. If importing started a sweep, this suite would corrupt the
+  // working tree — a worse version of the interrupted-sweep hazard, triggered by a test.
+  const before = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8');
+  await import(pathToFileURL(path.join(ROOT, 'tools', 'source-gate-sweep.mjs')).href);
+  assert.strictEqual(fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8'), before,
+    'importing the source-gate sweep modified js/app.js');
+  assert.ok(!fs.existsSync(path.join(ROOT, 'js', 'app.js.sgbak')),
+    'importing the source-gate sweep left a backup behind — it ran');
+});

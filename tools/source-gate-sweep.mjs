@@ -71,6 +71,20 @@ const ENTRIES = [
     to:   "[...document.querySelectorAll('.nav-ghost.spent')].forEach((n) => n.remove());" },
 ];
 
+// Exported so a gate can verify these anchors still MATCH without running the sweep.
+export { ENTRIES, APP };
+
+// ⛔⛔ THE CLI MUTATES js/app.js. It copies the file, rewrites it, runs suites, and restores.
+// Without this guard, merely IMPORTING the module to read ENTRIES would start a real sweep
+// against the working tree — the same shape as the interrupted-sweep hazard that leaves an
+// applied mutant behind, but triggered by a test. Two other checkers in this repo shipped with
+// exactly this defect (their suites silently died on the CLI's process.exit); here the cost
+// would have been a mutated source file, not just a dead test.
+const invokedDirectly = process.argv[1]
+  && fileURLToPath(import.meta.url).replace(/\\/g, '/') === process.argv[1].replace(/\\/g, '/');
+if (invokedDirectly) main();
+
+function main() {
 const run = (args) => spawnSync(NODE, args, { cwd: ROOT, encoding: 'utf8' });
 const restore = () => { if (fs.existsSync(BAK)) { fs.copyFileSync(BAK, APP); fs.unlinkSync(BAK); } };
 process.on('SIGINT', () => { restore(); process.exit(130); });
@@ -134,3 +148,4 @@ console.log(`\nswept ${ENTRIES.length} source-gate mutations: `
 if (uncaught.length) console.log('UNCAUGHT (fingerprint did not fire):\n  ' + uncaught.join('\n  '));
 if (notNeutral.length) console.log('NOT NEUTRAL (a behaviour test also caught it — bad control):\n  ' + notNeutral.join('\n  '));
 process.exit(uncaught.length || notNeutral.length ? 1 : 0);
+}
