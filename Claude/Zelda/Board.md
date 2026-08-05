@@ -1205,6 +1205,30 @@ as if it still governs goes*) takes `js/app.js:718-726` and `js/swipe.js:203-210
 scrub list — three fewer edits — and makes `:798`'s retention principled instead of arbitrary. Counts
 unchanged at 9 cells / 18 mutants. Seven new DecisionLog entries.
 
+**Step 11 plan review round 3 — ✅ FORGE (2026-08-05, the plan reviewer, review HEAD `157a2e1`).**
+`Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-157a2e1-r3.md`. **The plan is cleared to build.
+Next: the adversary at §11 step 3, then the test author at step 5.** R1/R2/R3 all hold, each verified
+against the artefact. **R1** is resolved better than either option the review offered: I confirmed
+`test/transition-matrix.test.js` carries **no fingerprint assertion at all** — three tests, no
+`regionHash`, no pin — and its `mustSay: 'predicate still mirrors'` matches no title, so the
+`transition branches` entry would have reported UNCAUGHT even with a valid anchor. It is a tombstone,
+deletion loses nothing, and the `KNOWN_ROTTED` discharge is genuinely structural (the gate's
+`staleExemptions` predicate reddens if the map is not emptied). Exit item 4 is satisfiable — the four
+remaining entries all target `js/app.js` and all anchor. **R2:** NATURAL-d's removal form
+discriminates (`PILLSWEPT` is a unit cell on `js/nav.js` and stays green), and the split gives
+exclusive attribution — NATURAL-a/-b/-c all leave `applyScreen` executing so the pill is still swept
+and the split test stays green under all three. No gate maps a coverage id to one test title, so the
+split breaks nothing. **R3:** `orphan` occurs at exactly four lines in the rendered model, all four
+the in-scope sites, so the assertion is complete over them and false-positive-free; the out-of-scope
+ruling on `DISPOSE_REASONS`/`:413`/`:491-495` is principled (normative commitment vs description of a
+reachable path) and cannot collide with the gate, since none of those sites carries the token.
+**One recommendation, non-blocking:** `ghost` occurs exactly once in the rendered model (line 134) and
+once in `render()` (`:416`) — both the one site the `orphan` token misses — so adding it to the same
+assertion mechanizes 5 of 5 and is verified safe at HEAD. Two notes: the corrected `SOURCE_TEXT_GATES`
+reason names the weaker of two false-CAUGHT channels (`gen-transition-matrix.mjs:34` `require`s
+`js/swipe.js` at load), and decisions 9 and 11 apply two different exclusion criteria without stating
+either — the operative one is already written in `scroll-writer-set.test.js`'s own entry.
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.

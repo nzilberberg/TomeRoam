@@ -1675,3 +1675,37 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   describing a deleted branch. One token assertion over rendered output that a test already reads
   converts it. The evidence that a read-through is not a check: a five-site enumeration in this plan
   was short by one, and the missed site sat one line above two that were cited.
+
+- THE SUBTRACTION PASS PLAN IS FORGED — 2026-08-05, plan review round 3 at HEAD `157a2e1`,
+  `Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-157a2e1-r3.md`. The deletion set was unchanged
+  across all three rounds; every finding in rounds 1 and 2 was about blast radius, witnesses and
+  specification. Next owner: the adversary, against the promise "every item in §4 is unreachable at
+  HEAD, and the §5 collapse changes no behaviour".
+
+- `test/transition-matrix.test.js` CARRIES NO FINGERPRINT ASSERTION — 2026-08-05, read directly at
+  `157a2e1`. It holds three tests: the committed-inventory comparison, the SETTINGS-SUB derivation,
+  and the frozen-spec self-consistency check. There is no `regionHash` call and no pinned region. The
+  mirror it once fingerprinted was retired at `14257f2` (stage 4), stated in the file's own `:42-47`
+  and contradicted by its own `:12-20` header.
+
+- A TOOL ENTRY WHOSE `mustSay` MATCHES NO TEST TITLE IN ITS TARGET GATE IS DEAD EVEN WITH A VALID
+  ANCHOR — 2026-08-05. `tools/source-gate-sweep.mjs` decides CAUGHT by
+  `gateFails.some((l) => l.includes(e.mustSay))`, so an entry naming a phrase no test title carries
+  reports UNCAUGHT regardless of its anchor. Checking an anchor is not checking an entry; the killer
+  phrase must be checked against the gate's actual test titles.
+
+- SPLITTING A MULTI-ASSERTION CELL IS HOW A MUTANT'S KILL IS ATTRIBUTED — 2026-08-05, verified against
+  `RECOVERYPARITY`'s four mutants. The sweep reports a killing TEST, not a killing assertion. Nothing
+  in this repo maps a coverage id to exactly one test title, and `test/swipe-declone-stage2-css.test.js`
+  is the precedent for several `ID — …` titles in one file, so the split costs nothing structurally.
+
+- A GENERATED RECORD'S RETIRED-CONCEPT SCAN TAKES EVERY TOKEN THE CONCEPT USES, NOT ONE — 2026-08-05.
+  `orphan` occurs at four lines of `docs/swipe-model.generated.txt` and `ghost` at exactly one — the
+  fifth site, which carries no `orphan` token. A single-token scan mechanizes four of five sites and
+  leaves the fifth on a read-through; both tokens together close it, verified false-positive-free.
+
+- AN EXCLUSION LIST'S OPERATIVE CRITERION IS "REDDENS ON MUTATIONS UNRELATED TO ITS OWN SUBJECT" —
+  2026-08-05. `tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` header states "fails BY CONSTRUCTION
+  under any mutation", which is false of at least two of its own entries. The criterion that actually
+  separates an excluded gate from an included one is written in the `scroll-writer-set.test.js` entry,
+  the one added after a measurement.
