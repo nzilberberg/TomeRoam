@@ -55,9 +55,9 @@ before this document is trusted again. Never update a pinned constant alone.
      js/app.js:139   if (cur && cur.v === desc.v && !desc.author && !desc.book) navStack[navStack.length - 1] = desc;
      js/app.js:140   else navStack.push(desc);
      js/app.js:163   navStack.push({ v }); fwdStack.length = 0;
-     js/app.js:707   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
-     js/app.js:708   else navStack.push(fwdStack.pop());
-     js/app.js:1183  navStack = [{ v: 'home' }];
+     js/app.js:704   else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
+     js/app.js:705   else navStack.push(fwdStack.pop());
+     js/app.js:1181  navStack = [{ v: 'home' }];
 
    case                              from -> to                              result
    --------------------------------  --------------------------------------  ------------------------

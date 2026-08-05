@@ -53,7 +53,6 @@ const starts = (h) => swipeLog(h).filter((m) => /^start /.test(m));
 const hardResets = (h) => swipeLog(h).filter((m) => /leftover state on begin/.test(m));
 const renders = (h) => h.log.calls.filter((c) => c.name === 'browse.render').map((c) => c.args[0]);
 const scrollCalls = (h) => h.log.calls.filter((c) => c.name === 'window.scrollTo');
-const ghosts = (h) => h.document.querySelectorAll('.nav-ghost').length;
 
 function addRow(h) {
   const row = h.document.createElement('div');
@@ -264,7 +263,7 @@ test('PS — a superseded pre-stack recovery leaves the stack on the source: the
     await goLive(h);                        // a fresh back-swipe from the same source
     const later = starts(h).at(-1);
     assert.ok(first && later, 'fixture sanity: both the superseded and the later gesture engaged');
-    assert.equal(later.replace(/ ghosts=\d+$/, ''), first.replace(/ ghosts=\d+$/, ''),
+    assert.equal(later, first,
       'a pre-stack recovery must not consume the stack — the same transition is still offered');
   } finally { h.dispose(); }
 });
@@ -337,7 +336,6 @@ test('BORROWEDREALSURVIVES — on a browse->home supersession neither borrowed-r
     await goLive(h);                                       // back-swipe books->home; BOTH movers borrowed-real
     assert.ok(/start back books→home/.test(starts(h).at(-1) || ''),
       `fixture: the drag under test is browse->home — got ${starts(h).at(-1)}`);
-    assert.equal(ghosts(h), 0, 'fixture: the pair is pane-less — no owned pane exists to remove');
     const hr0 = hardResets(h).length;
 
     h.touch.start(10, 300, browseEl);                      // supersede mid-drag

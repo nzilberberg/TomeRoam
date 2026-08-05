@@ -1690,6 +1690,29 @@ outside `mutation-anchors.test.js`'s `MUTATIONS`-only read, and outside ESLint's
 prior watch items resolved by this build ([W9] [W10] [W12] [W50]). Next: apply-review, then the
 coverage auditor, then step 7's device gate ([W79]).
 
+**⭐ Step 11 REVIEW FIXES APPLIED (2026-08-05), between-stages — [W70]–[W75] closed.**
+`Claude/Brunel/swipe-declone-stage2-subtraction-build.md` (fix-then-ship response section).
+[W70]/F1: the duplicate `BORROWEDREALSURVIVES` mutant deleted, `S2-29` (Curie's, `b2327f5`) is the
+sole registration. [W71]/F2: `js/app.js`'s SESSION OWNER comment no longer claims a PANE-OWNING
+rejection D8 deleted. [W72]/F3: the two vacuous `ghosts(h)` comparisons in D15's declared scope
+removed (`swipe-invariants.test.js`, `swipe-stage6.test.js`); the two outside it
+(`swipe-stage6i.test.js`) left as the review scoped them — not required. [W73]/F4: four stale
+`js/app.js` comments rewritten (frame-sampler, "panes go NOW", `runFinalize`'s exit count, the
+`finishing`-restore note); `test/home-abort-writes.test.js` left untouched, outside the reviewed
+commit's diff per the review's own framing. [W74]/F5: the dead `RECOVERY_RENDER_ALWAYS_FALSE`
+constant removed. [W75]/F6: the two dead `ghosts=` token strippers removed. **[W76] O1 and [W77] O2
+NOT applied — routed to the planner**, as Observations the review itself does not sanction as
+required. Verified by execution: full suite 878/877/0-fail/1-skip (regenerated docs after the
+comment edits shifted navStack append-site line numbers — hash unchanged, only line numbers);
+`source-gate-sweep.mjs` exit 0 (4/4); targeted sweep of the re-derived indices
+(`13 20 140 141 143 144`, since F1's deletion shifted everything after it) 0 uncaught/unapplied/
+stale, `#13` still killed by `RECOVERYPARITY.pillswept`, `#141` (S2-29 alone) still `caught (153
+failing)`. Build bumped `2026-08-05.1` → `.2` (comment-only edit to a shipping file, judged CODE
+per the shipping-bump rule's own "in-code comment fixes explicitly included"). **[W78] not
+actioned — it names a tooling gap (the derived co-change tool's surface must extend past
+`tools/mutate.mjs`), owner Vitruvius, not a code fix.** Not committed yet. Next: the user's go to
+commit, or continue straight to apply-review's close (Poirot re-confirms or the coverage auditor).
+
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
 - **Options→HUB refactor · library-scaling virtualization · durable-progress spine + device-delete** — all built; scaling on-device gate passed → `[[tomeroam-durable-progress-plan]]`, `[[tomeroam-library-scaling-plan]]`.

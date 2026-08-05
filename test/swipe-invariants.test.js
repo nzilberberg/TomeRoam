@@ -37,7 +37,6 @@ const swipeLog = (h) => h.log.calls
 const settles = (h) => swipeLog(h).filter((m) => /^#\d+ (abort|commit) /.test(m));
 const starts = (h) => swipeLog(h).filter((m) => /^start /.test(m));
 const scrollCalls = (h) => h.log.calls.filter((c) => c.name === 'window.scrollTo');
-const ghosts = (h) => h.document.querySelectorAll('.nav-ghost').length;
 
 /** Authors over Books: a left-edge back-swipe is browse->browse, the pane case. */
 async function onAuthorsOverBooks(h) {
@@ -294,7 +293,7 @@ test('I11 — an ABORT leaves the stack on the source: the next swipe offers the
     await abortingSwipe(h, addRow(h));
     const second = starts(h)[1];
     assert.ok(second, 'the second gesture must also engage — an aborted swipe must not consume the stack');
-    assert.equal(second.replace(/ ghosts=\d+$/, ''), first.replace(/ ghosts=\d+$/, ''),
+    assert.equal(second, first,
       'after an abort the authoritative descriptor is the SOURCE, so the same transition is still offered');
   } finally { h.dispose(); }
 });
@@ -417,7 +416,6 @@ test('I20 — stale move/end/cancel from the superseded gesture cannot touch the
     const settlesAfter = settles(h).length;
     const scrollAfter = scrollCalls(h).length;
     const rendersAfter = renders(h).length;
-    const ghostsAfter = ghosts(h);
     // TRANSFORM is the assertion this test originally MISSED, and missing it made the
     // whole test inert: a stale touchmove drives move(), which acts on the CURRENT
     // global `d` — so it drags the NEW session's movers without logging anything.
@@ -459,7 +457,6 @@ test('I20 — stale move/end/cancel from the superseded gesture cannot touch the
     assert.equal(settles(h).length, settlesAfter, 'a stale event must not settle the live gesture');
     assert.equal(scrollCalls(h).length, scrollAfter, 'a stale event must not move the document');
     assert.equal(renders(h).length, rendersAfter, 'a stale event must not re-render Browse');
-    assert.equal(ghosts(h), ghostsAfter, 'a stale event must not dispose the new session\'s pane');
     assert.deepEqual(moverEls.map((el) => el.style.transform), transformsAfter,
       'a stale touchmove must not drag the NEW session\'s movers. move() acts on the CURRENT '
       + 'global `d`, so a superseded gesture whose listeners were not released reaches the handler '

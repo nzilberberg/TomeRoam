@@ -241,3 +241,80 @@ decisionlog-citations). HEAD verified via `git rev-parse HEAD`, not the commit c
 Not pushed. Handoff: the code reviewer (Poirot), then the coverage auditor (Mendeleev), then the
 records scrub (this plan's status, the parent's §12/§13, the campaign manifest's falsified `note`,
 the decision log — §11 step 8).
+
+## Fix-then-ship response to Poirot's review (2026-08-05)
+
+Review: `Claude/Poirot/POIROT-swipe-declone-stage2-subtraction-49efe4f.md` (`dc1a9ad`), verdict PASS
+— fix-then-ship. Applied the six sanctioned findings (F1–F6). O1/O2 left alone (routed to the
+planner, per the review). This is a between-stages fix: no behaviour change, no new stage started.
+
+- **F1 (Significant, registry).** `tools/mutate.mjs` registered `BORROWEDREALSURVIVES`'s replacement
+  mutant twice — index 54 (this build's own D13b entry) and index 142 (`S2-29`, already registered by
+  Curie at `b2327f5`, unknown to the plan/build). Executed proof: both reported `caught (153 failing)`
+  with byte-identical `killed by:` lists. **Fix:** deleted the duplicate (the D13b entry); `S2-29` is
+  the sole registration. Comment at its former site corrected to point at `S2-29` rather than claim a
+  new registration.
+- **F2 (Significant, comment).** `js/app.js`'s SESSION OWNER block (one function above `begin()`)
+  stated a PANE-OWNING rejection ("`begin()` still rejects any new gesture there") that D8 deleted —
+  the gate is now `if (finishing && !session) return;`, uniform, no PANE-OWNING/PANE-LESS split left
+  to gate. Rewritten to state that the split has no second side any more, per decision 12's
+  discriminator (a live account of a gone mechanism, not a tombstone).
+- **F3 (Minor, vacuous assertions).** Removed `test/swipe-invariants.test.js:462`
+  (`assert.equal(ghosts(h), ghostsAfter, ...)`, inside the very cell already repaired once for
+  inertness) and `test/swipe-stage6.test.js:340` (`assert.equal(ghosts(h), 0, ...)`) — both
+  structurally 0-vs-0 always, no first-party surface can write `.nav-ghost`. Both now-unused
+  `ghosts(h)` helpers removed with their last call site. **Not applied:**
+  `test/swipe-stage6i.test.js:91`/`:109` — the review names these as the class, not a required fix
+  ("may ride with a later purge"); a file this commit does not otherwise touch. Left untouched.
+- **F4 (Minor, comment residue).** Four `js/app.js` sites rewritten: the `.213` frame-sampler comment
+  (dropped the "pane type logged beside it" claim — the `pane=` token is gone); the "panes go NOW"
+  line above `dropAt` (there is no pane to drop any more, not merely an immediate one); "runFinalize
+  has THREE exits — the two ghost-held reveals return early" (one exit, no held reveals); the
+  `finishing`-restore comment beside the try/finally (dropped the "held path must KEEP it true" branch
+  that no longer exists). **Not applied:** `test/home-abort-writes.test.js:249` — the review notes
+  this file is untouched by the commit under review and records the citation "as the class." Left
+  untouched.
+- **F5 (Minor, dead code).** `tools/mutate.mjs:91` `RECOVERY_RENDER_ALWAYS_FALSE` — a dead constant
+  (one occurrence, its own declaration) holding the exact pre-collapse line whose byte-identical twin
+  (`RECOVERY_RENDER_LINE`) this build already deleted. Removed.
+- **F6 (Minor, dead regex).** Two `.replace(/ ghosts=\d+$/, '')` calls on `SWIPE start` log lines
+  (`test/swipe-invariants.test.js:297`, `test/swipe-stage6.test.js:267`) — the token they strip is
+  gone (D9), so the calls were no-ops; the comparisons now read the full strings directly.
+
+**Registry re-derivation (F1 shifted every index after the removed entry).** Confirmed by re-import:
+145 mutants (was 146). Re-derived names → indices: `#13` (`HARDRESET_DISPOSE`, unchanged),
+`#20` (the merged scroll-restore entry, unchanged), `S2-28 PILLSWEPT` → `#140` (was 141),
+`S2-29 BORROWEDREALSURVIVES` → `#141` (was 142, now the sole entry), `S2-31` → `#143` (was 144),
+`S2-32` → `#144` (was 145).
+
+**Targeted mutation sweep** (foreground, explicit indices, never backgrounded):
+`node tools/mutation-sweep.mjs 13 20 140 141 143 144` → `swept 6: 0 uncaught, 0 unapplied,
+0 stale flags`. `#13` killed by `RECOVERYPARITY.pillswept` (the §5 adjacency, unchanged). `#141`
+(`S2-29`, now sole) caught `(153 failing)` — the same count Poirot measured across both
+duplicates, confirming the surviving entry alone carries the full designated-kill evidence.
+`#140`/`#143`/`#144` all caught exactly as the original build measured. No `*.mutbak` after.
+
+**Docs regenerated.** `js/app.js`'s comment edits (F2, F4) shifted line numbers below them;
+`node tools/gen-swipe-model.mjs` / `gen-transition-matrix.mjs` re-run. Diff is three navStack
+append-site line numbers only (`707→704`, `708→705`, `1183→1181`); `VERIFIED.supersession`'s hash is
+UNCHANGED (both F2 and F4's edits sit outside the pinned `begin()`→`if (target.closest` region) —
+confirmed by the unchanged hash in the diff, not asserted.
+
+**Full suite:** 878 tests, 877 pass, 0 fail, 1 skip (device-only), re-run three times (after the
+test/comment fixes; after doc regeneration; after the build bump) — green each time after the doc
+regen landed (the FIRST post-fix run redenned `763` on the stale doc, as expected, before regenerating).
+
+**`node tools/source-gate-sweep.mjs`** (never imported): exit 0, all four fingerprints RED with the
+behavioural control GREEN, `0 uncaught, 0 not-behaviour-neutral`. No `js/app.js.sgbak` left.
+
+**Build number.** Bumped `2026-08-05.1` → `2026-08-05.2`. Judged CODE: `js/app.js` changed
+(comment-only), and this project's shipping-bump rule states "in-code comment fixes explicitly
+included" — a comment-only edit to a shipping file still bumps. `tools/mutate.mjs`,
+`test/swipe-invariants.test.js`, `test/swipe-stage6.test.js` are not shipping paths and would not by
+themselves require it. Stamped and `--check`-verified across `sw.js`/`js/debug.js`/`index.html`.
+
+**Not applied, and why:** O1 (the euphemism the token-scan forces into the generated doc) and O2
+(`regionHash` pins comments) are Observations the review itself routes to the planner (O1: allow the
+tokens inside an explicitly-tombstoned block, or accept and say so; O2: a gate-improvement candidate).
+Neither is a finding this seat can close — both require a planning decision about the mechanism, not
+a local edit. Left untouched, per "implement ONLY the sanctioned findings."

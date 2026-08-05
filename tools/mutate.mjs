@@ -88,8 +88,6 @@ const VR_IDENTITY_ORDER_TO = [
   '        dropRowHold();',
   '        finishing = false;',
 ].join('\n');
-const RECOVERY_RENDER_ALWAYS_FALSE = "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });";
-
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
 // Stage 1 (PLAN-swipe-declone.md §5.1) retires the `fromKind` argument along with
 // ghostApp's HOME-source branch (browse->browse is the only caller left), so this anchor
@@ -533,18 +531,14 @@ const MUTATIONS = [
   //   swipe6e HR (both sweep sites forced keepGhosts, stranding an orphan) — the orphan branch
   //     itself is deleted (§8 D14; the ORPHAN path is unreachable, held by NOGHOSTCLASS).
   // REPLACED, not dropped (D13b): swipe6e BR's subject — a borrowed-real mover is never
-  // removed by teardown — SURVIVES as BORROWEDREALSURVIVES (test/swipe-stage6.test.js), so a
-  // new mutant is registered against the mechanism that now guarantees it: `Nav.resetSwipeStyles`
-  // (js/nav.js), broadened to REMOVE the elements it clears rather than clearing them — the
-  // same defect class the retired `own` filter used to make structurally impossible.
-  // ⚠️ Non-discriminating, disclosed rather than repaired: the reset runs at the top of every
-  // applyScreen over every view and every `.browsepage`, so this mutant reddens much of the
-  // harness suite — it demonstrates the SUITE notices, not that BORROWEDREALSURVIVES alone
-  // does. Expected killers include BORROWEDREALSURVIVES and most of the harness suite.
-  { name: 'nav: resetSwipeStyles broadens to REMOVE the elements it clears rather than clearing them (-> BORROWEDREALSURVIVES, non-discriminating)',
-    file: 'js/nav.js',
-    from: "    for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }",
-    to:   '    for (const el of els) if (el && el.parentNode) el.parentNode.removeChild(el);' },
+  // removed by teardown — SURVIVES as BORROWEDREALSURVIVES (test/swipe-stage6.test.js).
+  // NOT a new registration here — CORRECTED (POIROT-swipe-declone-stage2-subtraction-49efe4f.md
+  // F1/[W70]): Curie had already registered the replacement mutant for this exact mechanism at
+  // step 5 (`S2-29 BORROWEDREALSURVIVES`, below, `b2327f5`), which this build's own D13b entry
+  // duplicated without checking — same file, byte-identical `from`, a semantically identical
+  // `to` (`removeChild` vs `remove()`). Executed: both reported `caught (153 failing)` with
+  // byte-identical `killed by:` lists, so neither was distinguishable as BORROWEDREALSURVIVES's
+  // designated killer. The duplicate is removed; `S2-29` is the sole registration.
   // ── SWIPE stage 6f: outgoing app-ghost for in-flow→overlay — SUPERSEDED by Stage 1 ──
   // (PLAN-swipe-declone.md §5.1, 2026-07-30). Stage 6f's own rule ("ghost every in-flow
   // source going to a non-home destination") is exactly what Stage 1 narrows away: only

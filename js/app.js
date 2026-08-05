@@ -215,22 +215,19 @@
     // captured `cur` IS this same object. A new gesture REPLACES `session`; a
     // superseding hard reset nulls it before re-arming.
     //
-    // ⚠️ STAGE 3 laid the OWNER + IDENTITY; STAGE 6c adds the first slice of
-    // ENFORCEMENT. The plan's "every async callback captures session.id and no-ops
-    // when superseded" (§3.2, I12) is now REACHABLE and LOAD-BEARING for the
-    // PANE-LESS supersession window: begin()'s `finishing` gate (below) is narrowed
-    // from a blanket reject to admit ONLY a live pane-less session, so a successor
-    // CAN arm mid-settle, and the settle rAF / `finalize` (settle(), below) each
-    // check `cur === session` before acting. It remains UNREACHABLE BY CONSTRUCTION
-    // — and so still deferred — for the PANE-OWNING/held-reveal window (ghost/
-    // snapshot; cell PG): `begin()` still rejects any new gesture there, so no
-    // successor can arm and no stale continuation can fire while one is superseded.
-    // That half, the reveal-phase handles' guards, and the null-on-retire
-    // bookkeeping land with the paint-centralization restructure (6d/7,
-    // PLAN-swipe-stage6c.md §11). Identity has been observable since stage 3
-    // regardless: the hard-reset log and the `#N` finalize line both carry `sid=`,
-    // so a superseded gesture is tied to its id and two sequential gestures show
-    // distinct ids.
+    // ⚠️ STAGE 3 laid the OWNER + IDENTITY; STAGE 6c added the first slice of
+    // ENFORCEMENT, later made UNCONDITIONAL (PLAN-swipe-declone-stage2-subtraction.md
+    // §5/§7/§8 D8). The plan's "every async callback captures session.id and no-ops
+    // when superseded" (§3.2, I12) is now REACHABLE and LOAD-BEARING for EVERY
+    // session, not only a pane-less one: begin()'s `finishing` gate (below) admits
+    // any live session, and the settle rAF / `finalize` (settle(), below) each check
+    // `cur === session` before acting. Stage 6c's original narrowing distinguished a
+    // PANE-LESS supersession window from a PANE-OWNING one that `begin()` still
+    // rejected; that split has no second side left to gate now that no transition
+    // constructs an owned pane at all, so the gate and the guards below apply
+    // uniformly. Identity has been observable since stage 3 regardless: the
+    // hard-reset log and the `#N` finalize line both carry `sid=`, so a superseded
+    // gesture is tied to its id and two sequential gestures show distinct ids.
     let session = null, sessionSeq = 0;
     // The injected predicate js/nav.js's overlayFilmstrip reads (Stage A1-fix-r2,
     // PLAN-one-screen-type.md §5.4/§5.4a): true for the WHOLE of a gesture SESSION's
@@ -662,8 +659,8 @@
       // the uncover: 60fps is 16.7ms, and a repaint of the full view shows up as one
       // long frame. That is a proxy for the flash, not the flash — but it is objective,
       // it runs on EVERY swipe, and it needs no labelling. Intermittency stops being a
-      // problem and becomes the data: with pane type logged beside it, dozens of swipes
-      // in one report say whether long frames track panes.
+      // problem and becomes the data: dozens of swipes in one report say whether long
+      // frames are common or rare.
       const watchFrames = () => {
         if (!window.PBDebug || typeof requestAnimationFrame !== 'function') return;
         const t0 = performance.now();
@@ -1012,8 +1009,9 @@
         // it, so an abort has nothing to rebuild and nothing to hold — it is a transform
         // reset and nothing else, and it falls straight through to the plain finalize below
         // exactly like every other transition.
-        // No hold on this path — the panes go NOW, so the view is exposed from the
-        // first instant and every mutation below belongs in the EXPOSED bucket.
+        // No hold on this path — and no pane to drop, since no transition builds an owned
+        // pane any more — so the view is exposed from the first instant and every mutation
+        // below belongs in the EXPOSED bucket.
         cover.dropAt = performance.now();
         // .213: fires on every transition, so long frames are measured across the board.
         watchFrames();
@@ -1042,10 +1040,9 @@
         }
         finishing = false;
       };
-      // try/finally so the row hold can never be stranded. runFinalize has THREE
-      // exits — the two ghost-held reveals return early — and none is guaranteed to
-      // run if applyScreen or Browse.render throws. A finally covers every return AND
-      // the throw. runFinalize itself now calls dropRowHold before its own
+      // try/finally so the row hold can never be stranded. runFinalize's single exit
+      // is not guaranteed to run if applyScreen or Browse.render throws. A finally
+      // covers the return AND the throw. runFinalize itself now calls dropRowHold before its own
       // applyScreen(dest, …) (see that call site); this one is a leak guard for a
       // throw earlier in runFinalize — watchFrames, reportReveal — before that call is
       // reached, and is a no-op otherwise (dropRowHold clears session.hold on its first
@@ -1073,9 +1070,10 @@
         if (cur !== session) return;
         // Order matters: dropRowHold reads session.hold, so it must run BEFORE
         // endOwnership clears the session. `finishing` is restored ONLY on a throw
-        // (review of .223, finding 2): the no-pane path already cleared it in
-        // runFinalize, and the held path must KEEP it true until drop() — clearing it
-        // here would let a new gesture arm while the ghost still covers the view.
+        // (review of .223, finding 2): runFinalize already clears it on every
+        // non-throwing path, so this `finally` only has work to do when runFinalize
+        // threw before reaching its own clear — without it, that throw would wedge
+        // every future swipe behind a `finishing` that never comes back down.
         let ok = false;
         try { runFinalize(); ok = true; } finally {
           dropRowHold(); endOwnership();
