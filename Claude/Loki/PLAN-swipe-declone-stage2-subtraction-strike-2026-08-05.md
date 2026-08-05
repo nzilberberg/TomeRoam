@@ -179,3 +179,14 @@ enumeration that is true and checkable at every listed entry, and incomplete.
 
 No `*.mutbak` in the tree; no product file modified; `tools/mutation-sweep.mjs` and
 `tools/source-gate-sweep.mjs` were not invoked.
+
+## Machine-readable verdict — declared 2026-08-05 for the campaign gate
+
+Verdict: FRACTURE_FOLDED
+
+The executed fracture (§6 — `M1WRITERSET` baseline entry #10, absent from the co-change
+enumeration) is folded into the plan as §4a C5 with the #10/#11 shared-text-group re-derivation,
+and this strike's collapse transform is promoted to §11 step 5b, a build precondition requiring
+the measured failing set to equal the declared radius. Verified against the plan at `8896d62`,
+not from report: C5 present in §4a and the §10 no-cell table, step 6's same-commit list names the
+baseline entry, step 3's row cites this casebook. The strike record above stands unmodified.
