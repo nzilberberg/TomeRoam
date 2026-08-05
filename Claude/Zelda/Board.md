@@ -1668,6 +1668,28 @@ anchor and fire. Build bumped `2026-08-03.306` → `2026-08-05.1` (stamped, `--c
 Mendeleev, then the records scrub (this plan's status, the parent's §12/§13, the campaign
 manifest's falsified note, this board, the decision log — step 8, not done here).
 
+**⭐ Step 11 CODE REVIEW: PASS — fix-then-ship (2026-08-05, target `49efe4f`).**
+`Claude/Poirot/POIROT-swipe-declone-stage2-subtraction-49efe4f.md`. Nothing on §9's keep list was
+deleted (each verified at HEAD, `css/` and `js/swipe.js` not in the diff at all), and **exit item 5 —
+the one load-bearing step with no mechanism — is substantiated**: the pinned region extracted from
+both commits and diffed code-only shows exactly seven changed statements, and the recorded
+re-verification names all seven. Verified by execution: suite 878/877/0-fail/1-skip;
+`source-gate-sweep.mjs` exit 0 (4/4 fingerprints red, controls hold); targeted sweeps of the touched
+families (`13 20 54 142`, `13 141 144 145`) 0 uncaught / 0 unapplied / 0 stale, no `*.mutbak`;
+mutant `#13` killed by `RECOVERYPARITY.pillswept`, which proves §5's adjacency ([F6]) — the recovery
+still reaches the pill sweep through `applyScreen` alone; a harness probe counts 0 `.nav-ghost` at
+boot and after a nav. **Two required fixes:** [W70] `tools/mutate.mjs` indices 54 and 142 are one
+mutant registered twice (byte-identical `from`, executed byte-identical 153-test `killed by:` lists
+— decision 19's own class, created by the commit that applied it); [W71] `js/app.js:221-227` still
+states a `begin()` PANE-OWNING rejection D8 deleted. **Four minors + two observations:**
+[W72]–[W75] vacuous ghost assertions, comment residue, a dead registry constant holding the deleted
+line, and two `ghosts=` token strippers; [W76]–[W77] the generated model's "marker element"
+euphemism and `regionHash` pinning comments as well as code. **[W78] — the seventh enumeration miss,
+and its shape is new: every one is in `test/` or `tools/`, outside the `js/`-scoped purge gates,
+outside `mutation-anchors.test.js`'s `MUTATIONS`-only read, and outside ESLint's surface.** Four
+prior watch items resolved by this build ([W9] [W10] [W12] [W50]). Next: apply-review, then the
+coverage auditor, then step 7's device gate ([W79]).
+
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
 - **Options→HUB refactor · library-scaling virtualization · durable-progress spine + device-delete** — all built; scaling on-device gate passed → `[[tomeroam-durable-progress-plan]]`, `[[tomeroam-library-scaling-plan]]`.
