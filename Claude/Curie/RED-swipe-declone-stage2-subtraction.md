@@ -12,11 +12,12 @@ Authored against HEAD `d8333b4`
 1. What was authored, and where each cell lives
 2. Red-at-HEAD, and what each red means
 3. Executed mutation results — every mutant, by name
-4. Mutants owed at step 6, with derived anchors
+4. Mutants owed at step 6, with derived anchors — ALL LANDED, see §9
 5. The collapse-probe measurement, and what it showed about these cells
 6. Findings routed back — what the plan's enumeration missed
 7. Departures from §10 as written, with the reason
 8. Exit accounting — every §10 cell against its realization
+9. The coverage audit's three gaps, closed — measured (2026-08-05)
 
 ---
 
@@ -125,12 +126,18 @@ and no stale `touchend`. Re-executed: #21 now reddens **that test, on that asser
 
 ## 4. Mutants owed at step 6, with derived anchors
 
-⛔ **These are NOT registered and are NOT claimed to work.** Each targets code that does not exist
-at HEAD, or a cell that is already red at HEAD so its redness would be unattributable. Registering
-any of them now would rot `test/mutation-anchors.test.js` immediately. This is the same split
-stage 6e used when `disposeOwnedPanes` did not yet exist: the test author authors the cells, the
-builder registers the defenders that only exist after the build. **Every one must be executed and
-observed to redden its named cell before it is written down as working.**
+⛔ **ALL OF THESE HAVE LANDED — see §9 for each one's registered name and measured killer set.**
+They are kept here as the derivation, because the anchors below are the ones §9's registrations
+use and because **the cost of the deferral is the record worth keeping**: five of the six sat in
+this table unregistered through the build, the review and the review fixes, and the standing
+mutation sweep printed `0 uncaught` the whole time while a third of §10's declared mutants were
+not in the set being swept. A table of things owed is not a mechanism. Nothing in the repo
+compared this table against the registry, which is the durable gap the audit routes at plan §14.
+
+The reason they were deferred: each targeted code that did not exist at HEAD, or a cell that was
+already red at HEAD so its redness would have been unattributable, and registering any of them
+then would have rotted `test/mutation-anchors.test.js` immediately. That reason was correct and
+is not what failed; the follow-through is.
 
 ### 4a. New registrations owed
 
@@ -270,14 +277,16 @@ machinery is false, and because that machinery's failure is the silent one.
 
 ## 7. Departures from §10 as written, with the reason
 
-**`MOVERSHAPE` asserts the adapter's seam-field READ set, not the produced key set.** Stated in the
-cell's own header, not buried here. The oracle hands the real `start()` a Construction whose movers
-expose their real values through recording accessors; the classification, the resolution and the
-destination render all stay production. It is 1:1 with the produced key set for every shape the
-plan names — the adapter reads `ownership` iff it emits `own`, and reads `slot` iff it computes
-`base` — and a build that read a field and discarded it would pass. The `base` half is
-additionally covered BEHAVIOURALLY by a second test: a dropped base offset writes
-`translateX(NaNpx)` onto a real element, which is asserted directly. See finding F-4.
+**`MOVERSHAPE` asserted the adapter's seam-field READ set and not the produced key set — and that
+substitution was WRONG, proven by an executed counterexample. CLOSED at §9 F3.** The departure is
+recorded rather than deleted because the reasoning that justified it is the reasoning to distrust:
+the read set was argued 1:1 with the emitted key set "for every shape the plan names", and a
+mutant is not obliged to stay inside an enumeration. A third key whose value is a **constant**
+reads no seam field, so the observer could not see it, and nothing downstream reads it, so no
+behavioural cell could either. The cell now carries the SOURCE assertion §10 specifies **in
+addition to** the read-set observer; the read-set test keeps its own job (it catches a field that
+is read and discarded, which the source assertion cannot see). See finding F-4 for why §10's
+original runtime fixture is not constructible, which remains true.
 
 **`STALETOUCH` gains a split witness test.** §11 step 5 describes it as "the existing stale-event
 cell re-anchored". The re-anchor alone would have shipped a witness never shown to fail (§3). The
@@ -295,6 +304,11 @@ unevenly written.
 
 | §10 cell | Realized | Mutation evidence |
 |---|---|---|
+This table records the state at the time the red suite was filed. **§9 supersedes its mutation-
+evidence column**: every "owed" entry below has since landed and been executed.
+
+| §10 cell | Realized | Mutation evidence at filing time |
+|---|---|---|
 | `NOGHOSTCLASS` | yes | `S2-25` executed, CAUGHT; fire drill positive ×3, negative ×1, all observed to fire |
 | `NOOWNEDPANE` | yes, **red at HEAD** | 2 mutants owed at step 6 (§4a) — the gate is already red, so neither is attributable now; fire drill positive ×3 quoting forms, negative ×2 |
 | `NOCLB` | yes | `S2-26`, `S2-27` executed, CAUGHT; fire drill positive ×2, negative ×2, the positive placed behind two `//`-bearing strings as [R4] specifies |
@@ -303,25 +317,170 @@ unevenly written.
 | `DESTROYEDMOVER` | yes — 3 destruction routes | `NATURAL-a` = `S2-13` ✓; the other two coordinates are fixtures, not mutants (F-5) |
 | `PILLSWEPT` | yes, **arity half red at HEAD** | `NATURAL-a` = `S2-28` ✓; `NATURAL-b` owed at step 6 |
 | `BORROWEDREALSURVIVES` | yes — `BR` relocated intact | `S2-29` ✓, non-discrimination disclosed with its measured killer set |
-| `STALETOUCH` | yes — re-anchored **and split** | #21 ✓ against the split witness specifically |
+| `STALETOUCH` | yes — re-anchored **and split** | #21 ✓ against the split witness specifically (the entry named `swipe: supersession stops releasing the old target listeners`; **the index has since moved to #19** — cite it by name and re-derive) |
 | **M2** (step 4) | yes — the throw cell + the `keyFor` sibling negative | `S2-30` ✓ (the exact mutant the audit names) |
 
-**Every applicable cell is either realized above or routed as a finding in §6. Nothing is left
-unwritten and nothing is silently narrowed.**
+⛔ **F-5 above is WRONG and the coverage audit corrected it.** It read §10's `DESTROYEDMOVER` row
+as the superseded round-1 form (three route variants, only one registrable). The ratified §10 had
+already been re-derived to **one mutant per ASSERTION**, all three registrable. Reading a
+superseded revision of a row and filing a finding against it is how a count of three was satisfied
+on paper by one registration — and the entry above then read as complete. §9 lands all three.
+
+---
+
+## 9. The coverage audit's three gaps, closed — measured (2026-08-05)
+
+Closing `Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction.md` (verdict `GAPS_NAMED`),
+findings F1, F2, F3. Authored against HEAD `4357775`. **Nothing under `js/` or `css/` was
+touched**: the subtraction is built and reviewed, and a test author does not change the behaviour
+being asserted.
+
+⛔ **Method.** Every mutant below was REGISTERED, then APPLIED, then its failing-test list READ,
+before any claim about it was written. Every sweep ran in the FOREGROUND with explicit indices
+re-derived by name; `git status` was verified clean and `*.mutbak`-free after each. The final
+numbers are from a re-sweep against the FINAL suite, not against the state the mutant was first
+measured in — a mutation result stops being true when the suite changes.
+
+### F1 — the six §10 mutants that had no registry entry
+
+| Registered as | §10 identity | Result — whole behaviour suite | Killing cells |
+|---|---|---|---|
+| `S2-33` | `NOOWNEDPANE` NATURAL-a (tag inline at a construction site) | CAUGHT, 5 failing | `NOOWNEDPANE` + the four-test `NOGHOSTATALL` family |
+| `S2-34` | `NOOWNEDPANE` NATURAL-b (tag as an unreferenced module constant) | CAUGHT, 1 failing | `NOOWNEDPANE` **alone** |
+| `S2-35` | `MOVERSHAPE` NATURAL-a (adapter re-adds the ownership key) | CAUGHT, 2 failing | `MOVERSHAPE` emitted-key-set + read-set |
+| `S2-36` | `MOVERSHAPE` NATURAL-b (adapter drops the base key) | CAUGHT, 16 failing | all three `MOVERSHAPE` tests; NON-DISCRIMINATING |
+| `S2-37` | `PILLSWEPT` NATURAL-b (the reset regains a guarding parameter) | CAUGHT, 1 failing | the `PILLSWEPT` **arity** test alone |
+| `S2-38` | `DESTROYEDMOVER` NATURAL-a (the 340ms settle fallback removed) | CAUGHT, 42 failing | all three `DESTROYEDMOVER` routes; NON-DISCRIMINATING |
+
+**All eighteen of §10's mutants are now registered.** Recounted against §10 rather than
+incremented: `NOGHOSTCLASS` 1, `NOOWNEDPANE` 2, `NOCLB` 2, `MOVERSHAPE` 2, `RECOVERYPARITY` 4,
+`DESTROYEDMOVER` 3, `PILLSWEPT` 2, `BORROWEDREALSURVIVES` 1, `STALETOUCH` 1 = 18. The audit's F1
+enumeration of the six absentees is confirmed complete.
+
+⭐ **The audit's CRLF caveat does not apply to `tools/mutate.mjs`, and following it would have been
+harmless but for the wrong reason.** `js/app.js`, `js/nav.js`, `js/swipe.js` and `js/browse.js` are
+all CRLF, but `resolveAnchor` normalises `\r\n` to `\n` on BOTH the source and the `from`
+(`tools/mutate.mjs`, and the same normalisation in `test/mutation-anchors.test.js`), so a
+multi-line `from` built with `\n` is correct and `\r\n` would work identically. The caveat is true
+of an ad-hoc applier that reads the file raw — which is what the audit used — and is false of the
+registry. Verified by execution: all six anchors resolve, the anchors gate is green, and every
+mutant applied.
+
+⚠️ **Two of the six are non-discriminating, disclosed rather than repaired** — the treatment
+`S2-29` already carries. `S2-36` also reddens `eslint: no errors in shipped app code`, MEASURED as
+`js/app.js:540 no-unused-vars — 'baseOf' is assigned a value but never used`; `S2-38` reddens 42
+tests because jsdom fires no `transitionend`, so every harness cell that advances a clock past a
+settle depends on the fallback. In both cases the designated cells fire, so attribution is shared
+rather than lost, and the measured sets are written into the registrations.
+
+⭐ **A killer COUNT is meaningless without the scope it was taken over.** The audit measured
+`S2-38` at "3 failing" and `S2-33` at "2 failing" over two test FILES; over the whole behaviour
+suite they are 42 and 5. Neither number is wrong. A future reader comparing a fresh sweep against
+either would conclude the registry had rotted.
+
+### F3 — `MOVERSHAPE`'s key-set claim, and the counterexample that shipped uncaught
+
+⭐ **Reproduced first, over a wider scope than the audit used.** `S2-39` — the adapter emitting a
+third key with a **constant** value, `own: 'borrowed-real'` — was registered and swept against the
+ENTIRE behaviour suite BEFORE the repair: **UNCAUGHT — not one test failed.** The suite at that
+point was 880 tests, 879 pass, 0 fail, 1 skip. The audit's finding holds at full scope, not only
+over the two files it ran.
+
+**The repair, and why it is an addition rather than a narrowing.** The cell is now three tests and
+they are a set:
+
+1. **the EMITTED key set, over SOURCE** (new) — catches a key sourced from anything at all,
+   including a constant, a computed name or a spread. This is the assertion §10 specifies and §13
+   decision 20 rules on: over source, not over a runtime observer, because an observer for
+   `d.movers` would add exactly the surface the pass exists to remove.
+2. **the READ set of seam fields, at RUNTIME** (existing) — kept, because it catches a field that
+   is read and DISCARDED, which a source assertion cannot see.
+3. **the base offset reaching a real transform** (existing) — the behavioural cover for `base`.
+
+After the repair, `S2-39` is CAUGHT by test 1 **alone** (1 failing). The claim the cell states is
+now the claim it witnesses.
+
+⛔ **The new reader is a scanner, so it has a fire drill, and the drill CAUGHT A REAL DEFECT IN IT
+BEFORE ANY MUTANT DID.** The first form of the reader tracked bracket depth but not quote state,
+so a comma inside a STRING VALUE at the entry's own depth split the key list and the cell would
+have reported a bogus key set. Every case that happened to pass did so because its string sat
+inside a call, one level deeper — the accident that makes a scanner defect invisible: the controls
+someone thinks to write are the ones that sit where the bug is not. The drill is 7 positive
+controls (constant third key, seam-sourced third key, dropped base, dropped element, computed key,
+spread, quoted key), 10 negative controls (including the two same-depth string cases that bit),
+and 2 rot controls (zero sites and two sites both refuse rather than assert over the first).
+
+⚠️ **The new test's own honest limit**, stated in the file rather than left to be discovered: a
+source assertion cannot see a key attached elsewhere at runtime, and it reads ONE expression. Its
+fixture-sanity assertion is what stops that from being silent — a renamed or duplicated adapter
+binding FAILS the cell rather than finding nothing and passing.
+
+### F2 — registrations that cover a cell without naming it
+
+The audit filed this for `DESTROYEDMOVER`. **Executing the neighbouring entries found three more
+in the same class, one of them worse than the class.** Each is closed the same way: the measured
+expected-killer set written into the registration.
+
+| Entry | Measured killer set (2026-08-05, whole behaviour suite) | What was added |
+|---|---|---|
+| `#31 stage3: finalize does not end ownership` | 7 failing: all three `DESTROYEDMOVER` routes, the endpoint cell, `FILMSTRIPDRAG`, `SCOPE`, and eslint (`'endOwnership' is assigned a value but never used`) | `DESTROYEDMOVER` named — §10 NATURAL-c |
+| `#113 S2-13 RESETCOVERSPAGES` | 2 failing: `RESETCOVERSPAGES`, `DESTROYEDMOVER.midscreen` | `DESTROYEDMOVER.midscreen` named — §10 NATURAL-b |
+| `#20 the recovery stops restoring the session-start scroll` | 6 failing: `I20`, `NC`, all three `RECOVERYPARITY` routes, eslint (`'cur' is assigned a value but never used`) | `RECOVERYPARITY` named — §10 NATURAL-b; the unmeasured `SC` clause dropped |
+| `#19 supersession stops releasing the old target listeners` | 2 failing: `I20`, the `STALETOUCH` split witness | `STALETOUCH` named — §10's only mutant for that cell |
+| `#13 begin() stops hard-resetting a superseded session` | **1 failing: `RECOVERYPARITY.pillswept` — and nothing else** | see below |
+
+⭐⭐ **`#13`'s designated killers were not merely missing, they were FALSE.** Its registered name
+read "(-> I2/I20 pane test)". Those cells went with the panes; the entry's only killer in the whole
+suite is `RECOVERYPARITY.pillswept`, a cell the name did not mention. It had been reporting
+`caught` on evidence that had nothing to do with the guard it claimed. This is one step past the
+audit's F2 class — F2 is a cell with no registration naming it; this is a registration naming
+cells that no longer fire — and it was invisible to every mechanism in the tree, because nothing
+compares a registration's stated killers against its measured ones. It is also the designated
+mutant for `RECOVERYPARITY`'s NATURAL-d, so a future re-anchor made in service of the stale name
+would have removed that cell's only evidence.
+
+### Suite and scope
+
+- Full suite after the work: **884 tests, 883 pass, 0 fail, 1 skip** (the one skip is the
+  device-only cell). Before: 880 / 879 / 0 / 1. The four new tests are the emitted-key cell and
+  its three drills.
+- Targeted sweeps, all foreground, all restored, `git status` clean and `*.mutbak`-free after
+  each: `13 19 20`, `31 113 151`, `145 146 147 148 149 150`, and `151` twice (before and after the
+  repair). Every run reported `0 unapplied, 0 stale flags`; the only `uncaught` was `S2-39` before
+  the repair, which was the point of running it.
+- **No build-number bump.** Only `test/`, `tools/` and `Claude/` changed; the shipping-bump gate's
+  own cells state that tests and tooling never require one, and nothing under `js/`, `css/`,
+  `sw.js` or `index.html` was touched.
+
+### What is still owed, and to whom
+
+- **The durable answer to F1's class is NOT built and is not the test author's to build**: a check
+  that every mutant a plan's `vitruvius-coverage` block declares exists in the registry. Plan §14
+  already routes it, and this pass is its second piece of evidence. Until it exists, the same gap
+  can reopen on the next plan without anything reddening.
+- **A registration's stated killers are still not compared against its measured ones.** `#13` is
+  the concrete instance. The measured sets are now written into the registrations that carry them,
+  which is a record, not a mechanism.
+- Audit findings **F4** (vacuous assertions and a dead helper in `test/`), **F5** (the
+  coverage-audit glob matching two subjects) and **F6** (plan Status and board row disagreeing
+  with reality) are untouched here — F4 is routed to a later purge, F5 and F6 to the assistant.
 
 ---
 
 ## Handoff
 
 - **Source artifact** — this file; the plan is `Claude/Plans/PLAN-swipe-declone-stage2-subtraction.md`.
-- **Status** — §11 steps 4 and 5 DONE. The red suite is filed and committed; every registered
-  mutant has been executed.
-- **Next owner** — **the builder**, for §11 step 5b (the collapse-applied trial run) and step 6
-  (the subtraction commit). §5 of this file is the trial run already performed against THIS
-  suite: its failing set is enumerated and every item is accounted for.
-- **Also owed to the builder at step 6** — the mutants and re-anchors in §4, and the two
-  relocations left deliberately incomplete (§1).
-- **Routed to the planner** — findings F-1, F-2, F-4, F-5, F-6 in §6. F-1 is a fourth executed
-  instance of R10 and belongs in §8 D13b before step 6 begins.
+- **Status** — §11 steps 4, 5, 5b and 6 are DONE and the code review's fixes have landed. The
+  coverage audit's three test-author findings (F1, F2, F3) are CLOSED at §9, every new mutant
+  executed, suite green at 884 / 883 / 0 fail / 1 skip.
+- **Next owner** — **the assistant**, for §11 step 7 (the device re-confirm, UNRUN) and step 8
+  (the records scrub, which now also carries audit findings F5 and F6).
+- **Open, and not the test author's** — audit F4 (vacuous assertions and a dead helper in
+  `test/`) is routed to a later purge. The durable answer to F1's class — a check that every
+  mutant a plan's `vitruvius-coverage` block declares exists in the registry — is routed by plan
+  §14 and is **not built**; until it is, the same gap can reopen on the next plan with nothing
+  reddening.
+- **Routed to the planner** — findings F-1, F-2, F-4, F-6 in §6. **F-5 is WITHDRAWN**: it was
+  filed against a superseded revision of §10's `DESTROYEDMOVER` row (see §8).
 - **Not audited here** — `Claude/Mendeleev/` audits this suite; the test author does not audit
-  their own.
+  their own. §9 closes findings that audit raised; it does not grade the suite.

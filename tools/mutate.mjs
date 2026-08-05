@@ -215,7 +215,17 @@ const MUTATIONS = [
   { name: 'swipe: touchcancel no longer shares onEnd (-> I19 DRAGGING commit test)',
     from: "target.addEventListener('touchcancel', onEnd, { passive: true });",
     to: "target.addEventListener('touchcancel', () => {}, { passive: true });" },
-  { name: 'swipe: begin() stops hard-resetting a superseded session (-> I2/I20 pane test)',
+  // ⭐ THIS ENTRY'S DESIGNATED KILLERS ARE STALE, and that was found by EXECUTION rather than by
+  // reading it. MEASURED 2026-08-05 over the whole behaviour suite: exactly ONE test fails, and
+  // it is `RECOVERYPARITY.pillswept` — a cell this name does not mention. The `I2/I20 pane` cells
+  // it was written for went with the panes, so the entry has been reporting `caught` on evidence
+  // that has nothing to do with the guard it names.
+  // It is ALSO the designated mutant for `RECOVERYPARITY`'s NATURAL-d
+  // (PLAN-swipe-declone-stage2-subtraction.md §10; the post-collapse form of "the screen
+  // application is REMOVED from the recovery" is byte-for-byte this entry). That cell has no
+  // registration of its own for the assertion, so re-anchoring or de-registering this entry in
+  // service of the stale name above would take its only mutation evidence with it, silently.
+  { name: 'swipe: begin() stops hard-resetting a superseded session (-> RECOVERYPARITY.pillswept ALONE; the I2/I20 pane cells it was written for no longer exist)',
     from: HARDRESET_DISPOSE_FROM, to: HARDRESET_DISPOSE_TO },
   // ── SWIPE stage 6a: supersession pre-stack recovery (PLAN-swipe-stage6.md §6/§9) ─
   { name: 'stage6a (a) re-anchored: the Browse hold releases BEFORE the applyScreen it must follow, so endHold is handed the PRE-commit descriptor (-> LANDEDPAGESHOWS commit half)',
@@ -251,7 +261,14 @@ const MUTATIONS = [
       '        // Order matters: dropRowHold reads session.hold, so it must run BEFORE',
     ].join('\n'),
     to: '        // Order matters: dropRowHold reads session.hold, so it must run BEFORE' },
-  { name: 'swipe: supersession stops releasing the old target listeners (-> I20 stale-callback test)',
+  // ALSO the designated mutant for `STALETOUCH`
+  // (PLAN-swipe-declone-stage2-subtraction.md §10), which likewise has no registration of its
+  // own. MEASURED 2026-08-05 (2 failing): the `I20` cell named below, and `STALETOUCH — a stale
+  // touchmove must not write a transform onto the NEW session's movers (the witness, alone)`.
+  // ⭐ That SPLIT witness is the point of naming it here: the witness only reaches its transform
+  // assertion because it was split out of `I20` — before the split this mutant killed `I20` on
+  // an EARLIER assertion and the witness was never executed.
+  { name: 'swipe: supersession stops releasing the old target listeners (-> I20 stale-callback test, STALETOUCH split witness)',
     from: "releaseGesture();   // never leave a dead gesture's listeners on a stale node",
     to: '/* mutated: listeners left bound */' },
   // RE-ANCHORED (PLAN-home-shift-fix.md §7.3, MUTUNIQ): `window.scrollTo(0,
@@ -271,7 +288,16 @@ const MUTATIONS = [
   // `indexOf` does not require a line-boundary match. Disambiguated by including the
   // preceding `applyScreen(currentDesc(), …)` statement, which is unique to this site
   // (the other abort site calls `applyScreen(dest, …)`).
-  { name: 'stage6a/swipe: the supersession recovery stops restoring the session-start scroll (-> SC known-red test, NC scroll clause, I20 test)',
+  //
+  // ALSO the designated mutant for `RECOVERYPARITY`'s NATURAL-b
+  // (PLAN-swipe-declone-stage2-subtraction.md §10), which has no registration of its own.
+  // MEASURED 2026-08-05 (6 failing): `I20`, `NC`, ALL THREE `RECOVERYPARITY` routes, and
+  // `eslint: no errors in shipped app code` — the last MEASURED to be
+  // `js/app.js:424 no-unused-vars — 'cur' is assigned a value but never used`, since this
+  // statement holds the recovery's only read of `cur`. That is a channel unrelated to the
+  // mutant's subject and is named so "reddens for the right reason" stays checkable. `SC` does
+  // NOT fail; that clause of the old name is dropped rather than carried unmeasured.
+  { name: 'stage6a/swipe: the supersession recovery stops restoring the session-start scroll (-> NC scroll clause, I20 test, RECOVERYPARITY all three routes)',
     from: [
       '        applyScreen(currentDesc(), { render: false, resetScroll: false });',
       '        window.scrollTo(0, cur.scroll0);',
@@ -325,7 +351,16 @@ const MUTATIONS = [
   { name: 'stage3: vertical abandon does not relinquish ownership (-> endpoint abandon test)',
     from: 'releaseGesture(); sessionDone(d); d = null; return;',
     to:   'releaseGesture(); d = null; return;' },
-  { name: 'stage3: finalize does not end ownership (-> endpoint completed-and-gone test)',
+  // ⭐ ALSO THE DESIGNATED MUTANT FOR `DESTROYEDMOVER`'s session-release assertion
+  // (PLAN-swipe-declone-stage2-subtraction.md §10 `DESTROYEDMOVER` NATURAL-c; recorded at the
+  // coverage audit's F2). MEASURED 2026-08-05 (7 failing): all three `DESTROYEDMOVER` routes in
+  // test/swipe-declone-stage2-subtraction.test.js, the endpoint cell named above, FILMSTRIPDRAG,
+  // SCOPE, and `eslint: no errors in shipped app code` — the last because dropping the call
+  // leaves `endOwnership` with no reader and `no-unused-vars` is an ERROR on js/**.
+  // Recorded HERE rather than left implicit because `DESTROYEDMOVER` has no registration of its
+  // own for this assertion: narrowing this entry in service of the endpoint cell alone would
+  // remove that cell's mutation evidence with nothing reddening to say so.
+  { name: 'stage3: finalize does not end ownership (-> endpoint completed-and-gone test, DESTROYEDMOVER session-release on all three routes)',
     // Re-anchored: finding 2's throw-restore turned the finally into a block; the
     // ownership end is now this line.
     from: 'dropRowHold(); endOwnership();',
@@ -1174,7 +1209,14 @@ const MUTATIONS = [
     to:   "        scrollY: () => o.mount.scrollTop,\n        viewportH: () => o.mount.clientHeight,\n        listTop: () => o.mount.scrollTop + list.getBoundingClientRect().top - o.mount.getBoundingClientRect().top," },
 
   // ── RESETCOVERSPAGES — the first borrowed mover with no id ──
-  { name: 'S2-13 RESETCOVERSPAGES: resetSwipeStyles keeps its id-only element list, so an interrupted gesture strands a page at translateX(+/-w) (-> RESETCOVERSPAGES)',
+  // ⭐ ALSO THE DESIGNATED MUTANT FOR `DESTROYEDMOVER`'s no-stuck-transform assertion
+  // (PLAN-swipe-declone-stage2-subtraction.md §10 `DESTROYEDMOVER` NATURAL-b; recorded at the
+  // coverage audit's F2). MEASURED 2026-08-05 (2 failing): RESETCOVERSPAGES and
+  // `DESTROYEDMOVER.midscreen` — the one route on which a SURVIVING page's transform can be
+  // observed at all, which is why the other two routes stay green here. Same reason as
+  // the entry above: that cell has no registration of its own for this assertion, so a future
+  // narrowing here would silently take its evidence with it.
+  { name: 'S2-13 RESETCOVERSPAGES: resetSwipeStyles keeps its id-only element list, so an interrupted gesture strands a page at translateX(+/-w) (-> RESETCOVERSPAGES, DESTROYEDMOVER.midscreen)',
     file: 'js/nav.js',
     from: "    els.push(...document.querySelectorAll('.browsepage'));\n",
     to:   "" },
@@ -1450,14 +1492,10 @@ const MUTATIONS = [
   // campaign turned out to be EQUIVALENT, each backed by a careful source argument, and a fifth
   // was caught in review for the same reason. Reading has not been sufficient.
   //
-  // ⛔ WHAT IS DELIBERATELY NOT REGISTERED YET, and why (so its absence is not read as an
-  // oversight). Four of the pass's mutants target code that DOES NOT EXIST AT HEAD — the
-  // collapsed recovery and the parameterless style reset — and two more target a gate that is
-  // already RED at HEAD (`NOOWNEDPANE`, whose subject is the four `'owned-pane'` filters the pass
-  // deletes), so their redness would be unattributable. Registering any of them now would rot
-  // `test/mutation-anchors.test.js` immediately. They are derived, with exact anchors, in
-  // Claude/Curie/RED-swipe-declone-stage2-subtraction.md and are owed at step 6 — the same split
-  // stage 6e used when `disposeOwnedPanes` did not yet exist.
+  // ⛔ ALL EIGHTEEN OF §10's MUTANTS ARE NOW REGISTERED. Six were deferred when this block was
+  // first written, because they targeted code that did not exist at HEAD or a gate that was
+  // already red; they landed at S2-33 … S2-38 below, once the subtraction shipped. Nothing from
+  // §10 is outstanding. The record of what that deferral cost is on S2-33's block.
 
   // ── NOGHOSTCLASS (test/retired-concepts-purge.test.js) ──
   // ADDITIVE. The gate's subject is a SOURCE-TEXT property — that no first-party script writes
@@ -1548,6 +1586,115 @@ const MUTATIONS = [
   // they describe had no runnable evidence at all. They are wired up here rather than rewritten.
   { name: 'S2-32 RECOVERYPARITY: the supersession recovery releases the row hold BEFORE applying the source screen (-> RECOVERYPARITY ordering clause, all three routes)',
     from: VR_HOLD_ORDER_FROM, to: VR_HOLD_ORDER_TO },
+
+  // ══ SUBTRACTION PASS — the six §10 mutants that were OWED at step 6, registered here by
+  // ══ the test author against the coverage audit's F1
+  // ══ (Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction.md §4 F1).
+  //
+  // WHY THEY WERE ABSENT, stated so the gap is not read as carelessness and so the SHAPE of it
+  // is available to the next pass. Each targeted code that did not exist at HEAD when the red
+  // suite was authored (the collapsed recovery, the parameterless style reset, the un-mapped
+  // adapter) or a gate that was already RED then, so registering them at that point would have
+  // rotted test/mutation-anchors.test.js immediately. They were derived with exact anchors in
+  // Claude/Curie/RED-swipe-declone-stage2-subtraction.md §4a and owed to the builder at step 6;
+  // the build landed the code and the registrations were not made, so the standing sweep
+  // reported `0 uncaught` over the registry while a third of §10's declared mutants were not in
+  // the set being swept. A green counter states execution, not coverage.
+  //
+  // ⛔ EVERY ENTRY BELOW WAS APPLIED AND ITS FAILING TEST LIST READ before its comment was
+  // written. The measured killer set is recorded on each, per §8 D13c.
+
+  // ── NOOWNEDPANE (test/retired-concepts-purge.test.js) — §10 NATURAL-a ──
+  // The retired ownership tag written INLINE at a real mover construction site: the shape the
+  // gate is most obviously for, and the one a reader assumes is the only one.
+  // MEASURED 2026-08-05 (5 failing): NOOWNEDPANE (the textual gate) plus the four-test
+  // NOGHOSTATALL family — the belt and the brace both fire, which is §10's stated relationship
+  // between them ("NOOWNEDPANE is the weaker of two guards, not the sole one").
+  { name: 'S2-33 NOOWNEDPANE: the retired ownership tag is re-introduced INLINE at a mover construction site (-> NOOWNEDPANE, NOGHOSTATALL)',
+    file: 'js/swipe.js',
+    from: "    outgoing = mover(env.sourceEl(sourceHost, from.v), 'borrowed-real', 'outgoing');",
+    to:   "    outgoing = mover(env.sourceEl(sourceHost, from.v), 'owned-pane', 'outgoing');" },
+
+  // ── NOOWNEDPANE — §10 NATURAL-b, the shape an inline-only reading MISSES ──
+  // The tag held in a named module constant instead of written at a call. This is the reason
+  // the cell scans for a STRING LITERAL rather than for a construction call: a re-introduction
+  // can be a declaration nobody calls yet. The `.filter` gives the constant one read so ESLint's
+  // `no-unused-vars` (an ERROR on js/**) cannot redden test/lint.test.js and steal the kill —
+  // it is behaviour-inert, since no browse-family name equals the tag.
+  // MEASURED 2026-08-05 (1 failing): NOOWNEDPANE ALONE. That is the point of the entry —
+  // NOGHOSTATALL cannot see this shape, because no mover is constructed with the tag; only the
+  // textual scan reaches it, and it reaches it because it matches a LITERAL rather than a call.
+  { name: 'S2-34 NOOWNEDPANE: the retired ownership tag is re-introduced as a named MODULE CONSTANT, never written at a call site (-> NOOWNEDPANE alone)',
+    file: 'js/swipe.js',
+    from: "  const BROWSE_FAMILY = ['books', 'authors', 'authorBooks', 'files'];",
+    to:   "  const OWNED_PANE_KIND = 'owned-pane';\n"
+        + "  const BROWSE_FAMILY = ['books', 'authors', 'authorBooks', 'files'].filter((v) => v !== OWNED_PANE_KIND);" },
+
+  // ── MOVERSHAPE (test/swipe-declone-stage2-subtraction.test.js) — §10 NATURAL-a and -b ──
+  // The one CONTRACT change in the pass, mutated from both sides: a key that returns, and the
+  // key that must stay. NATURAL-a is the exact regression §4 D12 removes — a field with no
+  // reader riding back in on the seam it was deleted from.
+  // MEASURED 2026-08-05 (2 failing): the MOVERSHAPE emitted-key-set test and the MOVERSHAPE
+  // read-set test. Both halves of the cell see this shape, because the third key is sourced from
+  // a seam field — which is exactly the shape S2-39 below does NOT take.
+  { name: 'S2-35 MOVERSHAPE: the L3 adapter re-adds the retired ownership key, so a field with NO reader ships again on the session mover (-> MOVERSHAPE emitted-key-set + read-set tests)',
+    from: '      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot) });',
+    to:   '      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot), own: m.ownership });' },
+  // ⚠️ NON-DISCRIMINATING, disclosed rather than repaired — the same treatment S2-29 carries.
+  // MEASURED 2026-08-05 (16 failing): all three MOVERSHAPE tests, plus every harness cell that
+  // reads a drag transform (the base offset is `undefined`, so every mover writes
+  // `translateX(NaNpx)`), plus `eslint: no errors in shipped app code` — dropping the key leaves
+  // `baseOf` with no reader, and `no-unused-vars` is an ERROR on js/**. The lint kill is a
+  // channel unrelated to this mutant's subject, so it is named here: "reddens for the right
+  // reason" is checkable only if the wrong reasons are written down too. The three MOVERSHAPE
+  // tests all fire, so attribution is not lost — it is merely shared.
+  { name: 'S2-36 MOVERSHAPE: the L3 adapter drops the base key, so the incoming mover has no offset and the drag writes translateX(NaNpx) (-> all three MOVERSHAPE tests; NON-DISCRIMINATING)',
+    from: '      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot) });',
+    to:   '      const toMover = (m) => ({ el: m.element });' },
+
+  // ── PILLSWEPT (test/swipe-declone-stage2-reset.test.js) — §10 NATURAL-b ──
+  // ⭐ THE ARITY ASSERTION IS THE ONLY WITNESS, and this mutant is what makes that load-bearing
+  // rather than decorative. With the parameter reintroduced every production call site still
+  // passes no argument, so `keepGhosts` is undefined, `!keepGhosts` is true, the sweep still
+  // runs and the pill-REMOVAL test stays green. §10's claim that "an arity assertion is the only
+  // mechanical form of 'no caller can guard this'" holds as measured.
+  // MEASURED 2026-08-05 (1 failing): the PILLSWEPT ARITY test, alone in the whole behaviour
+  // suite. Its sibling — the pill-removal test in the same cell — stays GREEN, which is the
+  // measurement that makes the arity assertion load-bearing rather than a restatement.
+  { name: 'S2-37 PILLSWEPT: resetSwipeStyles regains a parameter and guards the pill sweep behind it, so a future caller can switch the sweep off (-> PILLSWEPT arity test ALONE)',
+    file: 'js/nav.js',
+    from: "  function resetSwipeStyles() {\n    document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());",
+    to:   "  function resetSwipeStyles(keepGhosts) {\n    if (!keepGhosts) document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());" },
+
+  // ── DESTROYEDMOVER (test/swipe-declone-stage2-subtraction.test.js) — §10 NATURAL-a ──
+  // The settle's timer fallback removed, so a gesture whose transitionend anchor was DETACHED
+  // mid-drag never finalizes: `finishing` is stranded and every future swipe is wedged. This is
+  // the assertion the three destruction routes share, and the first registration that names
+  // DESTROYEDMOVER as its designated cell (audit §4 F2).
+  // ⚠️ NON-DISCRIMINATING, disclosed rather than repaired. MEASURED 2026-08-05: 42 failing,
+  // including all three DESTROYEDMOVER routes. The fallback is the ONLY thing that finalizes a
+  // gesture whose transitionend never arrives, and jsdom fires no transitionend at all, so every
+  // harness cell that advances a clock past a settle depends on it. It demonstrates that THE
+  // SUITE notices; the three named routes are what shows THIS cell does. The audit that
+  // commissioned this entry measured "3 failing" over two test FILES — the whole-suite number is
+  // 42, which is why a killer count is only meaningful beside the scope it was taken over.
+  { name: 'S2-38 DESTROYEDMOVER: the 340ms settle fallback is removed, so a gesture whose transitionend anchor was destroyed mid-drag never settles (-> DESTROYEDMOVER all three routes; NON-DISCRIMINATING)',
+    from: '      cur.settleTimer = setTimeout(finalize, 340);',
+    to:   '      /* mutated: no settle fallback — a detached anchor never finalizes */' },
+
+  // ── MOVERSHAPE (test/swipe-declone-stage2-subtraction.test.js) — the ORPHANED-KEY mutant ──
+  // ⭐ THIS ONE SHIPPED UNCAUGHT AND WAS FOUND BY EXECUTION. The coverage audit hand-applied it
+  // against the cell as shipped and the suite stayed GREEN; re-run here over the WHOLE behaviour
+  // suite before the repair, it was still uncaught — 880 tests, 0 failing. A third key whose
+  // value is a CONSTANT is sourced from no seam field, so the runtime read-set observer cannot
+  // see it, and nothing downstream reads it, so no behavioural cell can either. The cell's own
+  // stated claim — "an orphaned key cannot ship silently" — was therefore false while reading as
+  // covered, which is worse than an absent cell: an audit reads a false claim as a swept one.
+  // The repair is the SOURCE assertion §10 specifies and §13 decision 20 rules on.
+  // MEASURED 2026-08-05 after the repair (1 failing): the MOVERSHAPE emitted-key-set test alone.
+  { name: 'S2-39 MOVERSHAPE: the L3 adapter emits a THIRD key whose value is a constant, so a field with no reader and no seam source ships silently (-> MOVERSHAPE emitted-key-set test)',
+    from: '      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot) });',
+    to:   "      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot), own: 'borrowed-real' });" },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

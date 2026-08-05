@@ -1741,7 +1741,32 @@ neither carries an `-rN` suffix, so **this audit's GAPS_NAMED does not redden th
 audit's ADEQUATE clears it (confirmed by running the gate). Owner: the assistant. [W84] F6 (Note) —
 the plan's Status line still reads "RED SUITE AUTHORED"; both records go on step 8's scrub list.
 **Step 7 (device re-confirm) is UNRUN and nothing claims otherwise; step 8 (records scrub) is not
-done.** Next: the user's go — the three test-author findings, or step 7's device gate.
+done.**
+
+**⭐ [W80] [W81] [W82] CLOSED (2026-08-05, authored at `4357775`) — the coverage audit's three
+test-author findings, each closed by execution.** `Claude/Curie/RED-swipe-declone-stage2-subtraction.md`
+§9; writable set was `test/`, `tools/mutate.mjs` and records only — nothing under `js/` or `css/`.
+**F1:** the six absent §10 mutants registered as `S2-33`…`S2-38`, every one applied and its failing
+list read — all CAUGHT by their designated cells. **All eighteen of §10's mutants are now
+registered**, recounted against §10 rather than incremented. **F3:** the counterexample was
+reproduced FIRST over the whole behaviour suite (uncaught, 0 failing at 880 tests), then closed by
+adding the SOURCE assertion §10 and decision 20 specify — the emitted key set, composed with the
+existing read-set test rather than replacing it. Registered as `S2-39`; after the repair it is
+CAUGHT by that cell **alone**. Its reader carries a 19-control fire drill, and **the drill caught a
+real defect in the reader before any mutant did** (a separator inside a string at the entry's own
+depth mis-split the key list; every case that passed did so because its string sat one level
+deeper). **F2:** the measured expected-killer sets written into the registrations that carry
+`DESTROYEDMOVER`. ⭐⭐ **The audit's F2 enumeration was short by three, found by executing the
+neighbours:** `#20` and `#19` likewise cover `RECOVERYPARITY` NATURAL-b and `STALETOUCH` without
+naming them, and **`#13`'s designated killers were FALSE, not merely missing** — its name read
+"(-> I2/I20 pane test)", those cells went with the panes, and its only killer in the whole suite is
+`RECOVERYPARITY.pillswept`. It had reported `caught` on evidence unrelated to the guard it claimed.
+Suite **884 / 883 / 0 fail / 1 skip**; no build bump (test + tooling + records only). ⛔ **Still not
+built:** the check that every mutant a plan's `vitruvius-coverage` block declares exists in the
+registry (plan §14, owner the planner) — until it exists this gap can reopen with nothing
+reddening; and nothing compares a registration's *stated* killers against its *measured* ones,
+which is what let `#13` rot. **[W83] F5 and [W84] F6 remain open (the assistant, step 8); F4
+remains routed to a later purge.** Next: the user's go — step 7's device gate, or step 8's scrub.
 
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.

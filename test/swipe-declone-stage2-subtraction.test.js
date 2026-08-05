@@ -28,7 +28,10 @@
 // sets it, so the scroll assertions pin WHETHER a restore was issued, never WHICH coordinate.
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const { boot } = require('./app-harness.js');
+const { ROOT } = require('./dom-fixture.js');
 
 // REAL wall clock, captured before boot() patches setTimeout: move() resamples velocity only
 // after >8ms of REAL time, and synthetic moves fired back-to-back otherwise leave vx holding
@@ -94,21 +97,47 @@ function addPillFloat(h) {
 // over a REAL gesture, because the fake-env construction layer never executes the adapter
 // mapping at all.
 //
-// ⛔ HONEST SCOPE, and it is a ROUTED FINDING, not a silent narrowing. §10 specifies "assert the
-// recorded mover key set equals exactly the two-key set by deep comparison". The recorded
-// movers live on the gesture session (`d.movers`) and NOTHING observes them: the only
-// production observer, `window.PBSwipeSession()`, reports `{id, dragging}` and nothing else, and
-// an object literal's key creation cannot be trapped from outside (a literal uses
-// [[DefineOwnProperty]], which no prototype setter sees). So the exact key set is not
-// constructible at this layer without a production change, which this pass forbids.
+// ⭐ THE CELL IS THREE TESTS AND THEY ARE A SET, not one test with two spares. Each sees a
+// different class of defect and none of them subsumes another:
 //
-// WHAT IS ASSERTED INSTEAD, stated as exactly what it is: the set of SEAM FIELDS the adapter
-// READS, captured by handing the real `start()` a Construction whose movers expose their real
-// values through recording accessors. It is 1:1 with the produced key set for every shape the
-// plan names — the adapter reads `ownership` if and only if it emits `own`, and reads `slot` if
-// and only if it computes `base` — and a build that read a field and discarded it would pass.
-// The `base` half is additionally covered BEHAVIOURALLY below, where a dropped base offset
-// writes a non-numeric transform onto a real element.
+//   (1) the EMITTED KEY SET, over SOURCE      — catches a key sourced from ANYTHING, including a
+//                                               constant, a computed name or a spread
+//   (2) the READ SET of seam fields, at RUNTIME — catches a key sourced from a seam field, and
+//                                               sees the real adapter execute on a real gesture
+//   (3) the base offset reaching a REAL transform — the behavioural cover for the `base` half,
+//                                               so a dropped base is not source-only evidence
+//
+// ⛔ WHY (1) IS OWED AND WHY THE RUNTIME READ SET COULD NOT STAND ALONE — an EXECUTED
+// counterexample, not an argument. This cell shipped with (2) and (3) only, on the disclosed
+// reasoning that the read set is 1:1 with the emitted key set "for every shape the plan names".
+// The coverage audit applied
+//     const toMover = (m) => ({ el: m.element, base: baseOf(m.slot), own: 'borrowed-real' });
+// — a third key whose value is a CONSTANT rather than a read of a seam field — and the whole
+// behaviour suite stayed green. An orphaned key shipped silently, which is the exact outcome
+// this cell's stated claim forbids, and it did so on the pass's own subject: a field with no
+// reader is what the pass exists to delete. The 1:1 argument was true only over the shapes the
+// plan enumerated, and a mutant is not obliged to stay inside an enumeration.
+//
+// (1) is the assertion §10 specifies and §13 decision 20 rules on — "asserts over SOURCE, not
+// over a runtime observer", because a runtime observer for `d.movers` would add exactly the
+// surface this pass exists to remove. It is the same kind the parent plan's `MOVERHASBOX` and
+// `PAGEISVIEW` already use. Its mutant is `S2-39`.
+//
+// ⚠️ (1)'s OWN honest limit, stated rather than left for a later reader to discover: a source
+// assertion cannot see a key attached elsewhere at runtime, and it reads ONE expression, so it
+// says nothing about an adapter that moved. Its fixture-sanity assertion is what keeps that from
+// being silent — if the binding it reads stops existing, it FAILS rather than finding nothing
+// and passing.
+//
+// (2)'s scope, stated as exactly what it is: the set of SEAM FIELDS the adapter READS, captured
+// by handing the real `start()` a Construction whose movers expose their real values through
+// recording accessors. §10's original fixture ("assert the recorded mover key set by deep
+// comparison" at runtime) is not constructible — the recorded movers live on the gesture session
+// (`d.movers`) and nothing observes them: `window.PBSwipeSession()` reports `{id, dragging}` and
+// nothing else, and an object literal's key creation cannot be trapped from outside (a literal
+// uses [[DefineOwnProperty]], which no prototype setter sees). What (2) adds over (1) is that it
+// runs the REAL adapter on a REAL gesture, so it also catches a build that reads a field and
+// discards it — a defect invisible to the emitted key set.
 //
 // This wraps `Swipe.buildConstruction` and delegates to the real one, so the classification,
 // the resolution and the destination render are all still production; only the mover objects
@@ -142,6 +171,169 @@ function recordAdapterReads() {
   };
   return { reads, restore() { Swipe.buildConstruction = realBuild; } };
 }
+
+// ── The emitted key set, over SOURCE ────────────────────────────────────────────────────
+//
+// Locates the adapter by its enclosing `toMover` binding, brace-matches the object literal it
+// returns, and splits it at TOP-LEVEL commas only — so a nested object, an array, a call, a
+// ternary or a string containing a comma or a brace cannot desynchronise the split. The key of
+// each entry is the text before its first top-level `:`; an entry with no colon (a shorthand or
+// a `...spread`) and a computed `[expr]` key both come back verbatim and therefore fail the
+// comparison, which is correct — a spread means the key set is not statically knowable at all,
+// and a cell that cannot know the key set must not report that it is exactly two.
+const ADAPTER_DECL = 'const toMover = (m) => ({';
+const CLOSERS = { '{': '}', '(': ')', '[': ']' };
+
+// Scan `s` from `i`, tracking quote and bracket state; calls `onChar(c, depth, inQuote)` per
+// character and returns the index of the balancing closer (or -1).
+//
+// ⛔ `inQuote` IS NOT DECORATION — the drill below caught its absence. The first form of this
+// reader passed depth alone, so a separator inside a STRING VALUE at the entry's own depth split
+// the key list and the cell read a bogus key set. Every case that happened to pass did so
+// because its string sat inside a call, one level deeper — the exact accident that makes a
+// scanner defect invisible: the controls someone thinks to write are the ones that sit where the
+// bug is not.
+function scanBalanced(s, i, onChar) {
+  let depth = 0, quote = null;
+  for (let j = i; j < s.length; j++) {
+    const c = s[j];
+    if (quote) {
+      if (c === '\\') { onChar(c, depth, true); onChar(s[++j], depth, true); continue; }
+      if (c === quote) quote = null;
+      onChar(c, depth, true);
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') { quote = c; onChar(c, depth, true); continue; }
+    if (CLOSERS[c]) { depth++; onChar(c, depth, false); continue; }
+    if (c === '}' || c === ')' || c === ']') { onChar(c, depth, false); depth--; if (depth === 0) return j; continue; }
+    onChar(c, depth, false);
+  }
+  return -1;
+}
+
+/** { sites, keys } — `sites` is how many `toMover` bindings exist, `keys` the emitted key set. */
+function adapterEmittedKeys(src) {
+  const sites = src.split(ADAPTER_DECL).length - 1;
+  if (sites !== 1) return { sites, keys: null };
+  const open = src.indexOf(ADAPTER_DECL) + ADAPTER_DECL.length - 1;   // the literal's own `{`
+  const parts = [];
+  let cur = '';
+  const end = scanBalanced(src, open, (c, depth, inQuote) => {
+    if (!inQuote && depth === 1 && c === ',') { parts.push(cur); cur = ''; return; }
+    cur += c;
+  });
+  if (end === -1) return { sites, keys: null };
+  parts.push(cur.replace(/\}$/, ''));
+  const keys = parts
+    .map((p) => p.replace(/^\{/, '').trim())
+    .filter(Boolean)
+    .map((p) => {
+      // The separator is the first colon at the ENTRY's own depth — not `indexOf(':')`, which a
+      // computed key or a ternary inside a nested call would capture instead.
+      let seen = 0, colon = -1;
+      scanBalanced('{' + p + '}', 0, (c, depth, inQuote) => {
+        if (!inQuote && depth === 1 && c === ':' && colon === -1) colon = seen;
+        seen++;
+      });
+      const raw = colon <= 0 ? p : p.slice(0, colon - 1).trim();
+      return /^['"`].*['"`]$/.test(raw) ? raw.slice(1, -1) : raw;
+    });
+  return { sites, keys };
+}
+
+test('MOVERSHAPE — the L3 adapter EMITS exactly { el, base } and no third key, asserted over source', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8').replace(/\r\n/g, '\n');
+  const { sites, keys } = adapterEmittedKeys(src);
+
+  // FIXTURE SANITY FIRST, and it is load-bearing rather than decorative: a source assertion that
+  // cannot find its subject would otherwise pass by finding nothing, which is how a cell reports
+  // a property it has stopped checking. If the adapter is renamed or moved, this FAILS and says
+  // so, and the repair is to re-derive the anchor — never to relax it.
+  assert.equal(sites, 1,
+    `fixture: js/app.js must declare exactly ONE \`toMover\` adapter binding; found ${sites}. `
+    + 'This cell reads that one expression, so zero sites means it is asserting over nothing and '
+    + 'more than one means it is asserting over whichever came first.');
+  assert.ok(Array.isArray(keys),
+    'fixture: the adapter\'s object literal did not brace-match — re-derive the anchor');
+
+  assert.deepEqual([...keys].sort(), ['base', 'el'],
+    'the L3 adapter must EMIT exactly { el, base }. A third key is a field on the session mover '
+    + 'with no reader — the pass\'s own subject (§4 D12 deleted `own` for exactly that reason) — '
+    + 'and it ships silently: nothing downstream touches it, so no behavioural cell can see it. '
+    + 'The sibling read-set test below cannot see it either when its VALUE is a constant rather '
+    + 'than a seam field, which is an EXECUTED counterexample, not a hypothesis. A missing key '
+    + `means the mover lost the element reference or the base offset. emitted=${JSON.stringify(keys)}`);
+});
+
+// ⛔ FIRE DRILL for the reader above, and it is an acceptance condition rather than a courtesy.
+// A source assertion is a scanner, and this project's recorded scanner failure is the SILENT
+// one: a parser that desynchronises on a comma or a brace inside a string returns a key set that
+// is wrong in a direction nobody notices, and the cell then reports a property it is no longer
+// checking. Its ability to fire must not rest on the one live mutant, because the live mutant is
+// the one shape someone already thought of. Synthetic sources only — never the real file — so
+// the drill has no text of its own that the scan could collide with.
+const drillSrc = (literal) => `  (function () {\n      const toMover = (m) => ({${literal});\n  })();\n`;
+
+test('MOVERSHAPE fire drill — POSITIVE: every emitted-key defect shape is reported, not just the constant one', () => {
+  const cases = [
+    ["a third key with a CONSTANT value (the executed counterexample)", " el: m.element, base: baseOf(m.slot), own: 'borrowed-real' }", ['base', 'el', 'own']],
+    ['a third key sourced from a SEAM FIELD', ' el: m.element, base: baseOf(m.slot), own: m.ownership }', ['base', 'el', 'own']],
+    ['the base key DROPPED', ' el: m.element }', ['el']],
+    ['the element key DROPPED', ' base: baseOf(m.slot) }', ['base']],
+    ['a COMPUTED key name, which no identifier scan would see', " el: m.element, base: baseOf(m.slot), [KIND]: 1 }", ['[KIND]', 'base', 'el']],
+    ['a SPREAD, which makes the key set unknowable at all', ' el: m.element, base: baseOf(m.slot), ...m.extra }', ['...m.extra', 'base', 'el']],
+    ['a QUOTED third key name', " el: m.element, base: baseOf(m.slot), 'own': 1 }", ['base', 'el', 'own']],
+  ];
+  for (const [label, literal, expected] of cases) {
+    const { sites, keys } = adapterEmittedKeys(drillSrc(literal));
+    assert.equal(sites, 1, `${label}: the drill fixture must present exactly one adapter site`);
+    assert.deepEqual([...keys].sort(), expected, `${label}: the reader must report this key set`);
+    assert.notDeepEqual([...keys].sort(), ['base', 'el'],
+      `${label}: this defect shape must NOT read as the clean two-key set — a positive control `
+      + 'that cannot make the assertion fail is the defect the drill exists to catch');
+  }
+});
+
+test('MOVERSHAPE fire drill — NEGATIVE: a clean two-key literal is never mis-split by a comma, brace, colon or comment inside a value', () => {
+  const clean = [
+    ['the real shape', ' el: m.element, base: baseOf(m.slot) }'],
+    ['a comma inside a STRING value, nested one level in a call', " el: m.element, base: f('a, b') }"],
+    // ⭐ The two below are the cases the reader's FIRST form got wrong. A separator inside a
+    // string at the ENTRY's own depth has no bracket around it to hide behind, which is why the
+    // nested case above passed while the property was broken.
+    ['a comma inside a STRING value at the ENTRY\'s own depth', " el: m.element, base: 'a, b' }"],
+    ['a colon inside a STRING value at the ENTRY\'s own depth', ' el: m.element, base: "a: b" }'],
+    ['a brace and a comma inside a TEMPLATE value', ' el: m.element, base: `${a}, {x}` }'],
+    ['a nested OBJECT value carrying its own keys', ' el: m.element, base: { x: 1, y: 2 } }'],
+    ['a nested ARRAY value carrying commas', ' el: m.element, base: [1, 2, 3] }'],
+    ['a TERNARY value carrying its own colon', ' el: m.element, base: a ? b : c }'],
+    ['a COMPUTED expression inside a value, whose colon is not the separator', ' el: m.element, base: f([a ? b : c]) }'],
+    ['a trailing comma', ' el: m.element, base: baseOf(m.slot), }'],
+    ['written across LINES', '\n        el: m.element,\n        base: baseOf(m.slot),\n      }'],
+    ['a quoted key name on the CLEAN shape', " 'el': m.element, \"base\": baseOf(m.slot) }"],
+  ];
+  for (const [label, literal] of clean) {
+    const { sites, keys } = adapterEmittedKeys(drillSrc(literal));
+    assert.equal(sites, 1, `${label}: the drill fixture must present exactly one adapter site`);
+    assert.deepEqual([...keys].sort(), ['base', 'el'],
+      `${label}: a clean two-key literal must read as exactly { el, base }. A false POSITIVE here `
+      + 'is how a correct cell gets switched off; a scanner that cries wolf is removed, and the '
+      + `property goes with it. got=${JSON.stringify(keys)}`);
+  }
+});
+
+test('MOVERSHAPE fire drill — ROT: a missing or duplicated adapter binding is reported, never silently passed', () => {
+  const none = adapterEmittedKeys('  const other = (m) => ({ el: m.element });\n');
+  assert.equal(none.sites, 0, 'a renamed or removed adapter must report ZERO sites');
+  assert.equal(none.keys, null, 'with no site there is no key set — the cell must not invent one');
+
+  const two = adapterEmittedKeys(drillSrc(' el: m.element, base: baseOf(m.slot) }')
+    + drillSrc(" el: m.element, base: baseOf(m.slot), own: 'x' }"));
+  assert.equal(two.sites, 2, 'two adapter bindings must report TWO sites');
+  assert.equal(two.keys, null,
+    'with two sites the reader must refuse rather than assert over whichever came first — that is '
+    + 'the non-unique-anchor failure the mutation registry already refuses, one layer over');
+});
 
 test('MOVERSHAPE — the L3 adapter consumes exactly the element reference and the slot (no ownership read), on a real gesture', async () => {
   const h = boot({ fakeTimers: true });
