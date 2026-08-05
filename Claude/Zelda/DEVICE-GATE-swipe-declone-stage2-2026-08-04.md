@@ -1,7 +1,33 @@
 # Device gate — swipe de-clone Stage 2 (`PLAN-swipe-declone.md` §13 step 10b)
 
-Filed by Zelda, 2026-08-04. **Status: OWED — never run.** Confirmed by absence: no device verdict
-for this campaign exists in `Claude/Zelda/` (only the A1b and parked-page ones).
+Filed by Zelda, 2026-08-04. **Status: PASS — all six items, run on build `2026-08-03.306`.**
+
+> *"All six pass."* — the user, 2026-08-04.
+
+**Step 10b is DISCHARGED.** This was the campaign's only unrun device gate, and its absence was the
+subtraction plan's risk 3: had it failed, the cheapest repairs would have been exactly the branches
+that pass deletes. It did not fail, so the subtraction is unblocked and no branch is being kept as
+insurance against an unrun gate.
+
+**What this covers, and its ceiling.** Six items, each with a derived gesture and a distinguishable
+failure: `browse→browse` commit and abort in both directions on long and short lists; no jump at drag
+start; scroll surviving a trip to Home; the A–Z strip through two drag kinds; a list past
+`FULL_RENDER_MAX = 600`; and the four cross-screen transitions re-confirmed. It is a human
+observation pass — it rules out failures large enough to see, which is what a compositing and
+gesture gate can rule out, and no more.
+
+**Separately reported by the user in the same message, and NOT covered here:** long-standing issues
+with the letter pickers (the A–Z strip), explicitly stated as **pre-existing and not caused by any
+recent work**, minor, and deferred by the user until the current campaign is finished. Item 4 above
+passed, so whatever those are, they are not the drag-time behaviour this gate exercises. Captured on
+the board so the thread is not lost; **not** folded into this campaign.
+
+---
+
+## The original filing (retained — the items as issued)
+
+**Was: OWED — never run.** Confirmed by absence: no device verdict for this campaign existed in
+`Claude/Zelda/` (only the A1b and parked-page ones).
 
 ## Why this is being surfaced NOW, ahead of the subtraction pass
 
@@ -85,5 +111,6 @@ to windowed rendering, a different code path from every short list above.
 
 ## Status
 
-**OWED — all six items.** Nothing here has been run on a device. The subtraction pass is filed and
-waits on this deliberately, per its own risk 3.
+**PASS — all six items**, user-run on build `2026-08-03.306`, 2026-08-04.
+
+Step 10b is discharged and the subtraction pass is unblocked.

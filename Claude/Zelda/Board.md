@@ -1367,3 +1367,5 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
 - **Options→HUB refactor · library-scaling virtualization · durable-progress spine + device-delete** — all built; scaling on-device gate passed → `[[tomeroam-durable-progress-plan]]`, `[[tomeroam-library-scaling-plan]]`.
+
+| T-LP1 | Letter picker (A–Z strip) — long-standing minor issues, user-reported | unassigned | DEFERRED by the user 2026-08-04 until the current campaign lands | derive the symptoms from the user, then route | waiting on the campaign | `Claude/Zelda/DEVICE-GATE-swipe-declone-stage2-2026-08-04.md` |
