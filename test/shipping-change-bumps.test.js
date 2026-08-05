@@ -95,3 +95,47 @@ test('the live tree passes its own gate', async () => {
   assert.ok(live.length >= 4, 'the shipping files this gate guards are missing from the repo');
   assert.ok(live.every(isShipping));
 });
+
+// ── THE CONVERSE, 2026-08-04. The user asked "I'm on 306. Is that right? I never saw a reload
+// prompt." It was right, and there was nothing to reload for — .306 had been minted by a commit
+// touching only tools/hooks/device-gate-check.mjs and its test, neither of which ships. A build
+// number is a label for the SHIPPED tree; minting one for tooling makes every device fetch a new
+// build.json and can offer an update that changes nothing visible.
+test('a bump with no shipping change anywhere is flagged as spurious', async () => {
+  const { judgeSpuriousBump } = await load();
+  assert.deepStrictEqual(
+    judgeSpuriousBump({
+      changed: ['tools/hooks/device-gate-check.mjs', 'test/device-gate-check.test.js',
+        'sw.js', 'js/debug.js', 'index.html', 'build.json'],
+      before: '2026-08-03.305', after: '2026-08-03.306', shippingSinceLastBump: [],
+    }),
+    ['2026-08-03.305 -> 2026-08-03.306'],
+    'the .306 bump was accepted — the converse check is vacuous');
+});
+
+test('a bump that ships something in the same commit is justified', async () => {
+  const { judgeSpuriousBump } = await load();
+  assert.deepStrictEqual(judgeSpuriousBump({
+    changed: ['css/app.css', 'sw.js', 'js/debug.js', 'index.html', 'build.json'],
+    before: '2026-08-03.305', after: '2026-08-03.306', shippingSinceLastBump: [],
+  }), []);
+});
+
+test('a LABEL REPAIR bump is justified — the drift landed in an earlier commit', async () => {
+  // This is exactly .305: css/app.css drifted in b55fef9 with no bump, and a later commit
+  // bumped to make the label true again. Flagging that would punish the fix.
+  const { judgeSpuriousBump } = await load();
+  assert.deepStrictEqual(judgeSpuriousBump({
+    changed: ['sw.js', 'js/debug.js', 'index.html', 'build.json'],
+    before: '2026-08-02.304', after: '2026-08-03.305',
+    shippingSinceLastBump: ['css/app.css'],
+  }), []);
+});
+
+test('no bump at all is not the converse check\'s business', async () => {
+  const { judgeSpuriousBump } = await load();
+  assert.deepStrictEqual(judgeSpuriousBump({
+    changed: ['tools/mutate.mjs'], before: '2026-08-03.306', after: '2026-08-03.306',
+    shippingSinceLastBump: [],
+  }), []);
+});

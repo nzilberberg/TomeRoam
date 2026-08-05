@@ -74,8 +74,47 @@ export function judge({ changed, before, after }) {
   return substantive;
 }
 
+// ⛔ Run the CLI only when invoked directly. MEASURED 2026-08-04: without this, importing the
+// module to unit-test `judge` EXECUTED the whole check, whose `process.exit(0)` then killed the
+// test process — `node --test` reported "# tests 1 # pass 1" for a thirteen-test file and looked
+// green. The suite was vacuous from the moment it was written, and the count was the only tell.
+// Third instance of this exact shape in one session, so it is worth stating as a rule: a checker
+// that cannot be imported without side effects cannot be tested, and its green means nothing.
+const invokedDirectly = process.argv[1]
+  && fileURLToPath(import.meta.url).replace(/\\/g, '/') === process.argv[1].replace(/\\/g, '/');
+
 const argv = process.argv.slice(2);
 const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
+/**
+ * THE CONVERSE, added 2026-08-04. `judge` above enforces "a shipping change must bump". It says
+ * nothing about the other direction, and the other direction happened: `.306` was created by a
+ * commit touching only `tools/hooks/device-gate-check.mjs` and its test — neither of which ships —
+ * because the stamper was run out of habit. Every device then fetches a new `build.json` and can be
+ * offered an update that changes nothing it can see. That is exactly the attention this project's
+ * user has been spending on "is that right? I never saw a reload prompt."
+ *
+ * ⚠️ A bump with no shipping change in THIS commit is not automatically wrong — the LABEL REPAIR
+ * case is legitimate and shipped as `.305`: a shipping file drifted in an earlier commit without a
+ * bump, and a later commit bumps to make the label true again. So the question is not "does this
+ * commit ship something" but "is there any unlabelled shipping change since the last bump".
+ *
+ * ⛔ This MUST live at module scope. Placing it inside `main()` — an `export` inside a function —
+ * is a syntax error that reddened all thirteen cells at once, which is at least a loud failure.
+ *
+ * @returns {string[]} reasons the bump looks spurious; empty means justified.
+ */
+export function judgeSpuriousBump({ changed, before, after, shippingSinceLastBump }) {
+  if (!before || !after || before === after) return [];          // no bump: not our business
+  const substantive = (changed || []).filter(isShipping)
+    .filter((f) => !STAMPED.has(f.replace(/\\/g, '/')));
+  if (substantive.length) return [];                             // ships something: justified
+  if ((shippingSinceLastBump || []).length) return [];           // label repair: justified
+  return [`${before} -> ${after}`];
+}
+
+if (!invokedDirectly) { /* imported for testing — export only */ } else main();
+
+function main() {
 
 const buildOf = (text) => { try { return JSON.parse(text).build; } catch { return null; } };
 const showBuild = (rev) => { try { return buildOf(git(['show', `${rev}:build.json`])); } catch { return null; } };
@@ -94,6 +133,34 @@ if (range) {
     try { return buildOf(git(['show', ':build.json'])); } catch { /* not staged */ }
     return existsSync(join(ROOT, 'build.json')) ? buildOf(readFileSync(join(ROOT, 'build.json'), 'utf8')) : null;
   })();
+}
+
+
+// Shipping files (excluding the stamped three) changed since build.json last changed.
+function shippingSinceLastBump() {
+  try {
+    const lastBump = git(['log', '-1', '--format=%H', '--', 'build.json']).trim();
+    if (!lastBump) return [];
+    return git(['diff', '--name-only', lastBump, 'HEAD']).split(/\r?\n/).filter(Boolean)
+      .filter(isShipping).filter((f) => !STAMPED.has(f.replace(/\\/g, '/')));
+  } catch { return []; }
+}
+
+const spurious = judgeSpuriousBump({ changed, before, after, shippingSinceLastBump: shippingSinceLastBump() });
+if (spurious.length) {
+  console.error(`shipping-change-bumps: this commit BUMPS the build (${spurious[0]}) but nothing that
+reaches a device changed — not in this commit, and not since the last bump.
+
+A build number is a label for the shipped tree. Minting a new one for a test, a tool or a record
+makes every device fetch a fresh build.json and can offer the user an update that changes nothing
+they can see. Measured 2026-08-04: .306 was created by a commit touching only a hook and its test.
+
+If this IS a label repair — a shipping file drifted earlier without a bump — this check finds that
+automatically and stays quiet, so seeing this message means there is no such drift.
+
+Leave build.json alone for test/tooling/records changes; the gate below already forces a bump when
+something actually ships.`);
+  process.exit(1);
 }
 
 const offenders = judge({ changed, before, after });
@@ -118,3 +185,4 @@ Bump it:
 (\`stamp --check\` will not catch this — it proves the three stamped files agree with each
 other, which they happily do on a number that no longer describes the tree.)`);
 process.exit(1);
+}
