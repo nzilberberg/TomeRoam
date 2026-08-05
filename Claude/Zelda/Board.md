@@ -1257,6 +1257,22 @@ re-verification) is now **the one load-bearing step with no mechanism behind it*
 deletions, which are cheap to undo, but the claim that the collapse changes no behaviour. Three new
 DecisionLog entries. **Next: the adversary (§11 step 3), then the test author (steps 4–5).**
 
+**⭐ Step 11 adversary strike DONE (2026-08-05, at `8dac588`) — ONE executed fracture; the §5
+behavioural promise itself HELD.** Casebook
+`Claude/Loki/PLAN-swipe-declone-stage2-subtraction-strike-2026-08-05.md` (+ two filed probes). The
+collapse was applied in memory (product source untouched) and the real app driven through the
+harness on both forms: every producible entry route into `begin()`'s recovery has `cur` non-null,
+the resetScroll axis is behaviourally identical (pre-set scroll survives on both forms), and the
+orphan input is constructible only by injecting a ghost — the control fired both ways, demonstrating
+R1's exact stake in motion. Full suite: HEAD 849/0-fail; collapsed 9 fail, **eight inside the plan's
+declared blast radius and ONE outside it — the fracture: `test/scroll-writer-set.test.js`
+`M1WRITERSET` baseline entry #10 registers §5's third ternary by exact text (`if (cur)
+window.scrollTo(0, cur.scroll0);`), so step 6's commit lands red on a gate on none of the plan's
+lists** (§4a, step 6, the file is cited only for the exclusion criterion). Repair is a baseline
+restructure, not a text bump: post-collapse #10's text equals #11's, erasing the nesting
+distinguisher the gate's Direction-3 attribution is built on. **Owner: the planner** — add the file
+to §4a/step 6 and specify the #10/#11 shared-text group. Then the test author (steps 4–5).
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.
