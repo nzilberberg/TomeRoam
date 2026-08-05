@@ -1505,3 +1505,27 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   and is load-bearing — it is the only sweeper of the retained pill clone on the recovery path, and it
   is deliberately unguarded by `keepGhosts`. Line 105 is a clean deletion. Found independently by the
   planner and by the code review, which files it as W50 with the same reading.
+
+- THE SUBTRACTION PASS PLAN IS TEMPERED, NOT FORGED — 2026-08-04, plan review at HEAD `1ced95d`,
+  `Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-1ced95d.md`.
+  Every §4 reachability proof was struck against the shipped source and every one held. Seven findings
+  block the build: three surfaces that must change in step 6's single commit appear in no list in the
+  plan (`test/swipe-model.test.js`'s `VERIFIED.supersession` pin, `tools/gen-swipe-model.mjs`'s
+  hard-coded ORPHAN prose, and `tools/source-gate-sweep.mjs`'s `begin/supersession` anchor at
+  `js/app.js:428`); the `NOOWNEDPANE`/`NOCLB` scan resolution is unspecified where `NOGHOSTCLASS`'s is
+  specified; the declared source ranges skip `js/app.js:437-473`; and the deleted-cell set drops two
+  witnesses of behaviours that survive rather than the one the plan names. Owner: the planner.
+
+- A GENERATED RECORD'S PROSE LIVES IN ITS GENERATOR, SO "REGENERATE IT" IS NOT A SCRUB STEP —
+  2026-08-04, derived from `docs/swipe-model.generated.txt` and `tools/gen-swipe-model.mjs`.
+  Regenerating a checked-in generated document reproduces whatever its generator hard-codes. A plan
+  that deletes a mechanism must edit the generator's prose and re-verify the mirrored rule; updating
+  the fingerprint pin alone converts a falsifiable mirror back into the unverified copy the pin exists
+  to prevent.
+
+- A SOURCE LINE MAY BE A MUTATION ANCHOR IN A TOOL THE ANCHORS GATE DOES NOT READ — 2026-08-04.
+  `test/mutation-anchors.test.js` reads `tools/mutate.mjs` only. `tools/source-gate-sweep.mjs` carries
+  its own anchors — the sole runnable mutation evidence for the source-text fingerprint gates, which
+  `tools/mutation-sweep.mjs` deliberately excludes — and its rot is caught only by running that tool.
+  Any plan deleting a line in `js/app.js` must check both anchor sets, and `node tools/source-gate-sweep.mjs`
+  belongs in the exit condition beside the mutation sweep.

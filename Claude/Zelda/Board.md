@@ -1083,9 +1083,10 @@ recovery predicate makes its ORPHAN branch unreachable and collapses three terna
 `resetScroll: cur ? false : undefined`, whose orphan value is the pre-6a home-scroll-to-top parity the
 code review's F1 preserved. That collapse is admissible ONLY behind a new source-scan gate
 (`NOGHOSTCLASS`), which turns the reachability reading into a structure; four reachability readings
-have already been wrong in this campaign. ⛔ **Step 10b (the device gate on the shipped Stage-2 form)
-has NOT run** — there is no device verdict for this campaign in `Claude/Zelda/` — **and it gates the
-build**, because the cheapest repairs if it fails are exactly the branches this pass deletes.
+have already been wrong in this campaign. ✅ **Step 10b (the device gate on the shipped Stage-2 form)
+PASSED — all six items, build `2026-08-03.306`, commit `1ced95d`** (`Claude/Zelda/DEVICE-GATE-swipe-declone-stage2-2026-08-04.md`).
+It was the plan's risk 3: had it failed, the cheapest repairs would have been exactly the branches
+this pass deletes, so nothing is kept as insurance. The build gate is clear.
 Planner-owned inheritances all CLOSED in the plan §13 + DecisionLog: audit **M1** (no new guard; widen
 the cell, `DESTROYEDMOVER`), audit **M3** (the CLB purge gate is re-homed, `NOCLB`), addendum **A8**
 (`constructionPlanFor.outgoing` retained as a stated exemption under Rule R), **A2 does not ride
@@ -1096,6 +1097,28 @@ same-key `browse→browse` mover collision — a correctness question, needs its
 coverage cells, seventeen mutants, all source/key-set/class-state/call-count/DOM-identity — no
 geometry. ⚠️ `Claude/Campaigns/swipe-declone-stage2.json`'s `note` still claims `display: contents`
 and "THE PLAN WAS NEVER REVIEWED"; both falsified — owed to the assistant at the records scrub.
+
+**Step 11 plan review — TEMPER (2026-08-04, the plan reviewer, review HEAD `1ced95d`).**
+`Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-1ced95d.md`. **Owner: the planner.** Every §4
+reachability proof was struck against source and every one HELD — D1's consumer-set argument, D2's
+one-`return` value proof, D5's writer-less `let`, D8's three-literal producer set, D12's four `.own`
+readers, the `nav.js:105`/`:106` correction, the residuals-comment CONFLICT, and `NOCLB`'s subject
+(both identifiers occur zero times under `js/`). Seven findings block: **F1** the frozen model's
+`VERIFIED.supersession` pin covers exactly the §5 collapse region and its ORPHAN prose is hard-coded
+in `tools/gen-swipe-model.mjs`, so regenerating the doc does not fix it — neither file is in any list
+in the plan; **F2** D9 deletes `js/app.js:428`, the sole anchor of `tools/source-gate-sweep.mjs`'s
+`begin/supersession` entry, which is that fingerprint's ONLY mutation evidence and is invisible to
+the anchors gate; **F3** `NOOWNEDPANE`/`NOCLB` leave their scan resolution unspecified where
+`NOGHOSTCLASS` specifies it, and the bare-token reading is RED on six unscrubbed comment sites;
+**F4** the declared source ranges are line-incomplete and skip `js/app.js:437-473` entirely — the
+prose form of the branch being collapsed; **F5** R2's list is short by two — `DEC` and `BR` are the
+only witnesses of behaviours that SURVIVE (the recovery sweeping the pill float; borrowed-real
+`#browse`/`#home` surviving a supersession); **F6** §5 justifies deleting the explicit
+`resetSwipeStyles` call by one of its three effects (the other two survive only via
+`js/nav.js:129` — verified, but unstated); **F7** D15 misses the vacuous transform assertion at
+`test/swipe-invariants.test.js:426-427`/`:450-451`, whose deletion guts the cell. F8–F10 are
+non-blocking. Step 10b PASSED on `.306` (`1ced95d`), so the build gate is clear and the plan is the
+only thing holding step 6.
 
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
