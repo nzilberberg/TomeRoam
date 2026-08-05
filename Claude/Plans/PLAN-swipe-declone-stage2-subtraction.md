@@ -5,15 +5,30 @@ Type: plan
 <!-- vitruvius-gate {"plan_type":"subtraction",
   "patterns":{"boundary_relocation":false,"callee_replacement":false,"contract_shape":true,"state_transfer":false,"async_change":false,"persistence_migration":false,"lifecycle_ownership":true},
   "project_adapter":"tomeroam-js-dom",
-  "source_ranges":["js/app.js:113-115","js/app.js:261-266","js/app.js:385-399","js/app.js:425-436","js/app.js:474-487","js/app.js:560-563","js/app.js:594-595","js/app.js:601-617","js/app.js:696-699","js/app.js:766-771","js/app.js:1114-1120","js/app.js:1151-1154","js/nav.js:104-106","js/nav.js:129-130","js/swipe.js:244-277"],
+  "source_ranges":["js/app.js:113-115","js/app.js:261-266","js/app.js:385-399","js/app.js:425-487","js/app.js:560-563","js/app.js:594-595","js/app.js:601-617","js/app.js:693-699","js/app.js:718-726","js/app.js:761-771","js/app.js:1114-1120","js/app.js:1151-1154","js/nav.js:104-106","js/nav.js:129-130","js/swipe.js:203-210","js/swipe.js:244-277"],
   "callee_ranges":[],
-  "affected_contracts":["js/app.js:603","js/nav.js:104","test/swipe-stage5-residuals.test.js:1","tools/mutate.mjs:1","docs/swipe-model.generated.txt:1"],
+  "affected_contracts":["js/app.js:603","js/nav.js:104","test/swipe-stage5-residuals.test.js:1","test/swipe-model.test.js:36","tools/gen-swipe-model.mjs:69","tools/source-gate-sweep.mjs:64","tools/fuzz-ui.js:54","tools/mutate.mjs:1","docs/swipe-model.generated.txt:1"],
   "staged_records":["Claude/Plans/PLAN-swipe-declone.md","Claude/Zelda/Board.md","Claude/Zelda/OBSOLESCENCE-CANDIDATES.md","Claude/Decisions/DecisionLog.md"],
   "blocking_questions":["NOGHOSTCLASS","NOOWNEDPANE","NOCLB","MOVERSHAPE","RECOVERYPARITY","DESTROYEDMOVER","PILLSWEPT"]} -->
 
-Status: **PLAN_READY — hand to the plan reviewer.** This plan executes `PLAN-swipe-declone.md` §13
-step 11 against the §12 deletion list. It is subordinate to that plan and does not restate it: §12
-remains the authoritative inventory, and every row of §4 below cites the §12 item it discharges.
+Status: **PLAN_READY, round-1 review folded — hand back to the plan reviewer.** This plan executes
+`PLAN-swipe-declone.md` §13 step 11 against the §12 deletion list. It is subordinate to that plan and
+does not restate it: §12 remains the authoritative inventory, and every row of §4 below cites the §12
+item it discharges.
+
+**What the round-1 review changed, in one line.** `Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-1ced95d.md`
+(verdict TEMPER) struck every reachability proof in §4 against source rather than against this plan's
+prose, and **all of them held** — D1, D2, D3, D5, D8, D12, the `nav.js:105`/`:106` correction,
+`NOCLB`'s subject, and the A2 exclusion. **The deletion set has not moved.** What the review found is
+**blast radius this plan did not enumerate**: three surfaces that must change in step 6's single
+commit appeared in no list here (§4a), two scan resolutions were unspecified where their sibling's
+was specified (§10), the comment residue was under-declared (§8 D16b), and the deleted-cell set
+dropped two witnesses of behaviours that survive (§9, §10). Each correction is marked **[F*n*]** at
+the point it lands.
+
+**Also changed since round 1:** `PLAN-swipe-declone.md` §13 **step 10b PASSED all six device items**
+on build `.306` (2026-08-04). §11 step 2 is discharged and R3 is closed. Nothing is being retained as
+insurance.
 
 **Why subtract at all, in one sentence.** Every branch that can no longer be reached still audits
 clean in isolation, and the defect that opened this campaign was two things each correct alone and
@@ -33,6 +48,7 @@ careful source argument, each settled only by execution.
 2. *(Applicability — unnumbered heading; the authoring gate matches it literally)*
 3. Scope — what is deleted, what stays, what is deferred
 4. The deletion set, item by item, with the proof of unreachability
+   - 4a. Co-changes that are not deletions and must land in the same commit
 5. The cascade the parent's §12 does not name — the orphan-recovery collapse
 6. Contract and seam — the one shape change, and the rule that decides it
 7. Lifecycle and ownership — the `owned-pane` kind ceases to exist
@@ -65,6 +81,10 @@ remains to be deleted. Two CONFLICTS are declared and resolved below; one GAP is
 | `Claude/Zelda/OBSOLESCENCE-CANDIDATES.md` "How to work this list", rule 4 — **"Never batch two removals into one build. Attribution is the whole point."** | Standing working rule | **AGREE, and it decides the Stage A2 question.** §13 decision 5: A2 does not ride along. |
 | `Claude/Zelda/OBSOLESCENCE-CANDIDATES.md` §10 — Stage A2's premise-coupling to declone Stage 2, **RESOLVED 2026-08-01** | Ratified record | **AGREE, and it is a reason A2 is UNBLOCKED, not a reason to merge it.** `#browse` keeps its `position: fixed` box, so `PLAN-one-screen-type.md` §5.5 stays true and A2 loses no premise. §13 decision 5. |
 | `Claude/Campaigns/swipe-declone-stage2.json` — the `note` field still describes `#browse` becoming `display: contents` and states "THE PLAN WAS NEVER REVIEWED" | Campaign manifest | **CONFLICT.** Both clauses were falsified at `735601d` and by four review rounds. The manifest is not this plan's writable surface; §11 step 8 routes the correction to the assistant with the rest of the records scrub. |
+| `test/swipe-model.test.js`'s `VERIFIED.supersession` pin, and the ORPHAN prose hard-coded in `tools/gen-swipe-model.mjs` | Live gate + its generator; the project's frozen model | **GAP, closed at [F1].** The pinned region is `regionHash(read('js/app.js'), 'function begin(x, y, target) {', 'if (target.closest', 'begin/supersede')` — **exactly** §5's collapse region plus D9's `.spent` sweep. The §5 edit necessarily moves the hash, and the generated document is not hand-editable: the ORPHAN prose lives in `render()` at `tools/gen-swipe-model.mjs:416`, `:431`, `:234` and `:473-474`, so D17's "regenerate" reproduces it verbatim. Both files are now in §4a and on step 6's same-commit list. |
+| `tools/source-gate-sweep.mjs`'s `begin/supersession (swipe-model)` entry | Live tool; the ONLY runnable mutation evidence for the fingerprint gates, which `tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` deliberately excludes | **GAP, closed at [F2].** Its anchor is `document.querySelectorAll('.nav-ghost.spent')…`, which D9 deletes; `test/mutation-anchors.test.js` reads `tools/mutate.mjs` only, so the rot is invisible to the gate §8 called "the mechanical closure". The entry is re-anchored in §4a and the tool joins §11's exit condition. |
+| `tools/fuzz-ui.js:54` — `ghosts: all('.nav-ghost').length` as a probe field | Live diagnostic tool | **AGREE, and it is D3's own argument one file out [F8].** After the pass it is constant 0. §4a. |
+| `PLAN-swipe-declone.md` §13 step 10b — the device gate on the shipped Stage-2 form | Ratified sequence step | **DISCHARGED 2026-08-04: all six items PASS on build `.306`.** §11 step 2 is closed and R3 with it. |
 | **GAP, closed** | — | No record stated what happens to the recovery block's ORPHAN branch when the `.nav-ghost` disjunct that is its only entry condition is deleted. §5 closes it: the branch is unreachable and collapses, and three ternaries collapse with it. |
 
 ## Applicability
@@ -89,7 +109,14 @@ remains to be deleted. Two CONFLICTS are declared and resolved below; one GAP is
 
 **DELETED.** Twelve source items in `js/app.js` and `js/nav.js` (§4 D1–D12), the test and tooling
 residue that has no subject left (§8), and one stale set of generated inventories. Every one is
-listed with the reason it is unreachable at HEAD `b539f71`.
+listed with the reason it is unreachable at HEAD `b539f71` (re-derived against `1ced95d` by the
+round-1 review; the intervening commits touched no file this plan cites).
+
+**CO-CHANGED, and not deletions [F1, F2, F8].** Four surfaces contain nothing this pass removes and
+break or lie the moment §5's collapse lands: the frozen swipe model's fingerprint pin, its
+generator's hard-coded ORPHAN prose, the source-gate sweep's supersession anchor, and the fuzz
+probe's ghost counter. §4a. They are called out separately from the deletion list because two of them
+are gates, and a gate that reddens is the first thing step 6 shows the builder.
 
 **ADDED — one file, and it is not new scope.** `test/retired-concepts-purge.test.js` (§10). Three
 of this pass's deletions rest on "no first-party source produces X". That is a claim a future edit
@@ -145,6 +172,28 @@ non-`none` value would have meant, and there is no longer an answer. The change 
 build log and in the board so a future reader of an older device log knows why the token stops
 appearing; it is not an invariant, so no cell holds it.
 
+### 4a. Co-changes that are not deletions and must land in the same commit
+
+**Added at [F1], [F2], [F8].** A deletion list is not the same thing as a blast radius. These three
+surfaces contain no code this pass removes, yet each one *breaks or lies* the moment §5's collapse
+lands, and none appeared in the round-1 revision. They are set out here rather than in §8's residue
+table because two of them are gates, and a gate that reddens at step 6 is the first thing the builder
+sees — ahead of all twelve deletions.
+
+| # | Surface | What the collapse does to it | Required disposition |
+|---|---|---|---|
+| **C1** | `test/swipe-model.test.js` `VERIFIED.supersession` (currently `b07e422a493b8fff`) | The pinned region **is** the collapse region, so the hash moves. The commit lands red here first. | The pin moves **only behind a line-by-line re-verification recorded in the build log**, in the form the last four re-pins already used (`test/swipe-model.test.js:39-70` is the precedent: each records what changed inside the region and what was mirrored). ⛔ **A re-hash without the re-verification is the one weak link the frozen model exists to close** — `js/swipe.js:1-12` records that the generator reimplements conditions rather than executing them, so the pin is the only thing that makes the reimplementation falsifiable. |
+| **C2** | `tools/gen-swipe-model.mjs` — the ORPHAN prose, hard-coded in `render()` | Regenerating the document **reproduces it verbatim.** Four sites: the recovery-order paragraph (`:416`, "dispose the old pane / stray ghosts"), the ORPHAN-path sentence (`:431`), the `TERMINATION` row's `pane: 'dispose orphan'` cell (`:234`), and the termination footnote's `resetScroll:d?false:undefined` parity clause (`:473-474`). | Rewrite all four to describe the post-collapse code: one entry route set, one screen/scroll policy, no orphan sub-case, and `resetSwipeStyles` reached once via `applyScreen` (§5, [F6]). Regenerate afterwards. **The document must describe the code it mirrors after the pass** — a generated model that still documents a deleted branch turns the one file meant to be trustworthy at a glance into the one that has to be cross-checked. |
+| **C3** | `tools/source-gate-sweep.mjs`, the `begin/supersession (swipe-model)` entry | Its anchor is `js/app.js:428`, which D9 deletes. The tool then prints `ANCHOR FAILED` and exits nonzero. **Invisible to `test/mutation-anchors.test.js`**, which imports `tools/mutate.mjs`'s `MUTATIONS` and nothing else. | Re-anchor onto a **behaviour-neutral rewrite of a line that still exists inside the post-collapse region**, chosen in the same commit — the same shape as its two existing re-anchors, whose comments record the previous rot. `node tools/source-gate-sweep.mjs` becomes an exit condition (§11). |
+| **C4** | `tools/fuzz-ui.js:54` — `ghosts: all('.nav-ghost').length` | Constant 0 after the pass. | Remove the field. This is D3's own argument one file out: a diagnostic field with one constant value is not a measurement. |
+
+**Why C3 is Structural and not tidy-up.** `tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` excludes
+the fingerprint gates by design — they fail under every mutation by construction, which would be a
+false CAUGHT — and `source-gate-sweep.mjs` exists precisely because that exclusion "left the
+fingerprints with NO runnable mutation evidence at all". So the fingerprint whose evidence C3 restores
+is **the same one C1 re-pins**, over this pass's most dangerous edit. Re-pinning a gate in the same
+commit that silently ends the demonstration of its ability to fire is the defect, not the rot.
+
 ## 5. The cascade the parent's §12 does not name — the orphan-recovery collapse
 
 `begin()`'s recovery entry predicate is `if (d || document.querySelector('.nav-ghost') || (finishing
@@ -155,9 +204,23 @@ null case become constant:
 
 | Expression at HEAD | Collapses to | What the orphan value was for |
 |---|---|---|
-| `resetSwipeStyles(cur ? true : undefined)` | *(the whole call goes with D9/D11 — the sweep it suppressed no longer exists)* | keep the full sweep when no session owns the pane |
+| `resetSwipeStyles(cur ? true : undefined)` | *(the whole call goes — see the adjacency below, which is the reason it is deletable)* | keep the full sweep when no session owns the pane |
 | `applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined })` | `applyScreen(currentDesc(), { render: false, resetScroll: false })` | `resetScroll: undefined` kept `js/nav.js`'s default `true`, so an orphan hard reset on a home source still scrolled to top — pre-Stage-6a parity, the code review's F1 |
 | `if (cur) window.scrollTo(0, cur.scroll0)` | `window.scrollTo(0, cur.scroll0)` | an orphan has no session-start scroll to restore |
+
+⛔ **Deleting the explicit `resetSwipeStyles` call rests on an ADJACENCY, not on the ghost sweep
+alone — stated at [F6] because the round-1 revision named one of its three effects and left the other
+two implicit.** `Nav.resetSwipeStyles` does three things: (a) sweep `.nav-ghost` (`js/nav.js:105`),
+(b) sweep `.np-pill-float` (`:106`), and (c) clear `transform` / `transition` / `willChange` /
+`zIndex` on every view, **every `.browsepage`**, and the navbar pill (`:107-116`) — effect (c) being
+the "erratic after a while" class the reset exists to prevent. Only (a) dies with D9. **(b) and (c)
+survive because the very next line, `applyScreen(…)` (`js/app.js:482`), reaches
+`resetSwipeStyles(opts && opts.keepGhosts)` as the FIRST statement of `Nav.applyScreen`
+(`js/nav.js:129`)** — so with `keepGhosts` gone that call performs the full reset, once, at the same
+point in the sequence. The row is admissible for that reason and no other. Two consequences: the
+adjacency is recorded in `tools/gen-swipe-model.mjs`'s rewritten prose (§4a C2), and a future edit
+that reorders or short-circuits `js/app.js:482` restores the pill leak — which is why
+`RECOVERYPARITY` gains an assertion that the recovery path sweeps the pill (§10, [F5]).
 
 ⛔ **This is the single most dangerous edit in the pass, and it is dangerous in one specific
 direction.** If `.nav-ghost` is reachable after all, the collapsed form changes `resetScroll` from
@@ -271,20 +334,29 @@ finding four separate times.
 
 | # | Surface | Disposition |
 |---|---|---|
-| D13 | `tools/mutate.mjs` — **de-registered by NAME:** `swipe6e DP/attribution: disposeOwnedPanes' own filter never matches…`, `swipe6e BR: disposeOwnedPanes broadens to remove every mover…`, `swipe6e DEC: the .np-pill-float decoration removal is mistakenly guarded behind keepGhosts…`, `swipe6e HR: the recovery keeps ghosts on the ORPHAN branch too…`, `r223 4: endOwnership clears at finalize, ignoring revealPending…`, `stage6a F1: orphan sub-case forces resetScroll:false, dropping home scroll-to-top…`, `stage6i SCOPE: the commit→home held-reveal branch is reinstated…` | Each names a subject this pass deletes. ⛔ `stage6i SCOPE` is **already broken at HEAD** and its removal is a repair, not a loss: its replacement text calls `holdGhostUntilPaintable`, deleted in step 10, so the mutant now produces a `ReferenceError` and would be recorded CAUGHT for the wrong reason. Recorded because a mutant that reddens for the wrong reason is indistinguishable from a working one in the sweep output. |
-| D13b | `tools/mutate.mjs` — **re-anchored, NOT dropped:** `swipe: begin() stops hard-resetting a superseded session (-> I2/I20 pane test)` | Its subject — that `begin()` hard-resets leftover state — survives the collapse. Only its anchor text changes. |
-| D13c | `tools/mutate.mjs` — **kept unchanged:** `S2-23 NOGHOSTATALL: the app-ghost branch is re-added for browse->browse…` | It mutates `js/swipe.js` and reddens a fake-env unit cell; nothing in `js/app.js` is on its path. |
-| D14 | **Cells deleted:** all of `test/swipe-stage6e.test.js` (`DP.browse-home`, `BR`, `HR`, `DEC` — every one's subject is `disposeOwnedPanes`, the orphan branch, or the `keepGhosts` guard); `test/swipe-stage6.test.js`'s `OB` and `OB-home`; the `.nav-ghost` sweep cell in `test/nav.test.js`; `test/swipe-stage5-wiring.test.js`'s `F2-r WIRING` cell | ⛔ `OB-home` is the only cell proving `resetScroll` defaults to `true` on the orphan path (pre-6a parity). It is deleted because the path is deleted, and that is admissible **only** because `NOGHOSTCLASS` holds the path unreachable. This is the one place in the pass where a deletion removes a witness rather than a redundancy, and it is named so the coverage audit does not have to rediscover it. |
-| D15 | **Vacuous assertions removed:** the `ghosts(h) === 0` helper and its uses in `test/swipe-stage6c.test.js` (three), `test/swipe-invariants.test.js`, `test/swipe-stage5-residuals.test.js` and `test/swipe-stage6.test.js` | Each asserts a count that is now zero by construction. `test/swipe-construction.test.js`'s `.nav-ghost` assertions are **kept**: they run against the SEAM with a fake document, where the seam could still mount one, so they are not vacuous. |
+| D13 | `tools/mutate.mjs` — **de-registered by NAME:** `swipe6e DP/attribution: disposeOwnedPanes' own filter never matches…`, `swipe6e DEC: the .np-pill-float decoration removal is mistakenly guarded behind keepGhosts…`, `swipe6e HR: the recovery keeps ghosts on the ORPHAN branch too…`, `r223 4: endOwnership clears at finalize, ignoring revealPending…`, `stage6a F1: orphan sub-case forces resetScroll:false, dropping home scroll-to-top…`, `stage6i SCOPE: the commit→home held-reveal branch is reinstated…` | Each names a subject this pass deletes. ⛔ `stage6i SCOPE` is **already broken at HEAD** and its removal is a repair, not a loss: its replacement text calls `holdGhostUntilPaintable`, deleted in step 10, so the mutant now produces a `ReferenceError` and would be recorded CAUGHT for the wrong reason. Recorded because a mutant that reddens for the wrong reason is indistinguishable from a working one in the sweep output. |
+| D13b | `tools/mutate.mjs` — **re-anchored or REPLACED, not dropped:** `swipe: begin() stops hard-resetting a superseded session (-> I2/I20 pane test)` is **re-anchored** (its subject — that `begin()` hard-resets leftover state — survives the collapse; only its anchor text changes). `swipe6e BR: disposeOwnedPanes broadens to remove every mover regardless of own` is **replaced, not de-registered [F5]** — its cell moves and survives (D14b), so a new mutant is registered against the surviving mechanism: the style reset is broadened to REMOVE the elements it clears rather than clearing them | A relocated cell with no mutant is a cell whose ability to fail stops being demonstrated at exactly the moment its rationale changes. The replacement targets the mechanism that now guarantees the property, which is the style reset, not the retired ownership filter. |
+| D13c | `tools/mutate.mjs` — **kept, with its expected killer set recorded [F9]:** `S2-23 NOGHOSTATALL: the app-ghost branch is re-added for browse->browse…` | It mutates `js/swipe.js` and reddens a fake-env unit cell. ⚠️ Its replacement text contains **both** retired tokens (`w.className = 'nav-ghost'` and `mover(w, 'owned-pane', 'outgoing')`), and the two new gates scan `js/swipe.js` as well — so after the pass the sweep's `killed by:` list gains `NOGHOSTCLASS` and `NOOWNEDPANE`. Nothing breaks; a caught mutant stays caught. But with audit **M5** (mechanising the designated-killer check) deferred, the expected killer set is written into the mutant's own registration comment in this commit, so "reddens for the right reason" stays checkable by reading — the same hazard this table records one row up for `stage6i SCOPE`. |
+| D14 | **Cells deleted:** `test/swipe-stage6e.test.js`'s `DP.browse-home`, `HR` and `DEC`; `test/swipe-stage6.test.js`'s `OB` and `OB-home`; the `.nav-ghost` sweep cell in `test/nav.test.js`; `test/swipe-stage5-wiring.test.js`'s `F2-r WIRING` cell. **`BR` is NOT deleted — it is relocated [F5]** (next row) | ⛔ `OB-home` is the only cell proving `resetScroll` defaults to `true` on the orphan path (pre-6a parity). It is deleted because the path is deleted, and that is admissible **only** because `NOGHOSTCLASS` holds the path unreachable. `DEC`'s subject — *the recovery path still sweeps the pill float* — is a behaviour that **survives**, so its witness is not deleted but re-homed onto `RECOVERYPARITY`'s fourth assertion (§10, [F5]); the unit-layer `PILLSWEPT` never touches that path and is not a substitute for it. |
+| D14b | **`BR` relocated, not deleted [F5]:** `test/swipe-stage6e.test.js:172-192` ("on a `browse→home` supersession neither borrowed-real mover is ever removed") moves into `test/swipe-stage6.test.js`, beside `OR`/`NC`/`VR`/`PS`, with its rationale rewritten | Its **assertion** is about the borrowed-real views surviving a supersession, which this pass does not change; only its stated *rationale* (the `own` filter) dies. §8's own rule separates those. It is not vacuous either — `resetSwipeStyles` still removes nodes on that path (`js/nav.js:106`), so a broadened sweep would redden it. No other cell covers it: `RECOVERYPARITY` asserts screen, scroll and ordering; `DESTROYEDMOVER` asserts transforms and a null session. With `BR` moved, `test/swipe-stage6e.test.js` is deleted whole — a one-cell file named for a retired stage is worse records hygiene than the move. |
+| D15 | **Vacuous assertions removed:** the `ghosts(h) === 0` helper and its uses in `test/swipe-stage6c.test.js` (three), `test/swipe-invariants.test.js`, `test/swipe-stage5-residuals.test.js` and `test/swipe-stage6.test.js`. ⛔ **`test/swipe-invariants.test.js:426-427` / `:450-451` is NOT in this set — it is RE-ANCHORED [F7]** | Each count assertion is now zero by construction. `test/swipe-construction.test.js`'s `.nav-ghost` assertions are **kept**: they run against the SEAM with a fake document, where the seam could still mount one, so they are not vacuous. The stale-event cell's `ghostEl && ghostEl.style.transform` comparison is **already inert at HEAD** (both sides `null`), and that cell's own header names exactly this assertion as the one whose absence "made the whole test inert" — so deleting it leaves the cell in the state its header records as broken. It is re-anchored onto a **surviving** mover (a `.browsepage`, or `#home`, whose transform a stale `touchmove` would actually write), which restores a witness the pass would otherwise have quietly removed. |
 | D16 | `test/browse-decouple.test.js` — `realSetTimeout`, `realSleep`, `mkGhostEnv` | Addendum A6. No call sites; `eslint.config.js:17` ignores `test/**`, so nothing else catches it. |
-| D16b | **Comment scrubs, in the same commit:** `test/swipe-stage5-residuals.test.js:88-92` (the false "`own` is still load-bearing" note — §1, §6); `test/swipe-construction.test.js:160-168` (names `own` as a production key); `js/app.js:401-407` and `:600-601` (describe a capture recipe and a three-valued `own` that no longer exist) | A comment that describes a deleted mechanism is the same defect as the mechanism, one layer out, and the first of these is a record that actively contradicts D12. |
-| D17 | `docs/swipe-model.generated.txt`, `docs/transition-matrix.generated.txt` | Regenerated in the same commit. Generated inventories that describe deleted branches are the cheapest form of the same defect this pass exists to remove. |
+| D16b | **Comment scrubs, in the same commit — the full list [F4].** In `js/app.js`: **`:437-473`**, the 37-line block that is the prose form of the branch §5 collapses (it describes `disposeOwnedPanes(cur,'superseded')`, the DOM-global `.nav-ghost` sweep, the ORPHAN-pane path and `resetScroll:undefined`'s parity role); `:401-407` (a capture recipe that no longer exists); `:425-427` (the `.spent` fade rationale); `:429-434` (the three-disjunct recovery predicate); `:475-479` (the `keepGhosts` dual-site rationale); `:600-601` (a three-valued `own`); `:693-696` (the held reveal and `holdGhostUntilPaintable`); `:718-726` (the `ghostVsReal` and `fadePanes` tombstones, "its `spent` marking applied to owned-pane movers"); `:761-765` ("the ONLY owned-pane recipe is the app-ghost"). In `js/swipe.js`: `:207` ("the `.nav-ghost` wrapper"), `:254` ("retired the home-snapshot owned-pane outcome"). In `test/`: `test/swipe-stage5-residuals.test.js:88-92` (the false "`own` is still load-bearing" note — §1, §6) and `test/swipe-construction.test.js:160-168` (names `own` as a production key). | **This is the item the round-1 revision under-declared, and `:437-473` is the sharpest case: it is the ARGUMENT for the branch being removed, so leaving it makes HEAD carry a careful justification for code that no longer exists.** D16b's own rule — a comment describing a deleted mechanism is the same defect one layer out — is what condemns it, and `js/app.js:437-473` was not even inside the round-1 declared ranges. Under `NOOWNEDPANE`'s resolution (§10, [F3]) this residue does **not** redden the gate, so the scrub is owed on its own merits and is an explicit exit item, not a gate side-effect. |
+| D16c | **The sweep-exclusion decision for the new purge file, made rather than left to the builder [F8].** `test/retired-concepts-purge.test.js` is **NOT** added to `tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` exclusion list | The exclusion exists for gates that fail under *every* mutation by construction, because the mutation edits the very text they pin. These three cells are not that class: they fire only on a mutant that injects **their own** token, and are inert under all others. Excluding them would make the three §10 ADDITIVE mutants report UNCAUGHT. Recorded because the exclusion list's own rationale ("gates that assert on source text") reads as though it covers them. |
+| D17 | `docs/swipe-model.generated.txt`, `docs/transition-matrix.generated.txt` | Regenerated in the same commit — **after** `tools/gen-swipe-model.mjs`'s prose is rewritten (§4a C2). ⛔ Regeneration alone does **not** discharge this: the ORPHAN prose is hard-coded in the generator, so a regenerate-only step reproduces it verbatim. |
 
 **The mechanical closure for D13.** `test/mutation-anchors.test.js` fails when a registered `from`
 no longer occurs in its target file, so an anchor left behind reddens rather than rotting silently.
 That gate — not this table — is the completeness check: the table names the mutants so the builder
 knows what to expect, and the gate proves none was missed. After the pass, run the full sweep, not
 only the anchors gate: an anchor can still match while its mutant has stopped biting.
+
+⛔ **That closure has a hole, and §4a C3 is it [F2].** `test/mutation-anchors.test.js` imports
+`tools/mutate.mjs`'s `MUTATIONS` **and nothing else**, so `tools/source-gate-sweep.mjs`'s own anchors
+are outside it — and one of them is the line D9 deletes. Neither the anchors gate nor the behavioural
+sweep can see that rot, so `node tools/source-gate-sweep.mjs` is named separately in §11's exit
+condition. A "mechanical closure" that silently excludes one of the two anchor registries is the same
+shape of false comfort as a cell that cannot fail.
 
 ## 9. What must NOT be deleted, and the measured evidence each carries
 
@@ -293,7 +365,8 @@ vestigial and are not.
 
 | Kept | Why, and what would be lost |
 |---|---|
-| `js/nav.js:106` — the `.np-pill-float` sweep | **The retained `npPillClone` is the one owned resource left.** This line is its only sweeper on the recovery path, and it is *unguarded* by `keepGhosts` on purpose — that is what the deleted `DEC` mutant proved. Removing it with the `keepGhosts` machinery would leak a floating pill clone on every superseded Now Playing swipe. §12 item 14's retention clause is about this line and cites the wrong one. |
+| `js/nav.js:106` — the `.np-pill-float` sweep | **The retained `npPillClone` is the one owned resource left.** This line is its only sweeper on the recovery path, and it is *unguarded* by `keepGhosts` on purpose. Removing it with the `keepGhosts` machinery would leak a floating pill clone on every superseded Now Playing swipe. §12 item 14's retention clause is about this line and cites the wrong one. ⚠️ After §5 deletes the explicit `resetSwipeStyles` call, the recovery reaches this line **only** through `applyScreen` → `js/nav.js:129` ([F6]) — a single-path dependency that had no witness once `DEC` was slated for deletion, which is why `RECOVERYPARITY` gains its fourth assertion ([F5]). |
+| The **behaviours** `DEC` and `BR` witness — the recovery path sweeps the pill float; the borrowed-real `#browse`/`#home` survive a supersession | **Both survive the pass; only their stated rationale dies.** Their witnesses are re-homed, not dropped: the first onto `RECOVERYPARITY`, the second by relocating `BR` intact (§8 D14/D14b). Named here because losing a witness in the same commit that removes the code guaranteeing the behaviour is the shape this whole campaign was opened by, and the coverage audit that would catch it runs *after* the build. |
 | `mover.ownership` at the seam | Rule R. It is `NOGHOSTATALL`'s subject. |
 | `constructionPlanFor.outgoing` | Rule R, stated exemption (A8). |
 | `cover.marks` / `mark()` / `cover.writes` / the `window.scrollTo` recorder | The live instruments for R5, the **still-open** repaint-on-abort symptom. They read constant only if the symptom is gone, and nothing has established that. |
@@ -316,15 +389,19 @@ because §5's collapse and §7's ruling *do* depend on it.
 ```vitruvius-coverage
 # id | behavior | fixture | mutation | layer
 NOGHOSTCLASS | no first-party script under js/ writes the retired ghost class to a className or classList or class attribute, so the recovery branch that only that class could arm cannot be re-armed by an edit | gate scan every js file excluding the vendored bundle for a class write whose value contains the retired token, by the same resolution rules the view-clone gate already uses, and fail naming file and line; the fixture must first PROVE it can fire by scanning a synthetic source that contains the write | ADDITIVE inject a class write of the retired token into an existing first-party file so the derived set gains a site and the gate reddens; expected killing cell NOGHOSTCLASS | gate source scan over first-party js
-NOOWNEDPANE | the retired owned-pane ownership literal occurs nowhere under js/, so no mover can be tagged with an ownership kind for which no teardown path remains | gate scan every js file excluding the vendored bundle for the retired ownership literal and fail naming file and line; paired in the same file with the fire-drill precondition so a scan that matches nothing is distinguished from a scan that cannot match | ADDITIVE inject the retired ownership literal into an existing first-party file; expected killing cell NOOWNEDPANE | gate source scan over first-party js
-NOCLB | the two retired clobber identifiers from the stage that removed the runtime build-side-effect byproduct occur nowhere under js/, closing the coverage audit finding that their purge gate was deleted with its file while its subject stayed live | gate the same scan as the two cells above with the two retired identifiers as its registered tokens; the registration list is checked for rot so a token that is no longer meaningful must be removed deliberately rather than left | ADDITIVE inject one of the two retired identifiers into an existing first-party file; expected killing cell NOCLB | gate source scan over first-party js
+NOOWNEDPANE | the retired ownership tag occurs nowhere under js/ AS A STRING VALUE in any quoting form, so no mover can be tagged with an ownership kind for which no teardown path remains, whether the tag is written inline at the call or held in a named constant | gate scan every js file excluding the vendored bundle for a STRING LITERAL in any of the three quoting forms whose content is exactly the retired tag, and fail naming file and line; a bare occurrence in a comment or in an identifier must NOT match, which the fire drill proves with a negative control alongside its positive one | TWO ADDITIVE mutants, one per re-introduction shape. NATURAL-a inject the tag inline at a mover construction site. NATURAL-b inject it as a named module constant that is never referenced, which the inline-only reading would miss. expected killing cell for BOTH is NOOWNEDPANE | gate source scan over first-party js
+NOCLB | the two retired clobber identifiers from the stage that removed the runtime build-side-effect byproduct occur nowhere under js/ IN CODE POSITION, closing the coverage audit finding that their purge gate was deleted with its file while its subject stayed live | gate scan every js file excluding the vendored bundle for either identifier occurring outside comments and outside string literals, and fail naming file and line; a prose mention of the retired concept in a comment must NOT match, because a record explaining why a concept was retired is exactly what should survive, and the fire drill proves that with a negative control | TWO ADDITIVE mutants. NATURAL-a inject a declaration of one identifier into an existing first-party file. NATURAL-b inject a read of the other, so a scan that only sees declarations is caught. expected killing cell for BOTH is NOCLB | gate source scan over first-party js
 MOVERSHAPE | the production mover object the adapter records on the session carries exactly the element reference and the base offset and no third key so a dropped or an orphaned key cannot ship silently | integration drive a real gesture on the app harness and assert the recorded mover key set equals exactly the two-key set by deep comparison rather than by presence checks; it must run at the harness layer and not at the fake-env construction layer because the fake-env layer never executes the adapter mapping at all, which is why the retired key-completeness cell needed a built pane to observe anything | TWO mutants. NATURAL-a the adapter re-adds the retired ownership key so a field with no reader ships again. NATURAL-b the adapter drops the base key so the incoming mover has no offset. expected killing cell for BOTH is MOVERSHAPE | integration app harness over the real adapter
-RECOVERYPARITY | the collapsed leftover-state recovery does exactly what the surviving branch did before the collapse namely suppress the screen reset restore the session-start scroll and release the hold in that order for every entry route that still exists | integration boot the app harness and drive the three surviving entry routes namely a mid-drag second touch and a settling session superseded before finalize and a live drag interrupted by a nav tap and assert for each that the source screen is restored without a re-render that the session-start scroll is written exactly once and that the row hold is released after the screen is applied | THREE mutants. NATURAL-a the collapsed call passes the default screen reset so the recovery scrolls the destination to top. NATURAL-b the session-start scroll restore is dropped. NATURAL-c the hold release is moved ahead of the screen application which dematerializes the kept rows. expected killing cell for ALL THREE is RECOVERYPARITY | integration app harness over the real recovery
+RECOVERYPARITY | the collapsed leftover-state recovery does exactly what the surviving branch did before the collapse namely suppress the screen reset restore the session-start scroll release the hold in that order AND sweep the transient now playing pill decoration for every entry route that still exists | integration boot the app harness and drive the three surviving entry routes namely a mid-drag second touch and a settling session superseded before finalize and a live drag interrupted by a nav tap and assert for each that the source screen is restored without a re-render that the session-start scroll is written exactly once that the row hold is released after the screen is applied AND that a pill float node present at the start of the recovery is gone at the end of it which is the only witness that the recovery still reaches the pill sweep now that the explicit style reset call is deleted and the path runs through the screen application alone | FOUR mutants. NATURAL-a the collapsed call passes the default screen reset so the recovery scrolls the destination to top. NATURAL-b the session-start scroll restore is dropped. NATURAL-c the hold release is moved ahead of the screen application which dematerializes the kept rows. NATURAL-d the screen application is moved after the ownership clear so the recovery no longer reaches the style reset and the pill float survives which is the leak the deleted witness used to catch. expected killing cell for ALL FOUR is RECOVERYPARITY | integration app harness over the real recovery
 DESTROYEDMOVER | a live browse to browse gesture whose two movers are destroyed mid drag by a cache clear still settles leaves no page carrying an inline transform and releases the session so the next touch does not trip the leftover-state hard reset | integration boot the app harness with the real browse renderer and fake timers drive a browse to browse past the direction lock so both movers carry inline transforms then clear the page cache the way the reconnect handler does then advance past the settle and the finalize and assert a settle line was emitted that no page in the document carries a non-empty inline transform and that the active session reads null | THREE mutants one per destruction route. NATURAL-a the page push is dropped from the style reset so a surviving page keeps its transform. NATURAL-b the container wipe route is driven instead of the cache clear. NATURAL-c a mid-gesture screen application with rendering enabled is driven instead. expected killing cell for ALL THREE is DESTROYEDMOVER | integration app harness with the real browse renderer
 PILLSWEPT | the transient now playing pill decoration is still removed by the style reset after the ghost-sweep parameter is deleted so the one owned resource the swipe still creates cannot leak | unit drive the real style reset against the real index fixture with a pill float node present and assert it is removed and separately assert the reset is declared with no parameters so no caller can re-introduce a conditional on it | TWO mutants. NATURAL-a the pill float sweep line is deleted alongside the ghost sweep line which is the exact defect the parent plan's mis-cited retention clause invites. NATURAL-b the reset regains a parameter and guards the pill sweep behind it. expected killing cell for BOTH is PILLSWEPT | unit nav reset against the real fixture
+BORROWEDREALSURVIVES | on a supersession neither borrowed-real view element is ever removed from the document so a teardown can never destroy a view the gesture only borrowed | integration the relocated cell drives a browse to home supersession on the app harness and asserts both view elements are the same objects and still connected afterwards its assertion unchanged from the form it has held since the stage that introduced typed ownership only its rationale rewritten because the ownership filter it used to cite no longer exists | NATURAL the style reset is broadened to REMOVE the elements it clears rather than clearing them which is the same defect class the retired ownership filter used to make structurally impossible expected killing cell BORROWEDREALSURVIVES | integration app harness over the real recovery
+STALETOUCH | a touch move belonging to a superseded gesture never writes a transform onto the successor gesture movers and the witness for that is a transform read on an element that still exists after the pass | integration the existing stale-event cell keeps its four count assertions and its transform witness is re-anchored from the retired pane onto a surviving mover namely a browse page or the home view whose transform a stale move would actually write with the before and after values compared on a node that is not null so the comparison can fail | NATURAL the stale move guard is removed so a superseded gesture reaches the move handler and writes onto the successor movers expected killing cell STALETOUCH | integration app harness over the real listeners
 ```
 
-**Seven cells, seventeen mutants.** Every one asserts a **source fact, a key-set fact, a class-state
+**Nine cells, eighteen mutants** — the round-1 revision said seven and seventeen; `BORROWEDREALSURVIVES`
+and `STALETOUCH` are added at [F5] and [F7], and `RECOVERYPARITY` gains a fourth mutant at [F5].
+Recounted rather than incremented. Every one asserts a **source fact, a key-set fact, a class-state
 fact, a call-count fact or a DOM-identity fact** — never a rendered geometry, for the same reason the
 parent plan's §14 gives: jsdom has no layout, paint or scroll anchoring, so a geometry cell here
 could not fail.
@@ -336,15 +413,31 @@ could not fail.
 | D1, D2, D3 | The behaviour that must survive is *nothing* — these are a supplier with no reader and a diagnostic with a constant value. A cell asserting their absence would depend on nothing. The suite's existing FLASH-line cells prove the line still forms. |
 | D4, D5, D7 | Their subjects were no-ops before the deletion, so no behaviour changes and no witness can distinguish before from after. `NOOWNEDPANE` covers the only way they could become live again. |
 | D6 | A device-log format change, not an invariant. §4's note records it; nothing depends on it. |
-| D12 | Covered by `MOVERSHAPE`, which is a migration of an existing cell rather than a new assertion. |
-| D13–D17 | Held by the existing anchors gate and by the full mutation sweep, which is the mechanical completeness check §8 relies on. |
+| D12 | Covered by `MOVERSHAPE`. |
+| D13–D17 | Held by the anchors gate, the full mutation sweep, **and `node tools/source-gate-sweep.mjs`** — three registries, not two ([F2]); §8's closure note records why the first alone is not enough. |
+| **C1, C2 (§4a)** | Held by the existing `test/swipe-model.test.js`, which reddens by construction on the moved hash. **No new cell is owed and none would help:** the risk is not that the gate fails to fire but that the cheapest way to green it is a re-hash. The mitigation is procedural and is written into §11's exit condition as a recorded line-by-line re-verification. Stated plainly because a Coverage Model that answered "gate exists" here would be answering a different question from the one that bites. |
+| **C3, C4 (§4a)** | C3 is held by running the tool (§11). C4 is a probe field with a constant value — D3's argument, and nothing depends on it. |
 
-**The purge file's own hazard, stated because this project has been bitten by it.** A gate that
-names its own forbidden token in a scannable form greens a dirty tree by matching itself, and a
-counting shell idiom can exit nonzero while printing zero. The file must therefore exclude itself by
-**file identity**, not by a path pattern, and every one of its failure paths must be **driven and
-observed to fire** before it is accepted — a fire drill against a synthetic source that contains each
-token. Writing an assertion whose failure path is never executed is the defect being repaired.
+**The purge file's own hazard, stated because this project has been bitten by it — and narrowed at
+[F10] to the part that is real.** The recorded hazard is that a gate naming its own forbidden token
+in a scannable form greens a dirty tree by matching itself. **Here it does not arise**: the scan walks
+`js/` and the gate lives in `test/`, so it cannot match itself under any resolution rule, and the
+registered token literals are out of scan scope for the same reason. The round-1 revision required
+self-exclusion "by file identity"; as specified that clause guards nothing, and an inert clause in the
+header of a gate whose header IS its specification is how a later reader concludes a hazard was
+handled when it was never present. **The clause is replaced by the statement of what actually holds:
+the token registry is data the scan reads, never text the scan walks, and that is true by the scan's
+scope rather than by an exclusion.** If the scope ever widens beyond `js/`, the exclusion becomes owed
+and must be added with a fire drill of its own.
+
+**What does the work is the fire drill, and it is an acceptance condition, not a suggestion.** Every
+one of the three cells' failure paths must be **driven and observed to fire** before the file is
+accepted — a positive control (a synthetic source containing the token in the matched form) *and*,
+for `NOOWNEDPANE` and `NOCLB`, a **negative control** (the same token in a comment), so the two
+resolutions [F3] settled are distinguished by an executed test rather than by a sentence in a header.
+Writing an assertion whose failure path is never executed is the defect being repaired. A related
+recorded failure applies to the implementation: a counting idiom can exit nonzero while printing zero,
+so the pass/fail decision is taken from the collected site list, never from an exit code.
 
 ## 11. Sequence, owners and the exit condition
 
@@ -352,25 +445,37 @@ token. Writing an assertion whose failure path is never executed is the defect b
 
 | # | Step | Owner | State |
 |---|---|---|---|
-| 1 | Stress this plan; verdict forge / temper / scrap. | the plan reviewer | open |
-| 2 | ⛔ **`PLAN-swipe-declone.md` §13 step 10b — the device gate on the shipped Stage-2 form — PASSES.** Not yet run: there is no device verdict for this campaign in `Claude/Zelda/`. | the user | **open, and it gates everything below** |
+| 1 | Stress this plan; verdict forge / temper / scrap. | the plan reviewer | **round 1 TEMPER** (`Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-1ced95d.md`), folded here; round 2 open |
+| 2 | `PLAN-swipe-declone.md` §13 step 10b — the device gate on the shipped Stage-2 form. | the user | **DONE — all six items PASS on build `.306`, 2026-08-04.** It gated everything below and no longer does. |
 | 3 | Strike this plan's promise: **"every item in §4 is unreachable at HEAD, and the §5 collapse changes no behaviour."** Aim at the reachability claims, not at the deletions. | the adversary | open |
 | 4 | Close coverage-audit **M2** — the `pageElFor` throw cell and its `keyFor` sibling negative. Independent of this pass and owed either way. | the test author | open |
-| 5 | Author the seven §10 cells red-first, with the purge file's fire drill run and recorded. `MOVERSHAPE` is a migration of the existing key-completeness cell, not a new file. | the test author | open |
-| 6 | **The subtraction — ONE commit.** D1–D17 together, plus the purge file, plus both regenerated inventories. Bump the build. The frozen spec, the anchors gate and every mutation anchor whose target text goes are edited in the SAME commit; their rot checks redden otherwise. | the builder | open |
+| 5 | Author the nine §10 cells red-first, with the purge file's fire drill — positive **and** negative controls — run and recorded. `MOVERSHAPE`, `NOGHOSTCLASS`, `NOOWNEDPANE`, `NOCLB` and `DESTROYEDMOVER` are new; `RECOVERYPARITY` and `PILLSWEPT` are new; `BORROWEDREALSURVIVES` is the relocated `BR` with a replacement mutant; `STALETOUCH` is the existing stale-event cell re-anchored. ⛔ **There is no key-completeness cell to migrate** — it was deleted in step 10. | the test author | open |
+| 6 | **The subtraction — ONE commit.** D1–D17 together, plus **§4a's four co-changes**, plus the purge file, plus both regenerated inventories. Bump the build. **Edited in the SAME commit:** the frozen spec; `test/mutation-anchors.test.js`'s subjects in `tools/mutate.mjs`; **`test/swipe-model.test.js`'s `VERIFIED.supersession`; `tools/gen-swipe-model.mjs`'s four ORPHAN prose sites; `tools/source-gate-sweep.mjs`'s `begin/supersession` anchor; `tools/fuzz-ui.js`'s ghost field** — every one of these rot checks reddens otherwise. | the builder | open |
 | 7 | **Device re-confirm** (`PLAN-swipe-declone.md` §13 step 11b): `browse→browse` commit and abort, plus the four Stage-1 transitions. Short, and run anyway — the form device-tested is the form that ships, and this commit changes the shipped form even where it cannot change behaviour. | the user | open |
 | 8 | Review the commit; audit the suite; then the records scrub — this plan's status, the parent's §12/§13, the campaign manifest's falsified `note`, the board, the decision log. | the code reviewer, then the coverage auditor, then the assistant | open |
 
-**Why step 2 gates step 6, stated as a cost rather than as ceremony.** If the device gate on the
-shipped Stage-2 form fails, the cheapest repairs available are precisely the branches this pass
-deletes — the abort re-render and the held reveal. Deleting them first does not make the repair
-impossible, but it converts a revert into a re-derivation, and the standing precedent is a stage that
-shipped to the device with three gates unrun and cost days to clean up.
+**Why step 2 gated step 6 — recorded now that it is discharged, because the reason is the transferable
+part.** Had the device gate on the shipped Stage-2 form failed, the cheapest repairs available were
+precisely the branches this pass deletes — the abort re-render and the held reveal. Subtracting first
+would have converted a revert into a re-derivation. It passed on all six items, so **nothing is being
+retained as insurance** and every item in §4 is admitted on its own proof rather than on doubt about
+the stage beneath it.
 
-**Exit condition.** Every §4 and §8 item is gone from HEAD; each was admitted on a stated proof; the
-three purge cells are green and each has been observed to fire; the full suite and the full mutation
-sweep are clean with no `*.mutbak` in the tree; both generated inventories agree with source; and the
-build number moved.
+**Exit condition.** All of the following, and the last three are additions at [F1], [F2] and [F3]:
+
+1. Every §4, §4a and §8 item is discharged in HEAD, each admitted on a stated proof.
+2. The nine §10 cells are green; each purge cell has been **observed to fire** on both its positive
+   and its negative control.
+3. The full suite passes and the **full mutation sweep** is clean, with no `*.mutbak` anywhere in the
+   tree.
+4. **`node tools/source-gate-sweep.mjs` exits 0** — the third anchor registry, invisible to the other
+   two, and the one carrying the supersession fingerprint's only mutation evidence.
+5. **`test/swipe-model.test.js` is green with `VERIFIED.supersession` moved behind a line-by-line
+   re-verification recorded in the build log** — not a re-hash. A green from a pasted hash does not
+   satisfy this condition and is the single most likely way step 6 goes wrong.
+6. Both generated inventories agree with source **and contain no ORPHAN prose**, checked by reading
+   the rendered output rather than by the fact that the generator was re-run.
+7. The build number moved.
 
 ## 12. Risk registry
 
@@ -379,20 +484,37 @@ build number moved.
   (`#home`'s scroll at a reveal) this campaign has already shipped a defect on. Mitigated
   structurally by `NOGHOSTCLASS` and prosecuted by step 3. Residual: a class name assembled at
   runtime, which no textual gate can see.
-- **R2 — a deleted cell was the only witness of a behaviour that SURVIVES.** The pass deletes roughly
-  ten cells. `OB-home` is the known instance and is named in §8; the unknown instances are what the
-  coverage auditor's per-assertion account is for, and that account has caught this class once
-  already this campaign.
-- **R3 — step 6 runs before step 2 and destroys the rollback surface.** Addressed by ordering, and by
-  saying the cost out loud: this is a sequencing risk, not a technical one, so it fails by being
-  convenient rather than by being hard.
+- **R2 — a deleted cell was the only witness of a behaviour that SURVIVES.** ⚠️ **This risk already
+  materialised once, inside this plan, and was caught by review rather than by the plan's own pass.**
+  The round-1 revision named `OB-home` as the single instance and missed two more of the same class:
+  `DEC` (the recovery path sweeps the pill float) and `BR` (the borrowed-real views survive a
+  supersession). Both behaviours survive; only their rationales died. They are re-homed at §8 D14b and
+  §10 [F5]. The lesson is that the "is this a redundancy or a witness?" question has to be asked
+  per-cell against the *behaviour*, never against the mechanism the cell's comment cites — the two had
+  come apart in exactly the cells this pass deletes. The unknown instances remain the coverage
+  auditor's per-assertion account, and that account runs **after** the build, which is why the known
+  ones are named here.
+- **R3 — the fingerprint pin is greened by a re-hash instead of a re-verification [F1].** ⭐ **Replaces
+  the retired rollback-surface risk** (step 10b passed, so nothing is held as insurance). Step 6's
+  commit lands red on `test/swipe-model.test.js` first — before any of the twelve deletions surfaces —
+  and the cheapest way to green a hash mismatch is to paste the new hash. That is precisely the weak
+  link the frozen model exists to close, and it would ship a generated model still documenting a
+  branch the same commit deleted. Mitigated by making the recorded re-verification an exit condition
+  (§11 item 5) rather than a step, and by putting the generator's prose on step 6's list (§4a C2).
 - **R4 — a mutant is de-registered whose subject actually survives.** The anchors gate proves an
   anchor still matches; it does not prove the mutant still bites. Step 6's exit requires the **full
   sweep**, not the anchors gate alone.
-- **R5 — the purge gate is written so it cannot fire.** Four recorded ways to green a dirty tree,
-  including a gate that spells its own forbidden token. Addressed by the fire drill in §10 being an
-  acceptance condition rather than a suggestion.
-- **R6 — the device-log format change (D6) is noticed later as a regression.** Low, and cheap to
+- **R5 — the purge gate is written so it cannot fire, or is narrowed until it cannot see a real
+  re-introduction [F3].** Two distinct failures with one cause: an unspecified match rule. The second
+  is the likelier and the quieter — an author who meets a red `NOOWNEDPANE` at step 5 cannot tell a
+  working fixture from undeleted residue, and the cheapest resolution is to narrow the match, leaving
+  one gate that resolves *writes* beside one that matches *strings*. Addressed by §10 stating each
+  cell's resolution explicitly, by D16b scrubbing the residue on its own merits so a red cannot be
+  ambiguous, and by the fire drill's **negative** control making the chosen rule an executed fact.
+- **R6 — `node tools/source-gate-sweep.mjs` is never run, and its rot surfaces the next time someone
+  needs the supersession fingerprint's mutation evidence [F2].** Which, on the standing pattern, is
+  the moment they can least afford it. Addressed by §11 exit item 4.
+- **R7 — the device-log format change (D6) is noticed later as a regression.** Low, and cheap to
   avoid: named in the build log and on the board in the same commit.
 
 ## 13. Decisions this plan settles
@@ -419,6 +541,32 @@ build number moved.
 6. **`PLAN-swipe-declone.md` §12 item 14's retention clause cites the wrong line.** The `.np-pill-float`
    sweep is `js/nav.js:106`; line 105 is the `.nav-ghost` sweep and is a clean deletion. The parent
    plan is corrected at step 8, not here.
+7. **Each purge cell's match rule is chosen to fit what its token IS, not applied uniformly [F3].**
+   The review posed two readings — bare token or quoted literal — and both are wrong as a blanket
+   rule: the first reddens on comment residue, the second is strictly weaker than `NOGHOSTCLASS`,
+   which resolves the *write*. The tokens are three different kinds of thing, so they get three rules.
+   **`nav-ghost` is a CSS class** ⇒ resolve the class write. **`owned-pane` is a tag VALUE** ⇒ match a
+   string literal in any quoting form whose content is exactly the tag, which catches both the inline
+   form and the named-constant form, because the literal has to exist somewhere for a mover to carry
+   that value. **`clobbered` / `sourceWasClobbered` are IDENTIFIERS** ⇒ match a code-position
+   occurrence, outside comments and strings, so that a comment explaining why the concept was retired
+   — exactly the record that *should* survive — does not redden the gate. Each rule's residual is the
+   same one `NOGHOSTCLASS` already discloses: a value assembled at runtime from fragments escapes a
+   textual scan, and no textual scan can close that.
+8. **`BR` is relocated, not deleted; `DEC`'s behaviour is re-homed onto `RECOVERYPARITY` [F5].** The
+   rule that decides it is §8's own, applied to the *behaviour* rather than to the comment: an
+   assertion survives when what it asserts survives, even when the mechanism its rationale cites is
+   the thing being deleted. `BR` moves into `test/swipe-stage6.test.js` beside the other supersession
+   cells and gets a replacement mutant against the mechanism that now guarantees the property.
+9. **The new purge file is NOT added to the mutation sweep's source-text-gate exclusion list [F8].**
+   That list is for gates that fail under every mutation by construction; these three fire only on a
+   mutant carrying their own token. Excluding them would make their three ADDITIVE mutants report
+   UNCAUGHT — a false clean of exactly the kind the exclusion list was built to prevent.
+10. **The purge file's self-exclusion clause is dropped as inert and replaced by the true statement
+    [F10].** The scan walks `js/`; the gate lives in `test/`; it cannot match itself under any rule.
+    An inert clause in a header that IS the specification teaches a later reader that a hazard was
+    handled when it was never present. What is retained — and made an acceptance condition — is the
+    fire drill, which is the part that does work.
 
 ## 14. Deliberately out of scope, with the consumer named
 
@@ -433,7 +581,14 @@ build number moved.
   parameterised pages.
 - **Coverage-audit M5 — mechanise the designated-killer check in the mutation sweep.** Owner: the
   planner, as tooling. This pass has an interest (it re-registers a lot of mutants) but the change is
-  to `tools/mutation-sweep.mjs`, not to the swipe.
+  to `tools/mutation-sweep.mjs`, not to the swipe. ⚠️ **The deferral now has a stated cost [F9]:**
+  after the pass, `S2-23 NOGHOSTATALL`'s `killed by:` list gains `NOGHOSTCLASS` and `NOOWNEDPANE`,
+  because its replacement text injects both retired tokens into `js/swipe.js` and the new gates scan
+  that file. Nothing breaks — a caught mutant stays caught — but `NOGHOSTATALL`'s evidence stops being
+  uniquely attributable to `NOGHOSTATALL`, which is the "reddens for the wrong reason is
+  indistinguishable from working" hazard this plan already records for `stage6i SCOPE`. The
+  compensating measure costs one line and is in scope: the expected killer set is written into
+  `S2-23`'s registration comment in the same commit (§8 D13c).
 - **Addendum A9 — the read-after-`applyScreen` invariant holds only on non-throwing paths.** A
   comment correction; the code review already owns it.
 - **`text-size-adjust`, the additive-overlay premise, the two disagreeing host vocabularies.** Named

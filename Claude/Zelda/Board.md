@@ -1120,6 +1120,34 @@ only witnesses of behaviours that SURVIVE (the recovery sweeping the pill float;
 non-blocking. Step 10b PASSED on `.306` (`1ced95d`), so the build gate is clear and the plan is the
 only thing holding step 6.
 
+**Step 11 round-1 TEMPER APPLIED (2026-08-04, the planner) — back to the plan reviewer for round 2.**
+All ten findings folded. ⭐ **The deletion set did NOT move**: every reachability proof held under the
+strike, so D1–D12 are unchanged and nothing was added to or removed from what gets deleted. What
+changed is **blast radius and witnesses**. New **§4a — co-changes that are not deletions** carries the
+four surfaces that break or lie when §5 lands and were in no list: C1 `test/swipe-model.test.js`'s
+`VERIFIED.supersession` (the pin covers exactly the collapse region — it moves ONLY behind a recorded
+line-by-line re-verification, never a re-hash), C2 `tools/gen-swipe-model.mjs`'s four hard-coded
+ORPHAN prose sites (regenerating reproduces them verbatim), C3 `tools/source-gate-sweep.mjs`'s
+`begin/supersession` anchor (the fingerprint's only mutation evidence, invisible to the anchors gate
+— `node tools/source-gate-sweep.mjs` is now exit item 4), C4 `tools/fuzz-ui.js:54`'s ghost counter.
+**F3 scan resolution DECIDED — three tokens, three rules, matched to what each token IS:** a retired
+CSS class ⇒ resolve the class WRITE; a retired tag VALUE ⇒ match a string literal in any quoting form
+(catches the named-constant form, which the quoted-at-comparison-site reading misses); retired
+IDENTIFIERS ⇒ code position only, so a comment explaining the retirement does not redden. Each proved
+by a fire drill with a **negative** control. **F5 — two witnesses rescued:** `DEC`'s behaviour (the
+recovery still sweeps the pill float) re-homes onto `RECOVERYPARITY`'s new fourth assertion + mutant;
+`BR` is **relocated intact** into `test/swipe-stage6.test.js` with a replacement mutant, so
+`test/swipe-stage6e.test.js` still goes whole. **F7** — the stale-event transform assertion is
+re-anchored onto a surviving mover, not deleted. **F4** — D16b now lists every comment site including
+`js/app.js:437-473`, the 37-line prose form of the collapsed branch. Coverage **7 cells / 17 mutants →
+9 / 18** (`BORROWEDREALSURVIVES`, `STALETOUCH` added; `RECOVERYPARITY` gains a mutant), recounted not
+incremented. Risk registry: **R3 replaced** — the retired rollback-surface risk gives way to *the
+fingerprint pin is greened by a re-hash*, the likeliest way step 6 goes wrong. Six new DecisionLog
+entries. ⭐⭐ **R2 materialised inside this plan and was caught by review, not by my own pass**: the
+round-1 revision named one deleted-witness instance and missed two of the same class, because the
+question was asked against each cell's stated *mechanism* instead of against its *behaviour* — and
+those two had come apart in exactly the cells this pass deletes.
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.

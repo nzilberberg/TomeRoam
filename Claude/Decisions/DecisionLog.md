@@ -1529,3 +1529,62 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   `tools/mutation-sweep.mjs` deliberately excludes — and its rot is caught only by running that tool.
   Any plan deleting a line in `js/app.js` must check both anchor sets, and `node tools/source-gate-sweep.mjs`
   belongs in the exit condition beside the mutation sweep.
+
+- A RETIRED-TOKEN PURGE GATE MATCHES BY WHAT ITS TOKEN IS, NOT BY ONE UNIFORM RULE — 2026-08-04, the
+  planner, closing plan-review finding F3 on the declone Stage 2 subtraction plan.
+  A bare-token scan reddens on legitimate comment prose; a quoted-literal scan misses a
+  re-introduction routed through a named constant. Neither is right as a blanket rule, because the
+  three retired tokens are three kinds of thing. A retired CSS CLASS is matched by resolving the class
+  WRITE. A retired string TAG VALUE is matched as a string literal in any quoting form whose content
+  is exactly the tag, which catches both the inline form and the named-constant form because the
+  literal must exist somewhere for a value to carry it. A retired IDENTIFIER is matched in CODE
+  POSITION only, outside comments and strings, so a comment explaining why the concept was retired —
+  the record that should survive — does not redden the gate. Every such gate states its rule in its
+  own header and proves it with a fire drill carrying a NEGATIVE control as well as a positive one.
+
+- AN UNSPECIFIED MATCH RULE IS NOT A GAP IN A GATE, IT IS A PRESSURE TO WEAKEN IT — 2026-08-04, the
+  planner, the transferable half of the finding above.
+  A test author who meets a red gate cannot distinguish "the fixture works" from "the tree is dirty",
+  and the cheapest resolution available is to narrow the match. The gate then ships weaker than its
+  sibling and the difference is invisible until a real re-introduction takes the shape the narrowed
+  rule cannot see. Two consequences for any plan that authors a scan gate red-first: state the
+  resolution before the cell is written, and scrub the residue that would make the red ambiguous on
+  its own merits rather than relying on the gate to force it.
+
+- A DELETED CELL'S FATE IS DECIDED BY ITS ASSERTION, NEVER BY THE MECHANISM ITS COMMENT CITES —
+  2026-08-04, the planner, closing plan-review finding F5.
+  An assertion survives when what it asserts survives, even when the mechanism its rationale names is
+  the thing being deleted. Two cells in the declone Stage 2 subtraction were slated for deletion on
+  the strength of their rationale while their behaviour survived: one witnessing that the supersession
+  recovery still sweeps the transient Now Playing pill clone, one witnessing that the borrowed-real
+  views are never removed by a teardown. The first is re-homed onto the recovery-parity cell, the
+  second relocated intact with a replacement mutant aimed at the mechanism that now guarantees it.
+  ⛔ The rationale and the behaviour had come apart in exactly the cells this pass deletes, which is
+  why the question must be asked per cell against the behaviour.
+
+- DELETING A CALL DELETES ALL OF ITS EFFECTS, SO A DELETION IS JUSTIFIED AT ITS FULL SURFACE —
+  2026-08-04, the planner, closing plan-review finding F6.
+  `js/app.js`'s explicit `resetSwipeStyles` call in the leftover-state recovery has three effects: the
+  retired ghost sweep, the `.np-pill-float` sweep, and the inline-style clear over every view and every
+  `.browsepage`. Only the first dies with the subtraction. The other two survive solely because the
+  next statement, `applyScreen(…)`, reaches `resetSwipeStyles` as the FIRST statement of
+  `Nav.applyScreen` (`js/nav.js:129`). That adjacency is the reason the call is deletable, and it is
+  now written down: an edit that reorders or short-circuits that statement restores a resource leak,
+  so the recovery-parity cell asserts the pill sweep on that path.
+
+- THE NEW PURGE GATE IS NOT A MUTATION-SWEEP SOURCE-TEXT EXCLUSION — 2026-08-04, the planner, closing
+  plan-review finding F8.
+  `tools/mutation-sweep.mjs`'s exclusion list is for gates that fail under EVERY mutation by
+  construction, because the mutation edits the text they pin. A token-purge gate is not that class: it
+  fires only on a mutant that injects its own registered token and is inert under all others.
+  Excluding it would make its own ADDITIVE mutants report UNCAUGHT — a false clean of exactly the kind
+  the exclusion list exists to prevent.
+
+- AN INERT SAFETY CLAUSE IN A GATE HEADER IS REMOVED, NOT LEFT AS REASSURANCE — 2026-08-04, the
+  planner, closing plan-review finding F10.
+  The recorded purge-gate hazard is a gate that spells its own forbidden token and greens a dirty tree
+  by matching itself. It does not arise when the scan walks `js/` and the gate lives in `test/`: the
+  gate cannot match itself under any rule. A clause guarding an absent hazard teaches a later reader
+  that a real one was handled. The clause is replaced by the statement of what actually holds — the
+  token registry is data the scan reads, never text it walks — with the note that widening the scan's
+  scope makes the exclusion owed.
