@@ -1710,8 +1710,38 @@ stale, `#13` still killed by `RECOVERYPARITY.pillswept`, `#141` (S2-29 alone) st
 failing)`. Build bumped `2026-08-05.1` → `.2` (comment-only edit to a shipping file, judged CODE
 per the shipping-bump rule's own "in-code comment fixes explicitly included"). **[W78] not
 actioned — it names a tooling gap (the derived co-change tool's surface must extend past
-`tools/mutate.mjs`), owner Vitruvius, not a code fix.** Not committed yet. Next: the user's go to
-commit, or continue straight to apply-review's close (Poirot re-confirms or the coverage auditor).
+`tools/mutate.mjs`), owner Vitruvius, not a code fix.** Committed at `6b25a15`; its SHA recorded at
+`318fc96`. (This paragraph read "Not committed yet" until the coverage audit reconciled it against
+git — filed as that audit's F6.)
+
+**⭐ Step 11 COVERAGE AUDIT DONE (2026-08-05, at `318fc96`) — verdict GAPS_NAMED, two gaps filed,
+neither load-bearing on the deletions.** `Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction.md`.
+All nine §10 cells exist, are green, and **each was driven to red by execution** against its own
+specified mutants; the reachability gates §5's collapse rests on (`NOGHOSTCLASS`, `NOOWNEDPANE`,
+`NOGHOSTATALL`) all fired. Executed, not read: full suite 878/877/0-fail/1-skip ×2;
+`source-gate-sweep.mjs` exit 0 (4/4 anchoring and firing); targeted sweeps of 15 re-derived indices
+at HEAD, 0 uncaught/unapplied/stale; **seven mutants applied by hand**; both halves of C5's
+group-count claim; a positive control for C2's token scan. Tree verified clean after every one.
+⛔ **[W80] F1 (Structural) — SIX of §10's eighteen mutants have no entry in `tools/mutate.mjs`**
+(`NOOWNEDPANE` ×2, `MOVERSHAPE` ×2, `PILLSWEPT` NATURAL-b, `DESTROYEDMOVER` NATURAL-a). Five were
+filed as *owed at step 6* in Curie's own owed-mutant table and never landed; the sixth was never
+filed, because that record's F-5 read §10's `DESTROYEDMOVER` row in its **superseded** round-1 form.
+All six were executed here and all six are CAUGHT by their designated cells — so the cells are sound
+and what is missing is the standing demonstration. **This is the EIGHTH instance of R10's class**,
+one layer in from the seventh: the seventh was anchor *rot inside* the registry, this is the
+registry's *completeness against §10*, and no mechanism in the tree compares the two. **Owner: the
+test author.** ⛔ **[W81] F3 (Gap) — `MOVERSHAPE` asserts less than its stated claim, with an
+executed counterexample:** `own: 'borrowed-real'` (a third key with a CONSTANT value) ships with
+29/29 green. §10 and decision 20 specify a SOURCE assertion over the emitted key set; the shipped
+cell uses a runtime read-recording proxy over the seam-field READ set, so a key not sourced from a
+seam field is invisible. **Owner: the test author.** [W82] F2 (Misleading) — `DESTROYEDMOVER`'s two
+demonstrated mutants (#31, #113) are registered under other cells' names, so it has no designated
+entry of its own. [W83] F5 (Note) — the manifest's `coverage-audit` glob matches BOTH audits and
+neither carries an `-rN` suffix, so **this audit's GAPS_NAMED does not redden the gate**; the earlier
+audit's ADEQUATE clears it (confirmed by running the gate). Owner: the assistant. [W84] F6 (Note) —
+the plan's Status line still reads "RED SUITE AUTHORED"; both records go on step 8's scrub list.
+**Step 7 (device re-confirm) is UNRUN and nothing claims otherwise; step 8 (records scrub) is not
+done.** Next: the user's go — the three test-author findings, or step 7's device gate.
 
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
