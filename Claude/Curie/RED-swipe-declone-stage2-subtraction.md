@@ -18,6 +18,7 @@ Authored against HEAD `d8333b4`
 7. Departures from §10 as written, with the reason
 8. Exit accounting — every §10 cell against its realization
 9. The coverage audit's three gaps, closed — measured (2026-08-05)
+10. Round 2's N2, closed — the same blind spot, one step further (2026-08-05)
 
 ---
 
@@ -405,10 +406,11 @@ BEFORE ANY MUTANT DID.** The first form of the reader tracked bracket depth but 
 so a comma inside a STRING VALUE at the entry's own depth split the key list and the cell would
 have reported a bogus key set. Every case that happened to pass did so because its string sat
 inside a call, one level deeper — the accident that makes a scanner defect invisible: the controls
-someone thinks to write are the ones that sit where the bug is not. The drill is 7 positive
-controls (constant third key, seam-sourced third key, dropped base, dropped element, computed key,
-spread, quoted key), 10 negative controls (including the two same-depth string cases that bit),
-and 2 rot controls (zero sites and two sites both refuse rather than assert over the first).
+someone thinks to write are the ones that sit where the bug is not. **The same accident then
+happened a second time, on comment state — see §10.**
+
+The drill is now 9 positive controls, 13 negative controls and 2 rot controls (zero sites and two
+sites both refuse rather than assert over the first).
 
 ⚠️ **The new test's own honest limit**, stated in the file rather than left to be discovered: a
 source assertion cannot see a key attached elsewhere at runtime, and it reads ONE expression. Its
@@ -464,6 +466,78 @@ would have removed that cell's only evidence.
 - Audit findings **F4** (vacuous assertions and a dead helper in `test/`), **F5** (the
   coverage-audit glob matching two subjects) and **F6** (plan Status and board row disagreeing
   with reality) are untouched here — F4 is routed to a later purge, F5 and F6 to the assistant.
+
+---
+
+## 10. Round 2's N2, closed — the same blind spot, one step further (2026-08-05)
+
+Closing `Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction-r2.md` (verdict **ADEQUATE**)
+finding **N2**. Authored against HEAD `b4c8cee`. Round 2's other findings are not the test
+author's: **N1** routes to the planner, **N3** and **N4** to the assistant at step 8, **N5** to a
+later purge. N1 is deliberately not re-derived here.
+
+⭐⭐ **THE FINDING IS A FALSE ALARM ON CORRECT CODE, WHICH IS THE URGENT DIRECTION.** `scanBalanced`
+tracked quote state and bracket depth but had **no comment state**, so an ordinary apostrophe in a
+line comment — `// the gesture's borrowed element` — opened a phantom quote that never closed and
+the reader mis-read a **correct** two-key literal. The recorded scar is that a gate which fires on
+correct work gets switched off, and this project has lost gates that way three times. A cell that
+reddens on a legitimate reformatting of the adapter gets loosened to unblock, and the property
+goes with it.
+
+⛔⛔ **AND THE DRILL'S OWN NAME ALREADY CLAIMED THE MISSING CONTROL.** The negative test was named
+*"…mis-split by a comma, brace, colon **or comment** inside a value"* and contained no comment case
+at all. That is worse than an unmentioned gap: the name is what a later reader checks instead of
+the array. **The durable rule now stated in the file: when a case is added to that list, it is
+added to the NAME and the ARRAY together.** This is the second instance of the identical accident
+in one cell — the controls someone thinks to write are the ones that sit where the bug is not —
+and it argues the reader's shape, not just its state machine, is the thing to distrust.
+
+### What changed
+
+- `scanBalanced` gains **comment state**, line (`//` to end of line) and block (`/* */`), and its
+  callback signature becomes `onChar(c, depth, inQuote, inComment)`. Comment openers are tested
+  **before** quote openers, so a `'` inside a comment cannot open a quote and a `//` inside a
+  string cannot open a comment; order is the whole separation. Exactly one callback per character
+  is preserved, which the key-extraction indexing depends on.
+- The splitter **drops** comment text rather than accumulating it. Keeping it would put a
+  comment's own colon ahead of the entry's real separator and yield a "key" that is a sentence.
+- The negative drill gains the three controls its name promised — a line comment with an
+  apostrophe, a line comment with a comma, a block comment with a brace and a quote — and its name
+  is corrected to enumerate what it now contains.
+- The positive drill gains the **false-negative half**, which is the reason the fix is comment
+  STATE and not a narrower rule against the false alarm: a third key bracketed by block comments
+  carrying apostrophes, and a third key below a line comment carrying one.
+- Each negative row now asserts `Array.isArray(keys)` **by name** first. Before, a desynchronised
+  reader failed the whole test as a bare `keys is not iterable`, with no indication which case did
+  it — that is exactly how it failed when first reproduced.
+
+### Executed
+
+**Red first.** The three negative controls were added BEFORE the fix and run: `not ok — MOVERSHAPE
+fire drill — NEGATIVE`, failing as `keys is not iterable` — the phantom quote had swallowed the
+literal's closing brace. Reproduced on the real function, not argued.
+
+**The discriminator, measured in both directions.** With the two comment-opener lines disabled and
+everything else final: **13 tests, 11 pass, 2 fail** — the NEGATIVE drill fails on *a LINE COMMENT
+containing an apostrophe* (the false alarm) **and the POSITIVE drill fails on *a third key hidden
+behind BLOCK COMMENTS carrying apostrophes*** (the false negative: a literal with a genuine third
+key read as the clean two-key set and passed). Comment state restored: **13 / 13 / 0 fail.** The
+blind spot cut both ways, which is why it is closed with state rather than with a rule aimed only
+at the alarm.
+
+**Re-swept against the FINAL suite** — a mutation result stops being true when the suite changes.
+Indices re-derived by name against the now-152-entry registry, foreground, `0 uncaught, 0
+unapplied, 0 stale flags` over all seven; no `*.mutbak` or `*.sgbak` left behind:
+
+| Mutant | Result | Killing cells |
+|---|---|---|
+| `S2-39` | CAUGHT, 1 failing | the `MOVERSHAPE` emitted-key-set test **alone** |
+| `S2-35` | CAUGHT, 2 failing | emitted-key-set + read-set |
+| `S2-36` | CAUGHT, 16 failing | all three `MOVERSHAPE` tests; non-discriminating, unchanged |
+| `S2-33` / `S2-34` / `S2-37` / `S2-38` | CAUGHT, 5 / 1 / 1 / 42 failing | unchanged from §9 |
+
+Full suite: **884 / 883 pass / 0 fail / 1 skip** — unchanged in count, because the work added
+controls to existing drill tests rather than new test cases. No build-number bump: `test/` only.
 
 ---
 

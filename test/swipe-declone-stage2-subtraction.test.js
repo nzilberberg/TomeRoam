@@ -184,29 +184,61 @@ function recordAdapterReads() {
 const ADAPTER_DECL = 'const toMover = (m) => ({';
 const CLOSERS = { '{': '}', '(': ')', '[': ']' };
 
-// Scan `s` from `i`, tracking quote and bracket state; calls `onChar(c, depth, inQuote)` per
-// character and returns the index of the balancing closer (or -1).
+// Scan `s` from `i`, tracking bracket depth, QUOTE state and COMMENT state; calls
+// `onChar(c, depth, inQuote, inComment)` once per character and returns the index of the
+// balancing closer (or -1). Exactly one call per character, which the key-extraction below
+// relies on to index into the text it is scanning.
 //
-// ⛔ `inQuote` IS NOT DECORATION — the drill below caught its absence. The first form of this
-// reader passed depth alone, so a separator inside a STRING VALUE at the entry's own depth split
-// the key list and the cell read a bogus key set. Every case that happened to pass did so
-// because its string sat inside a call, one level deeper — the exact accident that makes a
-// scanner defect invisible: the controls someone thinks to write are the ones that sit where the
-// bug is not.
+// ⛔ NEITHER `inQuote` NOR `inComment` IS DECORATION, and the SAME accident produced both. Each
+// was absent once and each was found by adding the control that sat where the bug was, not by
+// reading:
+//
+//   inQuote   — without it, a separator inside a STRING VALUE at the entry's own depth split the
+//               key list. Every case that passed did so because its string sat inside a call,
+//               one level deeper.
+//   inComment — without it, an ordinary apostrophe in a LINE COMMENT ("the gesture's borrowed
+//               element") opened a phantom quote that never closed, and the reader mis-read a
+//               CORRECT literal. This one is the worse half: its failure mode is a FALSE ALARM
+//               on correct code, and a gate that fires on correct work gets switched off. This
+//               project has lost gates that way three times.
+//
+// ⛔⛔ AND THE DRILL'S NAME ALREADY CLAIMED THE SECOND ONE. The negative test was named "…comma,
+// brace, colon or comment inside a value" and contained no comment case at all. A control named
+// but not written is worse than one never mentioned, because the name is what a later reader
+// checks. When adding a case to that list, add it to the NAME and the ARRAY together.
+//
+// ⚠️ STATED LIMIT: a `/` that begins neither `//` nor `/*` is passed through as ordinary code, so
+// this reader does not distinguish division from a regex literal. The expression it reads is an
+// object literal of element references and numeric offsets; if that ever stops being true, this
+// is the assumption to revisit.
 function scanBalanced(s, i, onChar) {
-  let depth = 0, quote = null;
+  let depth = 0, quote = null, comment = null;
   for (let j = i; j < s.length; j++) {
     const c = s[j];
-    if (quote) {
-      if (c === '\\') { onChar(c, depth, true); onChar(s[++j], depth, true); continue; }
-      if (c === quote) quote = null;
-      onChar(c, depth, true);
+    if (comment === 'line') {
+      onChar(c, depth, false, true);
+      if (c === '\n') comment = null;
       continue;
     }
-    if (c === "'" || c === '"' || c === '`') { quote = c; onChar(c, depth, true); continue; }
-    if (CLOSERS[c]) { depth++; onChar(c, depth, false); continue; }
-    if (c === '}' || c === ')' || c === ']') { onChar(c, depth, false); depth--; if (depth === 0) return j; continue; }
-    onChar(c, depth, false);
+    if (comment === 'block') {
+      onChar(c, depth, false, true);
+      if (c === '*' && s[j + 1] === '/') { onChar('/', depth, false, true); j++; comment = null; }
+      continue;
+    }
+    if (quote) {
+      if (c === '\\') { onChar(c, depth, true, false); onChar(s[++j], depth, true, false); continue; }
+      if (c === quote) quote = null;
+      onChar(c, depth, true, false);
+      continue;
+    }
+    // Comment openers are tested BEFORE quote openers: a `'` inside a comment must not open a
+    // quote, and a `//` inside a string must not open a comment. Order is what separates them.
+    if (c === '/' && s[j + 1] === '/') { comment = 'line'; onChar(c, depth, false, true); onChar('/', depth, false, true); j++; continue; }
+    if (c === '/' && s[j + 1] === '*') { comment = 'block'; onChar(c, depth, false, true); onChar('*', depth, false, true); j++; continue; }
+    if (c === "'" || c === '"' || c === '`') { quote = c; onChar(c, depth, true, false); continue; }
+    if (CLOSERS[c]) { depth++; onChar(c, depth, false, false); continue; }
+    if (c === '}' || c === ')' || c === ']') { onChar(c, depth, false, false); depth--; if (depth === 0) return j; continue; }
+    onChar(c, depth, false, false);
   }
   return -1;
 }
@@ -218,7 +250,11 @@ function adapterEmittedKeys(src) {
   const open = src.indexOf(ADAPTER_DECL) + ADAPTER_DECL.length - 1;   // the literal's own `{`
   const parts = [];
   let cur = '';
-  const end = scanBalanced(src, open, (c, depth, inQuote) => {
+  const end = scanBalanced(src, open, (c, depth, inQuote, inComment) => {
+    // Comment text is dropped rather than accumulated, so an entry's text is comment-free by the
+    // time its key is derived. Keeping it would put a comment's own colon ahead of the entry's
+    // real separator and yield a "key" that is a sentence.
+    if (inComment) return;
     if (!inQuote && depth === 1 && c === ',') { parts.push(cur); cur = ''; return; }
     cur += c;
   });
@@ -231,8 +267,8 @@ function adapterEmittedKeys(src) {
       // The separator is the first colon at the ENTRY's own depth — not `indexOf(':')`, which a
       // computed key or a ternary inside a nested call would capture instead.
       let seen = 0, colon = -1;
-      scanBalanced('{' + p + '}', 0, (c, depth, inQuote) => {
-        if (!inQuote && depth === 1 && c === ':' && colon === -1) colon = seen;
+      scanBalanced('{' + p + '}', 0, (c, depth, inQuote, inComment) => {
+        if (!inQuote && !inComment && depth === 1 && c === ':' && colon === -1) colon = seen;
         seen++;
       });
       const raw = colon <= 0 ? p : p.slice(0, colon - 1).trim();
@@ -283,6 +319,13 @@ test('MOVERSHAPE fire drill — POSITIVE: every emitted-key defect shape is repo
     ['a COMPUTED key name, which no identifier scan would see', " el: m.element, base: baseOf(m.slot), [KIND]: 1 }", ['[KIND]', 'base', 'el']],
     ['a SPREAD, which makes the key set unknowable at all', ' el: m.element, base: baseOf(m.slot), ...m.extra }', ['...m.extra', 'base', 'el']],
     ['a QUOTED third key name', " el: m.element, base: baseOf(m.slot), 'own': 1 }", ['base', 'el', 'own']],
+    // ⭐ THE FALSE-NEGATIVE HALF of the comment defect, and the reason the fix is comment STATE
+    // rather than a rule that only stops the false alarm. Without comment state the apostrophes
+    // in these comments put the separating comma inside a phantom quote, so a literal carrying a
+    // genuine third key read as the clean two-key set and PASSED. A blind spot cuts both ways:
+    // it cries wolf on correct code AND waves through the defect the cell exists to catch.
+    ['a third key hidden behind BLOCK COMMENTS carrying apostrophes', " el: m.element, /* the slot's offset */ base: baseOf(m.slot), /* and it's orphaned */ own: 1 }", ['base', 'el', 'own']],
+    ['a third key below a LINE COMMENT carrying an apostrophe', "\n        el: m.element,\n        base: baseOf(m.slot),   // the slot's offset\n        own: 'borrowed-real',\n      }", ['base', 'el', 'own']],
   ];
   for (const [label, literal, expected] of cases) {
     const { sites, keys } = adapterEmittedKeys(drillSrc(literal));
@@ -294,7 +337,7 @@ test('MOVERSHAPE fire drill — POSITIVE: every emitted-key defect shape is repo
   }
 });
 
-test('MOVERSHAPE fire drill — NEGATIVE: a clean two-key literal is never mis-split by a comma, brace, colon or comment inside a value', () => {
+test('MOVERSHAPE fire drill — NEGATIVE: a clean two-key literal is never mis-split by a comma, brace, colon, quote, line comment or block comment inside it', () => {
   const clean = [
     ['the real shape', ' el: m.element, base: baseOf(m.slot) }'],
     ['a comma inside a STRING value, nested one level in a call', " el: m.element, base: f('a, b') }"],
@@ -311,10 +354,24 @@ test('MOVERSHAPE fire drill — NEGATIVE: a clean two-key literal is never mis-s
     ['a trailing comma', ' el: m.element, base: baseOf(m.slot), }'],
     ['written across LINES', '\n        el: m.element,\n        base: baseOf(m.slot),\n      }'],
     ['a quoted key name on the CLEAN shape', " 'el': m.element, \"base\": baseOf(m.slot) }"],
+    // ⭐ The three below are the cases this test's NAME already promised and did not contain. A
+    // comment is the one place a lone apostrophe or quote mark is ordinary English rather than a
+    // string delimiter, so a reader with quote state but no comment state opens a phantom quote
+    // that never closes and mis-reads a CORRECT literal from that point on.
+    ['a LINE COMMENT containing an apostrophe', "\n        el: m.element,          // the gesture's borrowed element\n        base: baseOf(m.slot),\n      }"],
+    ['a LINE COMMENT containing a comma', '\n        el: m.element,          // the element, borrowed\n        base: baseOf(m.slot),\n      }'],
+    ['a BLOCK COMMENT containing a brace and a quote', ' el: m.element, /* the slot\'s offset: { x } */ base: baseOf(m.slot) }'],
   ];
   for (const [label, literal] of clean) {
     const { sites, keys } = adapterEmittedKeys(drillSrc(literal));
     assert.equal(sites, 1, `${label}: the drill fixture must present exactly one adapter site`);
+    // Named per row, because a null key set here means the reader never found the closing brace —
+    // a phantom quote or an unterminated comment swallowed it. Without this, the row fails as a
+    // bare `keys is not iterable` and the reader has to work out WHICH case did it.
+    assert.ok(Array.isArray(keys),
+      `${label}: the reader lost the literal's closing brace and returned no key set at all. `
+      + 'On a CLEAN literal that means its own state machine desynchronised — a quote or comment '
+      + 'it opened was never closed.');
     assert.deepEqual([...keys].sort(), ['base', 'el'],
       `${label}: a clean two-key literal must read as exactly { el, base }. A false POSITIVE here `
       + 'is how a correct cell gets switched off; a scanner that cries wolf is removed, and the '

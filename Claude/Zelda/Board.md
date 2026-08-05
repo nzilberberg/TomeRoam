@@ -1768,6 +1768,31 @@ reddening; and nothing compares a registration's *stated* killers against its *m
 which is what let `#13` rot. **[W83] F5 and [W84] F6 remain open (the assistant, step 8); F4
 remains routed to a later purge.** Next: the user's go — step 7's device gate, or step 8's scrub.
 
+**⭐ Round-2 coverage audit ADEQUATE (`b4c8cee`), and its one test-author finding N2 is CLOSED
+(2026-08-05, authored at `b4c8cee`).** `Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction-r2.md`
+→ `Claude/Curie/RED-swipe-declone-stage2-subtraction.md` §10. **N2 was a FALSE ALARM ON CORRECT
+CODE**, which is the urgent direction: the emitted-key-set reader tracked quote state but had no
+COMMENT state, so an ordinary apostrophe in a line comment (`// the gesture's borrowed element`)
+opened a phantom quote and the cell reddened on a correct, correctly-reformatted adapter. The
+recorded scar is that a gate firing on correct work gets switched off — this project has lost
+gates that way three times. ⛔⛔ **The negative drill's NAME already claimed the missing control**
+("…comma, brace, colon **or comment** inside a value") and contained no comment case — worse than
+an unmentioned gap, because the name is what a later reader checks. **This is the SECOND instance
+of the identical accident inside one cell** (the first was quote state, caught by the drill before
+any mutant). Closed with comment state (line + block, openers tested before quote openers,
+comment text dropped from entry text) and the three controls the name promised, plus the
+false-NEGATIVE half. **Measured in both directions:** with comment state disabled, 13 tests / 11
+pass / **2 fail** — the negative drill fails on the apostrophe case (the false alarm) AND the
+positive drill fails on a third key hidden behind block comments (a real orphaned key reading as
+clean). Restored: 13 / 13. Re-swept against the final suite, indices re-derived by name over the
+152-entry registry: `S2-33`…`S2-39` all CAUGHT, `0 uncaught / 0 unapplied / 0 stale flags`;
+`S2-39` still killed by the emitted-key cell **alone**. Suite **884 / 883 / 0 fail / 1 skip**; no
+bump (`test/` only). Durable rule now stated in the file: **a case added to a drill list is added
+to the NAME and the ARRAY together.** ⛔ **N1 is the planner's** (§10 `MOVERSHAPE`'s behaviour
+sentence over-claims against its own fixture sentence) and was deliberately not re-derived here;
+**N3 and N4 are the assistant's at step 8** — N3 notes the new manifest reports `red-suite`,
+`build` and `adversary` red on verdict-token grounds, not coverage; **N5** carries F4 forward.
+
 **⭐ Step 11 coverage audit ROUND 2: ADEQUATE — the suite spans §10 and every designated mutant is
 registered and executed.** `Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction-r2.md` (audited
 at `d4ae127`; supersedes the round-1 file, which is not edited — the `-rN` suffix makes
