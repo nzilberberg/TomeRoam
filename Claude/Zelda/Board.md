@@ -1148,6 +1148,26 @@ round-1 revision named one deleted-witness instance and missed two of the same c
 question was asked against each cell's stated *mechanism* instead of against its *behaviour* — and
 those two had come apart in exactly the cells this pass deletes.
 
+**Step 11 plan review round 2 — TEMPER (2026-08-04, the plan reviewer, review HEAD `5a1d977`).**
+`Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-5a1d977-r2.md`. **Owner: the planner.** All five
+round-1 structural resolutions are right in their reasoning; the deletion set is byte-for-byte
+unchanged and was not re-struck. F4 holds clean. F3's three per-token scan rules are sound and the
+`owned-pane` "the literal must exist somewhere" completeness claim survives the strike — the
+named-constant form matches, and the tree carries zero such literals once the four comparison sites
+go. Three residuals block. **R1:** `tools/source-gate-sweep.mjs` is **already red at HEAD** on its
+`transition branches` entry, whose anchor `const incomingBrowse = !toOv && toV !== 'home';` left
+`js/app.js` at `14257f2` (stage 4, "retire the branch mirror"), so the new exit item 4 is
+unsatisfiable — and `test/transition-matrix.test.js`'s fingerprint has had no mutation evidence for
+nine stages, the same hole C3 closes one entry over. **R2:** `RECOVERYPARITY`'s new NATURAL-d cannot
+produce its stated effect — moving `applyScreen` later still executes it, and `js/nav.js:129` →
+`:106` sweeps the pill unconditionally, so it reddens on hold-ordering (NATURAL-c's subject) and the
+re-homed `DEC` witness ships undemonstrated; the mutant that bites REMOVES the call. **R3:** C2's
+"four sites" is short by one (`tools/gen-swipe-model.mjs:471`, "orphan disposal"), with `:413`,
+`:491-495` and `DISPOSE_REASONS`' `deepEqual` pin at `test/swipe-model.test.js:272` unruled, and exit
+item 6 is a read-through where a two-line assertion over the already-read rendered output is
+available. R5 (non-discriminating `BORROWEDREALSURVIVES` mutant) and R6 (opposite rulings on
+retirement tombstones) are non-blocking. Next: the planner folds round 2, then the adversary at step 3.
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.

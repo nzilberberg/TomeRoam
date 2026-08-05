@@ -1588,3 +1588,28 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   that a real one was handled. The clause is replaced by the statement of what actually holds — the
   token registry is data the scan reads, never text it walks — with the note that widening the scan's
   scope makes the exclusion owed.
+
+- `tools/source-gate-sweep.mjs` HAS BEEN EXITING NONZERO SINCE STAGE 4 — 2026-08-04, measured at HEAD
+  `5a1d977`. Its `transition branches` entry is anchored on `const incomingBrowse = !toOv && toV !== 'home';`,
+  which left `js/app.js` at commit `14257f2` ("extract classifyTransition() + constructionPlanFor(),
+  retire the branch mirror"). The tool prints `ANCHOR FAILED`, pushes to `uncaught` and exits 1. Nothing
+  runs it, and `test/mutation-anchors.test.js` imports `tools/mutate.mjs` only, so the rot was invisible.
+  `test/transition-matrix.test.js`'s fingerprint therefore holds no runnable mutation evidence.
+
+- MAKING A TOOL AN EXIT CONDITION REQUIRES SWEEPING ALL OF ITS ENTRIES, NOT ONLY THE ONE THE CHANGE
+  BREAKS — 2026-08-04. A plan that repairs one anchor in a multi-entry registry and then requires the
+  registry to exit clean hands the builder a red it did not cause, at the end of the commit, where the
+  cheapest resolution is to drop the exit condition and retire the protection the plan just added.
+
+- A MUTANT MUST BE CHECKED AGAINST THE CODE PATH IT CLAIMS TO BREAK, NOT ONLY AGAINST ITS DESCRIPTION —
+  2026-08-04, from `RECOVERYPARITY` NATURAL-d. "Move the screen application after the ownership clear so
+  the recovery no longer reaches the style reset" does not reach that effect: the call still executes,
+  and `Nav.applyScreen` runs `resetSwipeStyles` as its first statement (`js/nav.js:129`), which sweeps
+  `.np-pill-float` unconditionally (`:106`). The mutant reddens on a different assertion, which is
+  indistinguishable from working in the sweep output. The reachable form removes the call.
+
+- AN ENUMERATION OF SITES IN A GENERATED RECORD IS CHECKED BY A GATE, NOT BY READING — 2026-08-04.
+  `tools/gen-swipe-model.mjs`'s orphan prose was enumerated as four sites and a fifth exists at `:471`.
+  `test/swipe-model.test.js` already reads the rendered output to compare it against the committed file,
+  so asserting that the rendered model carries no reference to a retired branch costs two lines and
+  converts the check from a read-through into a gate.
