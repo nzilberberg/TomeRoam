@@ -11,7 +11,16 @@ Type: plan
   "staged_records":["Claude/Plans/PLAN-swipe-declone.md","Claude/Zelda/Board.md","Claude/Zelda/OBSOLESCENCE-CANDIDATES.md","Claude/Decisions/DecisionLog.md"],
   "blocking_questions":["NOGHOSTCLASS","NOOWNEDPANE","NOCLB","MOVERSHAPE","RECOVERYPARITY","DESTROYEDMOVER","PILLSWEPT"]} -->
 
-Status: **PLAN_READY, round-1 review folded — hand back to the plan reviewer.** This plan executes
+Status: **RATIFIED 2026-08-05 — FORGE at plan-review round 3, cleared to the adversary (§11 step 3).**
+Three rounds, three TEMPERs resolved, then FORGE at `Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-157a2e1-r3.md`.
+⭐ **The deletion set never moved across any round.** Every reachability proof in §4 was struck against
+source in round 1 and confirmed again in rounds 2 and 3; what each round changed was blast radius,
+witnesses, mutant validity and mechanization. The round-3 recommendations (G1–G3) are folded here and
+none blocked. ⛔ **Read R9 before step 3:** every one of those proofs was confirmed by *reading*, and
+this campaign's record is four readings settled only by execution — which is what the adversary is
+commissioned against.
+
+This plan executes
 `PLAN-swipe-declone.md` §13 step 11 against the §12 deletion list. It is subordinate to that plan and
 does not restate it: §12 remains the authoritative inventory, and every row of §4 below cites the §12
 item it discharges.
@@ -234,10 +243,18 @@ nothing has been evidenced by it since stage 4.**
    retired — a within-document contradiction; `tools/source-gate-sweep.mjs`'s header names
    `transition-matrix.test.js` as one of the two fingerprint gates; and `tools/mutation-sweep.mjs`'s
    `SOURCE_TEXT_GATES` reason for that file says it "fingerprints the `js/app.js` transition-branch
-   region". ⚠️ **The exclusion ENTRY itself is not removed** — the gate still derives from `js/nav.js`
-   source text, so it can still fail under an unrelated mutation. Only its stated reason is false, and
-   only the reason is corrected. Deleting the entry on a false premise would re-open the false-CAUGHT
-   hole the exclusion list exists to close.
+   region". ⚠️ **The exclusion ENTRY itself is not removed** — the gate still reddens on mutations
+   unrelated to its own subject, which is the criterion that governs the list ([G3]). Only its stated
+   reason is false, and only the reason is corrected. Deleting the entry on a false premise would
+   re-open the false-CAUGHT hole the exclusion list exists to close.
+   ⛔ **The replacement reason names BOTH channels, not the stronger-sounding one [G2].** The gate
+   derives `SETTINGS_SUBS` from `js/nav.js` source text — and, more consequentially,
+   `tools/gen-transition-matrix.mjs:34` `require`s `js/swipe.js` at module load, so **any** mutant
+   targeting that file can fail it, and registered ones do (`tools/mutate.mjs:452-454`, and `S2-23` at
+   `:1306-1309`). Naming only the `js/nav.js` channel would leave a reason that is true, checkable,
+   and incomplete — **which is precisely how the record this finding corrects survived nine stages:
+   every reader who checked it found it true.** A reason that can be verified without being sufficient
+   is the failure mode, not a wrong reason.
 3. **The lesson is filed, because it is the transferable half.** A gate that advertises a guard it no
    longer has produces exactly this: a tool anchored to the retired guard, excluded from both sweeps,
    red for nine stages, with nobody wrong at any step. It is the same shape as §8's anchor-registry
@@ -391,7 +408,7 @@ finding four separate times.
 | D15 | **Vacuous assertions removed:** the `ghosts(h) === 0` helper and its uses in `test/swipe-stage6c.test.js` (three), `test/swipe-invariants.test.js`, `test/swipe-stage5-residuals.test.js` and `test/swipe-stage6.test.js`. ⛔ **`test/swipe-invariants.test.js:426-427` / `:450-451` is NOT in this set — it is RE-ANCHORED [F7]** | Each count assertion is now zero by construction. `test/swipe-construction.test.js`'s `.nav-ghost` assertions are **kept**: they run against the SEAM with a fake document, where the seam could still mount one, so they are not vacuous. The stale-event cell's `ghostEl && ghostEl.style.transform` comparison is **already inert at HEAD** (both sides `null`), and that cell's own header names exactly this assertion as the one whose absence "made the whole test inert" — so deleting it leaves the cell in the state its header records as broken. It is re-anchored onto a **surviving** mover (a `.browsepage`, or `#home`, whose transform a stale `touchmove` would actually write), which restores a witness the pass would otherwise have quietly removed. |
 | D16 | `test/browse-decouple.test.js` — `realSetTimeout`, `realSleep`, `mkGhostEnv` | Addendum A6. No call sites; `eslint.config.js:17` ignores `test/**`, so nothing else catches it. |
 | D16b | **Comment scrubs, in the same commit — the full list [F4].** In `js/app.js`: **`:437-473`**, the 37-line block that is the prose form of the branch §5 collapses (it describes `disposeOwnedPanes(cur,'superseded')`, the DOM-global `.nav-ghost` sweep, the ORPHAN-pane path and `resetScroll:undefined`'s parity role); `:401-407` (a capture recipe that no longer exists); `:425-427` (the `.spent` fade rationale); `:429-434` (the three-disjunct recovery predicate); `:475-479` (the `keepGhosts` dual-site rationale); `:600-601` (a three-valued `own`); `:693-696` (the held reveal and `holdGhostUntilPaintable`); `:761-767` ("the ONLY owned-pane recipe is the app-ghost"). In `test/`: `test/swipe-stage5-residuals.test.js:88-92` (the false "`own` is still load-bearing" note — §1, §6) and `test/swipe-construction.test.js:160-168` (names `own` as a production key). ⛔ **`js/app.js:718-726` and `js/swipe.js:203-210`/`:254` are REMOVED from this list at [R6]** — see the discriminator below. | **This is the item the round-1 revision under-declared, and `:437-473` is the sharpest case: it is the ARGUMENT for the branch being removed, so leaving it makes HEAD carry a careful justification for code that no longer exists.** D16b's own rule — a comment describing a deleted mechanism is the same defect one layer out — is what condemns it, and `js/app.js:437-473` was not even inside the round-1 declared ranges. Under `NOOWNEDPANE`'s resolution (§10, [F3]) this residue does **not** redden the gate, so the scrub is owed on its own merits and is an explicit exit item, not a gate side-effect. |
-| D16c | **The sweep-exclusion decision for the new purge file, made rather than left to the builder [F8].** `test/retired-concepts-purge.test.js` is **NOT** added to `tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` exclusion list | The exclusion exists for gates that fail under *every* mutation by construction, because the mutation edits the very text they pin. These three cells are not that class: they fire only on a mutant that injects **their own** token, and are inert under all others. Excluding them would make the three §10 ADDITIVE mutants report UNCAUGHT. Recorded because the exclusion list's own rationale ("gates that assert on source text") reads as though it covers them. |
+| D16c | **The sweep-exclusion decision for the new purge file, made rather than left to the builder [F8], under the criterion stated at [G3].** `test/retired-concepts-purge.test.js` is **NOT** added to `tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` exclusion list | ⭐ **The operative criterion is "does it redden on a mutation UNRELATED to its own subject?", not "does it redden on every mutation".** The list's header says the latter and the list's own measurement-derived entry says the former — `scroll-writer-set.test.js`'s reason records that it *"appeared as `killed by` on mutation #93 … which has nothing to do with the writer-set invariant"*. Under the header's wording, decisions 9 and 11 look like two different rules; under the measured one they are a single rule applied twice. **The purge file fires only on a mutant carrying its own registered token and is inert under every other, so it is excluded from the exclusion** — putting it in would make its three ADDITIVE mutants report UNCAUGHT, a false clean of exactly the kind the list exists to prevent. The header's overstated wording is corrected in the same commit so the list stops reading as false against its own entries. |
 | D17 | `docs/swipe-model.generated.txt`, `docs/transition-matrix.generated.txt` | Regenerated in the same commit — **after** `tools/gen-swipe-model.mjs`'s prose is rewritten (§4a C2). ⛔ Regeneration alone does **not** discharge this: the ORPHAN prose is hard-coded in the generator, so a regenerate-only step reproduces it verbatim. |
 
 **The tombstone discriminator, and the three sites it takes back off D16b's list [R6].** §13 decision
@@ -502,7 +519,7 @@ could not fail.
 | D12 | Covered by `MOVERSHAPE`. |
 | D13–D17 | Held by the anchors gate, the full mutation sweep, **and `node tools/source-gate-sweep.mjs`** — three registries, not two ([F2]); §8's closure note records why the first alone is not enough. |
 | **C1 (§4a)** | Held by the existing `test/swipe-model.test.js`, which reddens by construction on the moved hash. **No new cell is owed for the HASH and none would help:** nothing can mechanically distinguish a re-verified pin from a pasted one, so exit item 5 is correctly a discipline. |
-| **C2 (§4a)** | ⭐ **MECHANIZED at [R3] — one new assertion, not a read-through.** The round-1 revision argued no cell would help; that was right about the hash and **wrong about the consequence**, and `:471` is the standing proof — an enumeration short by one, missed while reading the two lines beneath it. `test/swipe-model.test.js` already reads the rendered output (`assert.equal(lf(gen.render()), committed)`), so a sibling assertion goes beside it: **the rendered model contains no occurrence of `orphan`, case-insensitive.** That is exactly the retired concept and it catches all four generator sites that carry it (`:234`, `:431`, `:471`, `:473`) including the one the read-through missed. The assertion names its authority in its message so a future reader who legitimately needs the word knows the failure is a conversation, not a chore. ⚠️ **Honest limit:** `:416` carries no `orphan` token, so it remains covered by exit item 6's read and by C1's re-verification — the gate mechanizes four of five sites, and saying which is the point. |
+| **C2 (§4a)** | ⭐ **MECHANIZED at [R3], and COMPLETE at [G1] — one new assertion over two tokens, not a read-through.** The round-1 revision argued no cell would help; that was right about the hash and **wrong about the consequence**, and `:471` is the standing proof — an enumeration short by one, missed while reading the two lines beneath it. `test/swipe-model.test.js` already reads the rendered output (`assert.equal(lf(gen.render()), committed)`), so a sibling assertion goes beside it: **the rendered model contains no occurrence of `orphan` and none of `ghost`, both case-insensitive.** `orphan` catches four of C2's five sites (`:234`, `:431`, `:471`, `:473`); `ghost` catches the fifth (`:416`), which is the only site either token misses. **Verified false-positive-free at HEAD:** `ghost` occurs at exactly one line of the rendered model (`:134`) and at exactly one line of the generator (`:416`), and both are that same site — so the pair is complete, minimal, and green the moment C2 is done. Both tokens are this campaign's retired concepts, which is the assertion's authority, and it names that authority in its message so a future reader who legitimately needs either word meets a conversation rather than a chore. **Five of five sites mechanized; nothing in C2 is left to a read.** |
 | **C3, C4 (§4a)** | C3 is held by running the tool (§11). C4 is a probe field with a constant value — D3's argument, and nothing depends on it. |
 
 **The purge file's own hazard, stated because this project has been bitten by it — and narrowed at
@@ -554,7 +571,7 @@ behavioural brace.
 
 | # | Step | Owner | State |
 |---|---|---|---|
-| 1 | Stress this plan; verdict forge / temper / scrap. | the plan reviewer | **round 1 TEMPER** (`Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-1ced95d.md`), folded here; round 2 open |
+| 1 | Stress this plan; verdict forge / temper / scrap. | the plan reviewer | **DONE — FORGE at round 3.** r1 TEMPER (`…-1ced95d.md`), r2 TEMPER (`…-5a1d977-r2.md`), r3 **FORGE** (`…-157a2e1-r3.md`); all folded, G1–G3 non-blocking and applied. The deletion set moved in none of them. |
 | 2 | `PLAN-swipe-declone.md` §13 step 10b — the device gate on the shipped Stage-2 form. | the user | **DONE — all six items PASS on build `.306`, 2026-08-04.** It gated everything below and no longer does. |
 | 3 | Strike this plan's promise: **"every item in §4 is unreachable at HEAD, and the §5 collapse changes no behaviour."** Aim at the reachability claims, not at the deletions. | the adversary | open |
 | 4 | Close coverage-audit **M2** — the `pageElFor` throw cell and its `keyFor` sibling negative. Independent of this pass and owed either way. | the test author | open |
@@ -587,11 +604,11 @@ the stage beneath it.
    re-verification recorded in the build log** — not a re-hash. A green from a pasted hash does not
    satisfy this condition and is the single most likely way step 6 goes wrong. Nothing can mechanize
    this half, which is why item 6 mechanizes the consequence instead.
-6. **The rendered swipe model carries no `orphan` token**, asserted by a new cell in
-   `test/swipe-model.test.js` beside the one that already compares the rendered output — **not** by a
-   read-through [R3]. Both generated inventories otherwise agree with source. The one C2 site the
-   assertion cannot see (`js/app.js`'s recovery-order paragraph, which carries no such token) is
-   covered by item 5's re-verification, and that limit is stated rather than papered over.
+6. **The rendered swipe model carries neither an `orphan` token nor a `ghost` token**, asserted by a
+   new cell in `test/swipe-model.test.js` beside the one that already compares the rendered output —
+   **not** by a read-through [R3, G1]. The two tokens together cover **all five** C2 sites, and both
+   are verified false-positive-free at HEAD, so no part of C2 rests on reading a 500-line generated
+   document. Both generated inventories otherwise agree with source.
 7. The build number moved.
 
 ## 12. Risk registry
@@ -635,6 +652,19 @@ the stage beneath it.
   at HEAD, so the builder would have met an unattributable red at the end of a fourteen-item commit
   and — by R5's own pattern — dropped the exit item, retiring the protection in the commit that added
   it. Both entries are now dispositioned.
+- ⭐⭐ **R9 — every reachability proof in §4 has been confirmed by READING, three times, and this
+  campaign's record is that four such readings were settled only by execution.** Carried from the
+  round-3 review's closing prediction, because it is the reason the next step is what it is. The
+  gates now cover a great deal: `NOGHOSTCLASS`, `NOOWNEDPANE` and `NOCLB` hold the textual claims
+  structurally; `NOGHOSTATALL` holds the behavioural one; exit item 6 is fully mechanized at [G1];
+  exit item 4 is satisfiable at [R1]. **Exit item 5 — the fingerprint re-verification — is now the
+  one load-bearing step in the pass with no mechanism behind it**, and it is load-bearing precisely
+  over §5's collapse, the edit whose safety rests on a reachability reading. Three review rounds
+  raised the cost of a wrong reading without changing its likelihood, because reading is what has
+  been wrong before. **That is what the adversary is commissioned against at step 3** — not the
+  deletions, which are cheap to undo, but the claim that the collapse changes no behaviour. A plan
+  cannot close this risk; it can only name it and hand it to the seat that settles questions by
+  running them.
 - **R8 — a mutant is registered for an assertion it cannot exercise [R2].** The pass registers
   eighteen mutants and one of them was already this shape after one round of review. Two structural
   answers rather than more care: a mutant's registration states the *mechanism* it perturbs and not
@@ -709,11 +739,27 @@ the stage beneath it.
     named test [R2].** The sweep reports a killing test, not a killing assertion, so a multi-assertion
     cell cannot attribute a kill. The precedent is this project's own park-distance work, which split
     a cell into eight named tests for exactly this reason.
-14. **Exit item 6 is mechanized; exit item 5 cannot be and stays a discipline [R3].** Nothing can
-    distinguish a re-verified fingerprint from a pasted one, so the pin stays procedural. Its
-    *consequence* — a generated model still describing a deleted branch — is a token scan over text a
-    cell already reads, and the standing law is that where a rule can be made structural it is made
-    structural. A five-site enumeration that was short by one after a careful read is the evidence.
+14. **Exit item 6 is mechanized over TWO tokens and is complete; exit item 5 cannot be mechanized and
+    stays a discipline [R3, G1].** Nothing can distinguish a re-verified fingerprint from a pasted
+    one, so the pin stays procedural. Its *consequence* — a generated model still describing a deleted
+    branch — is a token scan over text a cell already reads. `orphan` covers four of C2's five sites
+    and `ghost` covers the fifth; both are verified false-positive-free at HEAD, so **no part of C2
+    is left to a read**. The standing law is that where a rule can be made structural it is made
+    structural, and a five-site enumeration that was short by one after a careful read is the evidence
+    that a read is not a check. ⚠️ Adding the second token was a **one-word** change that closed the
+    last unmechanized site; the round-2 revision had stopped at "four of five, and saying which is the
+    point", which is honest disclosure standing in for an available mechanism.
+15. **The sweep-exclusion list has ONE criterion, and it is the measured one [G3].** *Does the gate
+    redden on mutations unrelated to its own subject?* — not *does it redden on every mutation*, which
+    is what the list's header says and what its own `scroll-writer-set.test.js` entry disproves by
+    citing a specific unrelated mutant. Under the measured criterion, decisions 9 and 11 stop being
+    two rules and become one applied twice. The header is corrected in the same commit.
+16. **A gate-exclusion reason names every channel by which the gate can fail, not the first true one
+    [G2].** The corrected transition-matrix reason names both the `js/nav.js` source-text derivation
+    and the `js/swipe.js` `require` at generator load, the latter being the channel registered mutants
+    actually travel. **This is the generalization of [R1]:** a reason that is true, checkable and
+    incomplete survives indefinitely, because every reader who checks it finds it true. Incompleteness
+    is the failure mode that hides; falsity is the one that gets caught.
 
 ## 14. Deliberately out of scope, with the consumer named
 

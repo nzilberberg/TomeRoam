@@ -1709,3 +1709,31 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   under any mutation", which is false of at least two of its own entries. The criterion that actually
   separates an excluded gate from an included one is written in the `scroll-writer-set.test.js` entry,
   the one added after a measurement.
+
+- A GATE-EXCLUSION REASON NAMES EVERY CHANNEL BY WHICH THE GATE CAN FAIL — 2026-08-05, the planner,
+  closing plan-review round-3 note G2 on the declone Stage 2 subtraction plan.
+  `test/transition-matrix.test.js` can be reddened by a mutation two ways: it derives `SETTINGS_SUBS`
+  from `js/nav.js` source text, and `tools/gen-transition-matrix.mjs:34` `require`s `js/swipe.js` at
+  module load, so any mutant targeting that file fails it — and registered mutants do. A corrected
+  exclusion reason naming only the first channel would have been true, checkable, and incomplete.
+  ⛔ THAT IS THE FAILURE MODE, and it is the generalization of the nine-stage rot this pass found: an
+  incomplete reason survives indefinitely because every reader who checks it finds it true, whereas a
+  false one gets caught. Completeness, not correctness, is the property a reason has to be audited for.
+
+- THE SOURCE-TEXT SWEEP-EXCLUSION LIST HAS ONE CRITERION: THE GATE REDDENS ON MUTATIONS UNRELATED TO
+  ITS OWN SUBJECT — 2026-08-05, the planner, closing plan-review round-3 note G3.
+  `tools/mutation-sweep.mjs`'s header states the criterion as "fails under EVERY mutation by
+  construction", and the list's own measurement-derived entry disproves that wording by citing one
+  specific unrelated mutant (`scroll-writer-set.test.js` appeared as `killed by` on mutation #93). The
+  measured criterion is the operative one. Under it, excluding the transition-matrix gate and NOT
+  excluding a retired-token purge gate follow from a single rule rather than reading as two; the
+  header is corrected so the list stops contradicting its own entries.
+
+- A HONEST DISCLOSURE IS NOT A SUBSTITUTE FOR AN AVAILABLE MECHANISM — 2026-08-05, the planner,
+  closing plan-review round-3 recommendation G1.
+  The plan mechanized four of five generated-prose sites and stated plainly which one it could not
+  reach, treating the disclosure as the discharge. A second token closed the fifth: `ghost` occurs at
+  exactly one line of the rendered swipe model and one line of its generator, and both are that site,
+  so asserting neither `orphan` nor `ghost` is complete and false-positive-free. Naming a residual
+  earns nothing when closing it costs one word. The test is whether a cheaper mechanism exists, not
+  whether the gap was declared.

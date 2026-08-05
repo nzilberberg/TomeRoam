@@ -1229,6 +1229,34 @@ reason names the weaker of two false-CAUGHT channels (`gen-transition-matrix.mjs
 `js/swipe.js` at load), and decisions 9 and 11 apply two different exclusion criteria without stating
 either — the operative one is already written in `scroll-writer-set.test.js`'s own entry.
 
+**⭐ Step 11 plan review round 3: FORGE — the subtraction plan is RATIFIED (2026-08-05), cleared to
+the adversary.** `Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-157a2e1-r3.md` (review at
+`157a2e1`), G1–G3 folded, none blocking. All three round-2 resolutions verified against the artefact.
+**R1 came back stronger than stated:** `test/transition-matrix.test.js` holds exactly three tests, no
+`regionHash`, no pin, no `VERIFIED` map, and the deleted entry's `mustSay` matches none of the three
+titles — so it could never have produced evidence, not merely since stage 4. Exit item 4 confirmed
+satisfiable (four entries remain, all on `APP`, all anchoring); the `KNOWN_ROTTED` discharge is
+structural; the exclusion-entry distinction is right. R2's exclusive attribution was traced mutant by
+mutant — NATURAL-a/-b/-c all leave `applyScreen` executing, so the split test stays green under all
+three and only NATURAL-d reddens it. R3's out-of-scope ruling is judged principled and its token is
+false-positive-free. **G1 closed the last unmechanized site with one word:** `ghost` occurs at exactly
+one line of the rendered model (`:134`) and one of the generator (`:416`) — the very site `orphan`
+misses — so exit item 6 asserts **neither** token and mechanizes **5 of 5**. ⛔ Lesson recorded: an
+honest disclosure of a residual is not a discharge when the mechanism costs one word. **G2** — the
+corrected sweep-exclusion reason names **both** false-CAUGHT channels (`js/nav.js` text, and
+`gen-transition-matrix.mjs:34`'s `require` of `js/swipe.js`, which registered mutants actually
+travel), because R1's whole lesson is that a *true-but-incomplete* reason survives nine stages
+precisely because every reader who checks it finds it true. **G3** — the exclusion list has ONE
+criterion, the measured one already written in its `scroll-writer-set` entry: *reddens on mutations
+unrelated to its own subject*, not *reddens on every mutation*; decisions 9 and 11 then follow from a
+single rule and the list stops reading as false against its own entries. ⭐⭐ **New risk R9, carried
+from Charpy's closing prediction:** three rounds confirmed every reachability proof **by reading**,
+and this campaign's record is four readings settled only by execution. Exit item 5 (the fingerprint
+re-verification) is now **the one load-bearing step with no mechanism behind it**, and it sits over
+§5's collapse. **That is exactly what the adversary is commissioned against at step 3** — not the
+deletions, which are cheap to undo, but the claim that the collapse changes no behaviour. Three new
+DecisionLog entries. **Next: the adversary (§11 step 3), then the test author (steps 4–5).**
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.
