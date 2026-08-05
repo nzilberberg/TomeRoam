@@ -1273,6 +1273,40 @@ restructure, not a text bump: post-collapse #10's text equals #11's, erasing the
 distinguisher the gate's Direction-3 attribution is built on. **Owner: the planner** — add the file
 to §4a/step 6 and specify the #10/#11 shared-text group. Then the test author (steps 4–5).
 
+**⭐⭐ Step 11 ADVERSARY STRIKE (2026-08-05): the promise HELD under execution; ONE FRACTURE, folded.**
+`Claude/Loki/PLAN-swipe-declone-stage2-subtraction-strike-2026-08-05.md` (`f89bd14`), both probes
+filed. **Held:** no first-party producer of the retired class; a six-scenario harness battery
+(mid-drag supersession, settling supersession, armed-only second touch, post-finalize clean entry,
+options-source supersession) entered the recovery with a non-null handle **every time**; the collapsed
+variant's unconditional `cur.scroll0` read — which throws on null — never threw across the battery or
+the 849-test suite; the `resetScroll` axis was behaviourally identical in both forms. ⭐ **The control
+fired:** an *injected* ghost took the orphan branch at HEAD and diverged completely under the collapse,
+so the negative is evidence, not silence. The orphan input is constructible only by injection.
+⛔ **THE FRACTURE — a fifth rot check, on no list:** `test/scroll-writer-set.test.js` `M1WRITERSET`
+baseline **entry #10 registers §5's third ternary by its exact text**, which the collapse rewrites —
+green at HEAD, red under the collapse, so **exit condition 3 was unsatisfiable as enumerated**. The
+plan had cited that file twice, both times only as the source of the sweep-exclusion criterion, never
+as blast radius. **The repair is a restructure, not a text bump:** post-collapse #10's text becomes
+identical to **#11**'s (the abort restore), erasing the containment-nesting Direction 3's attribution
+rule is built on. **RULING — #10 is re-derived into a shared-text GROUP with #11**: the group-count
+direction (which the gate already ships, built for exactly this) still reddens if **either** writer
+vanishes; what is lost is per-site attribution, disclosed and softened by naming both candidates in
+the message. Rejected and recorded: a trailing comment to restore nesting (compensating-constant
+shape; an innocuous edit would then redden a gate whose header forbids the cheap repair) and keying by
+enclosing function (**the better gate** — exact attribution, no rot on edits above — rejected as
+SCOPE, deferred with its consumer named). ⭐⭐ **New risk R10, and a new step:** this is the **THIRD**
+executed instance of the plan's own class *"a deletion list is not the same thing as a blast radius"* —
+rounds 1 and 2 found two by reading and each declared the set complete; the third was found only by
+**running** the collapse, and it is the one that broke an exit condition. **§11 gains step 5b — apply
+the collapse in memory, run the whole suite, and require the failing set to equal the declared radius
+item for item**, as a PRECONDITION of the build (as an exit item it would merely duplicate "the suite
+is green" and find the radius at its most expensive moment). The instrument qualifies as a step because
+it transforms at load time, **writes nothing to disk**, and **throws on a missing or non-unique
+anchor**, so it cannot pass vacuously. Exit condition 0 is the measured-equals-declared check. R9 is
+**materially reduced but retained** — a promise held under the strikes that were run is exactly that.
+**The deletion set did not move.** Four new DecisionLog entries. **Next: the test author (§11 steps
+4–5), then the builder's step 5b.**
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.

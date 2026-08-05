@@ -1737,3 +1737,47 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   so asserting neither `orphan` nor `ghost` is complete and false-positive-free. Naming a residual
   earns nothing when closing it costs one word. The test is whether a cheaper mechanism exists, not
   whether the gap was declared.
+
+- THE TWO DOCUMENT-SCROLL WRITERS BECOME ONE SHARED-TEXT GROUP IN `M1WRITERSET` — 2026-08-05, the
+  planner, folding the adversary's fracture on the declone Stage 2 subtraction plan.
+  The orphan-recovery collapse rewrites `if (cur) window.scrollTo(0, cur.scroll0);` to text identical
+  to the abort path's, erasing the containment-nesting the gate's Direction-3 attribution rule rests
+  on. Baseline entry #10 is re-derived to the bare text, putting it in one group with entry #11, and
+  the group-count direction — which the gate already ships and which was built for exactly this case —
+  still reddens when either writer vanishes. WHAT IS LOST is per-site attribution in the failure
+  message; the entries keep distinct owners and the message names both candidates. The longest-match
+  tie between two identical texts is absorbed by construction, since both keys are identical.
+  ⛔ REJECTED and recorded so they are not rediscovered: adding a trailing comment to restore the
+  nesting (a comment written to satisfy a gate is the compensating-constant shape, and it makes an
+  innocuous edit redden a gate whose header forbids the cheap repair), and keying entries by enclosing
+  function (the better gate — exact attribution, no rot on edits above — rejected as SCOPE, being new
+  derivation machinery at the end of a fourteen-item commit, and deferred with its consumer named).
+
+- A BLAST RADIUS IS MEASURED BY APPLYING THE CHANGE, NOT BY ENUMERATING IT — 2026-08-05, the planner,
+  the transferable half of the fracture above.
+  Three instances of one class in one plan: two co-change surfaces found in review round 1, one in
+  round 2, and a fifth rot check found by the adversary. Each round declared the set complete and each
+  was wrong; the first two were found by reading and the third — the one that made an exit condition
+  unsatisfiable — only by running the change. A plan that deletes a branch therefore APPLIES the
+  transform in memory and runs the whole suite BEFORE the commit, and requires the failing set to
+  equal the declared radius item for item. It is a precondition of the build, not an exit condition of
+  it: as an exit condition it duplicates "the suite is green" and finds the radius at its most
+  expensive moment.
+
+- AN IN-MEMORY TRANSFORM PROBE IS SAFE ENOUGH TO BE A PLAN STEP WHEN IT CANNOT NO-OP AND CANNOT WRITE
+  — 2026-08-05, the planner.
+  The instrument that found the fracture applies the change at module load, touches no file on disk,
+  and THROWS if any replacement anchor is missing or matches more than once. Those three properties
+  are what distinguish it from the mutation-sweep hazard this project has a standing scar about: no
+  applied mutant can survive an interrupted run, and an instrument that silently matched nothing would
+  report a clean radius it never measured. A transform probe lacking either property is a diagnostic,
+  not a gate.
+
+- A PROMISE HELD UNDER EXECUTION IS A RESIDUAL, NOT A CLOSED QUESTION — 2026-08-05, the planner.
+  The adversary drove six scenarios into the leftover-state recovery and the session handle was
+  non-null every time; the collapsed variant's unconditional read, which throws on null, never threw
+  across that battery or the full suite; and the control fired — an INJECTED ghost took the orphan
+  branch at HEAD and diverged completely under the collapse, so the negative is evidence rather than
+  silence. The risk is reduced, not retired: the orphan input remains constructible by injection, and
+  the disclosed residual (a class name assembled at runtime, or a non-first-party injection) is
+  outside every instrument available. The registry keeps the row and states what was measured.

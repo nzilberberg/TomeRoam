@@ -11,7 +11,29 @@ Type: plan
   "staged_records":["Claude/Plans/PLAN-swipe-declone.md","Claude/Zelda/Board.md","Claude/Zelda/OBSOLESCENCE-CANDIDATES.md","Claude/Decisions/DecisionLog.md"],
   "blocking_questions":["NOGHOSTCLASS","NOOWNEDPANE","NOCLB","MOVERSHAPE","RECOVERYPARITY","DESTROYEDMOVER","PILLSWEPT"]} -->
 
-Status: **RATIFIED 2026-08-05 — FORGE at plan-review round 3, cleared to the adversary (§11 step 3).**
+Status: **RATIFIED, adversary struck, ONE FRACTURE FOLDED — cleared to the test author (§11 step 4).**
+`Claude/Loki/PLAN-swipe-declone-stage2-subtraction-strike-2026-08-05.md`. ⭐ **The commissioned claim
+HELD under execution**: no first-party producer of the retired class exists, six driven scenarios all
+entered the recovery with a non-null handle, the collapsed variant's unconditional read never threw
+across the battery or the 849-test suite, and the `resetScroll` axis was behaviourally identical in
+both forms. **The control fired** — an *injected* ghost took the orphan branch at HEAD and diverged
+completely under the collapse — so the negative is evidence rather than silence, and the orphan input
+is constructible only by injection.
+
+⛔ **The fracture is the enumeration, again: a fifth rot check reddens on step 6's commit.**
+`test/scroll-writer-set.test.js`'s `M1WRITERSET` baseline **entry #10 registers §5's third ternary by
+its exact source text**, which the collapse rewrites. The gate is green at HEAD and red under the
+collapse; exit condition 3 was unsatisfiable as enumerated. It is now **§4a C5**, and its repair is a
+baseline **restructure**, not a text bump — §4a C5 carries the design. **The deletion set did not
+move.**
+
+⭐⭐ **This is the THIRD executed instance of this plan's own named class — "a deletion list is not
+the same thing as a blast radius" — and all three were found by RUNNING the collapse, none by
+reading it.** Three review rounds each declared the co-change set complete. §11 gains **step 5b**: the
+collapse is applied in memory and the suite is run *before* the commit, and the measured radius must
+equal the declared one. R10 carries the class.
+
+**RATIFIED 2026-08-05 — FORGE at plan-review round 3.**
 Three rounds, three TEMPERs resolved, then FORGE at `Claude/Charpy/PLAN-swipe-declone-stage2-subtraction-157a2e1-r3.md`.
 ⭐ **The deletion set never moved across any round.** Every reachability proof in §4 was struck against
 source in round 1 and confirmed again in rounds 2 and 3; what each round changed was blast radius,
@@ -108,6 +130,7 @@ remains to be deleted. Two CONFLICTS are declared and resolved below; one GAP is
 | `tools/source-gate-sweep.mjs`'s `begin/supersession (swipe-model)` entry | Live tool; the ONLY runnable mutation evidence for the fingerprint gates, which `tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` deliberately excludes | **GAP, closed at [F2].** Its anchor is `document.querySelectorAll('.nav-ghost.spent')…`, which D9 deletes; `test/mutation-anchors.test.js` reads `tools/mutate.mjs` only, so the rot is invisible to the gate §8 called "the mechanical closure". The entry is re-anchored in §4a and the tool joins §11's exit condition. |
 | `test/transition-matrix.test.js:42-47` — "**The MIRROR IS RETIRED (stage 4).** There used to be a test here pinning a fingerprint of `js/app.js`'s branch region… There is no second copy of the branch logic, so there is nothing to fingerprint and no test to keep here." | HEAD source, read directly | **CONFLICT with the same file's own header, and it decides [R1].** `:12-20` still advertises "TWO THINGS ARE GUARDED: … 2. the region of `js/app.js` the predicate MIRRORS is fingerprinted", thirty lines above the paragraph retiring it. The retirement is the current truth — the file contains no fingerprint assertion. **This is why nine stages of rot went unseen:** the header advertises a guard the file no longer has, `tools/source-gate-sweep.mjs`'s header names that gate as one of two fingerprint gates, and `tools/mutation-sweep.mjs`'s exclusion reason repeats the claim. All three are scrubbed with C3. |
 | `test/mutation-anchors.test.js`'s `KNOWN_ROTTED` exemption for `transition branches`, landed 2026-08-04 at `fad819e`, naming this plan as owner | Live gate, added by the review round | **AGREE, and it is discharged by C3.** The gate reddens on a stale exemption as well as on a new rot, so the exemption is removed in the same commit that removes the entry — which is what makes the discharge structural rather than remembered. |
+| `test/scroll-writer-set.test.js` — the `M1WRITERSET` registered baseline, **entry #10** (`if (cur) window.scrollTo(0, cur.scroll0);`) and **entry #11** (`window.scrollTo(0, cur.scroll0);`) | Live gate, its header forbidding a repair by narrowing | **CONFLICT, found by EXECUTION not by reading, and it is the adversary's fracture.** Entry #10 registers §5's third ternary **by its exact text**, which the collapse rewrites — so the gate is green at HEAD and red under the collapse, and exit condition 3 was unsatisfiable as enumerated. The plan cited this file twice before ([F8], decision 15) and both times only as the source of the sweep-exclusion criterion, never as blast radius. Resolved by re-derivation, not by a text bump: §4a **C5**. |
 | `tools/gen-swipe-model.mjs:257` `DISPOSE_REASONS` and its `deepEqual` pin at `test/swipe-model.test.js:270-274` | Live gate; a **third** swipe-model surface beyond C1's hash and C2's prose | **OUT OF SCOPE, ruled rather than left silent [R3].** It states `PLAN-swipe-reveal.md` §3.4's closed set of *permitted* dispose reasons — a design commitment of the parent plan, not a description of a call site this pass deletes. Retiring it is a records decision about §3.4, owned by the planner alongside Stage B's taxonomy work. Same ruling for `:413` (I17(a)) and `:491-495` (§8 PANE DISPOSAL), and for the same reason. |
 | `tools/fuzz-ui.js:54` — `ghosts: all('.nav-ghost').length` as a probe field | Live diagnostic tool | **AGREE, and it is D3's own argument one file out [F8].** After the pass it is constant 0. §4a. |
 | `PLAN-swipe-declone.md` §13 step 10b — the device gate on the shipped Stage-2 form | Ratified sequence step | **DISCHARGED 2026-08-04: all six items PASS on build `.306`.** §11 step 2 is closed and R3 with it. |
@@ -212,6 +235,49 @@ sees — ahead of all twelve deletions.
 | **C2** | `tools/gen-swipe-model.mjs` — the ORPHAN prose, hard-coded in `render()` | Regenerating the document **reproduces it verbatim.** **FIVE sites, not four [R3]:** the recovery-order paragraph (`:416`, "dispose the old pane / stray ghosts"), the ORPHAN-path sentence (`:431`), the `TERMINATION` row's `pane: 'dispose orphan'` cell (`:234`), the termination footnote's **`orphan disposal` clause (`:471`)**, and that footnote's `resetScroll:d?false:undefined` parity clause (`:473-474`). ⛔ `:471` sits one line above `:473` and the round-1 revision missed it while reading the two lines beneath it — which is the standing proof that a read-through of a 500-line generated document is not a check. | Rewrite all five to describe the post-collapse code: one entry route set, one screen/scroll policy, no orphan sub-case, and `resetSwipeStyles` reached once via `applyScreen` (§5, [F6]). Regenerate afterwards. **The document must describe the code it mirrors after the pass** — a generated model that still documents a deleted branch turns the one file meant to be trustworthy at a glance into the one that has to be cross-checked. **Mechanized at [R3]:** exit item 6 is no longer a read-through — see the assertion below. |
 | **C3** | `tools/source-gate-sweep.mjs` — **two entries, and they need opposite treatments [R1]** | (a) The `begin/supersession (swipe-model)` entry is anchored on `js/app.js:428`, which D9 deletes, so the tool would print `ANCHOR FAILED` and exit nonzero. (b) The `transition branches (transition-matrix + swipe-model)` entry is **already rotted at HEAD and has been for nine stages** — its anchor left `js/app.js` at `14257f2` when the predicate moved into `classifyTransition`, so the tool exits 1 today, before this pass touches anything. | (a) **Re-anchor** onto a behaviour-neutral rewrite of a line that still exists inside the post-collapse region — `const cur = d || session;`, the hard-reset log line and `releaseGesture()` all survive it, and the tool's own header sanctions a log-string change. (b) **DELETE the entry** — see the ruling below. Then remove `test/mutation-anchors.test.js`'s `KNOWN_ROTTED` exemption in the same commit, which that gate enforces by reddening on a stale exemption. |
 | **C4** | `tools/fuzz-ui.js:54` — `ghosts: all('.nav-ghost').length` | Constant 0 after the pass. | Remove the field. This is D3's own argument one file out: a diagnostic field with one constant value is not a measurement. |
+| **C5** | `test/scroll-writer-set.test.js` — the `M1WRITERSET` baseline, entries **#10** and **#11** | **Executed red under the collapse.** #10 registers §5's third ternary by its exact text `if (cur) window.scrollTo(0, cur.scroll0);`; the collapse rewrites it to `window.scrollTo(0, cur.scroll0);` — which is **entry #11's text exactly**. So Direction 2 reddens on the rot, and the textual distinguisher between the recovery writer and the abort writer is erased at the same moment. | **Re-derive #10 into a shared-text GROUP with #11**, and correct the three prose sites the collapse falsifies. The design, and the two options rejected, are below. ⛔ The gate's header forbids repairing a red by narrowing the pattern, so deleting the entry is not available. |
+
+### C5's design — how #10 and #11 stay distinguishable when their source text converges
+
+**The chosen shape: one shared-text group of two, which is the mechanism the gate already ships.**
+`groupKey` is `file + ' || ' + text`, so re-deriving #10 to the bare post-collapse text puts both
+entries in one group, and the gate's three directions then behave as follows:
+
+| Direction | Post-collapse behaviour | Does a silent loss still redden? |
+|---|---|---|
+| 1 — a derived site that is registered by no entry | the recovery site matches #11's text by containment | yes, unchanged |
+| 2 — a registered text that no longer occurs | the text occurs (twice) | correctly quiet; the writer still exists |
+| 3 — a group whose derived count ≠ its registered count | registered 2, derived 2 | ⭐ **yes: delete EITHER writer and the count falls to 1, and the gate reddens.** This is precisely what the group mechanism was built for, and the gate's own header says so about the retired 11/12 pair. |
+
+**What it costs, stated rather than glossed.** The gate can no longer name *which* of the two
+document-scroll writers vanished — it reports the group. Two mitigations, both free: the entries keep
+their distinct `owner` and `why` fields, and Direction 3's failure message is extended to name both
+candidates so the reader is not left to guess. Separately, the longest-match sort now chooses
+arbitrarily between two identical texts; that is **absorbed by construction**, because both keys are
+identical so whichever wins increments the same counter — recorded so a future reader does not read it
+as a latent bug.
+
+**Three prose sites become false and land in the same commit.** The baseline header's "Two entries may
+legitimately share the same text (**11 and 12** do)"; Direction 3's comment that "Registered texts
+NEST (entry 10's line CONTAINS entries 11/12's text) … otherwise the recovery site would be counted
+into the abort-path group" — **after the collapse nothing nests, and the recovery site is in the
+abort-path group deliberately**; and entry #11's own comment block, which narrates the retired 11/12
+pair and concludes "the group has a single member now" — it has two again.
+
+**Two designs rejected, recorded so they are not rediscovered.**
+
+- **Restore the nesting with a trailing comment on the recovery line.** It would work: the derivation
+  keys on the whole trimmed line, so a trailing comment makes the recovery site's text strictly
+  contain #11's and the longest-match sort recovers today's structure exactly. **Rejected** — a
+  comment written to satisfy a gate is the compensating-constant shape this project has a standing
+  rule about, and it makes an innocuous comment edit redden a gate whose header forbids the cheap
+  repair. The gate would then be teaching the wrong lesson to whoever met it.
+- **Key entries by enclosing function rather than by text.** This is the *better* gate: it gives exact
+  per-site attribution and, unlike `file:line`, does not rot on an edit above it. **Rejected as scope,
+  not as design** — it is new derivation machinery in a gate this pass does not otherwise touch,
+  landing at the end of a fourteen-item commit, and novel scanning machinery carries its own failure
+  modes (`NOCLB`'s over-stripping hazard, one section over, is the same shape). Deferred with its
+  consumer named in §14: the first task that needs per-site attribution on this gate.
 
 **Why C3 is Structural and not tidy-up.** `tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` excludes
 the fingerprint gates by design — they fail under every mutation by construction, which would be a
@@ -521,6 +587,7 @@ could not fail.
 | **C1 (§4a)** | Held by the existing `test/swipe-model.test.js`, which reddens by construction on the moved hash. **No new cell is owed for the HASH and none would help:** nothing can mechanically distinguish a re-verified pin from a pasted one, so exit item 5 is correctly a discipline. |
 | **C2 (§4a)** | ⭐ **MECHANIZED at [R3], and COMPLETE at [G1] — one new assertion over two tokens, not a read-through.** The round-1 revision argued no cell would help; that was right about the hash and **wrong about the consequence**, and `:471` is the standing proof — an enumeration short by one, missed while reading the two lines beneath it. `test/swipe-model.test.js` already reads the rendered output (`assert.equal(lf(gen.render()), committed)`), so a sibling assertion goes beside it: **the rendered model contains no occurrence of `orphan` and none of `ghost`, both case-insensitive.** `orphan` catches four of C2's five sites (`:234`, `:431`, `:471`, `:473`); `ghost` catches the fifth (`:416`), which is the only site either token misses. **Verified false-positive-free at HEAD:** `ghost` occurs at exactly one line of the rendered model (`:134`) and at exactly one line of the generator (`:416`), and both are that same site — so the pair is complete, minimal, and green the moment C2 is done. Both tokens are this campaign's retired concepts, which is the assertion's authority, and it names that authority in its message so a future reader who legitimately needs either word meets a conversation rather than a chore. **Five of five sites mechanized; nothing in C2 is left to a read.** |
 | **C3, C4 (§4a)** | C3 is held by running the tool (§11). C4 is a probe field with a constant value — D3's argument, and nothing depends on it. |
+| **C5 (§4a)** | Held by `M1WRITERSET` itself, in the strongest form available: after the re-derivation its Direction-3 group count reddens if **either** document-scroll writer vanishes, which is the property the merge was chosen to preserve. No new cell is owed — the gate that found the fracture is the gate that holds the repair. The re-derivation is verified by step 5b, where the trial's failing set must no longer contain it. |
 
 **The purge file's own hazard, stated because this project has been bitten by it — and narrowed at
 [F10] to the part that is real.** The recorded hazard is that a gate naming its own forbidden token
@@ -573,10 +640,11 @@ behavioural brace.
 |---|---|---|---|
 | 1 | Stress this plan; verdict forge / temper / scrap. | the plan reviewer | **DONE — FORGE at round 3.** r1 TEMPER (`…-1ced95d.md`), r2 TEMPER (`…-5a1d977-r2.md`), r3 **FORGE** (`…-157a2e1-r3.md`); all folded, G1–G3 non-blocking and applied. The deletion set moved in none of them. |
 | 2 | `PLAN-swipe-declone.md` §13 step 10b — the device gate on the shipped Stage-2 form. | the user | **DONE — all six items PASS on build `.306`, 2026-08-04.** It gated everything below and no longer does. |
-| 3 | Strike this plan's promise: **"every item in §4 is unreachable at HEAD, and the §5 collapse changes no behaviour."** Aim at the reachability claims, not at the deletions. | the adversary | open |
+| 3 | Strike this plan's promise: **"every item in §4 is unreachable at HEAD, and the §5 collapse changes no behaviour."** Aim at the reachability claims, not at the deletions. | the adversary | **DONE 2026-08-05 — the promise HELD; one fracture, in the co-change enumeration, folded as §4a C5.** `Claude/Loki/PLAN-swipe-declone-stage2-subtraction-strike-2026-08-05.md` |
 | 4 | Close coverage-audit **M2** — the `pageElFor` throw cell and its `keyFor` sibling negative. Independent of this pass and owed either way. | the test author | open |
 | 5 | Author the nine §10 cells red-first, with the purge file's fire drill — positive **and** negative controls — run and recorded. `MOVERSHAPE`, `NOGHOSTCLASS`, `NOOWNEDPANE`, `NOCLB` and `DESTROYEDMOVER` are new; `RECOVERYPARITY` and `PILLSWEPT` are new; `BORROWEDREALSURVIVES` is the relocated `BR` with a replacement mutant; `STALETOUCH` is the existing stale-event cell re-anchored. ⛔ **There is no key-completeness cell to migrate** — it was deleted in step 10. | the test author | open |
-| 6 | **The subtraction — ONE commit.** D1–D17 together, plus **§4a's four co-changes**, plus the purge file, plus both regenerated inventories. Bump the build. **Edited in the SAME commit:** the frozen spec; `test/mutation-anchors.test.js`'s subjects in `tools/mutate.mjs`; **`test/swipe-model.test.js`'s `VERIFIED.supersession` and its new no-`orphan` assertion; `tools/gen-swipe-model.mjs`'s FIVE ORPHAN prose sites; `tools/source-gate-sweep.mjs`'s `begin/supersession` re-anchor AND its `transition branches` entry deletion; `test/mutation-anchors.test.js`'s `KNOWN_ROTTED` exemption; the three stale fingerprint records (§4a C3 consequence 2); `tools/fuzz-ui.js`'s ghost field** — every one of these rot checks reddens otherwise. | the builder | open |
+| 5b | ⭐ **The collapse-applied TRIAL RUN — measure the blast radius before the commit, do not enumerate it.** Apply §5's collapse in memory and run the whole suite: `COLLAPSE=1 NODE_OPTIONS="--require $PWD/Claude/Loki/probe-stage2-subtraction-transform.js" node --test test/*.test.js`. **The set of failing tests must equal §4a plus §8's declared radius, item for item**; a failure the plan does not name is a fifth instance of R10 and is folded before step 6 starts, not repaired inside it. | the builder | open |
+| 6 | **The subtraction — ONE commit.** D1–D17 together, plus **§4a's four co-changes**, plus the purge file, plus both regenerated inventories. Bump the build. **Edited in the SAME commit:** the frozen spec; `test/mutation-anchors.test.js`'s subjects in `tools/mutate.mjs`; **`test/swipe-model.test.js`'s `VERIFIED.supersession` and its new no-`orphan` assertion; `tools/gen-swipe-model.mjs`'s FIVE ORPHAN prose sites; `tools/source-gate-sweep.mjs`'s `begin/supersession` re-anchor AND its `transition branches` entry deletion; `test/mutation-anchors.test.js`'s `KNOWN_ROTTED` exemption; the three stale fingerprint records (§4a C3 consequence 2); **`test/scroll-writer-set.test.js`'s `M1WRITERSET` baseline entry #10 and the three prose sites the collapse falsifies (§4a C5)**; `tools/fuzz-ui.js`'s ghost field** — every one of these rot checks reddens otherwise, **and step 5b is what proves the list is now complete rather than merely longer.** | the builder | open |
 | 7 | **Device re-confirm** (`PLAN-swipe-declone.md` §13 step 11b): `browse→browse` commit and abort, plus the four Stage-1 transitions. Short, and run anyway — the form device-tested is the form that ships, and this commit changes the shipped form even where it cannot change behaviour. | the user | open |
 | 8 | Review the commit; audit the suite; then the records scrub — this plan's status, the parent's §12/§13, the campaign manifest's falsified `note`, the board, the decision log. | the code reviewer, then the coverage auditor, then the assistant | open |
 
@@ -589,6 +657,10 @@ the stage beneath it.
 
 **Exit condition.** All of the following, and the last three are additions at [F1], [F2] and [F3]:
 
+0. ⭐ **Step 5b's measured radius equalled the declared one** — the trial's failing-test set matched
+   §4a plus §8 item for item, with any surplus folded into the plan before step 6 began. This is the
+   item that closes R10, and it is listed first because it is the only one that runs *before* the
+   commit rather than after it.
 1. Every §4, §4a and §8 item is discharged in HEAD, each admitted on a stated proof.
 2. The nine §10 cells are green; each purge cell has been **observed to fire** on both its positive
    and its negative control.
@@ -652,19 +724,41 @@ the stage beneath it.
   at HEAD, so the builder would have met an unattributable red at the end of a fourteen-item commit
   and — by R5's own pattern — dropped the exit item, retiring the protection in the commit that added
   it. Both entries are now dispositioned.
+- ⭐⭐ **R10 — the co-change ENUMERATION is the thing that keeps being incomplete, and only execution
+  has ever caught it.** Three instances of this plan's own named class ("a deletion list is not the
+  same thing as a blast radius"): round 1 found the frozen model and the source-gate anchor, round 2
+  found `gen-swipe-model.mjs:471`, and the adversary found `M1WRITERSET` entry #10. **Each round
+  declared the set complete, and each was wrong.** The first two were found by reading and the third
+  only by running the collapse — and the third is the one that made an exit condition unsatisfiable.
+  The structural answer is §11 **step 5b**: apply the collapse in memory, run the suite, and require
+  the measured radius to equal the declared one. It is a **precondition** of step 6 rather than an
+  exit item of it, because the value is finding the radius before the fourteen-item commit, not
+  confirming it after — as an exit item it would merely duplicate "the suite is green". ⚠️ **Honest
+  limit:** the instrument encodes §5's collapse plus the D9/D11 surfaces it rides on, not all twelve
+  deletions, so it measures the radius of the *collapse* — which is where this class has bitten three
+  times out of three.
 - ⭐⭐ **R9 — every reachability proof in §4 has been confirmed by READING, three times, and this
-  campaign's record is that four such readings were settled only by execution.** Carried from the
-  round-3 review's closing prediction, because it is the reason the next step is what it is. The
+  campaign's record is that four such readings were settled only by execution.** ✅ **Materially
+  reduced 2026-08-05, and by execution rather than by another reading.** The adversary drove six
+  scenarios into the recovery and the handle was non-null every time; the collapsed variant's
+  unconditional read — which throws on null — never threw across that battery or the 849-test suite;
+  the `resetScroll` axis was identical in both forms; and **the control fired**, an injected ghost
+  taking the orphan branch at HEAD and diverging completely under the collapse, so the negative is
+  evidence and not silence. The orphan input is constructible only by injection. **What remains** is
+  the residual this plan has always disclosed — a class name assembled at runtime, or a non-first-party
+  injection — which is outside every instrument available here, and the fingerprint re-verification
+  (exit item 5), which stays the one load-bearing step with no mechanism behind it. Retained rather
+  than closed, because a promise held under the strikes that were run is exactly that and no more. The
   gates now cover a great deal: `NOGHOSTCLASS`, `NOOWNEDPANE` and `NOCLB` hold the textual claims
   structurally; `NOGHOSTATALL` holds the behavioural one; exit item 6 is fully mechanized at [G1];
   exit item 4 is satisfiable at [R1]. **Exit item 5 — the fingerprint re-verification — is now the
   one load-bearing step in the pass with no mechanism behind it**, and it is load-bearing precisely
   over §5's collapse, the edit whose safety rests on a reachability reading. Three review rounds
   raised the cost of a wrong reading without changing its likelihood, because reading is what has
-  been wrong before. **That is what the adversary is commissioned against at step 3** — not the
-  deletions, which are cheap to undo, but the claim that the collapse changes no behaviour. A plan
-  cannot close this risk; it can only name it and hand it to the seat that settles questions by
-  running them.
+  been wrong before. **The adversary was commissioned against exactly that at step 3, and the
+  behavioural half came back held under execution** — which is why this risk is now a residual rather
+  than an open question. A plan could not have closed it; handing it to the seat that settles
+  questions by running them is what closed the part that could be closed.
 - **R8 — a mutant is registered for an assertion it cannot exercise [R2].** The pass registers
   eighteen mutants and one of them was already this shape after one round of review. Two structural
   answers rather than more care: a mutant's registration states the *mechanism* it perturbs and not
@@ -760,7 +854,25 @@ the stage beneath it.
     actually travel. **This is the generalization of [R1]:** a reason that is true, checkable and
     incomplete survives indefinitely, because every reader who checks it finds it true. Incompleteness
     is the failure mode that hides; falsity is the one that gets caught.
-
+17. **`M1WRITERSET` entries #10 and #11 become one shared-text GROUP; no textual distinguisher is
+    manufactured [the strike].** Post-collapse the two document-scroll writers carry identical text,
+    and the group-count direction — which the gate already ships and which was built for exactly this
+    — still reddens when either vanishes. What is lost is per-site attribution in the failure message,
+    and that is disclosed and partly repaired by naming both candidates in the message rather than
+    hidden. **Rejected: a trailing comment to restore the nesting** (a comment written to satisfy a
+    gate is the compensating-constant shape, and it would make an innocuous edit redden a gate whose
+    header forbids the cheap repair) and **keying by enclosing function** (the better gate, rejected
+    as scope not as design — new derivation machinery at the end of a fourteen-item commit; deferred
+    with its consumer named in §14).
+18. **The blast radius is MEASURED before the commit, not enumerated [the strike].** §11 gains step
+    5b: apply §5's collapse in memory, run the suite, and require the failing set to equal the
+    declared radius item for item. Three instances of one class, each after a round that declared the
+    set complete, and the third — the one that made an exit condition unsatisfiable — found only by
+    running it. The instrument is safe enough to be a step: it transforms at load time, **writes
+    nothing to disk**, and **refuses to run if any anchor is missing or non-unique**, so it cannot
+    pass vacuously. It is a precondition of step 6 rather than an exit item of it, because as an exit
+    item it would only duplicate "the suite is green" and would find the radius at its most expensive
+    moment.
 ## 14. Deliberately out of scope, with the consumer named
 
 - **W46 / addendum F2 — a same-key `browse→browse` pair resolves both mover slots to one node.**
@@ -782,6 +894,13 @@ the stage beneath it.
   indistinguishable from working" hazard this plan already records for `stage6i SCOPE`. The
   compensating measure costs one line and is in scope: the expected killer set is written into
   `S2-23`'s registration comment in the same commit (§8 D13c).
+- **`M1WRITERSET`'s per-site attribution — keying baseline entries by enclosing function.** Owner: the
+  planner, as a gate improvement. After §4a C5 the two document-scroll writers share one group, so a
+  drift report names the group and not the site. The fix is real and is *better* than what the gate
+  has — an enclosing-function key gives exact attribution and, unlike `file:line`, does not rot on an
+  edit above it. It is deferred because it is new derivation machinery in a gate this pass otherwise
+  only re-registers, at the end of a fourteen-item commit. **Consumer:** the first task that needs to
+  know *which* document-scroll writer vanished; until then the group count still says *that* one did.
 - **Addendum A9 — the read-after-`applyScreen` invariant holds only on non-throwing paths.** A
   comment correction; the code review already owns it.
 - **`text-size-adjust`, the additive-overlay premise, the two disagreeing host vocabularies.** Named
