@@ -113,6 +113,24 @@ export function artifactsOfRecord(files) {
   return rounds.filter(x => x.r === max).map(x => x.f);
 }
 
+/** Basename without directory or extension — the identity a glob collision is judged on. */
+export const stemOf = (p) => p.replace(/\\/g, '/').split('/').pop().replace(/\.md$/, '');
+
+/**
+ * True when two matched artifacts belong to DIFFERENT stages, rather than being two rounds of
+ * one review. Rounds differ in their FINAL token — this repo distinguishes them by commit SHA,
+ * not by `-rN`, which is why `artifactsOfRecord` cannot order them. A cross-stage collision is
+ * one stem being a strict PREFIX of the other.
+ *
+ * Measured 2026-08-05: judged per verdict this fired on 14 correctly-green gates; judged per
+ * file, still 6; with this discriminator, exactly 1 — the real defect — and 0 false positives
+ * across all thirteen campaigns.
+ */
+export const isCrossStage = (a, b) => {
+  const [x, y] = [stemOf(a), stemOf(b)];
+  return x !== y && (x.startsWith(y) || y.startsWith(x));
+};
+
 // Evaluate every gate in `manifest` against the artifacts under `root`.
 export function gateResults(manifest, root) {
   const results = [];
@@ -124,6 +142,62 @@ export function gateResults(manifest, root) {
     const files = artifactsOfRecord(matched);
     const found = files.flatMap(f => verdictsIn(f));
     const hit = found.filter(v => g.acceptVerdict.includes(v));
+
+    // ⛔⛔ A REJECTED VERDICT ANYWHERE IN THE MATCHED SET MUST NOT BE OUTVOTED BY AN
+    // ACCEPTED ONE. MEASURED 2026-08-05: this gate reported `pass (ADEQUATE)` for
+    // swipe-declone-stage2 while `AUDIT-swipe-declone-stage2-subtraction.md` — matched by the
+    // same glob — carried GAPS_NAMED. The stage read as clear with an open audit sitting beside
+    // it, which is this project's defining scar produced by its own gate.
+    //
+    // Two causes compounded, and neither is fixed by naming files better:
+    //   (1) `artifactsOfRecord` returns the set UNCHANGED when no `-rN` suffix exists, so a
+    //       sibling stage's artifact stays in scope. A stage name that is a strict PREFIX of
+    //       another's (…-stage2 vs …-stage2-subtraction) makes one glob swallow the other, and
+    //       the wildcard those globs need to see later rounds is what admits it.
+    //   (2) `hit.length ? pass` — one accepted verdict anywhere carried the whole gate.
+    //
+    // Fixing (2) is the load-bearing half: whatever the glob matches, a filed rejection is
+    // never silently outvoted. The per-file attribution is required, not decoration — the
+    // failure is unreadable without knowing WHICH artifact rejected.
+    // ⚠️ COMPARE PER FILE, NEVER PER VERDICT. A casebook legitimately records its OWN history —
+    // "round 1: TEMPER … round 2: FORGE" yields two verdict lines from one artifact, and that is
+    // an artifact doing its job, not a conflict. The first draft of this check compared the raw
+    // verdict list and fired on FOURTEEN gates across ten campaigns that were correctly green;
+    // measured before shipping, because a gate that fires on correct work gets switched off and
+    // this project has lost gates that way three times.
+    //
+    // A file ACCEPTS if any of its verdicts is accepted (its later round supersedes its earlier).
+    // A file REJECTS only if it declares verdicts and NONE is accepted. Ambiguity is one artifact
+    // accepting while a DIFFERENT one rejects — which is exactly the measured incident.
+    const perFile = files.map(f => ({ f, vs: verdictsIn(f) })).filter(x => x.vs.length);
+
+    // ⚠️ AND ONLY WHEN THE ARTIFACTS BELONG TO DIFFERENT STAGES. Measured: comparing per file
+    // still fired on SIX correctly-green gates, because this repo distinguishes review ROUNDS by
+    // COMMIT SHA, not by `-rN` — `PLAN-swipe-stage6d-00874b5.md` (TEMPER) is simply the earlier
+    // round of `…-d3571bf.md` (FORGE), and `artifactsOfRecord` cannot order SHAs. Six false
+    // positives against one real defect is the ratio at which a gate gets switched off, and this
+    // project has lost gates that way three times.
+    //
+    // The discriminator that separates the two cases, and it is exact on the evidence: rounds of
+    // one review differ in their FINAL token (…-stage6d-<sha>), whereas a cross-stage collision is
+    // one basename being a strict PREFIX of another (…-stage2 vs …-stage2-subtraction). Only the
+    // prefix shape means two different stages are sharing one glob — which is the measured
+    // incident, and the shape the wildcard needed for later rounds is what admits.
+    const crossStage = isCrossStage;
+    const accepting = perFile.filter(x => x.vs.some(v => g.acceptVerdict.includes(v)));
+    const rejected = perFile
+      .filter(x => !x.vs.some(v => g.acceptVerdict.includes(v)))
+      .filter(x => accepting.some(a => crossStage(a.f, x.f)))
+      .map(x => ({ f: x.f, vs: x.vs }));
+    if (hit.length && rejected.length) {
+      results.push({ ...g, ok: false, status:
+        `AMBIGUOUS — the glob ${g.verdictArtifactGlob} matches an accepted verdict AND a rejected one; `
+        + `a rejection is never outvoted. Rejecting: `
+        + rejected.map(x => `${x.f} [${[...new Set(x.vs)].join(', ')}]`).join('; ')
+        + `. If these are different STAGES, narrow the glob so each stage owns its own artifacts; `
+        + `if they are rounds of one stage, use the -rN suffix so the latest supersedes.` });
+      continue;
+    }
     // Distinguish the three outcomes — they need different fixes. UNDECLARED means the artifact
     // exists but states no verdict in any recognised form (add one); a filed-but-rejected verdict
     // means the gate RAN and said no (do the work).
