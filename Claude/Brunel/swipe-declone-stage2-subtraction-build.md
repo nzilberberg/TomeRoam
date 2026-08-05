@@ -318,3 +318,9 @@ themselves require it. Stamped and `--check`-verified across `sw.js`/`js/debug.j
 tokens inside an explicitly-tombstoned block, or accept and say so; O2: a gate-improvement candidate).
 Neither is a finding this seat can close — both require a planning decision about the mechanism, not
 a local edit. Left untouched, per "implement ONLY the sanctioned findings."
+
+### Commit
+
+`6b25a15` — all pre-commit gates passed (same twelve as the subtraction commit). HEAD verified via
+`git rev-parse HEAD`. Not pushed. This is a between-stages fix; no new stage started. Next: the
+user's go to continue (re-review, or the coverage auditor).
