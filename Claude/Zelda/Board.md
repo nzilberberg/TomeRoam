@@ -1307,6 +1307,42 @@ anchor**, so it cannot pass vacuously. Exit condition 0 is the measured-equals-d
 **The deletion set did not move.** Four new DecisionLog entries. **Next: the test author (§11 steps
 4–5), then the builder's step 5b.**
 
+**Step 11 RED SUITE AUTHORED (2026-08-05, Curie, `b2327f5`) — planner fold applied; next is the
+builder at step 5b.** `Claude/Curie/RED-swipe-declone-stage2-subtraction.md`. 884 tests / 880 pass /
+**3 intentional red-first cells** (`NOOWNEDPANE`, `MOVERSHAPE`, `PILLSWEPT`-arity) and nothing else,
+against an 849/0 baseline; committed `--no-verify` because the hook blocks a red tree, after every
+non-test gate passed. Mutants executed **individually against their target file**, not by sweep —
+with three cells red at HEAD a sweep reports CAUGHT for the wrong reason on everything. ⭐
+`PILLSWEPT`'s arity red **flips green under the collapse probe and nothing else does**. ⭐ Curie
+caught `#21` killing `I20` on its *second* assertion, so the re-anchored transform witness was never
+reached — split per decision 13 and re-executed. ⛔⛔ **R10 INSTANCE FOUR — and this fold MEASURED a
+fifth.** Two anchors rot on **§5's third ternary, the same line** whose `M1WRITERSET` registration
+became §4a C5: the search stopped at the finding instead of at the line. Rather than enumerate a
+fifth time, the planner **derived** the set — applied the collapse in memory, tested every registered
+anchor, **with a control pass on pristine source required to report zero first**. The control earned
+its keep: run one ignored `also.file` and produced a false positive. **Measured: seven anchors rot,
+FOUR on no list** — the two reported plus **`S2-31` and `S2-32`, which are `RECOVERYPARITY`'s own
+NATURAL-a and NATURAL-c**; uncaught, that cell would have shipped with three of its four mutants
+unrunnable. All four re-anchored (none de-registered — every subject survives); the two duplicates
+are **byte-identical in `from`/`to`** and are merged into one entry naming all three killers.
+**Four spec defects fixed:** `MOVERSHAPE`'s fixture was not constructible (`d.movers` is
+module-private) → **confirmed as source-structural**, since a runtime observer would be a production
+field whose only consumer is a test, which Rule R forbids one section earlier; `DESTROYEDMOVER`'s
+"three mutants" were two fixture route variants + one mutant → re-derived to **one mutant per
+ASSERTION over three route coordinates**; [R4]'s claim that `NOCLB` was the only gate needing
+comment/string stripping is **false** (`NOOWNEDPANE` needs the opposite half, and `js/app.js:386`
+makes its negative control live at HEAD) → one shared fire-drilled primitive; step 5b's `$PWD`
+**fails under MSYS** → relative path, verified. Also recorded: `VR_HOLD_ORDER_FROM/_TO` sat
+declared-but-unregistered since stage 6a, so the recovery's hold-release ordering — whose fix came
+from an executed counterexample — had **no runnable mutation evidence at all**; now `S2-32`.
+⭐⭐ **RULING ASKED FOR AND GIVEN (R10):** five hand enumerations of one blast radius, five times
+incomplete, including two by readers looking specifically for what they missed — and two of the
+missed entries **did not exist when the plan was written**, so no care at authoring time could have
+named them. Step 5b is **necessary and NOT sufficient**: it makes the list's incorrectness cheap and
+early, it does not make the list correct. **The co-change list should be DERIVED, not authored** —
+routed as tooling in §14 with the D13d measurement as its prototype, deliberately not built inside a
+subtraction pass. **The deletion set did not move.** Six new DecisionLog entries.
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.

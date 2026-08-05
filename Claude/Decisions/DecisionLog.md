@@ -1781,3 +1781,55 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   silence. The risk is reduced, not retired: the orphan input remains constructible by injection, and
   the disclosed residual (a class name assembled at runtime, or a non-first-party injection) is
   outside every instrument available. The registry keeps the row and states what was measured.
+
+- A HAND-AUTHORED CO-CHANGE LIST CANNOT STAY COMPLETE, AND THE LIST SHOULD BE DERIVED — 2026-08-05,
+  the planner, ruling on the declone Stage 2 subtraction plan's R10.
+  Five hand enumerations of one blast radius, five times incomplete: two review rounds, an adversary
+  strike, a red-suite pass, and the hand report of that pass. Instance four sat on a source line
+  instance three had already identified, and the report of instance four itself missed two more, found
+  only by deriving the set mechanically. ⛔ THE FAILURE IS NOT ATTENTION. Two of the missed entries did
+  not exist when the plan was written, so no care at authoring time could have named them — a list
+  written once cannot stay complete while the tree moves under it. RULED: applying the transform and
+  measuring is NECESSARY and NOT SUFFICIENT; it makes the list's incorrectness cheap and early but
+  still needs a human to reconcile what failed against what was declared. The durable answer is that
+  the list is DERIVED and the plan carries the derivation — the same shape this project already trusts
+  over hand-written inventories everywhere else (the transition matrix was hand-written twice and
+  wrong both times). Routed as tooling, deliberately not built inside a subtraction pass.
+
+- A DERIVATION INSTRUMENT NEEDS A CONTROL PASS ON UNMODIFIED INPUT — 2026-08-05, measured.
+  The rot set above was obtained by applying a transform in memory and testing every registered
+  mutation anchor against the result. The first run reported a defect that did not exist: it checked a
+  two-part mutation's second anchor against the primary file, ignoring that `also` carries its own
+  `file`. A control pass requiring ZERO rot against pristine source caught it immediately. An
+  instrument that reports findings without first being shown to report none on unchanged input is
+  producing claims, not measurements.
+
+- TWO BYTE-IDENTICAL MUTATION ENTRIES ARE MERGED, NAMING EVERY DESIGNATED KILLER — 2026-08-05, the
+  planner. Identical `from` and `to` differing only in `name` is not an anchor ambiguity — the text
+  occurs once in source, so the uniqueness gate passes both legitimately — but the two produce
+  identical source and therefore identical `killed by:` lists, so neither entry's designated killer is
+  distinguishable from the other's. It is the attribution hazard living in the registry rather than in
+  a cell, and it costs one full suite run per duplicate on every sweep. The merged entry carries every
+  killer either one named, so no coverage claim is dropped.
+
+- A FIXTURE ROUTE VARIANT IS NOT A MUTANT — 2026-08-05, the planner.
+  A coverage row listed three mutants where two were "drive a different destruction route", which
+  edits no source and would report CAUGHT without ever being applied. A mutant edits source; anything
+  that edits only the fixture is a COORDINATE. Counting a coordinate as a mutant inflates a coverage
+  claim with something that cannot fail. The row was re-derived to one mutant per ASSERTION over three
+  route coordinates.
+
+- A CELL ASSERTS OVER SOURCE RATHER THAN GAINING A RUNTIME OBSERVER FOR A PRIVATE FIELD — 2026-08-05,
+  the planner. The session mover list is module-private and its key-set cell was specified against a
+  fixture that cannot be built. The alternative to a source assertion was adding a runtime observer —
+  a production field whose only consumer is a test, which the same plan's field-survival rule forbids
+  and which adds exactly the surface a subtraction pass exists to remove. Where a behavioural witness
+  DOES exist for part of the claim it is used alongside, so the cell is source-only just where nothing
+  else can see.
+
+- `VR_HOLD_ORDER_FROM`/`_TO` WERE DECLARED BUT UNREGISTERED SINCE STAGE 6A — 2026-08-05, found by the
+  test author while authoring the subtraction suite; now wired as `S2-32` and executed.
+  The supersession recovery's hold-release ordering — whose fix came from an executed counterexample —
+  had NO runnable mutation evidence for that whole span: the mutation strings sat at the top of
+  `tools/mutate.mjs` and no entry referenced them. A declared-but-unreferenced constant is invisible to
+  the anchors gate, which checks registered entries and cannot know about a string nothing registers.
