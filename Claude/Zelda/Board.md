@@ -1574,6 +1574,41 @@ The latter two share a root — **conn flapping relay↔local**; pinning board r
   not restated here, since this repo is public and the superseded name is being retired from it. The app is
   unaffected until the deploy runs; app-only users never need it.
 
+**⭐ Step 11 RED SUITE FILED (2026-08-05) — §11 steps 4 and 5 DONE; next is the builder (step 5b, then step 6).**
+`Claude/Curie/RED-swipe-declone-stage2-subtraction.md`. All nine §10 cells authored plus coverage-audit
+**M2** (the `Browse.pageElFor` throw cell and its `keyFor` sibling negative). Suite 849 → **884 tests,
+3 fail** — and the three are the red-first cells, nothing else: `NOOWNEDPANE` (the tag literal at the
+four sites D4/D6/D7/D8 delete), `MOVERSHAPE` (the adapter still reads `ownership`) and `PILLSWEPT`'s
+arity half (`resetSwipeStyles` still declares `keepGhosts`). Eight mutants registered (`S2-25`…`S2-32`)
+and **every one executed and observed to redden its named cell** — per-file, foreground, tree checked
+clean after each, because with three cells red at HEAD a whole-suite sweep would report every mutant
+CAUGHT for the wrong reason. Four existing mutants were executed as this pass's defenders too (#13,
+#16, #21, `S2-13`). Six mutants are deliberately **not** registered — they target the collapsed
+recovery, the parameterless reset, or a gate already red — and are derived with exact anchors for step 6.
+
+⛔⛔ **A FOURTH EXECUTED INSTANCE OF R10, and again only running found it.** The collapse-probe run
+(884 tests, 11 fail) put **every** failure inside the plan's declared radius except the two red-first
+cells — but `test/mutation-anchors.test.js`'s rot list under the collapse holds **two entries on no
+plan list**: `stage6a: recovery stops restoring the session-start scroll` and `swipe: supersession
+recovery stops restoring the session-start scroll`. Both anchor on §5's third ternary
+(`if (cur) window.scrollTo(0, cur.scroll0);`) — **the same source line §4a C5 already caught the
+`M1WRITERSET` baseline registering, where the search stopped**. Neither is a de-registration: their
+subject SURVIVES and is `RECOVERYPARITY`'s own `NATURAL-b`, executed here. They need **re-anchoring**
+on step 6's list. They are also **byte-identical duplicates of each other**. **Owner: the planner**,
+before step 6 starts.
+
+⭐ **Four smaller findings routed with it.** §10 `MOVERSHAPE`'s fixture as specified is not
+constructible — `d.movers` has no observer (`window.PBSwipeSession()` reports `{id, dragging}`), so the
+cell asserts the adapter's seam-field READ set and says so in its own header, with the `base` half
+additionally covered behaviourally. §10 `DESTROYEDMOVER`'s "three mutants" are two FIXTURES and one
+mutant. [R4]'s claim that `NOCLB` is the first gate needing comment stripping is FALSE — `NOOWNEDPANE`
+needs it too, because this codebase's comments use markdown backticks and `js/app.js:386` carries
+`owned-pane` inside one, in backticks. And `VR_HOLD_ORDER_FROM`/`_TO` have sat declared-but-unregistered
+in `tools/mutate.mjs` since stage 6a, so the recovery's hold-release ORDERING — an executed
+counterexample's fix — had no runnable mutation evidence at all; wired up as `S2-32` and executed.
+⚠️ The plan's step-5b command needs a drive-letter path: `$PWD` expands to `/c/…` under MSYS and node
+cannot resolve it.
+
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
 - **Options→HUB refactor · library-scaling virtualization · durable-progress spine + device-delete** — all built; scaling on-device gate passed → `[[tomeroam-durable-progress-plan]]`, `[[tomeroam-library-scaling-plan]]`.

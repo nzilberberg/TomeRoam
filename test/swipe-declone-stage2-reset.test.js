@@ -95,3 +95,54 @@ test('RESETCOVERSPAGES — the swipe style reset clears every .browsepage, not o
       + `a page stuck off-viewport with nothing able to reset it:\n  ${strandedPages.join('\n  ')}`);
   } finally { for (const p of pages) p.remove(); }
 });
+
+// ════════════════════════════════════════════════════════════════════════════════════════
+// PILLSWEPT — the transient Now Playing pill decoration is still removed by the style reset
+// after the ghost-sweep parameter is deleted, so the ONE owned resource the swipe still
+// creates cannot leak. PLAN-swipe-declone-stage2-subtraction.md §10, authored red-first
+// (2026-08-05) before the subtraction.
+// ════════════════════════════════════════════════════════════════════════════════════════
+//
+// WHAT IS AT STAKE. `npPillClone` is the only owned resource a swipe builds after the declone,
+// and `js/nav.js`'s `.np-pill-float` sweep is its only sweeper. The parent plan's §12 item 14
+// names the WRONG line in its retention clause — it cites the `.nav-ghost` sweep line while
+// describing the pill sweep on the line below it — so a builder following that clause to the
+// letter deletes the pill sweep alongside the ghost sweep and leaks a floating pill clone on
+// every superseded Now Playing swipe. That mis-citation is the defect NATURAL-a reproduces.
+//
+// THE SECOND ASSERTION IS THE STRUCTURAL HALF, and it is what is RED at HEAD: after the
+// subtraction `resetSwipeStyles` takes NO parameter at all, so no caller can re-introduce a
+// conditional on it. At HEAD it declares `keepGhosts` (arity 1), which is exactly the
+// machinery §4 D11 removes. An arity assertion is the only mechanical form of "no caller can
+// guard this": a default-valued parameter would still let a guard back in, and nothing else
+// distinguishes the two shapes from a test.
+//
+// SCOPE. Unit layer, the REAL js/nav.js against the REAL index.html fixture. It drives the
+// reset DIRECTLY and never goes through the recovery, which is what makes it the
+// DISCRIMINATOR for RECOVERYPARITY's fourth mutant: when the recovery stops REACHING the
+// reset, this cell stays green and the redness is attributable to the recovery, not the sweep.
+
+test('PILLSWEPT — the style reset removes the transient .np-pill-float decoration', () => {
+  const pill = document.createElement('div');
+  pill.className = 'np-pill-float';
+  document.body.appendChild(pill);
+  assert.equal(document.querySelectorAll('.np-pill-float').length, 1,
+    'fixture sanity: a transient pill clone is present before the reset');
+
+  Nav.resetSwipeStyles();
+
+  assert.ok(!pill.isConnected, 'the pill clone must be detached by the reset');
+  assert.equal(document.querySelectorAll('.np-pill-float').length, 0,
+    'the transient Now Playing pill clone is the ONE owned resource a swipe still builds, and '
+    + 'this sweep is its only sweeper. Deleting this line alongside the ghost sweep — which the '
+    + "parent plan's §12 item 14 retention clause literally invites by citing the wrong line — "
+    + 'leaks a floating pill clone on every superseded Now Playing swipe.');
+});
+
+test('PILLSWEPT — the style reset is declared with NO parameter, so no caller can guard the pill sweep behind one', () => {
+  assert.equal(Nav.resetSwipeStyles.length, 0,
+    'after the subtraction `resetSwipeStyles` takes no parameter: the ghost-sweep suppression it '
+    + 'existed for has no subject left (§4 D9/D11), and a surviving parameter is what a later '
+    + 'edit would hang a `if (!keepGhosts)` guard on — putting the pill sweep back behind a flag '
+    + `and re-opening the leak the cell above forbids. Declared arity = ${Nav.resetSwipeStyles.length}.`);
+});

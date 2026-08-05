@@ -423,8 +423,23 @@ test('I20 — stale move/end/cancel from the superseded gesture cannot touch the
     // TRANSFORM is the assertion this test originally MISSED, and missing it made the
     // whole test inert: a stale touchmove drives move(), which acts on the CURRENT
     // global `d` — so it drags the NEW session's movers without logging anything.
-    const ghostEl = h.document.querySelector('.nav-ghost');
-    const transformAfter = ghostEl && ghostEl.style.transform;
+    //
+    // ⛔ RE-ANCHORED (STALETOUCH, PLAN-swipe-declone-stage2-subtraction.md §10 / §8 D15 [F7]).
+    // It used to read the transform off a `.nav-ghost`. No transition builds one, so BOTH sides
+    // of the comparison were `null` and the witness was already INERT AT HEAD — leaving this
+    // cell in exactly the state its own comment above records as broken. It is re-anchored onto
+    // the movers that SURVIVE: the `.browsepage` elements a browse->browse gesture actually
+    // drags, whose transform a stale touchmove would really write. Deleting it instead (the
+    // other disposition available for an inert assertion) would have quietly removed the
+    // witness rather than restoring it.
+    const moverEls = [...h.document.querySelectorAll('.browsepage')];
+    assert.ok(moverEls.length > 0,
+      'fixture: the successor gesture drags real .browsepage movers — without a non-null node the '
+      + 'transform comparison below compares null to null and cannot fail');
+    const transformsAfter = moverEls.map((el) => el.style.transform);
+    assert.ok(transformsAfter.some((t) => t),
+      'fixture: at least one surviving mover carries an inline transform from the LIVE successor '
+      + `gesture, so a stale drag has something to corrupt; got ${JSON.stringify(transformsAfter)}`);
 
     // The superseded gesture's node now fires its whole tail, at the ORIGINAL target.
     for (const type of ['touchmove', 'touchend', 'touchcancel']) {
@@ -447,8 +462,57 @@ test('I20 — stale move/end/cancel from the superseded gesture cannot touch the
     assert.equal(scrollCalls(h).length, scrollAfter, 'a stale event must not move the document');
     assert.equal(renders(h).length, rendersAfter, 'a stale event must not re-render Browse');
     assert.equal(ghosts(h), ghostsAfter, 'a stale event must not dispose the new session\'s pane');
-    assert.equal(ghostEl && ghostEl.style.transform, transformAfter,
-      'a stale touchmove must not drag the NEW session\'s movers');
+    assert.deepEqual(moverEls.map((el) => el.style.transform), transformsAfter,
+      'a stale touchmove must not drag the NEW session\'s movers. move() acts on the CURRENT '
+      + 'global `d`, so a superseded gesture whose listeners were not released reaches the handler '
+      + 'and writes a translateX onto the successor\'s borrowed-real movers — silently, because it '
+      + 'logs nothing. The transform on a node that still EXISTS is the only thing that shows it.');
+  } finally { h.dispose(); }
+});
+
+// ── STALETOUCH — the TRANSFORM witness, as its own named test ────────────────────────
+//
+// WHY IT IS SPLIT OUT (PLAN-swipe-declone-stage2-subtraction.md §13 decision 13; the
+// park-distance precedent). MEASURED 2026-08-05: under the registered mutant this witness
+// exists for — the supersession stops releasing the superseded target's listeners — the cell
+// above dies on its SECOND assertion ("a stale event must not settle the live gesture"), so the
+// transform assertion is never reached and the sweep can only report that the TEST reddened.
+// The sweep names a killing test, not a killing assertion, so without this split the witness
+// re-anchored above would ship never having been shown to fail — which is precisely the defect
+// the re-anchor exists to repair, one layer in.
+//
+// It asserts the transform and NOTHING else, so a red here is attributable to this witness.
+test('STALETOUCH — a stale touchmove must not write a transform onto the NEW session\'s movers (the witness, alone)', async () => {
+  const h = boot({ fakeTimers: true });
+  try {
+    await onAuthorsOverBooks(h);
+    const first = addRow(h);
+    h.touch.start(10, 300, first);
+    await realSleep(12);
+    h.touch.move(120, 302);                        // gesture 1 live
+
+    h.touch.start(10, 300, addRow(h));             // supersedes; gesture 1's listeners must go
+    await realSleep(12);
+    h.touch.move(120, 302);                        // the NEW gesture goes live and stamps its movers
+
+    const moverEls = [...h.document.querySelectorAll('.browsepage')];
+    assert.ok(moverEls.length > 0, 'fixture: the successor drags real .browsepage movers');
+    const before = moverEls.map((el) => el.style.transform);
+    assert.ok(before.some((t) => t),
+      `fixture: at least one mover carries a live transform, so a stale drag has something to corrupt; got ${JSON.stringify(before)}`);
+
+    // ONE stale event, and deliberately only the touchmove: a stale touchend would settle the
+    // successor and that is the assertion the cell above owns. This isolates the drag.
+    const e = new h.window.Event('touchmove', { bubbles: true, cancelable: true });
+    const t = { clientX: 400, clientY: 302, identifier: 0, target: first };
+    e.changedTouches = [t]; e.touches = [t];
+    first.dispatchEvent(e);
+
+    assert.deepEqual(moverEls.map((el) => el.style.transform), before,
+      'a superseded gesture whose listeners were not released reaches the shared move(), which acts '
+      + 'on the CURRENT global `d` — so it drags the SUCCESSOR\'s borrowed-real movers, silently, '
+      + 'logging nothing. Nothing else in the suite can see this: it starts no gesture, settles '
+      + 'nothing, scrolls nothing and renders nothing.');
   } finally { h.dispose(); }
 });
 

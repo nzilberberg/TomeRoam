@@ -1501,6 +1501,113 @@ const MUTATIONS = [
     file: 'css/app.css',
     from: "#browse {\n  position: fixed; left: 0; right: 0;",
     to:   "#browse {\n  position: fixed; left: 0; right: -400px;" },
+
+  // ══ SUBTRACTION PASS (declone stage 2, step 11) — registered by the test author with the
+  // ══ RED suite (PLAN-swipe-declone-stage2-subtraction.md §11 step 5).
+  //
+  // ⛔ EVERY ENTRY BELOW WAS EXECUTED AND OBSERVED TO REDDEN ITS NAMED CELL before it was
+  // written down. That ordering is not ceremony here: four registered mutants in a row in this
+  // campaign turned out to be EQUIVALENT, each backed by a careful source argument, and a fifth
+  // was caught in review for the same reason. Reading has not been sufficient.
+  //
+  // ⛔ WHAT IS DELIBERATELY NOT REGISTERED YET, and why (so its absence is not read as an
+  // oversight). Four of the pass's mutants target code that DOES NOT EXIST AT HEAD — the
+  // collapsed recovery and the parameterless style reset — and two more target a gate that is
+  // already RED at HEAD (`NOOWNEDPANE`, whose subject is the four `'owned-pane'` filters the pass
+  // deletes), so their redness would be unattributable. Registering any of them now would rot
+  // `test/mutation-anchors.test.js` immediately. They are derived, with exact anchors, in
+  // Claude/Curie/RED-swipe-declone-stage2-subtraction.md and are owed at step 6 — the same split
+  // stage 6e used when `disposeOwnedPanes` did not yet exist.
+
+  // ── NOGHOSTCLASS (test/retired-concepts-purge.test.js) ──
+  // ADDITIVE. The gate's subject is a SOURCE-TEXT property — that no first-party script writes
+  // the retired class — so the injection is deliberately behaviour-INERT: the paired removal on
+  // the same line means nothing can observe the class at runtime, and the redness is therefore
+  // attributable to the source scan alone rather than shared with whatever a live `.nav-ghost`
+  // would have tripped. Expected killer: NOGHOSTCLASS, and nothing else.
+  { name: 'S2-25 NOGHOSTCLASS: a first-party script writes the retired ghost class again, at a real class-write site (-> NOGHOSTCLASS)',
+    file: 'js/nav.js',
+    from: "      b.classList.toggle('active', on);",
+    to:   "      b.classList.toggle('active', on); b.classList.add('nav-ghost'); b.classList.remove('nav-ghost');" },
+
+  // ── NOCLB (test/retired-concepts-purge.test.js) — closes coverage-audit M3 ──
+  // TWO mutants, one per re-introduction shape, in a DOM-free module so neither can redden
+  // anything but the scan. (a) a declaration plus its read; (b) a bare READ of the other
+  // identifier with no declaration anywhere — the shape a declaration-only scan would miss.
+  // Both are inert (`false` / a field no caller sets). Expected killer for both: NOCLB.
+  { name: 'S2-26 NOCLB: the retired `clobbered` identifier is declared and read again in code position (-> NOCLB)',
+    file: 'js/progressfmt.js',
+    from: '  function b64urlEncode(bytes) {\n    let s = \'\';',
+    to:   '  function b64urlEncode(bytes) {\n    const clobbered = false;\n    if (clobbered) return \'\';\n    let s = \'\';' },
+  { name: 'S2-27 NOCLB: a bare READ of the retired `sourceWasClobbered` identifier is re-introduced, with no declaration (-> NOCLB)',
+    file: 'js/progressfmt.js',
+    from: '  function b64urlEncode(bytes) {\n    let s = \'\';',
+    to:   '  function b64urlEncode(bytes) {\n    if (bytes && bytes.sourceWasClobbered) return \'\';\n    let s = \'\';' },
+
+  // ── PILLSWEPT (test/swipe-declone-stage2-reset.test.js) ──
+  // THE DEFECT THE PARENT PLAN LITERALLY INVITES: §12 item 14's retention clause names the
+  // `.nav-ghost` sweep line while describing the `.np-pill-float` sweep on the line below it, so
+  // a builder following it to the letter deletes both. The pill clone is the ONE owned resource
+  // a swipe still creates and this is its only sweeper.
+  { name: 'S2-28 PILLSWEPT: the .np-pill-float sweep is deleted alongside the ghost sweep, leaking the one owned resource the swipe still builds (-> PILLSWEPT)',
+    file: 'js/nav.js',
+    from: "    document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone\n",
+    to:   "" },
+
+  // ── BORROWEDREALSURVIVES (test/swipe-stage6.test.js) ──
+  // The REPLACEMENT mutant for the relocated `BR` cell: its old defender was a broken `own`
+  // filter inside a disposer this pass deletes, so the mutant targets the mechanism that now
+  // guarantees the property — the style reset CLEARS rather than REMOVES.
+  // ⚠️ NON-DISCRIMINATING, and that is disclosed rather than repaired. The reset runs at the top
+  // of every applyScreen over every view and every `.browsepage`, so removing those elements
+  // reddens much of the harness suite: it demonstrates that THE SUITE notices, not that THIS
+  // cell does. It is the honest choice of mechanism — the filter it replaces no longer exists.
+  // MEASURED expected killers (2026-08-05, with this suite): BORROWEDREALSURVIVES, plus the
+  // browse/home/one-screen-type harness families. Recorded so "reddens for the right reason"
+  // stays checkable by reading, since the designated-killer check is not mechanised (audit M5).
+  { name: 'S2-29 BORROWEDREALSURVIVES: the swipe style reset is broadened to REMOVE the elements it clears, so a supersession destroys a view the gesture only borrowed (-> BORROWEDREALSURVIVES)',
+    file: 'js/nav.js',
+    from: "    for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }",
+    to:   "    for (const el of els) if (el && el.parentNode) el.remove();" },
+
+  // ── M2 (test/browse-virtual.test.js) — coverage-audit finding M2, plan §11 step 4 ──
+  // THE EXACT MUTANT THE AUDIT NAMES. Before the M2 cells landed this applied cleanly and left
+  // the suite GREEN: both places that appeared to cover the throw were independent
+  // re-implementations in fixtures, each throwing on its own account.
+  { name: 'S2-30 M2: Browse.pageElFor returns null on a cache miss instead of throwing, so a missing page surfaces later as a transform write on undefined (-> M2 pageElFor throw cell)',
+    file: 'js/browse.js',
+    from: [
+      '    if (!hit) {',
+      '      // A descriptor is plain in production, so JSON.stringify never throws in practice — but',
+      "      // this accessor's whole point is to fail LOUDLY and BY NAME at a miss, and letting a",
+      '      // cyclic descriptor turn that into an unrelated JSON TypeError would defeat it silently.',
+      '      let d;',
+      '      try { d = JSON.stringify(desc); } catch { d = String(desc); }',
+      "      throw new Error('Browse.pageElFor: no cached browse page for ' + d);",
+      '    }',
+      '    return hit.el;',
+    ].join('\n'),
+    to:   '    return hit ? hit.el : null;' },
+
+  // ── RECOVERYPARITY (test/swipe-declone-stage2-subtraction.test.js) ──
+  // The recovery drops its `resetScroll:false`, so the screen application stomps the explicit
+  // session-start scroll restore that follows it and the source panel is reset to top. This is
+  // the HEAD form of the pass's `NATURAL-a`; after §5's collapse the same defect is spelled
+  // `{ render: false, resetScroll: false }` -> `{ render: false }` and the anchor is re-derived
+  // with it (Claude/Curie/RED-swipe-declone-stage2-subtraction.md).
+  { name: 'S2-31 RECOVERYPARITY: the supersession recovery stops forcing resetScroll:false, so applying the source screen resets its panel to top over the session-start restore (-> RECOVERYPARITY.mid-drag)',
+    from: "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
+    to:   "        applyScreen(currentDesc(), { render: false, keepGhosts: cur ? true : undefined });" },
+
+  // The recovery releases the Browse row hold BEFORE it applies the source screen, which
+  // deactivates a suspended virtualized source and dematerializes its kept rows before the
+  // screen has landed — the ordering an executed counterexample fixed
+  // (Claude/Loki/STRIKE-swipe-stage6-recover-before-arm). This is RECOVERYPARITY's `NATURAL-c`.
+  // ⭐ `VR_HOLD_ORDER_FROM`/`_TO` have existed at the top of this file since stage 6a and were
+  // never registered — declared, anchoring cleanly, and reachable by no sweep, so the ordering
+  // they describe had no runnable evidence at all. They are wired up here rather than rewritten.
+  { name: 'S2-32 RECOVERYPARITY: the supersession recovery releases the row hold BEFORE applying the source screen (-> RECOVERYPARITY ordering clause, all three routes)',
+    from: VR_HOLD_ORDER_FROM, to: VR_HOLD_ORDER_TO },
 ];
 
 // Exported so a TEST can check every anchor still matches the source. A mutation

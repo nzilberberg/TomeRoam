@@ -375,3 +375,50 @@ test('KEEPER — a browser scroll between endHold and the successor\'s first mov
 // ST (green guard, existing @ ~:419 'I20 — stale move/end/cancel ... cannot touch the new
 //    session'): the superseded gesture's stale events stay harmless. Must stay green.
 // These are NOT duplicated here (one owner per cell); this file adds only the NEW cells.
+
+// ── BORROWEDREALSURVIVES — a supersession never removes a view the gesture only BORROWED ──
+//
+// RELOCATED, NOT REWRITTEN (PLAN-swipe-declone-stage2-subtraction.md §8 D14b, §13 decision 8).
+// This is the `BR` cell, moved here from test/swipe-stage6e.test.js beside the other
+// supersession cells (OR/NC/VR/PS). Its ASSERTION is unchanged from the form it has held since
+// typed ownership was introduced: on a `browse→home` supersession neither borrowed-real mover
+// is ever removed from the document.
+//
+// ⛔ WHAT CHANGED IS ONLY ITS RATIONALE, and that is the whole reason the relocation is not a
+// deletion. The cell used to cite `disposeOwnedPanes`' `own` filter as the mechanism that made
+// the removal structurally impossible; the subtraction deletes that filter with the ownership
+// kind it filtered on. The BEHAVIOUR survives, so the witness survives: what now guarantees it
+// is `Nav.resetSwipeStyles`, which CLEARS the inline styles on every view and every
+// `.browsepage` rather than removing the nodes. A reset broadened to REMOVE what it clears is
+// the same defect class the retired filter used to make impossible, and it reddens here — so
+// the cell is not vacuous either.
+//
+// This is R2's class ("a deleted cell was the only witness of a behaviour that SURVIVES")
+// answered per-cell against the BEHAVIOUR rather than against the mechanism the cell's own
+// comment cited — the two had come apart in exactly the cells this pass deletes. No other cell
+// covers it: RECOVERYPARITY asserts screen, scroll, ordering and the pill sweep;
+// DESTROYEDMOVER asserts transforms and a released session.
+test('BORROWEDREALSURVIVES — on a browse->home supersession neither borrowed-real mover (#browse or #home) is ever removed', async () => {
+  const h = boot({ fakeTimers: true, realBrowse: true });
+  try {
+    h.tap('.navbtn[data-nav="books"]'); await settle(h);   // navStack [home, books]
+    const browseEl = h.$('browse'), homeEl = h.$('home');
+    await goLive(h);                                       // back-swipe books->home; BOTH movers borrowed-real
+    assert.ok(/start back books→home/.test(starts(h).at(-1) || ''),
+      `fixture: the drag under test is browse->home — got ${starts(h).at(-1)}`);
+    assert.equal(ghosts(h), 0, 'fixture: the pair is pane-less — no owned pane exists to remove');
+    const hr0 = hardResets(h).length;
+
+    h.touch.start(10, 300, browseEl);                      // supersede mid-drag
+    assert.ok(hardResets(h).length > hr0, 'fixture: the supersession tripped the recovery');
+
+    assert.ok(h.$('browse') === browseEl && browseEl.isConnected,
+      'the borrowed-real #browse (the source host) must SURVIVE the supersession. The gesture does '
+      + 'not own it; a teardown that removed it would leave the successor rendering into a missing '
+      + 'host. Since the ownership filter that made this structurally impossible is gone, what '
+      + 'holds it is that the style reset CLEARS rather than REMOVES.');
+    assert.ok(h.$('home') === homeEl && homeEl.isConnected,
+      'the borrowed-real #home (the incoming mover) must also SURVIVE — it is a real view the '
+      + 'gesture borrowed, never a resource it created');
+  } finally { h.dispose(); }
+});

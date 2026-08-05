@@ -646,3 +646,78 @@ test('virtual author page: a changed BOOK SET with unchanged author metadata upd
     m._vctl.destroy();
   } finally { global.VirtualList.setForceVirtual(false); }
 });
+
+// ════════════════════════════════════════════════════════════════════════════════════════
+// M2 — `Browse.pageElFor`'s throw is a CONTRACT CLAIM, and its `keyFor` sibling is the
+// deliberate negative. Coverage-audit finding M2 (Claude/Mendeleev/AUDIT-swipe-declone-stage2.md),
+// closed here per PLAN-swipe-declone-stage2-subtraction.md §11 step 4.
+// ════════════════════════════════════════════════════════════════════════════════════════
+//
+// WHY THE GAP EXISTED, and why it is not visible from a green suite. Three records make the
+// throw an absolute claim (js/browse.js's own accessor comment, js/app.js's `env.sourceEl`
+// comment, and PLAN-swipe-declone.md §5.3.6 "a null resolution is an error, not a null mover").
+// No test called the REAL accessor with an uncached descriptor: the two places that appear to
+// cover it — test/app-harness.js's fake `Browse.pageElFor` and
+// test/swipe-declone-stage2-construction.test.js's recipe fake — are independent
+// re-implementations that throw on their OWN account. Change the real accessor to
+// `return hit ? hit.el : null` and every fixture still throws from its own stand-in; the suite
+// stays green while a missing page surfaces much later as a transform write on `undefined`.
+//
+// THE PRECEDENT IS EXACT AND IS THIS PROJECT'S OWN: `finalizationPlanFor`'s unhandled-kind
+// guards shipped with no throw test and no registered mutant, and making both guards inert
+// left the whole swipe suite green.
+//
+// NON-VACUITY PRECONDITION, stated because "it throws" is satisfiable by a fixture in which
+// nothing ever resolves: the CACHED descriptor is resolved in the same cell, so the cell can
+// tell "throws on a miss" from "throws on everything".
+
+test('M2 — Browse.pageElFor THROWS on an uncached descriptor, and resolves a cached one in the same cell', () => {
+  try {
+    T.pageCache.clear();
+    // The non-vacuity half FIRST: a descriptor this cache HAS resolves to its element.
+    const el = page();
+    T.pageCache.set('books', { el, order: 1 });
+    assert.equal(Browse.pageElFor({ v: 'books' }), el,
+      'fixture sanity: a CACHED descriptor must resolve — without this the throw below is '
+      + 'satisfied by a fixture in which nothing resolves at all');
+
+    // The claim: a miss is an ERROR at the seam, never a null mover.
+    assert.throws(() => Browse.pageElFor({ v: 'authorBooks', author: { ratingKey: 'never-rendered' } }),
+      /no cached browse page/,
+      'a descriptor with no cached page must FAIL LOUDLY AND BY NAME here, at the seam. Returning '
+      + 'null instead lets the miss surface much later as a transform write on `undefined`, which '
+      + 'is the failure this accessor was written to prevent (js/browse.js; plan §5.3.6).');
+    // A parameterized descriptor with NO payload cannot even be keyed — still a throw, not a null.
+    assert.throws(() => Browse.pageElFor({ v: 'files' }), /no cached browse page/,
+      'an unkeyable descriptor is a miss too, and a miss is an error');
+  } finally { T.pageCache.clear(); }
+});
+
+// The SIBLING NEGATIVE the code deliberately depends on. `keyFor` (js/browse.js) is the
+// hold-release path's probe and must return a VALUE on a miss, never throw: a throw there runs
+// inside app.js's finalize `finally`, PAST `if (!ok) finishing = false;`, which would leave
+// `finishing` true and wedge every future swipe. It is reached through the real production
+// entry point (`Browse.endHold`), not by exporting an internal — the wedge is a property of
+// the call site, and calling `keyFor` directly would prove nothing about it.
+test('M2 sibling — Browse.endHold survives a landed descriptor with no cached page (keyFor returns a value, never throws)', () => {
+  try {
+    T.pageCache.clear();
+    const el = page();
+    T.pageCache.set('books', { el, order: 1 });
+
+    const missing = { v: 'authorBooks', author: { ratingKey: 'never-rendered' } };
+    // The discriminator: the SAME descriptor throws through pageElFor. So this cell is about
+    // keyFor's non-throwing contract, not about the descriptor being harmless.
+    assert.throws(() => Browse.pageElFor(missing), /no cached browse page/,
+      'fixture sanity: this descriptor DOES throw through the accessor');
+
+    assert.doesNotThrow(() => Browse.endHold(Browse.beginHold(), missing),
+      'the hold release must survive a landing that names no cached browse page. A throw here '
+      + 'runs inside the finalize `finally` past `if (!ok) finishing = false;` and wedges every '
+      + 'future swipe — which is why keyFor is deliberately NOT pageElFor.');
+    assert.doesNotThrow(() => Browse.endHold(Browse.beginHold(), { v: 'files' }),
+      'an UNKEYABLE landed descriptor (parameterized, no payload) must also be a value, not a throw');
+    assert.doesNotThrow(() => Browse.endHold(Browse.beginHold(), null),
+      'a null landing must also be a value, not a throw');
+  } finally { T.pageCache.clear(); }
+});
