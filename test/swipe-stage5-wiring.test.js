@@ -14,13 +14,8 @@ const assert = require('node:assert');
 const { boot } = require('./app-harness.js');
 
 async function settle(h, n = 12) { for (let i = 0; i < n; i++) await h.settle(); }
-// REAL wall clock, captured before boot() patches setTimeout — move() only resamples
-// velocity after >8ms of real time, so an aborting drag must let real time pass.
-const realSetTimeout = global.setTimeout;
-const realSleep = (ms) => new Promise((r) => realSetTimeout(r, ms));
 
 const swipeLog = (h) => h.log.calls.filter((c) => c.name === 'debug' && c.args[0] === 'SWIPE').map((c) => c.args[1]);
-const flashLog = (h) => h.log.calls.filter((c) => c.name === 'debug' && c.args[0] === 'FLASH').map((c) => c.args[1]);
 const starts = (h) => swipeLog(h).filter((m) => /^start /.test(m));
 const txNum = (t) => { const m = /translateX\(\s*(-?\d+(?:\.\d+)?)px\)/.exec(t || ''); return m ? Number(m[1]) : null; };
 
@@ -102,36 +97,13 @@ test('F5c WIRING — a browse-host swipe cleans up a STALE settings overlay left
   } finally { h.dispose(); }
 });
 
-// ── F2-r (wiring) — browse→home is pane-less: L3 never synthesizes animSync or ghostY ───
-// Stage 6i (PLAN-swipe-noswap-home.md §5/§12) retired the home-snapshot recipe: a →home
-// reveal no longer builds ANY owned pane (the real fixed #home is the un-parked incoming
-// mover, borrowed-real), so buildConstruction's `capture` is null for browse→home — L3's
-// `if (c.capture) { ... }` guard (app.js start()) never runs, and neither d.animSync nor
-// d.ghostY is ever assigned. A build that synthesizes either from a null capture would
-// report a number instead of "?".
-test('F2-r WIRING — a browse→home swipe is pane-less: L3 never synthesizes animSync or ghostY', async () => {
-  const h = boot({ fakeTimers: true });
-  try {
-    h.tap('.navbtn[data-nav="books"]'); await settle(h);   // navStack = [home, books]; back = home
-    const row = addRow(h);
-    // Abort books->home: no owned pane is built (Stage 6i), so there is no capture to record.
-    h.touch.start(10, 300, row);
-    h.touch.move(80, 302); await realSleep(12);
-    h.touch.move(200, 304); await realSleep(12);
-    h.touch.move(30, 304); await realSleep(12);
-    h.touch.end(30, 304);
-    // Advance past BOTH the 340ms finalize timer and the 500ms reveal window it then arms.
-    await settle(h); await h.clock.advance(1200); await settle(h);
-    const line = flashLog(h).find((m) => /@reveal/.test(m));
-    assert.ok(line, `a books→home swipe must produce a @reveal line — got ${JSON.stringify(flashLog(h))}`);
-    assert.match(line, /animSync=\?/,
-      `browse→home builds no owned pane (Stage 6i), so d.animSync must never be assigned `
-      + `(reported "?"), not synthesized as a number: ${line}`);
-    assert.match(line, /ghostY=\?/,
-      `browse→home builds no owned pane (Stage 6i), so d.ghostY must never be assigned `
-      + `(reported "?"), not synthesized as a number: ${line}`);
-  } finally { h.dispose(); }
-});
+// ── F2-r — RETIRED WITH THE CAPTURE-RECORDING BLOCK (PLAN-swipe-declone-stage2-subtraction.md
+// §4 D2, §8 D14) ── This pinned that browse→home is pane-less: L3 never synthesizes animSync
+// or ghostY from a null capture. `buildConstruction` returns no `capture` key at all now (its
+// only producer, the app-ghost recipe, is gone), so `d.ghostY`/`d.animSync`/`d.animRes` have
+// no writer anywhere, and the `animSync=`/`ghostY=` tokens this cell asserted `?` for are
+// removed from the @reveal line entirely (D3) — there is no longer a field to prove is never
+// synthesized.
 
 // ── F7b — L3 ordering: the row hold precedes the clobbering destination render ───────────
 // start() takes the Browse row hold BEFORE buildConstruction invokes the mid-drag render

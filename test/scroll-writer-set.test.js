@@ -166,7 +166,7 @@ function deriveSites(readFile = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8
 //
 // Entries are keyed by their SOURCE TEXT, not by `file:line`: a line number rots on any edit
 // above it, which would turn this gate into noise. Two entries may legitimately share the
-// same text (11 and 12 do); they form a GROUP and the derived count for that group must match
+// same text (10 and 11 do); they form a GROUP and the derived count for that group must match
 // the number of registered entries in it, so the gate still fails when one of the two is
 // deleted.
 // ─────────────────────────────────────────────────────────────────────────────────────────
@@ -216,12 +216,19 @@ const BASELINE = [
   // cheap repair that would blind this gate. A document scroll writes no element's scrollTop,
   // and window scroll is always 0 on the signed-in app views now that both #home and #browse
   // are fixed own-scroll boxes (the reasoning recorded at css/app.css:146-149).
-  { n: 10, cls: 'B', file: 'js/app.js', text: 'if (cur) window.scrollTo(0, cur.scroll0);',
+  // RE-DERIVED (PLAN-swipe-declone-stage2-subtraction.md §4a C5, decision 17): entry 10 lost
+  // its `if (cur)` guard when §5's collapse proved `cur` is never null on the recovery's only
+  // remaining entry route, so its text now converges EXACTLY onto entry 11's — a shared-text
+  // GROUP of two, not the nested pair (entry 10's line no longer CONTAINS entry 11's; the two
+  // are now byte-identical). Direction 3 below still reddens if EITHER writer vanishes, which
+  // is the property the group mechanism exists to preserve; what is lost is which of the two
+  // vanished, and that is disclosed in the drift message rather than hidden.
+  { n: 10, cls: 'B', file: 'js/app.js', text: 'window.scrollTo(0, cur.scroll0);',
     target: 'the document', owner: 'the supersession recovery', why: 'a document scroll, not an element write' },
   // Entries 11 and 12 were a GROUP of two sharing this text — the HELD abort path and the
   // no-hold abort path. PLAN-swipe-declone.md Stage 2 deleted the held abort branch (an abort
-  // has nothing to rebuild and nothing to hold), so the group has a single member now, and the
-  // group-count check is exactly what would have caught that deletion going unrecorded.
+  // has nothing to rebuild and nothing to hold), so the group had a single member for a time —
+  // until entry 10 converged onto the same text above, re-forming a group of two.
   { n: 11, cls: 'B', file: 'js/app.js', text: 'window.scrollTo(0, cur.scroll0);',
     target: 'the document', owner: 'the abort path', why: 'a document scroll, not an element write' },
   { n: 13, cls: 'D', file: 'js/app.js', text: 'window.scrollTo = function (...args) {',
@@ -271,10 +278,12 @@ test('M1WRITERSET — every derived first-party vertical-scroll writer is regist
     + 'gone):\n  ' + rotted.join('\n  '));
 
   // ── DIRECTION 3 — a GROUP whose derived count no longer equals its registered count FAILS.
-  // Entries 11 and 12 share their text; without this, deleting one of the two would pass.
-  // Registered texts NEST (entry 10's line CONTAINS entries 11/12's text), so each derived
-  // site is attributed to its LONGEST matching entry — otherwise the recovery site would be
-  // counted into the abort-path group and the gate would report drift that is not there.
+  // Entries 10 and 11 share their text (PLAN-swipe-declone-stage2-subtraction.md §4a C5); without
+  // this, deleting one of the two would pass silently. Registered texts no longer NEST after
+  // §5's collapse — entry 10's line is now byte-identical to entry 11's, not a superset of it —
+  // so each derived site is attributed to its LONGEST matching entry (a no-op tie-break here,
+  // since the two texts are equal length; recorded so a future asymmetric group is not surprised
+  // by which one wins).
   const derivedCount = new Map();
   for (const s of sites) {
     const best = matchOf(s).sort((a, b) => b.text.length - a.text.length)[0];
@@ -286,11 +295,18 @@ test('M1WRITERSET — every derived first-party vertical-scroll writer is regist
   const drift = [];
   for (const [k, want] of registeredCount) {
     const got = derivedCount.get(k) || 0;
-    if (got !== want) drift.push(`${k} — registered ${want} site(s), derived ${got}`);
+    if (got !== want) {
+      // Name every registered candidate in the group, not just the key — a group drift cannot
+      // say WHICH writer vanished, so the reader is handed the full candidate list instead of
+      // being left to guess (PLAN-swipe-declone-stage2-subtraction.md §4a C5 mitigation).
+      const candidates = BASELINE.filter((e) => groupKey(e) === k)
+        .map((e) => `#${e.n} (${e.owner})`).join(', ');
+      drift.push(`${k} — registered ${want} site(s), derived ${got} — candidates: ${candidates}`);
+    }
   }
   assert.deepEqual(drift, [],
     'these baseline groups no longer have the registered number of sites in source. A group with '
-    + 'two identical-text entries (the two abort-path document scrolls) is why this direction '
+    + 'two identical-text entries (entries 10 and 11, both document scrolls) is why this direction '
     + 'exists: without it, deleting ONE of the two would pass silently:\n  ' + drift.join('\n  '));
 
   // ── THE INVARIANT ITSELF — exactly ONE registered site targets #home.

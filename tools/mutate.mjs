@@ -45,44 +45,33 @@ const HARDRESET_SID_FROM = [
 const DROP_SESSIONDONE_FROM = "sessionDone(cur);   // the held pane is released → this session's owner ends (terminal for held paths)";
 const DROP_SESSIONDONE_TO = '/* mutated: owner not ended on held reveal */';
 const HARDRESET_SID_TO = "        if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset');";
-// stage 6a: re-anchored — the hard reset's pane-disposal pair (PLAN-swipe-stage6.md §6
-// step 2) is now two adjacent statements, not one compound line (the recovery render
-// that step 3 adds needs the abort-render decision, so `render: false` can no longer be
-// literal). Removing BOTH is still required to strand the pane: applyScreen() also calls
-// Nav.resetSwipeStyles() internally, so dropping only the explicit call leaves the
-// ghost disposed anyway.
 // Re-anchored stage 6c (PLAN-swipe-stage6c.md §3): the recovery now also admits a
 // pane-less SETTLING session (`d` null, `session` live), so the render/scroll reads
 // were widened from `d` to `cur = d || session`.
 // Re-anchored stage 6d (PLAN-swipe-stage6d.md §2/§9): the recovery reads the declared
 // `cur.finPlan.abortRender` (plus the `cur.live` build-ran conjunct) instead of the
 // retired `cur.clobbered` runtime byproduct.
-// Re-anchored stage 6e (PLAN-swipe-stage6e.md §2/§4/§6): the owned-pane removal is now
-// the owner-driven disposeOwnedPanes(cur,'superseded') call ahead of resetSwipeStyles,
-// and both `resetSwipeStyles` and the `applyScreen` opts thread `keepGhosts:true` on the
-// owned branch. Gutting all three still strands the pane (neither remover runs), the
-// same defect this mutation has always proven — cell DP/HR/BR(snapshot clause).
-const HARDRESET_DISPOSE_FROM = [
-  "        if (cur) disposeOwnedPanes(cur, 'superseded');",
-  '        resetSwipeStyles(cur ? true : undefined);',
-  "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
-].join('\n');
+// Re-anchored PLAN-swipe-declone-stage2-subtraction.md §5/§8 D13b: the owner-driven
+// disposeOwnedPanes call and the explicit resetSwipeStyles call are both gone — the
+// collapse leaves exactly one statement performing the recovery's screen restore. This
+// mutation now guts that one statement; expected killers: OR/NC/PS (swipe-stage6.test.js),
+// RECOVERYPARITY (NATURAL-a/-b/-c share this line).
+const HARDRESET_DISPOSE_FROM = '        applyScreen(currentDesc(), { render: false, resetScroll: false });';
 const HARDRESET_DISPOSE_TO = '        /* mutated: no hard reset */';
 // stage 6a §9 VR — the two ordering defects the Loki strike measured against the real
 // js/browse.js + js/virtuallist.js (STRIKE-swipe-stage6-recover-before-arm-r2.md §3).
+// Re-anchored PLAN-swipe-declone-stage2-subtraction.md §5 (S2-32/RECOVERYPARITY
+// NATURAL-c): the dispose+resetSwipeStyles pair is gone, leaving the screen-application
+// and scroll-restore statements as the only two the row hold must precede.
 const VR_HOLD_ORDER_FROM = [
-  "        if (cur) disposeOwnedPanes(cur, 'superseded');",
-  '        resetSwipeStyles(cur ? true : undefined);',
-  "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
-  '        if (cur) window.scrollTo(0, cur.scroll0);',
+  '        applyScreen(currentDesc(), { render: false, resetScroll: false });',
+  '        window.scrollTo(0, cur.scroll0);',
   '        dropRowHold();',
 ].join('\n');
 const VR_HOLD_ORDER_TO = [
   '        dropRowHold();',
-  "        if (cur) disposeOwnedPanes(cur, 'superseded');",
-  '        resetSwipeStyles(cur ? true : undefined);',
-  "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
-  '        if (cur) window.scrollTo(0, cur.scroll0);',
+  '        applyScreen(currentDesc(), { render: false, resetScroll: false });',
+  '        window.scrollTo(0, cur.scroll0);',
 ].join('\n');
 // Re-anchored stage 6c: `finishing = false;` (F2) now sits between dropRowHold() and
 // the identity-null pair — still required to run AFTER dropRowHold (which reads
@@ -99,21 +88,7 @@ const VR_IDENTITY_ORDER_TO = [
   '        dropRowHold();',
   '        finishing = false;',
 ].join('\n');
-// stage 6a §9 SR — force the recovery to skip the source re-render even when the drag
-// DID clobber #browse. NB: the opposite direction (force-render TRUE when NOT clobbered,
-// aimed at cell NC) was tried and DROPPED — verified against the full suite, it reddens
-// nothing: NC's fixture supersedes from an OVERLAY source, and Nav.applyScreen dispatches
-// on desc.v BEFORE it ever consults the `render` flag (the options/sub-screen branch
-// calls renderScreen(), never Browse.render()), so the flag's value cannot leak into a
-// #browse render for that fixture regardless. NC's genuine proof is the scroll mutation
-// below, which reddens its scroll-restore clause directly.
-const RECOVERY_RENDER_LINE = "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });";
 const RECOVERY_RENDER_ALWAYS_FALSE = "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });";
-// stage 6a Poirot F1 (Claude/Poirot/f09cf9d-swipe-stage6-supersession.md) — the orphan
-// sub-case (d===null) must keep nav.js's default resetScroll so a home/options source
-// still scrolls to top. Forcing resetScroll:false back onto the orphan (the f09cf9d bug)
-// reds the OB-home cell in test/swipe-stage6.test.js.
-const F1_ORPHAN_RESETSCROLL_TO = "        applyScreen(currentDesc(), { render: false, resetScroll: false, keepGhosts: cur ? true : undefined });";
 
 // ── SWIPE stage 5 multi-line anchors (built by join, per the CRLF/'\n' rule) ──────────
 // Stage 1 (PLAN-swipe-declone.md §5.1) retires the `fromKind` argument along with
@@ -249,13 +224,12 @@ const MUTATIONS = [
     from: FINALIZE_ORDER_FROM, to: FINALIZE_ORDER_TO },
   { name: 'stage6a (b): session/d null BEFORE the hold release (-> VR: dropRowHold no-ops, hold leaks)',
     from: VR_IDENTITY_ORDER_FROM, to: VR_IDENTITY_ORDER_TO },
-  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the mutation IS the shipped behaviour now. No transition overwrites its source, so the
-  // recovery never re-renders and `render: false` is literal — there is no decision left to defeat.
-  { name: 'stage6a: recovery stops restoring the session-start scroll (-> SC known-red test, NC scroll clause)',
-    from: '        if (cur) window.scrollTo(0, cur.scroll0);',
-    to: '        /* mutated: no scroll restore */' },
-  { name: 'stage6a F1: orphan sub-case forces resetScroll:false, dropping home scroll-to-top (-> OB-home test)',
-    from: RECOVERY_RENDER_LINE, to: F1_ORPHAN_RESETSCROLL_TO },
+  // stage6a F1 — DE-REGISTERED (PLAN-swipe-declone-stage2-subtraction.md §4/§5/§8 D13).
+  // Its subject was the ORPHAN sub-case (cur null) forcing resetScroll:false; §5's collapse
+  // deletes the `.nav-ghost` disjunct that was that path's only entry condition (held
+  // structurally by NOGHOSTCLASS), so `cur` is non-null on every reachable entry and there
+  // is no orphan branch left to force anything on. Its designated killer, OB-home, is
+  // deleted with it (§8 D14).
   // ── SWIPE stage 6c: pane-less supersession ownership guard (PLAN-swipe-stage6c.md) ─
   { name: 'stage6c W: the supersession recovery omits the finishing=false clear (-> W/W(armed) wedge test)',
     from: [
@@ -283,18 +257,31 @@ const MUTATIONS = [
     from: "releaseGesture();   // never leave a dead gesture's listeners on a stale node",
     to: '/* mutated: listeners left bound */' },
   // RE-ANCHORED (PLAN-home-shift-fix.md §7.3, MUTUNIQ): `window.scrollTo(0,
-  // cur.scroll0);` occurs THREE times in js/app.js (the supersession recovery at 445,
-  // the held abort path at 1203, the no-hold abort path at 1228) and this single entry
-  // anchored on the bare line, so first-occurrence-wins always mutated the RECOVERY —
-  // the intended ABORT sites (either path) were never mutated and their restore had
-  // never been proven able to fail. Split into three per-site entries, each anchored
-  // with enough surrounding context to be unique on its own.
-  { name: 'swipe: supersession recovery stops restoring the session-start scroll (-> I20 test)',
-    // Unique via the `if (cur)` guard: only the recovery site inlines this scroll
-    // restore behind an `if (cur)` check — both abort sites are bare (they run inside
-    // an outer commit/abort branch that already established `cur`).
-    from: '        if (cur) window.scrollTo(0, cur.scroll0);',
-    to: '        /* mutated: no scroll restore */' },
+  // cur.scroll0);` occurs THREE times in js/app.js (the supersession recovery, the
+  // no-hold abort path, and — before this line moved — a held abort path retired at
+  // PLAN-swipe-declone.md §12 item 13) and a single entry anchored on the bare line
+  // let first-occurrence-wins always mutate the RECOVERY, leaving the abort site
+  // unproven. Split into per-site entries, each anchored with enough surrounding
+  // context to be unique on its own.
+  //
+  // MERGED (PLAN-swipe-declone-stage2-subtraction.md §8 D13d, decision 19): this entry
+  // and the former 'stage6a: recovery stops restoring the session-start scroll' entry
+  // both anchored on the BARE scroll-restore line after §5's collapse dropped the
+  // `if (cur)` guard that used to distinguish it — not a registry duplicate this time
+  // but a NON-UNIQUE anchor, because the bare line's leading whitespace (8 spaces) is a
+  // literal substring of the OTHER abort site's line (10 spaces + the same text) —
+  // `indexOf` does not require a line-boundary match. Disambiguated by including the
+  // preceding `applyScreen(currentDesc(), …)` statement, which is unique to this site
+  // (the other abort site calls `applyScreen(dest, …)`).
+  { name: 'stage6a/swipe: the supersession recovery stops restoring the session-start scroll (-> SC known-red test, NC scroll clause, I20 test)',
+    from: [
+      '        applyScreen(currentDesc(), { render: false, resetScroll: false });',
+      '        window.scrollTo(0, cur.scroll0);',
+    ].join('\n'),
+    to: [
+      '        applyScreen(currentDesc(), { render: false, resetScroll: false });',
+      '        /* mutated: no scroll restore */',
+    ].join('\n') },
   // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the HELD abort branch is deleted (§12 item 13) — an abort has nothing to hold a ghost over,
   // so there is no held scroll restore to suppress. The no-hold abort restore is still guarded below.
   { name: 'swipe: no-hold abort stops restoring the starting scroll (-> AB.noclobber-overlay / AB.noclobber-home tests)',
@@ -361,9 +348,10 @@ const MUTATIONS = [
   { name: 'r223 2: finishing not restored on a throw → swipe wedge (-> throw-in-finalize test)',
     from: 'if (!ok) finishing = false;   // a throw in applyScreen must never wedge every future swipe',
     to:   'if (false) finishing = false;' },
-  { name: 'r223 4: endOwnership clears at finalize, ignoring revealPending (-> held-reveal intermediate-ownership test)',
-    from: 'const endOwnership = () => { if (!revealPending) sessionDone(cur); };   // held paths end in drop()',
-    to:   'const endOwnership = () => { sessionDone(cur); };' },
+  // r223 4 — DE-REGISTERED (PLAN-swipe-declone-stage2-subtraction.md §4 D5, §8). Its
+  // subject was `revealPending`'s guard on endOwnership; D5 removes the field (no
+  // assignment survived step 10) and collapses the guard to unconditional
+  // `sessionDone(cur)` — there is no held-reveal branch left for it to gate.
   // ── SWIPE stage 4: the classification/construction boundary (js/swipe.js) ───────
   // Reviews of .227/.228 (Claude/Poirot/14257f2-*, f3ddd77-*), fixed across .228–.230.
   // These were verified BY HAND at the time — the evidence lived only in commit messages,
@@ -531,72 +519,32 @@ const MUTATIONS = [
   // re-renders #browse → reddens RC.armed (a DRAGGING/overlay supersession is unchanged:
   // cur.live is true / abortRender is 'none' there).
   // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): the conjunct guarded a render decision that no longer exists — the recovery renders nothing.
-  // ── SWIPE stage 6e: owner-driven disposeOwnedPanes(session, reason) (PLAN-swipe-stage6e.md) ─
-  // Curie authored the DP/BR/HR/DEC/RGreveal cells before disposeOwnedPanes existed, so their
-  // true built-code defenders (a broken filter INSIDE the new helper, and the nav.js decoration
-  // guard) could not be registered until the helper landed. Registered here per plan §9.
-  { name: 'swipe6e DP/attribution: disposeOwnedPanes\' own filter never matches, so it removes nothing (-> NOOP.attribution, DP.browse-browse, DP.browse-home)',
-    from: "        if (m.own === 'owned-pane' && m.el.parentNode) { m.el.remove(); disposed = true; }",
-    to:   '        if (false && m.el.parentNode) { m.el.remove(); disposed = true; }' },
-  { name: 'swipe6e BR: disposeOwnedPanes broadens to remove every mover regardless of own (-> BR borrowed-survives test)',
-    from: "        if (m.own === 'owned-pane' && m.el.parentNode) { m.el.remove(); disposed = true; }",
-    to:   '        if (m.el.parentNode) { m.el.remove(); disposed = true; }' },
-  { name: 'swipe6e DEC: the .np-pill-float decoration removal is mistakenly guarded behind keepGhosts too (-> DEC test)',
+  // ── SWIPE stage 6e cluster — RETIRED WITH disposeOwnedPanes (PLAN-swipe-declone-stage2-
+  // subtraction.md §4 D7, §8 D13). disposeOwnedPanes, its `own` filter, its disposal trace and
+  // the nav.js `keepGhosts` parameter it depended on are ALL removed — no reason-tagged
+  // disposal event exists to mistag, emit unconditionally, filter wrongly, or gate a
+  // decoration removal behind. DE-REGISTERED by name:
+  //   swipe6e DP/attribution (own filter never matches) — subject (the filter) is deleted.
+  //   swipe6e DEC (decoration removal wrongly guarded behind keepGhosts) — keepGhosts is gone;
+  //     the decoration removal (js/nav.js) is now unconditionally unguarded by construction.
+  //   swipe6e RSN-emit (disposal trace fires unconditionally) — the trace it perturbed lived
+  //     inside disposeOwnedPanes and has no replacement; found during this build (no entry in
+  //     the plan's D13 table named it), the same class the plan's own R10 names.
+  //   swipe6e HR (both sweep sites forced keepGhosts, stranding an orphan) — the orphan branch
+  //     itself is deleted (§8 D14; the ORPHAN path is unreachable, held by NOGHOSTCLASS).
+  // REPLACED, not dropped (D13b): swipe6e BR's subject — a borrowed-real mover is never
+  // removed by teardown — SURVIVES as BORROWEDREALSURVIVES (test/swipe-stage6.test.js), so a
+  // new mutant is registered against the mechanism that now guarantees it: `Nav.resetSwipeStyles`
+  // (js/nav.js), broadened to REMOVE the elements it clears rather than clearing them — the
+  // same defect class the retired `own` filter used to make structurally impossible.
+  // ⚠️ Non-discriminating, disclosed rather than repaired: the reset runs at the top of every
+  // applyScreen over every view and every `.browsepage`, so this mutant reddens much of the
+  // harness suite — it demonstrates the SUITE notices, not that BORROWEDREALSURVIVES alone
+  // does. Expected killers include BORROWEDREALSURVIVES and most of the harness suite.
+  { name: 'nav: resetSwipeStyles broadens to REMOVE the elements it clears rather than clearing them (-> BORROWEDREALSURVIVES, non-discriminating)',
     file: 'js/nav.js',
-    from: "    document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone",
-    to:   "    if (!keepGhosts) document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // mutated: wrongly guarded" },
-  // ── Stage 6e Mendeleev-remediation (AUDIT-swipe-stage6e BARE_CELLS): close the Mutation-cases
-  // dimension (EC §4.10 — non-vacuity evidence must be RUNNABLE in tooling, not a one-time hand
-  // check). The NOOP.mechanism anti-no-op guard, the RSN reason-correctness/emit guard, and an
-  // HR orphan-specific mutant were unregistered. See Claude/Curie/RED-swipe-stage6e.md
-  // §"Mendeleev-remediation".
-  //
-  // B1 — the anti-no-op crux (Loki STRIKE-swipe-stage6e-r1 residual 1). The owned branch must
-  // suppress the DOM-global .nav-ghost sweep at BOTH sites (the explicit resetSwipeStyles AND
-  // applyScreen's internal one). Dropping keepGhosts at EITHER site alone lets that one sweep run;
-  // the owned pane is already gone via disposeOwnedPanes, so the DOM outcome is UNCHANGED and only
-  // NOOP.mechanism's sweep-count reddens (count 1) — which is exactly why a DOM-outcome cell (DP)
-  // cannot catch it and a mechanism cell must. Two one-site mutants, one per site.
-  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2): NOOP-a and NOOP-b both asserted which of two
-  // mechanisms disposes an OWNED PANE on the recovery branch. No transition builds one, so both
-  // sweeps remove nothing and each mutant applies cleanly while changing no behaviour — the sweep
-  // reported both UNCAUGHT. Nothing is left undefended by their removal: keepGhosts suppresses
-  // the `.nav-ghost` sweep (js/nav.js:105) — a node kind that is never created and is itself on
-  // the subtraction list (§12 item 14) — while the ADJACENT `.np-pill-float` sweep (js/nav.js:106)
-  // is UNGUARDED by keepGhosts and runs regardless; its removal is defended by the DEC cell in
-  // test/swipe-stage6e.test.js.
-  // B2 — RSN reason correctness (plan §9 promised a mistag mutant that never landed). (a) the
-  // disposal reason TOKEN is wrong -> RSN's "superseded recorded" assertion reddens; (b) the trace
-  // fires UNCONDITIONALLY, ignoring the `disposed` flag (Charpy F2) -> a pane-LESS supersession
-  // then claims a disposal that never happened, reddening RSN's pane-less-no-trace clause.
-  // DE-REGISTERED (PLAN-swipe-declone.md Stage 2, reconciled 2026-08-01 after CI's full-registry
-  // sweep reported it UNCAUGHT). RSN-mistag perturbed the disposal REASON token, which has exactly
-  // one consumer: the PBDebug SWIPE line inside disposeOwnedPanes. That line is gated on `disposed`
-  // — deliberately, so a no-op call cannot claim a disposal that never happened — and no transition
-  // builds an owned pane any more, so it never runs and the token is unobservable. The mutation
-  // applies cleanly and changes nothing.
-  // NOT a relocation, checked rather than assumed: the only ownership kind left is the NP pill
-  // decoration ('owned-decoration'), removed by resetSwipeStyles, which takes no reason token.
-  // STILL DEFENDED, and by what — disposeOwnedPanes' `own` FILTER (it never removes a
-  // borrowed-real mover) by the BR cell; the pane-less reality by DP.browse-home; the NP
-  // decoration's removal on the recovery by DEC — all in test/swipe-stage6e.test.js, all passing.
-  // Only the disposal EVENT and its reason lose coverage, and they lose it by having no subject.
-  // disposeOwnedPanes itself is a step-11 subtraction item (§12 item 15) and is left standing.
-  { name: 'swipe6e RSN-emit: the disposal trace fires unconditionally, ignoring the disposed flag (-> RSN pane-less-no-trace clause / Charpy F2)',
-    from: "      if (disposed && window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);",
-    to:   "      if (window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);" },
-  // N1 — HR orphan-specific. The orphan branch (cur null) is swept at BOTH sites; this two-part
-  // mutant forces keepGhosts on BOTH so a stray orphan is never disposed (suppressing only one
-  // leaves the other sweeping it). The owned branch is unchanged — keepGhosts is already true
-  // there — so this reddens ONLY the orphan cell HR (the coarse whole-block hard-reset mutant #13
-  // also reddens HR, but not orphan-specifically).
-  { name: 'swipe6e HR: the recovery keeps ghosts on the ORPHAN branch too (both sweep sites forced keepGhosts), stranding a stray orphan (-> HR test)',
-    from: '        resetSwipeStyles(cur ? true : undefined);',
-    to:   '        resetSwipeStyles(true);',
-    also: {
-      from: "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
-      to:   "        applyScreen(currentDesc(), { render: cur ? (cur.live && cur.finPlan.abortRender === 'rerender') : false, resetScroll: cur ? false : undefined, keepGhosts: true });",
-    } },
+    from: "    for (const el of els) if (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; el.style.zIndex = ''; }",
+    to:   '    for (const el of els) if (el && el.parentNode) el.parentNode.removeChild(el);' },
   // ── SWIPE stage 6f: outgoing app-ghost for in-flow→overlay — SUPERSEDED by Stage 1 ──
   // (PLAN-swipe-declone.md §5.1, 2026-07-30). Stage 6f's own rule ("ghost every in-flow
   // source going to a non-home destination") is exactly what Stage 1 narrows away: only
@@ -662,21 +610,12 @@ const MUTATIONS = [
   { name: 'stage6i home-host: the seam renderDestination branch never un-parks the real #home (-> SNAPSHOTGONE test)',
     from: "          if (host === 'home') { $('home').classList.remove('parked'); return $('home'); }",
     to:   "          if (host === 'home') { return $('home'); }" },
-  { name: 'stage6i SCOPE: the commit→home held-reveal branch is reinstated (-> SCOPE no-hold-timer test)',
-    from: [
-      "        mark('finalize');",
-      '        // Stage 6i (PLAN-swipe-noswap-home.md §5/§12): the commit→home held-reveal branch',
-    ].join('\n'),
-    to: [
-      "        mark('finalize');",
-      "        if (commit && dest.v === 'home') {",
-      "          applyScreen(dest, { render: false, keepGhosts: true });",
-      "          revealPending = true;",
-      "          holdGhostUntilPaintable($('home'), cover);",
-      '          return;',
-      '        }',
-      '        // Stage 6i (PLAN-swipe-noswap-home.md §5/§12): the commit→home held-reveal branch',
-    ].join('\n') },
+  // stage6i SCOPE — DE-REGISTERED (PLAN-swipe-declone-stage2-subtraction.md §8 D13). Its
+  // `to` text called `holdGhostUntilPaintable`, deleted in step 10 and `keepGhosts`/
+  // `revealPending`, both deleted by this pass — applying it would throw a ReferenceError
+  // and be recorded CAUGHT for the wrong reason, indistinguishable from a working mutant.
+  // Its anchor (`mark('finalize');`) still matches source, so this was already broken at
+  // HEAD before this pass touched anything; removal is a repair, not a loss.
   { name: 'stage6i ABORT: setView stops re-parking #home when the target view is not home (-> ABORT parked-after test; also DP.browse-home; also stage1 HOMESTAYSLIVE post-commit test — Stage 1, PLAN-swipe-declone.md, relies on this SAME toggle to park #home at commit, since showAppView no longer parks it mid-drag)',
     file: 'js/nav.js',
     from: "    $('home').classList.toggle('parked', v !== 'home');   // parked = off-screen but PAINTED (covers stay decoded)",
@@ -1303,6 +1242,13 @@ const MUTATIONS = [
   // TWO PARTS, because re-adding the plan VALUE alone changes no mover: the seam no longer
   // branches on it. The pane has to be built and the capture returned for the cell's three
   // assertions to be the discriminator they are written as.
+  // ⚠️ EXPECTED KILLERS WIDENED (PLAN-swipe-declone-stage2-subtraction.md §8 D13c). This
+  // mutant's replacement text injects BOTH retired tokens (`className = 'nav-ghost'` and
+  // `mover(w, 'owned-pane', 'outgoing')`) into js/swipe.js, which the new source-scan gates
+  // NOGHOSTCLASS and NOOWNEDPANE also scan. Nothing breaks — a caught mutant stays caught —
+  // but the sweep's `killed by:` list for this mutant now also names NOGHOSTCLASS and
+  // NOOWNEDPANE alongside NOGHOSTATALL; recorded here so "reddens for the right reason"
+  // stays checkable by reading, per the same hazard already disclosed for `stage6i SCOPE`.
   { name: 'S2-23 NOGHOSTATALL: the app-ghost branch is re-added for browse->browse — a pane is built, a .nav-ghost is mounted and a capture is returned (-> NOGHOSTATALL)',
     file: 'js/swipe.js',
     from: "    let outgoing, incoming, decoration = null;\n    outgoing = mover(env.sourceEl(sourceHost, from.v), 'borrowed-real', 'outgoing');",
@@ -1591,13 +1537,13 @@ const MUTATIONS = [
 
   // ── RECOVERYPARITY (test/swipe-declone-stage2-subtraction.test.js) ──
   // The recovery drops its `resetScroll:false`, so the screen application stomps the explicit
-  // session-start scroll restore that follows it and the source panel is reset to top. This is
-  // the HEAD form of the pass's `NATURAL-a`; after §5's collapse the same defect is spelled
-  // `{ render: false, resetScroll: false }` -> `{ render: false }` and the anchor is re-derived
-  // with it (Claude/Curie/RED-swipe-declone-stage2-subtraction.md).
+  // session-start scroll restore that follows it and the source panel is reset to top. Re-anchored
+  // (PLAN-swipe-declone-stage2-subtraction.md §5 collapse landed): the dispose/reset/keepGhosts
+  // machinery is gone, so the defect is now spelled `{ render: false, resetScroll: false }` ->
+  // `{ render: false }`.
   { name: 'S2-31 RECOVERYPARITY: the supersession recovery stops forcing resetScroll:false, so applying the source screen resets its panel to top over the session-start restore (-> RECOVERYPARITY.mid-drag)',
-    from: "        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });",
-    to:   "        applyScreen(currentDesc(), { render: false, keepGhosts: cur ? true : undefined });" },
+    from: '        applyScreen(currentDesc(), { render: false, resetScroll: false });',
+    to:   '        applyScreen(currentDesc(), { render: false });' },
 
   // The recovery releases the Browse row hold BEFORE it applies the source screen, which
   // deactivates a suspended virtualized source and dematerializes its kept rows before the

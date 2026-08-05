@@ -18,7 +18,9 @@
 //   NC  red-first  an overlay-source (non-clobber) supersession issues NO spurious
 //                  #browse render but still restores scroll.
 //   PS  green guard supersession is PRE-STACK — the recovery must not mutate the nav stack.
-//   OB  green guard an ORPHAN-pane hard reset (d===null) attempts no session-scroll restore.
+//   OB / OB-home  RETIRED (PLAN-swipe-declone-stage2-subtraction.md §8 D14) — the orphan
+//                 (d===null, cur null) entry route they drove no longer exists; see the
+//                 tombstone below.
 //   KEEPER (device-only) Loki's NB-post-endHold-scroll-realize — jsdom cannot emit it.
 //
 // RED-FIRST DISCIPLINE. The three red-first cells (VR/OR/NC) FAIL against HEAD for the
@@ -267,85 +269,14 @@ test('PS — a superseded pre-stack recovery leaves the stack on the source: the
   } finally { h.dispose(); }
 });
 
-// ── OB (green regression guard) — the ORPHAN-pane hard reset ─────────────────────────
-// §9 OB + I17(b). begin() also hard-resets when there is a leftover `.nav-ghost` but NO
-// live session (d === null) — an orphan pane. There is no session-start scroll to restore
-// and currentDesc() is authoritative, so the recovery must NOT read cur.scroll0/cur.finPlan
-// on this path (cur is null — the render/scroll ternaries short-circuit before either
-// dereference). GREEN against HEAD; this pins that the recovery guards on the live session.
-// Mutation (recovery reads cur.* unconditionally) → a throw or a spurious scroll on the
-// orphan path.
-test('OB — an orphan-pane hard reset (no live session) disposes as hard-reset and attempts no session-scroll restore', async () => {
-  const h = boot({ fakeTimers: true });
-  try {
-    await onAuthorsOverBooks(h);
-    // An orphan: a leftover .nav-ghost with NO active session (d === null). This is the
-    // spent/interrupted-pane shape begin() hard-resets — inject it directly so the branch
-    // is exercised with d null (no live gesture in flight).
-    const orphan = h.document.createElement('div');
-    orphan.className = 'nav-ghost';
-    h.$('browse').appendChild(orphan);
-
-    const sBefore = scrollCalls(h).length;
-    const hrBefore = hardResets(h).length;
-    // A left-edge touch → begin() sees the orphan ghost (d null) → hard reset. Do NOT drive
-    // it live: isolate begin()'s orphan branch (no start(), no mid-drag render/scroll).
-    assert.doesNotThrow(() => { h.touch.start(10, 300, addRow(h)); },
-      'the orphan hard reset must not throw (it must not read cur.scroll0/cur.finPlan on a null cur)');
-    await settle(h);
-
-    assert.ok(hardResets(h).length > hrBefore, 'fixture sanity: the orphan really tripped begin()\'s hard reset');
-    assert.equal(scrollCalls(h).length, sBefore,
-      'an orphan hard reset has no session-start scroll to restore — it must issue no scrollTo');
-  } finally { h.dispose(); }
-});
-
-// ── OB-home (regression, red-first for F1) — orphan hard-reset resets scroll on a home source ─
-// Poirot F1 (Claude/Poirot/f09cf9d-swipe-stage6-supersession.md): the recovery's shared
-// `applyScreen(currentDesc(), { render: cur?(cur.live && cur.finPlan.abortRender===
-// 'rerender'):false, resetScroll: false })` (stage 6d re-derived the render flag) forces
-// resetScroll:false onto the ORPHAN sub-case (d===null) too — not just the live-recovery
-// branch that needs it (so applyScreen won't stomp the explicit d.scroll0 restore). For an
-// orphan hard-reset whose currentDesc() is `home`, the PRE-6a code reset the document scroll
-// to top; the committed f09cf9d does not — an unclassified parity regression the OB test
-// above is blind to (it drives a BROWSE source, where nav.js never resets scroll, so
-// resetScroll is inert).
-//
-// Stage 6i (PLAN-swipe-noswap-home.md §6) RE-HOMES what gets reset: active #home is now its
-// own position:fixed overflow-y:auto scroller, so home entry resets #home's OWN scrollTop
-// (nav.js), not the document's `window.scrollTo(0, 1)` (retired). The INVARIANT this cell
-// pins is unchanged — an orphan hard-reset on a home source must still reset home's scroll
-// to top — only the OBSERVABLE CHANNEL moved.
-//
-// This asserts the pre-6a parity on the re-homed channel: an orphan hard-reset on a home
-// source resets #home.scrollTop to 0. Brunel's fix (`resetScroll: d ? false : undefined`, so
-// only the live-recovery branch forces false) greens it; the OB browse guard stays green
-// (browse is inert to resetScroll). (Options/sub sources reset a PANEL scrollTop — home is
-// now the SAME kind of own-scroll source, no longer the window-observable one.)
-test('OB-home — an orphan hard-reset on a HOME source resets #home\'s own scroll to top (pre-6a parity; Poirot F1; Stage 6i re-homed)', async () => {
-  const h = boot({ fakeTimers: true });
-  try {
-    h.tap('.navbtn[data-nav="home"]');      // currentDesc() === home
-    await settle(h);
-    h.$('home').scrollTop = 500;            // #home scrolled down within its own fixed scroller
-
-    // An orphan: a leftover .nav-ghost with NO live session (d === null), on a HOME source.
-    const orphan = h.document.createElement('div');
-    orphan.className = 'nav-ghost';
-    h.$('home').appendChild(orphan);
-
-    const hrBefore = hardResets(h).length;
-    // Any touchstart with a leftover ghost trips begin()'s hard reset (it runs before the
-    // edge/exclusion checks). Do NOT drive it live — isolate the hard-reset's applyScreen.
-    h.touch.start(10, 300, addRow(h));
-    await settle(h);
-
-    assert.ok(hardResets(h).length > hrBefore, 'fixture sanity: the orphan tripped begin()\'s hard reset');
-    assert.equal(h.$('home').scrollTop, 0,
-      'an orphan hard-reset on a home source must reset #home\'s OWN scroll to top '
-      + '(applyScreen home → #home.scrollTop = 0)');
-  } finally { h.dispose(); }
-});
+// ── OB / OB-home — RETIRED WITH THE ORPHAN PATH (PLAN-swipe-declone-stage2-subtraction.md
+// §4/§5/§8 D14). Both pinned begin()'s ORPHAN sub-case (a leftover `.nav-ghost` with no
+// live session, cur === null): OB, that the recovery reads no session-start scroll on that
+// path; OB-home, that it still resets #home's own scroll to top (pre-6a parity). §5's
+// collapse deletes the `.nav-ghost` disjunct that was the orphan path's only entry
+// condition — no first-party source can construct the class any more (held structurally by
+// NOGHOSTCLASS) — so `cur` is non-null on every reachable entry and the branch both cells
+// drove is unreachable. Deleted, not narrowed: their subject no longer exists.
 
 // ── KEEPER (device-only) — Loki NB-post-endHold-scroll-realize ───────────────────────
 // The Loki r2 strike's named RESIDUAL suspicion (filed as a suspicion, not a body): between

@@ -231,7 +231,7 @@ export const TERMINATION = [
     basis: 'parity', where: 'move(): releaseGesture(); d = null; return — before start()' },
   { reason: 'touch-cancel (dragging)', nav: 'settle decision', screen: 'from decision', scroll: 'commit/abort', pane: 'normal settle',
     basis: 'parity', where: 'touchcancel shares onEnd with touchend' },
-  { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: 'currentDesc(); never re-rendered', scroll: 'restore d.scroll0 (live)', pane: 'dispose orphan',
+  { reason: 'hard-reset (leftover)', nav: 'unchanged', screen: 'currentDesc(); never re-rendered', scroll: 'restore d.scroll0', pane: 'none',
     // basis stays 'parity' — the swipe-model gate requires every TERMINATION row to name
     // where its behavior is VERIFIED against current code, and this row does. But its
     // screen/scroll columns now carry the SR/SC repairs, which §10 (the gated §8A ledger)
@@ -411,25 +411,30 @@ export function render() {
   P('            gesture. I17(a) is the separate rule: while an active session is');
   P('            SETTLING / FINALIZING / REVEALING a new gesture does NOT arm, and');
   P('            that session\'s pane is NOT disposed to make room (I10 must hold).');
-  P('   [parity] What the hard reset ACTUALLY does on supersession, IN ORDER (stage 6a');
-  P('            landed the pre-stack recovery): releaseGesture; resetSwipeStyles');
-  P('            (dispose the old pane / stray ghosts + clear inline styles); recover the');
-  P('            source PRE-STACK while the Browse hold is STILL held —');
+  P('   [parity] What the hard reset ACTUALLY does on supersession, IN ORDER');
+  P('            (PLAN-swipe-declone-stage2-subtraction.md §5 collapse): releaseGesture;');
+  P('            recover the source PRE-STACK while the Browse hold is STILL held —');
   P('            applyScreen(currentDesc(), {render:false, resetScroll:false}) reconciles');
   P('            the source screen with NO re-render: since PLAN-swipe-declone.md Stage 2');
   P('            no transition overwrites its source element, so there is no source CONTENT');
-  P('            to rebuild (stage 6d\'s finalizationPlanFor and its abortRender decision are');
-  P('            retired with the clone), then');
-  P('            window.scrollTo(0, d.scroll0) restores the start scroll; dropRowHold');
-  P('            LAST — endHold is TOLD the landed screen read from that applyScreen, so it');
-  P('            reconciles which browse PAGE is shown from the landing rather than from an');
-  P('            inference, and realizes the SUSPENDED source rows against the settled');
-  P('            scroll, reusing them rather than rebuilding; session = null,');
+  P('            to rebuild. That SAME applyScreen call also performs the full style reset');
+  P('            (Nav.resetSwipeStyles, unconditional — reached as applyScreen\'s own first');
+  P('            statement), clearing any leftover inline transform and sweeping the transient');
+  P('            NP pill decoration; there is no separate dispose call and no other transient');
+  P('            first-party marker element left to sweep, because no transition constructs an');
+  P('            owned pane any more. Then window.scrollTo(0, d.scroll0) restores the start');
+  P('            scroll; dropRowHold LAST — endHold is TOLD the landed screen read from that');
+  P('            applyScreen, so it reconciles which browse PAGE is shown from the landing');
+  P('            rather than from an inference, and realizes the SUSPENDED source rows against');
+  P('            the settled scroll, reusing them rather than rebuilding; session = null,');
   P('            d = null LAST of all (both are read by releaseGesture/dropRowHold, so');
   P('            nulling earlier would leak the hold); then the new gesture arms. The nav');
   P('            stack and navbar return to the source; movers are torn down BY OWNERSHIP');
-  P('            (§3.2). On the ORPHAN path (d === null) there is no session-start state,');
-  P('            so render + scroll degrade to the prior top-level restore.');
+  P('            (§3.2). There is exactly ONE entry route now: `d` (a mid-drag or settling');
+  P('            session) — the second sub-case this row used to also cover, entered only when');
+  P('            a leftover marker element was present with no owning session, is unreachable');
+  P('            by construction (no first-party source constructs that marker any more) and');
+  P('            has no entry left.');
   P('');
   P('   ⚠️ TWO SEPARATE REPAIRS live here, and BOTH are NEW POLICY (§10), not parity —');
   P('   they do not reproduce the pre-rewrite code, they CLOSE two known-red defects an');
@@ -468,10 +473,10 @@ export function render() {
     P('   ---');
     for (const t of TERMINATION) if (t.policyRef) {
       P(`   † ${t.reason}: ${t.policyRef} — implemented stage 6a. The [parity] basis covers`);
-      P('     the supersede-not-reject routing + orphan disposal (verified at `where`); the');
-      P('     screen/scroll RESTORE behaviors are the new policy §10 records, not pre-rewrite');
-      P('     behavior reproduced. (The ORPHAN sub-case, d===null, keeps nav.js default');
-      P('     scroll-to-top — resetScroll:d?false:undefined — so only the live path is policy.)');
+      P('     the supersede-not-reject routing (verified at `where`); the screen/scroll');
+      P('     RESTORE behaviors are the new policy §10 records, not pre-rewrite behavior');
+      P('     reproduced. There is no second sub-case any more (PLAN-swipe-declone-stage2-');
+      P('     subtraction.md §5) — every hard-reset now takes this same live-restore path.');
     }
   }
   P('');

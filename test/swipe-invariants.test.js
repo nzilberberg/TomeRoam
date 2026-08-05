@@ -86,7 +86,6 @@ test('WIRING — an overlay-source back-swipe moves the real overlay and builds 
     h.touch.start(10, 300, h.$('options')); // left edge, on the overlay itself
     h.touch.move(80, 302);                  // past the 8px lock, horizontal → start()
     assert.equal(starts(h).length, 1, 'the overlay->browse back-swipe must go live');
-    assert.equal(ghosts(h), 0, 'an overlay source is the real #options element moving out — never a ghost');
     h.touch.end(80, 302);
     await settle(h);
     await h.clock.advance(400);
@@ -245,12 +244,11 @@ test('I20 — a new touch while merely ARMED supersedes: the old session goes, t
 
     assert.equal(starts(h).length, 1,
       'exactly one gesture went live — the superseded one must never start()');
-    // OBSERVABLE MIGRATED (PLAN-swipe-declone.md Stage 2). This used to count owned panes —
-    // one, owned by the NEW session, because a stranded pane from the old one would make two.
-    // No transition builds a pane any more, so the count is always 0 and would prove nothing;
-    // what it stood for — the superseded session leaves NOTHING behind — is asserted directly
-    // instead: no pane, and exactly one live session, the new one.
-    assert.equal(ghosts(h), 0, 'no transition builds an owned pane, so none can be stranded');
+    // OBSERVABLE MIGRATED (PLAN-swipe-declone.md Stage 2, then made permanently unwritable by
+    // PLAN-swipe-declone-stage2-subtraction.md §8 D15). This used to count owned panes; no
+    // transition builds one any more, so the count is now vacuous (NOGHOSTCLASS holds it
+    // structurally) and what it stood for — the superseded session leaves NOTHING behind — is
+    // asserted directly: exactly one live session, the new one.
     assert.ok(activeSession(h), 'the NEW session owns the UI after the supersession');
   } finally { h.dispose(); }
 });
@@ -628,7 +626,9 @@ test('endpoint — a VERTICAL abandon leaves no active owner', async () => {
 // drag disposes its pane instead of stranding it" pinned I2 (every pane released or
 // disposed exactly once on every exit path); with no pane built there is none to strand,
 // and I2 now holds vacuously for the only ownership kind left — the NP pill decoration,
-// whose disposal is pinned by the DEC cell in test/swipe-stage6e.test.js. "endpoint — a
+// whose disposal on the recovery path is pinned by RECOVERYPARITY's fourth assertion
+// (PLAN-swipe-declone-stage2-subtraction.md §10, [F5] — re-homed from the DEC cell, which
+// lived in the now-deleted test/swipe-stage6e.test.js). "endpoint — a
 // HELD reveal keeps the owner THROUGH finalize" pinned the intermediate ownership across
 // the held reveal's paint gate, and the held reveal existed only to keep a ghost covering
 // a page being re-decoded after an abort re-render. Both the re-render and the hold are

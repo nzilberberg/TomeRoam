@@ -157,7 +157,12 @@ test('decorations is a top-level projected {kind, base} list with the role leaf 
     'the dead `role` leaf must NOT cross the seam — no L3 consumer reads it (plan §3, F2)');
 });
 
-// ── F1.1 — the mover EXTERNAL shape, not the production {el,base,own} ────────────────
+// ── F1.1 — the mover EXTERNAL shape, not the production {el,base} ────────────────────
+// WORDING CORRECTED (PLAN-swipe-declone-stage2-subtraction.md §6 Compatibility U10): `own`
+// was L3's third production key; §6 D12 deletes it (no reader survives the pass), so the
+// production shape L3 maps onto is now {el,base}, not {el,base,own}. The `!('own' in m)`
+// check below is UNCHANGED and stays meaningful: the SEAM must never emit `own` regardless
+// of whether L3 still maps a same-named key.
 test('movers carry the external {element,ownership,slot} shape, not the production keys', () => {
   const ctx = mkEnv();
   const c = build(desc('home'), desc('books'), ctx);
@@ -165,7 +170,7 @@ test('movers carry the external {element,ownership,slot} shape, not the producti
     const m = c.movers[which];
     assert.deepEqual(Object.keys(m).sort(), MOVER_KEYS, `${which} mover must be {element,ownership,slot}`);
     assert.ok(!('el' in m) && !('base' in m) && !('own' in m),
-      `${which} mover must NOT emit the production el/base/own keys — L3 owns that mapping`);
+      `${which} mover must NOT emit the production el/base keys, or the retired own key — L3 owns that mapping`);
     assert.equal(m.slot, which, `${which} mover slot must be "${which}"`);
   }
   // Stage 1 (PLAN-swipe-declone.md §5.1): home->browse no longer builds an owned pane —

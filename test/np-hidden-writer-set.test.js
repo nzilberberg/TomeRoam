@@ -640,11 +640,11 @@ test('NPHIDDENWRITER — the SYNCHRONY half of claim C6: setView un-hides the de
   const npArgs = npCall[1].split(',').map((s) => s.trim()).filter(Boolean);
   assert.deepEqual(npArgs, ["'nowplaying'"],
     "applyScreen's Now Playing branch no longer passes setView the LITERAL 'nowplaying' and "
-    + 'nothing else. §9 rules edge 5 uncovered because `opts.render`, `opts.resetScroll` and '
-    + '`opts.keepGhosts` are consumed by applyScreen itself and never reach the park-and-hide '
-    + 'statements at js/nav.js:52-70 — an option threaded through this call is the second way that '
-    + 'identity breaks. THE GREEN HERE IS WHAT KEEPS EDGE 5 UNCOVERED; this red hands the ruling '
-    + `back to the planner. Arguments passed: [${npArgs.join(', ')}]`);
+    + 'nothing else. §9 rules edge 5 uncovered because `opts.render` and `opts.resetScroll` are '
+    + 'consumed by applyScreen itself and never reach the park-and-hide statements at '
+    + 'js/nav.js:52-70 — an option threaded through this call is the second way that identity '
+    + 'breaks. THE GREEN HERE IS WHAT KEEPS EDGE 5 UNCOVERED; this red hands the ruling back to '
+    + `the planner. Arguments passed: [${npArgs.join(', ')}]`);
 });
 
 test('NPHIDDENWRITER scope — the scoping clauses are part of the cell, not preamble', () => {

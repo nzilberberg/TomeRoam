@@ -9,15 +9,10 @@
 // reading had failed twice. Reading does not scale past about three interacting
 // conditions; prose inventories in this codebase should be treated as guesses.
 //
-// TWO THINGS ARE GUARDED:
-//   1. the committed file matches what the generator produces right now, so it cannot
-//      drift or be edited by hand;
-//   2. the region of js/app.js the predicate MIRRORS is fingerprinted. That mirroring
-//      is the one weak link in the whole scheme — the generator does not execute
-//      app.js, it reimplements its branch conditions. If those conditions change, the
-//      fingerprint changes and this test fails LOUDLY, which is the only honest
-//      behaviour: it does not mean the code is wrong, it means the predicate must be
-//      re-verified before the generated file can be trusted again.
+// ONE THING IS GUARDED here: the committed file matches what the generator produces
+// right now, so it cannot drift or be edited by hand. (A second guard — a fingerprint
+// of the js/app.js region the predicate MIRRORED — was retired at stage 4; see the note
+// below, at the point the mirror itself was retired.)
 const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');

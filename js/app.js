@@ -111,7 +111,6 @@
   const npOpen = Nav.npOpen;                    // () => bool: NP is the current screen
   function setView(v) { Nav.setView(v); }
   function setNavActive(which) { Nav.setNavActive(which); }
-  function resetSwipeStyles(keepGhosts) { Nav.resetSwipeStyles(keepGhosts); }
   function applyScreen(desc, opts) { Nav.applyScreen(desc, opts); }
   function slideInView(el, from) { Nav.slideInView(el, from); }
   function overlayFilmstrip(fromV, toV, dir) { Nav.overlayFilmstrip(fromV, toV, dir); }
@@ -258,12 +257,6 @@
     // Observable owner state, for tests asserting no session survives an exit (and for
     // device diagnostics). Pure read of the real var — not a parallel implementation.
     if (typeof window !== 'undefined') window.PBSwipeSession = () => (session ? { id: session.id, dragging: !!d } : null);
-    // A session is PANE-LESS when it owns no full-viewport cover pane (Stage 6c,
-    // PLAN-swipe-stage6c.md §2.1/§3 — the classification is derived from the same
-    // `own` tags Swipe.buildConstruction assigns each mover, not a duplicated
-    // classifier). Only a live pane-less session may be superseded by begin(); a
-    // pane-owning one (ghost/snapshot) stays gated (cell PG, deferred to 6d/7).
-    const paneLess = (s) => !s.movers.some((m) => m.own === 'owned-pane');
     // Snapshot of the browse page the gesture STARTED on, taken before the mid-drag
     // render touches anything. Compared at reveal, it is the one measurement that
     // separates "the page was rebuilt" from "the page was preserved and is still
@@ -382,105 +375,58 @@
       const t = session.hold; session.hold = 0;
       if (window.Browse && Browse.endHold) Browse.endHold(t, currentDesc());
     };
-    // Owner-driven emergency disposal (PLAN-swipe-stage6e.md §3/§4; EC §4.3/§4.4): removes
-    // exactly the `own`s movers this SESSION owns — `owned-pane` movers still attached —
-    // and never a `borrowed-real` or `owned-decoration` mover (the `own` filter is a
-    // structural guarantee, not an enumerated exclusion). Idempotent (the el.parentNode
-    // guard, matching dropPanes below). Takes its owner explicitly (never reads the module
-    // `session`/`d`), so it operates only on resources the caller already owns (§4.3). Feeds
-    // `reason` to the PBDebug SWIPE diagnostic ONLY when a pane is actually disposed, so a
-    // no-op call (a pane-less session) does not claim a disposal that never happened.
-    const disposeOwnedPanes = (owner, reason) => {
-      let disposed = false;
-      for (const m of owner.movers) {
-        if (m.own === 'owned-pane' && m.el.parentNode) { m.el.remove(); disposed = true; }
-      }
-      if (disposed && window.PBDebug) PBDebug.log('SWIPE', `pane disposed reason=${reason} sid=${owner.id}`);
-    };
     const navPill = () => $('navbar').querySelector('.np-actions');
-    // The Now Playing pill clone, the app-ghost capture recipe (ghostApp) and their helper
-    // cluster (ghostWrap/freezeArt/copyScroll/copyAnimPhase, GHOST_BG) moved into js/swipe.js
-    // Swipe.buildConstruction behind the injected `env` (stage 5, boundary B —
-    // Claude/Plans/PLAN-swipe-stage5.md). (Stage 6i retired the second capture recipe,
-    // snapshotHome: a →home reveal un-parks the real fixed #home instead of cloning a snapshot,
-    // so ghostApp is now the sole capture recipe.) start() builds the env below and consumes the
-    // Construction it returns; the destination render dispatch stays here in env.renderDestination.
+    // The Now Playing pill clone (npPillClone) moved into js/swipe.js Swipe.buildConstruction
+    // behind the injected `env` (stage 5, boundary B — Claude/Plans/PLAN-swipe-stage5.md). Both
+    // capture recipes it once stood alongside — ghostApp (app-ghost) and snapshotHome — are
+    // retired (PLAN-swipe-declone.md Stage 2; PLAN-swipe-noswap-home.md Stage 6i): no transition
+    // builds a copy of a view any more, so buildConstruction returns no `capture` field at all.
+    // start() builds the env below and consumes the Construction it returns; the destination
+    // render dispatch stays here in env.renderDestination.
 
     function begin(x, y, target) {
-      // Stage 6c narrowed gate (PLAN-swipe-stage6c.md §3/§4/§7, NEGATIVE form). Reject
-      // whenever `finishing` is true and there is NOT a live PANE-LESS session to
-      // supersede: a null `session` (a stuck `finishing` left after a prior recovery
-      // already nulled it) rejects, AND a PANE-OWNING session (ghost/snapshot;
-      // held-reveal implies it — cell PG) rejects, so this slice defines supersession
-      // for the pane-less phase only. Only a live pane-less session falls through to
-      // be recovered/superseded below. The negative form (rather than
-      // `finishing && paneOwning(session)`) is load-bearing: a positive check would
-      // fall through on `paneOwning(null) === false` and let a stuck `finishing` wedge
-      // silently instead of rejecting.
-      if (finishing && !(session && paneLess(session))) return;
+      // Reject whenever `finishing` is true and there is no live session to supersede: a
+      // null `session` (a stuck `finishing` left after a prior recovery already nulled
+      // it) rejects. Every session is pane-less now that no transition constructs an
+      // owned pane (PLAN-swipe-declone-stage2-subtraction.md §5/§7), so the stage-6c
+      // PANE-OWNING/PANE-LESS split this gate used to draw no longer has two sides.
+      if (finishing && !session) return;
       // Leftover from an INTERRUPTED gesture (a 2nd touch mid-swipe, a missed
       // touchend, etc.) → hard-reset to known-good before starting fresh. This is
       // what stops corruption from accumulating over many swipes.
-      // A `.spent` pane is one that has already uncovered and is only finishing its
-      // .203 fade-out. It is NOT leftover state — but it IS still a `.nav-ghost`, so
-      // without this a swipe started during the fade would trip the hard reset below
-      // and re-introduce the wrong-page/wrong-tap failure .178 fixed. Clear them first.
-      document.querySelectorAll('.nav-ghost.spent').forEach((n) => n.remove());
-      // The recovery entry predicate admits a THIRD case beyond the stage-6a pair
-      // (`d` mid-drag; an orphan `.nav-ghost`): a live PANE-LESS session still
-      // settling/finalizing (`finishing && session` — reachable only because the gate
-      // above already rejected every other `(finishing, session)` combination, so
-      // `session` here is always pane-less). It has `d === null` (nulled at end()) and
-      // no `.nav-ghost` (it owns no pane), so it needs this explicit admission.
-      if (d || document.querySelector('.nav-ghost') || (finishing && session)) {
+      // The recovery entry predicate admits a second case beyond `d` mid-drag: a live
+      // session still settling/finalizing (`finishing && session` — reachable only
+      // because the gate above already rejected every other combination). It has
+      // `d === null` (nulled at end()), so it needs this explicit admission.
+      if (d || (finishing && session)) {
         if (window.PBDebug) PBDebug.log('SWIPE', 'leftover state on begin → hard reset'
           + (session ? ' sid=' + session.id : ''));
         releaseGesture();   // never leave a dead gesture's listeners on a stale node
-        // Recover the superseded session PRE-STACK (stage 6a, PLAN-swipe-stage6.md §3/§6;
-        // extended stage 6c to a pane-less SETTLING session, PLAN-swipe-stage6c.md §3;
-        // stage 6e typed the owned-pane disposal, PLAN-swipe-stage6e.md §2/§3/§4) before
-        // its resources are released: dispose `cur`'s OWNED panes through the owner-driven
-        // disposeOwnedPanes(cur,'superseded') when a session owns them (EC §4.3 — replaces
-        // the DOM-global `.nav-ghost` sweep's owned-pane effect for this case), or sweep a
-        // stray ORPHAN ghost via the full resetSwipeStyles sweep when `cur` is null (I17(b),
-        // unchanged); restore the source screen — with NO re-render, because since
-        // PLAN-swipe-declone.md Stage 2 no transition overwrites its source element, so
-        // there is never any source CONTENT to rebuild (stage 6d's `finalizationPlanFor`
-        // and its `abortRender` decision are retired with the clone). The page SELECTION
-        // that the re-render also used to restore is now owned by Browse.endHold, which
-        // dropRowHold() below hands the landed screen — and this path applies that screen
-        // first, which is what makes the read correct here too. Then restore the
-        // session-start document scroll (cur.scroll0). `cur` below reads whichever handle
-        // is live: `d` for a mid-drag
-        // supersession, else the pane-less settling `session` (same object `d` referenced
-        // before end() nulled it — no new field). `resetScroll:false` is forced ONLY on a
-        // live-recovery branch, so applyScreen does not stomp the explicit cur.scroll0
-        // restore below; the ORPHAN-pane path (`cur` null — a leftover ghost with no live
-        // session, I17(b)) passes `resetScroll:undefined` and keeps nav.js's default
-        // (resetScroll:true), so a home or options/sub source still resets to top exactly
-        // as the pre-6a hard reset did (parity; Poirot F1). The orphan has no
-        // session-start state, so the render flag is `false` and no cur.scroll0 restore
-        // runs. The Browse hold is released ONLY AFTER this render+scroll (releasing it
-        // first would deactivate a suspended virtualized source and dematerialize its kept
-        // rows before the render could reuse them — Loki strike,
+        // Recover the superseded session PRE-STACK (stage 6a, PLAN-swipe-stage6.md §3/§6)
+        // before its resources are released: restore the source screen — with NO
+        // re-render, because since PLAN-swipe-declone.md Stage 2 no transition overwrites
+        // its source element, so there is never any source CONTENT to rebuild. The page
+        // SELECTION that the re-render also used to restore is now owned by
+        // Browse.endHold, which dropRowHold() below hands the landed screen — and this
+        // path applies that screen first, which is what makes the read correct here too.
+        // Then restore the session-start document scroll (cur.scroll0). `cur` is `d` for
+        // a mid-drag supersession, else the settling `session` (same object `d`
+        // referenced before end() nulled it — no new field). `resetScroll:false` is
+        // forced so applyScreen does not stomp the explicit cur.scroll0 restore below.
+        // The Browse hold is released ONLY AFTER this render+scroll (releasing it first
+        // would deactivate a suspended virtualized source and dematerialize its kept rows
+        // before the render could reuse them — Loki strike,
         // STRIKE-swipe-stage6-recover-before-arm). `finishing` is cleared here too (Stage
-        // 6c F2): nothing else clears it for a superseded pane-less session (its own
-        // finalize never runs), so leaving it set would wedge every future swipe the
-        // moment the superseding touch failed to arm (cell W) — cleared BEFORE the
-        // superseded session's IDENTITY is dropped LAST of all: releaseGesture() and
-        // dropRowHold() both READ `session` (dropRowHold no-ops on a null session), so
-        // nulling it any earlier would leak the hold and the source rows would never be
-        // realized (the same ordering `finalize()` observes at its own hold release).
+        // 6c F2): nothing else clears it for a superseded session (its own finalize never
+        // runs), so leaving it set would wedge every future swipe the moment the
+        // superseding touch failed to arm (cell W) — cleared BEFORE the superseded
+        // session's IDENTITY is dropped LAST of all: releaseGesture() and dropRowHold()
+        // both READ `session` (dropRowHold no-ops on a null session), so nulling it any
+        // earlier would leak the hold and the source rows would never be realized (the
+        // same ordering `finalize()` observes at its own hold release).
         const cur = d || session;
-        // `keepGhosts:true` on the owned branch suppresses the DOM-global `.nav-ghost`
-        // sweep at BOTH call sites — here AND inside applyScreen's own baseline reset
-        // (nav.js:120) — so the owned-pane removal is owner-driven, not duplicated (EC
-        // §4.16; Loki STRIKE-swipe-stage6e-r1 residual 2). The orphan branch (`cur` null)
-        // keeps the FULL sweep at both sites, unchanged.
-        if (cur) disposeOwnedPanes(cur, 'superseded');
-        resetSwipeStyles(cur ? true : undefined);
-        applyScreen(currentDesc(), { render: false, resetScroll: cur ? false : undefined, keepGhosts: cur ? true : undefined });
-        if (cur) window.scrollTo(0, cur.scroll0);
+        applyScreen(currentDesc(), { render: false, resetScroll: false });
+        window.scrollTo(0, cur.scroll0);
         dropRowHold();
         finishing = false;
         session = null;
@@ -559,7 +505,6 @@
       // L2 — the injected seam. buildConstruction reads the world ONLY through this.
       const env = {
         document,
-        scrollY: () => window.scrollY || 0,
         // 'browse-page' (PLAN-swipe-declone.md §5.3.6) resolves the SOURCE PAGE node for a
         // browse→browse pair, through the descriptor-keyed page cache — never #browse, which
         // the incoming slot would resolve to as well, putting one element in two mover slots
@@ -590,31 +535,16 @@
           return el;
         },
       };
-      // Log BEFORE the build so `ghosts=` reports any PRE-EXISTING leftover pane (parity
-      // with the pre-extraction order), not the one this gesture is about to mount.
-      if (window.PBDebug) PBDebug.log('SWIPE', `start ${d.dir} ${d.from.v}→${d.dest.v} ghosts=${document.querySelectorAll('.nav-ghost').length}`);
+      if (window.PBDebug) PBDebug.log('SWIPE', `start ${d.dir} ${d.from.v}→${d.dest.v}`);
       const c = Swipe.buildConstruction(d.from, d.dest, env);
 
       // Map the seam's external movers { element, ownership, slot } onto the production
-      // shape { el, base, own }: base is OUTGOING 0, INCOMING off, a decoration by its slot.
-      // The typed `own` drives teardown by TYPE (borrowed-real | owned-pane |
-      // owned-decoration), unchanged from stage 3.
+      // shape { el, base }: base is OUTGOING 0, INCOMING off, a decoration by its slot.
       const baseOf = (slot) => (slot === 'outgoing' ? 0 : off);
-      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot), own: m.ownership });
+      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot) });
       d.movers = [toMover(c.movers.outgoing), toMover(c.movers.incoming)];
       if (c.movers.decoration) d.movers.push(toMover(c.movers.decoration));
 
-      // Record the owned pane's capture for the reveal diagnostic — ONLY the fields the
-      // capture carries. Post-Stage-6i the only owned-pane capture is the app-ghost, which
-      // ALWAYS carries a ghostY; a →home reveal builds NO capture at all (c.capture === null),
-      // so d.ghostY/d.animSync stay untouched on that path and both d.ghostY readers null-guard
-      // them (the "no ghost ⇒ d.ghostY untouched" invariant now holds by there being no →home
-      // capture, not by a ghostY-less home snapshot — plan §3/§12).
-      if (c.capture) {
-        if ('ghostY' in c.capture) d.ghostY = c.capture.ghostY;
-        d.animSync = (d.animSync || 0) + c.capture.animSync;
-        d.animRes = c.capture.animRes;
-      }
       // Outgoing-NP np-locked unlock stays app-side (plan §5): when NP is the SOURCE the
       // body unlocks so the real nav buttons show as the pill slides out. (The incoming-NP
       // unlock rides with env.renderDestination above.) `decorations` is hoisted to the
@@ -690,12 +620,6 @@
         for (const m of cur.movers) m.el.style.transform = 'translateX(' + (m.base === 0 ? outTo : inTo) + 'px)';
       });
       let done = false;
-      // A held reveal (holdGhostUntilPaintable) keeps an owned-pane covering the view
-      // past finalize; the session must stay the owner until that pane is released.
-      // finalize clears the session only when NO reveal is pending; a held reveal's
-      // drop() clears it instead. Set true by the two held branches below.
-      let revealPending = false;
-      const dropPanes = () => { for (const m of cur.movers) if (m.own === 'owned-pane' && m.el.parentNode) m.el.remove(); };
       //
       // ⭐ .203 PROBE — CROSS-FADE THE GHOST INSTEAD OF YANKING IT.
       // Two consecutive device repros (.202 #8 and #10, both "flashed at the snap
@@ -740,7 +664,7 @@
       // it runs on EVERY swipe, and it needs no labelling. Intermittency stops being a
       // problem and becomes the data: with pane type logged beside it, dozens of swipes
       // in one report say whether long frames track panes.
-      const watchFrames = (paneKind) => {
+      const watchFrames = () => {
         if (!window.PBDebug || typeof requestAnimationFrame !== 'function') return;
         const t0 = performance.now();
         const gaps = [];
@@ -753,21 +677,10 @@
           const worst = gaps.reduce((a, b) => (b > a ? b : a), 0);
           // `long` = frames over 32ms, i.e. at least one dropped frame.
           const long = gaps.filter((g) => g > 32).length;
-          PBDebug.log('FLASH', `frames pane=${paneKind} worst=${worst}ms long=${long}`
+          PBDebug.log('FLASH', `frames worst=${worst}ms long=${long}`
             + ` gaps=[${gaps.join(',')}]`);
         };
         requestAnimationFrame(tick);
-      };
-      // Which kind of full-viewport pane this settle built, if any. Post-Stage-6i the ONLY
-      // owned-pane recipe is the app-ghost (built by Swipe.buildConstruction for any in-flow
-      // source going to a non-home destination); the home-snapshot recipe is retired, so a
-      // →home reveal builds NO owned pane at all (both movers are borrowed-real). Every
-      // transition without an owned pane slides REAL elements and covers nothing → 'none'.
-      // (`cur.dest.v === 'home'` can never coincide with an owned pane now — an app-ghost
-      // requires toKind !== 'home' — so a 'snapshot' label is unreachable and removed.)
-      const paneKindOf = () => {
-        const p = cur.movers.filter((m) => m.own === 'owned-pane');
-        return p.length ? 'ghost' : 'none';
       };
       const runFinalize = () => {
         // `tgt=detached` means the node the finger started on was destroyed mid-drag
@@ -994,31 +907,22 @@
             const seen = firsts.length ? ` | first=[${firsts.join(' ')}]` : '';
           const wrote = cover.writes && cover.writes.length
             ? ` | scrollWrites=[${cover.writes.join(' ')}]` : '';
-          // How many covers the ghost builder actually phase-seeded. `animSync=0` means
-          // the .205 fix did not run at all (no getAnimations, or nothing matched), which
-          // is indistinguishable from "it ran and did not help" unless it is reported.
-          // `res=` is the residual measured AT the sync: 0 means the assignment took.
-          // A large res says the seek itself failed; res=0 with the flash still present
-          // says animation phase is not the mechanism after all.
-          const ghostDiff = ` animSync=${cur.animSync == null ? '?' : cur.animSync}`
-            + `/res=${cur.animRes == null ? '?' : cur.animRes}`;
-            // POSITION across the reveal — scrollY/documentHeight at each step, plus the
-            // scroll the ghost was frozen at. A move between preDrop and postDrop, or a
-            // reveal at a Y different from ghostY, IS the flash: the whole page jumping,
-            // invisible to every DOM counter above (all of which read zero on the aborts
-            // the user confirmed flashing).
+            // POSITION across the reveal — scrollY/documentHeight at each step. A move
+            // between preDrop and postDrop IS the flash: the whole page jumping, invisible
+            // to every DOM counter above (all of which read zero on the aborts the user
+            // confirmed flashing).
             // `final`, NOT `end` — the line already ends with `end=<why>`, and two
             // different `end=` tokens in one log line is exactly the kind of ambiguity
             // that makes a reading unparseable later. Caught by a surviving mutation.
             mark('final');
             const trail = cover.marks.length
-              ? ` | scroll=[${cover.marks.join(' ')}] ghostY=${cover.ghostY == null ? '?' : cover.ghostY}` : '';
+              ? ` | scroll=[${cover.marks.join(' ')}]` : '';
             PBDebug.log('FLASH', `#${seq} ${tag} @reveal rows=${rows0} imgs=${imgs0} withSrc=${src0}`
               + ` | COVERED ${fmt(cov)}`
               + ` | EXPOSED ${fmt(exp)}${seen}`
               + ` | hidden +img=${hid.add} -img=${hid.rem} src+=${hid.srcSet}`
               + ` | ${cmp}`
-              + art + trail + wrote + ghostDiff + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
+              + art + trail + wrote + ` | win=${Math.round(performance.now() - t0)}ms end=${why}`);
           };
           // The flash happens within a few frames of the uncover, so the window only has
           // to outlive that. 1500ms was long enough to swallow the user's NEXT action and
@@ -1061,7 +965,6 @@
           } catch { /* a diagnostic must never break the reveal */ }
         };
         cover.mark = mark;   // the hold samples either side of the removal through this
-        cover.ghostY = (cur.ghostY == null) ? null : Math.round(cur.ghostY);
         //
         // ⭐ .202 — WHO MOVES THE SCROLL. The .201 trail found it on the first log:
         //   scroll=[finalize=13631/14676 applied=1534/2386 restored=1534/2386
@@ -1112,11 +1015,8 @@
         // No hold on this path — the panes go NOW, so the view is exposed from the
         // first instant and every mutation below belongs in the EXPOSED bucket.
         cover.dropAt = performance.now();
-        dropPanes();
-        // .213: fires on the NO-PANE transitions too (browse↔options, ↔nowplaying).
-        // Those are the control group, and they collect themselves — if long frames
-        // appear here as often as on the pane paths, panes are not the mechanism.
-        watchFrames(paneKindOf());
+        // .213: fires on every transition, so long frames are measured across the board.
+        watchFrames();
         // Measured on the plain paths too, so an abort's numbers have something to be
         // compared AGAINST — "covers reload on every transition" and "covers reload
         // only on aborts" call for completely different fixes.
@@ -1147,10 +1047,10 @@
       // run if applyScreen or Browse.render throws. A finally covers every return AND
       // the throw. runFinalize itself now calls dropRowHold before its own
       // applyScreen(dest, …) (see that call site); this one is a leak guard for a
-      // throw earlier in runFinalize — dropPanes, watchFrames, reportReveal — before
-      // that call is reached, and is a no-op otherwise (dropRowHold clears
-      // session.hold on its first call).
-      const endOwnership = () => { if (!revealPending) sessionDone(cur); };   // held paths end in drop()
+      // throw earlier in runFinalize — watchFrames, reportReveal — before that call is
+      // reached, and is a no-op otherwise (dropRowHold clears session.hold on its first
+      // call).
+      const endOwnership = () => sessionDone(cur);
       const finalize = () => {
         if (done) return; done = true;
         // Cancel the paused settle rAF so it cannot write a stale transform on foreground

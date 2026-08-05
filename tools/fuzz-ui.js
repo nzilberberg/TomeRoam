@@ -13,8 +13,7 @@
 //
 // It does NOT assert on paint — it asserts on the DOM/geometry facts that a corrupted frame leaves
 // behind: two screens visible at once, a view stuck under a transform at rest, a browse page that
-// is active but empty, orphaned ghosts. Those are checkable and they are what the reported bugs
-// actually are.
+// is active but empty. Those are checkable and they are what the reported bugs actually are.
 (function () {
   const S = {};
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -51,7 +50,6 @@
     return {
       screens: sc, pages,
       onscreen: sc.filter((s) => s.onscreen).map((s) => s.id),
-      ghosts: all('.nav-ghost').length,
       session: (typeof PBSwipeSession === 'function') ? !!PBSwipeSession() : null,
       navActive: (all('.navbtn').find((b) => /active/.test(b.className)) || {}).textContent?.trim() || null,
     };
@@ -77,7 +75,6 @@
     }
     const visPages = st.pages.filter((p) => p.shown && Math.abs(p.tx) < 40);
     if (visPages.length > 1) v.push(`TWO BROWSE PAGES VISIBLE: ${visPages.map((p) => p.key).join(' + ')}`);
-    if (st.ghosts) v.push(`ORPHANED GHOST NODES: ${st.ghosts}`);
 
     return v.map((m) => `[${ctx}] ${m}`);
   }
@@ -133,7 +130,7 @@
       await sleep(420 + Math.floor(rnd() * 260));
       const st = state();
       const v = check(st, `#${i} after ${act}`);
-      log.push({ i, act, onscreen: st.onscreen, ghosts: st.ghosts, pages: st.pages.length });
+      log.push({ i, act, onscreen: st.onscreen, pages: st.pages.length });
       if (v.length) violations.push({ i, act, v, state: st });
       if (violations.length >= (opts.stopAfter || 6)) break;
     }

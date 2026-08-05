@@ -1645,6 +1645,29 @@ counterexample's fix — had no runnable mutation evidence at all; wired up as `
 ⚠️ The plan's step-5b command needs a drive-letter path: `$PWD` expands to `/c/…` under MSYS and node
 cannot resolve it.
 
+**⭐ Step 11 BUILD GREEN (2026-08-05) — §11 step 5b then step 6 DONE; next is the code reviewer.**
+`Claude/Brunel/swipe-declone-stage2-subtraction-build.md`. **Step 5b:** the plan's literal trial
+command (`NODE_OPTIONS` env var) leaked into child processes three test files spawn in temp
+sandboxes, crashing them for a reason unrelated to §5's collapse — fixed by passing `--require` as
+a CLI flag instead (env vars are inherited by children, CLI flags are not); the clean re-measurement
+matched §4a+§8's declared radius item for item, no surplus. **Step 6:** all twelve D1–D12 deletions
+landed in `js/app.js`/`js/nav.js`; `tools/mutate.mjs` de-registered/re-anchored/merged/replaced per
+D13/D13b/D13c/D13d, plus a sixth undeclared R10 instance found by execution (`swipe6e RSN-emit`,
+its disposal-trace subject fully gone with `disposeOwnedPanes`); `tools/source-gate-sweep.mjs`'s
+`begin/supersession` re-anchored and `transition branches` deleted as a retired mirror's tombstone;
+`test/swipe-model.test.js`'s hash re-pinned behind a recorded line-by-line re-verification, plus a
+new mechanized token-scan assertion (no "orphan", no "ghost" in the rendered model — the generator's
+first-draft rewrite still used both words describing their own absence, caught by the new assertion
+and rewritten clean); `test/scroll-writer-set.test.js`'s M1WRITERSET entries #10/#11 merged into a
+shared-text group (hit the same indentation-substring anchor trap the plan's own history warns
+about — fixed with a 2-line anchor). Full suite 878/877/0-fail/1-skip (device-only). Full mutation
+sweep run in 12 shards (146 mutants, matching the registry): **0 uncaught, 0 unapplied, 0 stale
+flags**, no `*.mutbak` left anywhere. `source-gate-sweep.mjs` exits 0, all 4 remaining entries
+anchor and fire. Build bumped `2026-08-03.306` → `2026-08-05.1` (stamped, `--check` clean).
+**Not yet committed or pushed** — the build log records every exit condition; next is Poirot, then
+Mendeleev, then the records scrub (this plan's status, the parent's §12/§13, the campaign
+manifest's falsified note, this board, the decision log — step 8, not done here).
+
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
 - **Options→HUB refactor · library-scaling virtualization · durable-progress spine + device-delete** — all built; scaling on-device gate passed → `[[tomeroam-durable-progress-plan]]`, `[[tomeroam-library-scaling-plan]]`.

@@ -101,8 +101,7 @@ const Nav = (() => {
   // while a drag is active (see overlayFilmstrip below; PLAN-one-screen-type.md
   // §5.4a) — so this reset lands on a session-owned mover only after that session
   // has released it.
-  function resetSwipeStyles(keepGhosts) {
-    if (!keepGhosts) document.querySelectorAll('.nav-ghost').forEach((n) => n.remove());
+  function resetSwipeStyles() {
     document.querySelectorAll('.np-pill-float').forEach((n) => n.remove());   // transient NP-swipe pill clone
     const els = ['home', 'browse', 'options', 'nowplaying', ...SETTINGS_SUBS].map((id) => d.byId(id));
     // Every `.browsepage` too. Since PLAN-swipe-declone.md §5.3.4 a browse PAGE is a
@@ -126,7 +125,7 @@ const Nav = (() => {
     const resetScroll = !opts || opts.resetScroll !== false;
     const render = !opts || opts.render !== false;
     const $ = d.byId;
-    resetSwipeStyles(opts && opts.keepGhosts);   // baseline: no swipe can leave stale transforms/ghosts behind
+    resetSwipeStyles();   // baseline: no swipe can leave stale transforms behind
     // Stage 6i (PLAN-swipe-noswap-home.md §6): active #home is its own fixed
     // overflow-y:auto scroller, so home entry resets #home's OWN scrollTop, not the
     // document — the home-scoped `body.home-tall` seating hack + the document

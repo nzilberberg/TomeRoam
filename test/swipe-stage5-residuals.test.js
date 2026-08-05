@@ -85,11 +85,10 @@ test('F5a — the mid-drag render forwards the FULL dest descriptor payload (not
 // element of that fixture is gone: no pane is built, and fadePanes was deleted with it
 // (§12 item 12).
 //
-// The `own` key itself is NOT retired and is still load-bearing — it is what keeps teardown
-// from touching a borrowed-real view. Its remaining owned kind is the NP pill decoration,
-// and the DEC cell in test/swipe-stage6e.test.js is what observes that disposal; the
-// borrowed-real half (a real view is never removed by teardown) is pinned by the BR cell in
-// the same file.
+// The `own` key itself is RETIRED (PLAN-swipe-declone-stage2-subtraction.md §6 D12): after
+// disposeOwnedPanes/dropPanes/paneKindOf/paneLess are all removed, no reader of `own` remains
+// in production or in a gate. The borrowed-real survival it used to gate is now pinned by
+// BORROWEDREALSURVIVES in test/swipe-stage6.test.js.
 // ── npLock — the outgoing-NP np-locked unlock (c.decorations consumer effect) ─────────
 // When NP is the SOURCE of a swipe, start()'s decorations loop removes document.body's
 // `np-locked` class so the real nav buttons show as the pill slides out (app.js:491-492).

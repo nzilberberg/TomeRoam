@@ -179,22 +179,20 @@ test('resolveAnchor refuses a non-unique anchor and accepts one that disambiguat
 // runnable mutation evidence for the source-text FINGERPRINT gates. Nothing watched the second
 // one, so it rotted invisibly — exactly the failure this file exists to prevent, one level up.
 //
-// MEASURED: `tools/source-gate-sweep.mjs`'s `transition branches` entry anchors on
+// MEASURED, then RESOLVED (PLAN-swipe-declone-stage2-subtraction.md §4a C3(b), decision 11):
+// `tools/source-gate-sweep.mjs`'s `transition branches` entry anchored on
 // `const incomingBrowse = !toOv && toV !== 'home';`, which left `js/app.js` at 14257f2 (.227,
 // stage 4, "retire the branch mirror") when the predicate moved into `classifyTransition` in
-// js/swipe.js. The tool has exited 1 ever since — NINE stages — and `test/transition-matrix.test.js`'s
-// fingerprint has held no mutation evidence for that whole span. Nobody ran it, because nothing
-// made them.
+// js/swipe.js. The tool exited 1 for NINE stages and `test/transition-matrix.test.js`'s
+// fingerprint held no mutation evidence for that whole span. Nobody ran it, because nothing
+// made them. It is not re-anchored: `test/transition-matrix.test.js:42-47` states in its own
+// words that the mirror it defended was retired at stage 4 and there is nothing left to
+// fingerprint — the entry was a tombstone of a retired mirror, so it is deleted rather than
+// given a `file` field to chase a predicate that no longer has a second copy anywhere.
 //
-// The rot is recorded below rather than hidden: it is a KNOWN entry with an owner, so a NEW rot
-// still reddens. Re-anchoring it needs a `file` field the tool does not have (all five entries
-// target js/app.js and the predicate now lives in js/swipe.js), which is a design change and
-// belongs to the plan, not to this gate.
+// A rot found here is recorded below with an owner, so a NEW one still reddens instead of
+// going unnoticed for another nine stages.
 const KNOWN_ROTTED = new Map([
-  ['transition branches (transition-matrix + swipe-model)',
-    'anchor left js/app.js at 14257f2 (.227) when the predicate moved into classifyTransition '
-    + '(js/swipe.js:92). Re-anchoring needs a per-entry `file` field the tool lacks — owned by '
-    + 'PLAN-swipe-declone-stage2-subtraction.md (Charpy r2, R1). Remove this exemption with the fix.'],
 ]);
 
 test('every source-gate anchor still matches its target, or is a KNOWN rot', async () => {

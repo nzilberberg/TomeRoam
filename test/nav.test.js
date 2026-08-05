@@ -97,14 +97,12 @@ test('applyScreen renders the destination, and render:false reconciles visibilit
   assert.deepEqual(rendered, [], 'a second render would re-load images = the post-settle flash');
 });
 
-test('resetSwipeStyles clears inline transforms off every screen + drops ghosts', () => {
-  const ghost = document.createElement('div'); ghost.className = 'nav-ghost'; document.body.appendChild(ghost);
+test('resetSwipeStyles clears inline transforms off every screen', () => {
   $('options').style.transform = 'translateX(50px)';
   $('downloads').style.transition = 'transform .2s';
   Nav.resetSwipeStyles();
   assert.equal($('options').style.transform, '');
   assert.equal($('downloads').style.transition, '');
-  assert.equal(document.querySelectorAll('.nav-ghost').length, 0);
 });
 
 test('element resolvers agree with the real DOM', () => {

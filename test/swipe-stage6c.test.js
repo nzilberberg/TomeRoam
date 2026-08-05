@@ -53,7 +53,6 @@ const commits = (h) => swipeLog(h).filter((m) => /^#\d+ (abort|commit) /.test(m)
 const starts = (h) => swipeLog(h).filter((m) => /^start /.test(m));
 const resets = (h) => swipeLog(h).filter((m) => /hard reset/.test(m));
 const endHolds = (h) => h.log.calls.filter((c) => c.name === 'browse.endHold');
-const ghosts = (h) => h.document.querySelectorAll('.nav-ghost').length;
 const tf = (h, id) => h.$(id).style.transform;
 const hidden = (h, id) => h.$(id).classList.contains('hidden');
 const sess = (h) => h.window.PBSwipeSession();
@@ -104,7 +103,6 @@ test('G1 — a stale settle rAF from a superseded pane-less session writes no tr
     await backCommit(h, h.$('options'));                 // A: options→books, released → settling
     assert.equal(starts(h).length, 1, 'A must have gone live');
     assert.ok(sess(h) && sess(h).dragging === false, 'A must be settling (finishing, not dragging)');
-    assert.equal(ghosts(h), 0, 'runtime paneLess: the options→books gesture materialized no owned pane');
     const aId = sess(h).id;
 
     // B supersedes mid-settle and arms.
@@ -137,7 +135,6 @@ test('G2 — a 340ms settleTimer firing after supersession runs no finalize over
     await onOptionsOverBooks(h);
     await backCommit(h, h.$('options'));
     assert.ok(sess(h) && sess(h).dragging === false, 'A must be settling');
-    assert.equal(ghosts(h), 0, 'runtime paneLess: no owned pane');
     const aId = sess(h).id;
 
     h.touch.start(10, 300, h.$('options'));
@@ -171,7 +168,6 @@ test('G3 — a late transitionend after supersession runs no finalize over the s
     await onOptionsOverBooks(h);
     await backCommit(h, h.$('options'));
     assert.ok(sess(h) && sess(h).dragging === false, 'A must be settling');
-    assert.equal(ghosts(h), 0, 'runtime paneLess: no owned pane');
     const aId = sess(h).id;
 
     h.touch.start(10, 300, h.$('options'));

@@ -1,16 +1,20 @@
 #!/usr/bin/env node
-// source-gate-sweep.mjs — mutation evidence for the SOURCE-TEXT fingerprint gates.
+// source-gate-sweep.mjs — mutation evidence for the SOURCE-TEXT fingerprint gate.
 //
-// WHY THIS IS SEPARATE FROM tools/mutation-sweep.mjs. The fingerprint gates
-// (swipe-model.test.js, transition-matrix.test.js) assert on the TEXT of js/app.js
-// regions rather than on behaviour. In the behavioural sweep they fail under EVERY
-// mutation by construction — the mutation changes the text they pin — which is a false
-// CAUGHT, so mutation-sweep.mjs deliberately excludes them. But excluding them left the
-// fingerprints with NO runnable mutation evidence at all: nothing proved that changing
+// WHY THIS IS SEPARATE FROM tools/mutation-sweep.mjs. The fingerprint gate
+// (swipe-model.test.js) asserts on the TEXT of js/app.js regions rather than on
+// behaviour. (transition-matrix.test.js's own mirror was RETIRED at stage 4 — its
+// predicate moved into js/swipe.js's classifyTransition, which the frozen
+// test/fixtures/swipe-plan-spec.mjs checks structurally instead — so it carries no
+// fingerprint of its own any more and this tool no longer names it.) In the
+// behavioural sweep the swipe-model fingerprint fails under EVERY
+// mutation by construction — the mutation changes the text it pins — which is a false
+// CAUGHT, so mutation-sweep.mjs deliberately excludes it. But excluding it left the
+// fingerprint with NO runnable mutation evidence at all: nothing proved that changing
 // a branch condition inside a fingerprinted region actually trips its gate. The .218
 // review asked for exactly that check and .219 missed it.
 //
-// This tool closes it the honest way. For each fingerprint it does TWO things:
+// This tool closes it the honest way. For the fingerprint it does TWO things:
 //   (1) mutate a REAL branch condition inside its region and require the SPECIFIC gate
 //       test to go RED (keyed on a failing subtest whose title carries `mustSay`);
 //   (2) run the behavioural swipe suite UNDER THE SAME MUTATION as a negative control,
@@ -39,11 +43,6 @@ const BAK = APP + '.sgbak';
 // mutation is behaviour-neutral where possible (an equivalent rewrite), so it is the
 // FINGERPRINT that catches it, not a behavioural test — that is the property under test.
 const ENTRIES = [
-  { region: 'transition branches (transition-matrix + swipe-model)',
-    gate: 'test/transition-matrix.test.js',
-    mustSay: 'predicate still mirrors',
-    from: "const incomingBrowse = !toOv && toV !== 'home';",
-    to:   "const incomingBrowse = toV !== 'home' && !toOv;" },   // equivalent, text differs
   { region: 'navTo stack rule (swipe-model)',
     gate: 'test/swipe-model.test.js',
     mustSay: 'mirrored js/app.js region',
@@ -64,11 +63,12 @@ const ENTRIES = [
   { region: 'begin/supersession (swipe-model)',
     gate: 'test/swipe-model.test.js',
     mustSay: 'mirrored js/app.js region',
-    // Behaviour-neutral rewrite of a line INSIDE the region (the .spent sweep), so it
-    // is the fingerprint that catches it. (Re-anchored for stage 3: the old anchor was
-    // the hard-reset log line, which stage 3 edited to add `sid=`.)
-    from: "document.querySelectorAll('.nav-ghost.spent').forEach((n) => n.remove());",
-    to:   "[...document.querySelectorAll('.nav-ghost.spent')].forEach((n) => n.remove());" },
+    // Re-anchored (PLAN-swipe-declone-stage2-subtraction.md §4a C3(a)): the old anchor,
+    // the `.spent` sweep, is deleted by D9 (no first-party source can write `.nav-ghost`
+    // any more). Behaviour-neutral rewrite of a line that SURVIVES the collapse inside
+    // the same region — the ternary the collapsed recovery still opens with.
+    from: 'const cur = d || session;',
+    to:   'const cur = d ? d : session;' },
 ];
 
 // Exported so a gate can verify these anchors still MATCH without running the sweep.

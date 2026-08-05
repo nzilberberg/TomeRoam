@@ -64,10 +64,30 @@ const VERIFIED = {
   //     SELECTION the re-render also used to restore (Invariant D6).
   // The model's §5 supersession prose and its §4 hard-reset TERMINATION row were rewritten
   // to say exactly that, so the document still describes the code it mirrors.
+  //
+  // RE-VERIFIED 2026-08-05 for PLAN-swipe-declone-stage2-subtraction.md §5's orphan-recovery
+  // collapse, line by line against js/app.js begin()'s recovery reader, and the mirrored
+  // rule in tools/gen-swipe-model.mjs updated to match in the same commit. The gate's
+  // NEGATIVE form narrowed from `!(session && paneLess(session))` to `!session` (every
+  // session is pane-less now, so the PANE-OWNING/PANE-LESS split the old form drew no
+  // longer has two sides). Inside the recovery: the `.spent` sweep and the recovery
+  // predicate's `.nav-ghost` disjunct are BOTH gone (D9 — no first-party source constructs
+  // the class any more), so `cur = d || session` is non-null on every reachable entry —
+  // there is no more ORPHAN sub-case. Three consequences inside the region, all mirrored:
+  // (1) the explicit `disposeOwnedPanes(cur,'superseded')` and `resetSwipeStyles(cur ? true
+  //     : undefined)` calls are gone outright — `applyScreen`'s own internal
+  //     `resetSwipeStyles()` call (now unconditional, `keepGhosts` retired with it) performs
+  //     the full reset as its first statement, at the same point in the sequence (the
+  //     adjacency §5 of the plan states and no other); (2) `resetScroll: cur ? false :
+  //     undefined` collapses to the literal `false`; (3) `if (cur) window.scrollTo(0,
+  //     cur.scroll0)` loses its guard — `cur` cannot be null. The model's §5 supersession
+  //     prose and its §4 hard-reset TERMINATION row were rewritten to drop the orphan
+  //     sub-case and describe the reset reaching through `applyScreen` alone.
   // Was 'a470962594518cb9' (pre-stage-3), then 'd455d0d197ea3af8' (before the comment fix),
   // then 'c5ab2fae0fd03654' (pre-stage-6d), then '502467fc1286f5e1' (pre-stage-6e), then
-  // '99b3ddb8778bcb57' (pre-declone-stage-2).
-  supersession: 'b07e422a493b8fff',
+  // '99b3ddb8778bcb57' (pre-declone-stage-2), then 'b07e422a493b8fff' (pre-declone-stage-2-
+  // subtraction).
+  supersession: 'ce3a96a2ead88f31',
 };
 
 // Every line in js/app.js that appends to or rebinds navStack, as it stood when the
@@ -95,6 +115,27 @@ test('the committed model is exactly what the generator produces', async () => {
   assert.equal(lf(gen.render()), committed,
     'docs/swipe-model.generated.txt is stale or was hand-edited. '
     + 'Run: node tools/gen-swipe-model.mjs');
+});
+
+// MECHANIZED (PLAN-swipe-declone-stage2-subtraction.md §4a C2, §11 exit item 6, [R3, G1]).
+// The rendered model must describe the code it mirrors, and after §5's collapse (D9) no
+// first-party source can ever construct the retired `.nav-ghost` class or its orphan-entry
+// sub-case again — so neither retired concept may appear in the document a reader is meant
+// to trust at a glance. Both tokens are case-insensitive; `orphan` catches four of C2's five
+// prose sites and `ghost` catches the fifth (verified false-positive-free at authoring time:
+// each token occurred at exactly one site in both the generator and the rendered output, and
+// both were the SAME site). This is a token scan over text the cell above already reads —
+// not a read-through of the document.
+test('the rendered model names neither retired concept — no "orphan", no "ghost"', async () => {
+  const gen = await load();
+  const rendered = gen.render();
+  assert.ok(!/orphan/i.test(rendered),
+    'the rendered swipe model still says "orphan" — the ORPHAN sub-case (PLAN-swipe-declone-'
+    + 'stage2-subtraction.md §5) is unreachable by construction (NOGHOSTCLASS) and must not be '
+    + 'documented as live');
+  assert.ok(!/ghost/i.test(rendered),
+    'the rendered swipe model still says "ghost" — no first-party source constructs the '
+    + 'retired `.nav-ghost` class any more and it must not be documented as live');
 });
 
 test('every mirrored js/app.js region still matches what was verified', async () => {
