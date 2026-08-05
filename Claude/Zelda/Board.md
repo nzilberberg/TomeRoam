@@ -1768,6 +1768,38 @@ reddening; and nothing compares a registration's *stated* killers against its *m
 which is what let `#13` rot. **[W83] F5 and [W84] F6 remain open (the assistant, step 8); F4
 remains routed to a later purge.** Next: the user's go — step 7's device gate, or step 8's scrub.
 
+**⭐ Step 11 coverage audit ROUND 2: ADEQUATE — the suite spans §10 and every designated mutant is
+registered and executed.** `Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction-r2.md` (audited
+at `d4ae127`; supersedes the round-1 file, which is not edited — the `-rN` suffix makes
+`artifactsOfRecord` drop the unsuffixed original, and the coverage-audit gate now reads `pass
+(ADEQUATE)` on the new manifest). **All eighteen §10-designated mutants plus `S2-39` were re-swept
+at this HEAD in four foreground batches — `0 uncaught, 0 unapplied, 0 stale flags` on every one** —
+because a mutation result stops being true when the suite changes and it changed twice. Suite 884 /
+883 / 0 fail / 1 skip; `source-gate-sweep.mjs` run directly, exit 0. **[W80] [W81] [W82] confirmed
+closed by independent execution**, and all three of the test author's corrections (the CRLF caveat
+does not apply to the registry; a killer count is meaningless without its scope — `S2-38` measured
+at 42 and `S2-33` at 5 here; `#13`'s only killer is `RECOVERYPARITY.pillswept`) hold under this
+audit's own runs. **[W83] F5 CLOSED at `d4ae127`.** ⛔⛔ **[W85] N1 (Gap) — the NINTH incomplete
+blast-radius enumeration, again found by executing.** §10 `MOVERSHAPE`'s *behaviour* sentence claims
+more than §10's own *fixture* sentence commissions: a third key attached to the recorded mover **one
+line after** construction ships **UNCAUGHT at whole-suite scope** (884 / 883 / 0 fail, measured). The
+source assertion reads one expression; the read-set proxy sees no seam read; the two witnesses that
+catch the inserting form (the model fingerprint, the anchors gate) witness text movement, not the
+property, and a line-neutral edit evades both. **Owner: the planner** — narrow the sentence, or
+commission the measured occupant: `Object.freeze` on the adapter literal, which was applied and
+measured **behaviour-neutral to the whole suite**. ⚠️ `js/app.js` is a non-strict IIFE, so the freeze
+silences the write rather than throwing — the source assertion must also assert the wrapper, or its
+removal re-opens the route silently. [W86] N2 (Misleading) — the emitted-key-set reader has **no
+comment state** and its negative drill is *named* for comments while containing none; executed: a
+correct two-key literal with an apostrophe in a line comment REDDENS the cell, with all three drills
+green. A gate that fires on correct code gets switched off. **Owner: the test author.** [W87] N3
+(Note) — the new manifest's narrow globs expose three gates red on non-coverage grounds
+(`red-suite` and `build` declare no verdict token; the adversary's line parses as `ONE`), so the
+campaign still reads INCOMPLETE and this audit's ADEQUATE is not the blocker. **Owner: the
+assistant, step 8.** [W84] N4 — F6 is larger than round 1 named: the plan's Status line **and**
+§11's step rows 5, 5b and 6 still read `open`. **Step 7 (device re-confirm) is UNRUN and nothing in
+the suite or the records claims otherwise; step 8 (records scrub) is not done.**
+
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
 - **Options→HUB refactor · library-scaling virtualization · durable-progress spine + device-delete** — all built; scaling on-device gate passed → `[[tomeroam-durable-progress-plan]]`, `[[tomeroam-library-scaling-plan]]`.
