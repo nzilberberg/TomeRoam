@@ -1168,6 +1168,43 @@ item 6 is a read-through where a two-line assertion over the already-read render
 available. R5 (non-discriminating `BORROWEDREALSURVIVES` mutant) and R6 (opposite rulings on
 retirement tombstones) are non-blocking. Next: the planner folds round 2, then the adversary at step 3.
 
+**Step 11 round-2 TEMPER APPLIED (2026-08-04, the planner) — back to the plan reviewer for round 3.**
+Review at `5a1d977` (`Claude/Charpy/…-5a1d977-r2.md`); the deletion set was **not re-struck and did
+not move — second round running**, and all five round-1 resolutions were confirmed sound, including
+F3's load-bearing "the literal must exist somewhere" claim and F4's scrub list. ⭐⭐ **R1 resolved
+differently from either option offered.** `tools/source-gate-sweep.mjs`'s `transition branches` entry
+is **deleted, not re-anchored, and no per-entry `file` field is needed** — the fingerprint it
+evidences was **retired at stage 4 by the same commit (`14257f2`) that moved the predicate**
+(`test/transition-matrix.test.js:42-47` says so; the file has no fingerprint assertion, and the
+entry's `mustSay` matches no test title there, so even a valid anchor would have read UNCAUGHT). It is
+the tombstone of a retired mirror; nothing becomes unevidenced; **exit item 4 is now satisfiable**,
+and `test/mutation-anchors.test.js`'s `KNOWN_ROTTED` exemption (landed at `fad819e`) is emptied in the
+same commit. ⚠️ Why it stayed invisible for nine stages: `test/transition-matrix.test.js:12-20` still
+advertises the fingerprint its own `:42-47` retired, and the tool's header and the sweep's exclusion
+reason both repeat that claim — three records agreeing with each other and disagreeing with the code.
+All three scrubbed; the **exclusion ENTRY stays** (that gate still derives from `js/nav.js` text) and
+only its reason is corrected. **R2 — `RECOVERYPARITY`'s NATURAL-d was a mutant that could not bite:**
+moving the `applyScreen` call still executes it (`Nav.applyScreen` calls `resetSwipeStyles` first, no
+early return; the pill sweep is unconditional), so it reddened on hold-ordering, which NATURAL-c
+already covers — and the re-homed `DEC` witness would have shipped never shown to fail. **The biting
+form REMOVES the call**; `PILLSWEPT` stays green so the kill is attributable, and the fourth assertion
+becomes its own named test so the sweep names it. ⛔ Third mutant-reddens-for-the-wrong-reason in this
+campaign, and the first two were other people's. **R3 — C2 was short by one** (`gen-swipe-model.mjs:471`,
+one line above two that WERE cited), and **exit item 6 is now MECHANIZED**: a new assertion in
+`test/swipe-model.test.js` that the rendered model carries no `orphan` token, catching all four
+generator sites incl. the missed one. Item 5 (the pin) stays a discipline — nothing distinguishes a
+re-verified hash from a pasted one — and the one C2 site the assertion cannot see is stated. The
+third swipe-model surface (`DISPOSE_REASONS` + its `deepEqual` pin, `:413`, `:491-495`) is ruled
+**OUT of scope with the reason**: it states `PLAN-swipe-reveal.md` §3.4's design commitment, not a
+deleted call site. **R4** — each purge rule's *every* exclusion gets an executed control, and
+`NOCLB`'s positive control is placed after a line whose string contains `//`, to catch an
+over-stripping scanner. **R5** — `BORROWEDREALSURVIVES`'s mutant is non-discriminating by nature;
+disclosed + expected-killer set recorded. ⭐ **R6 shrank the pass**: the tombstone discriminator (*a
+comment naming a retired symbol + authority + why, past tense, survives; prose describing a mechanism
+as if it still governs goes*) takes `js/app.js:718-726` and `js/swipe.js:203-210`/`:254` back OFF the
+scrub list — three fewer edits — and makes `:798`'s retention principled instead of arbitrary. Counts
+unchanged at 9 cells / 18 mutants. Seven new DecisionLog entries.
+
 **Standing:** NOW PLAYING STAYS UNIQUE (user decision, DecisionLog) — do not consistency-fix it.
 The red `--page-bg` diagnostic gradient at `css/app.css:41` is DELIBERATE and stays until the user
 says otherwise.

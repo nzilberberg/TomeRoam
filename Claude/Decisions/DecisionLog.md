@@ -1613,3 +1613,65 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   `test/swipe-model.test.js` already reads the rendered output to compare it against the committed file,
   so asserting that the rendered model carries no reference to a retired branch costs two lines and
   converts the check from a read-through into a gate.
+
+- A MUTATION-EVIDENCE ENTRY WHOSE GATE WAS RETIRED IS DELETED, NOT RE-ANCHORED — 2026-08-04, the
+  planner, closing plan-review round-2 finding R1 on the declone Stage 2 subtraction plan.
+  `tools/source-gate-sweep.mjs`'s `transition branches` entry has been rotted since `14257f2` (stage
+  4), and the natural reading is that it needs re-anchoring onto the predicate's new home in
+  `js/swipe.js`. It does not. The fingerprint it supplies evidence for was RETIRED BY THAT SAME
+  COMMIT: `test/transition-matrix.test.js:42-47` records that the mirror is gone and that there is
+  nothing left to fingerprint, and the file contains no fingerprint assertion — the entry's `mustSay`
+  phrase matches no test title in it, so even a valid anchor would have reported UNCAUGHT. The entry
+  is deleted, no per-entry `file` field is added to the tool, and nothing becomes unevidenced.
+
+- A GATE FILE THAT ADVERTISES A GUARD IT NO LONGER HAS PRODUCES SILENT, YEARS-LONG ROT — 2026-08-04,
+  measured; the transferable half of the finding above.
+  `test/transition-matrix.test.js:12-20` still lists the retired fingerprint as one of two things the
+  file guards, thirty lines above the paragraph that retires it. Downstream, `tools/source-gate-sweep.mjs`'s
+  header names that file as a fingerprint gate and `tools/mutation-sweep.mjs`'s exclusion reason
+  repeats the claim. Three records agreeing with each other and disagreeing with the code is why nine
+  stages passed with the tool exiting 1 and nobody wrong at any step. When a guard is retired, the
+  scrub covers every record that names it, not only the code.
+
+- A SWEEP-EXCLUSION ENTRY IS NOT DELETED BECAUSE ITS STATED REASON IS FALSE — 2026-08-04, the planner.
+  `tools/mutation-sweep.mjs` excludes `test/transition-matrix.test.js` on the ground that it
+  "fingerprints the js/app.js transition-branch region", which stopped being true at stage 4. Only the
+  reason is corrected. The gate still derives from `js/nav.js` source text, so it can still fail under
+  an unrelated mutation, and removing the entry on a false premise would re-open the false-CAUGHT hole
+  the exclusion list exists to close.
+
+- A MUTANT'S REGISTRATION NAMES THE MECHANISM IT PERTURBS, NOT THE EFFECT IT HOPES FOR — 2026-08-04,
+  the planner, closing plan-review round-2 finding R2.
+  A mutant registered to move a call after an ownership clear was expected to stop the recovery
+  reaching the style reset. Moving the call still executes it: `Nav.applyScreen` calls
+  `resetSwipeStyles` as its first statement with no early return, and the pill sweep inside it is
+  unconditional, so the mutant reddened on hold ordering — an assertion another mutant already covers
+  — while the assertion it was registered for would have shipped never having been shown to fail. The
+  biting form REMOVES the call, because the property is that the recovery reaches the reset at all.
+  ⛔ This is the third instance in one campaign of a mutant that reddens for the wrong reason, and the
+  first two were other people's; the plan that flagged both committed the third.
+
+- WHERE A CELL'S ASSERTIONS ARE KILLED BY DIFFERENT MUTANTS, THE TARGETED ASSERTION GETS ITS OWN NAMED
+  TEST — 2026-08-04, the planner.
+  The mutation sweep reports a killing TEST, not a killing assertion, so a multi-assertion cell cannot
+  attribute a kill and "CAUGHT" stops meaning "caught by the assertion this mutant exists to
+  exercise". Splitting the targeted assertion into its own named test buys the attribution
+  mechanically. Precedent: the park-distance suite split one cell into eight named tests for exactly
+  this reason.
+
+- A TOMBSTONE SURVIVES; A LIVE DESCRIPTION OF DELETED CODE GOES — 2026-08-04, the planner, closing
+  plan-review round-2 finding R6.
+  A comment that names a retired symbol, its authority and why it is gone, in the past tense, is the
+  record a code-position purge rule exists to protect. What is deleted is prose describing a mechanism
+  AS IF IT STILL GOVERNS — a live description of deleted code, or a branch documented as reachable.
+  The discriminator was owed because the same plan justified a scan rule by saying retirement records
+  should survive and then listed three of them for deletion while keeping a fourth. Applying it
+  removed three edits rather than adding any.
+
+- A RE-VERIFIED FINGERPRINT CANNOT BE MECHANIZED, BUT ITS CONSEQUENCE CAN — 2026-08-04, the planner,
+  closing plan-review round-2 finding R3.
+  Nothing distinguishes a re-verified hash from a pasted one, so a fingerprint pin stays a discipline.
+  What IS mechanizable is the outcome that discipline exists to prevent: a generated document still
+  describing a deleted branch. One token assertion over rendered output that a test already reads
+  converts it. The evidence that a read-through is not a check: a five-site enumeration in this plan
+  was short by one, and the missed site sat one line above two that were cited.
