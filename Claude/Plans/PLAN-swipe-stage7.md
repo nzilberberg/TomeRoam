@@ -11,22 +11,47 @@ Type: plan
   "staged_records":["Claude/Plans/PLAN-swipe-reveal.md","Claude/Subsystems/swipe-reveal.md","Claude/Zelda/Board.md","Claude/Decisions/DecisionLog.md","Claude/Campaigns/swipe-stage7.json"],
   "blocking_questions":["LEASEPAIRED","LEASEINVALID","LEASEORDER","MOVERFROZEN"]} -->
 
-Status: **TEMPER APPLIED (round 1) — returning to the plan reviewer.** Nothing here is cleared to build.
-`Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r1.md` (`5c2c065`), verdict TEMPER.
+Status: **TEMPER APPLIED (round 2) — NO ROUND 3 IS OWED; next seat is the adversary, for §17 step 2
+(U1).** Nothing here is cleared to build.
+`Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r2.md` (`c2369f8`), verdict TEMPER, over round 1's
+`Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r1.md` (`5c2c065`). The reviewer waived round 3 on the
+condition that the amendment stay confined to its three edits, and it did.
+Every measurement below was taken at `c2369f8` and re-checked against `8d0bc67`, which touches only
+the board, a new board-row-id gate and its hook wiring — no source, no mutation registry, no
+generated document — so every figure stands. Suite at `8d0bc67`: **900 tests / 899 pass / 0 fail /
+1 skip** (count read, not inferred; it rose from 887 because that commit added a gate cell).
 
-**The scope determination survived, and it was re-derived independently.** The plan reviewer checked
-all ten inheritance rows itself against HEAD — reading every cited line and sweeping `js/`, `css/`,
-`test/` and `tools/` for each named subject — and every row held. No row wrote off a live subject.
-**The deletion set did not move.** §3 is unchanged except for one re-categorisation (F7).
+**What round 2 changed — three edits, each with its acceptance predicate EXECUTED and its measured
+result recorded beside it.** F1 (Weak): §11's reader class (c) was one and is three — `ADAPTER_DECL`,
+the `tools/gen-swipe-model.mjs` / `docs/swipe-model.generated.txt` pair that no gate watches, and
+three current-truth comments; the eight live-reference test files are declared as a suite-caught
+class; step 5b's `to`-side scan gains the session field; and the declared co-change figure is
+**thirteen**, not the twelve that corresponds to leaving comments stale. F3a (Structural): §12's
+claim that the three MOVERSHAPE re-anchoring candidates keep `Object.freeze(` on their `to` side was
+false at HEAD — it is now stated as an OBLIGATION on the builder's edit with a fourth step-5b check
+behind it, and the "verified" wording is gone. F3b (Structural): `MOVERFROZEN`'s `NATURAL-b` is now a
+registry-side mutant, because measurement showed that no mutation of the predicate can redden the
+cell — in the one-part form OR in the two-part form the review prescribed.
 
-**What the review broke was this plan's verification machinery, in three places, and all three are
-repaired here.** F1: §11's headline MEASURED co-change set was measured from a transform NARROWER
-than §5 declares — **re-measured here, control-first, and the full set is thirteen registrations in
-three classes plus one non-registry reader, not one** (§11). F2: the release status had no production
-consumer, because the trace it named does not exist at HEAD — **resolved by scoping the trace line
-into this stage** (§5, §14 D1). F3: the gate R7 leaned on to catch a half-landed §14 freeze is made
-**vacuous** by the same commit's mandatory re-anchoring — **a repair is specified and R7's "no new
-mechanism is needed" is retracted** (§12, §13 `MOVERFROZEN`).
+**What round 2 did NOT change, so a later session does not re-open it.** §3's scope determination and
+its ten inheritance rows are settled — the reviewer re-derived all ten independently against HEAD at
+round 1 and every one held; round 2 did not re-strike them. F2 is repaired and **no change was owed**:
+the guarded `PBDebug.log` in `returnLease` is a real production consumer (`index.html:233` loads
+`js/debug.js`), the harness captures it (`test/app-harness.js:632`), and `LEASEINVALID`'s trace clause
+plus `NATURAL-d` are the proving test, so Engineering Contract §4.15 is satisfied on both halves.
+**§14's U1 is untouched and remains an open unknown owned by the adversary** (§17 step 2); the plan
+reviewer's round-1 walk of the exits is a reading and must not be treated as confirmatory.
+
+**Round 1 for the record: what it broke was this plan's verification machinery, in three places.** The
+scope determination was not among them — the plan reviewer re-derived all ten inheritance rows against
+HEAD and every one held, so the deletion set did not move and §3 changed only by one re-categorisation
+(F7). F1: §11's headline co-change set was measured from a transform NARROWER than §5 declares —
+**re-measured control-first, and the full set is thirteen registrations in three classes plus three
+non-registry readers, not one** (§11; the reader count is round 2's correction). F2: the release
+status had no production consumer, because the trace it named does not exist at HEAD — **resolved by
+scoping the trace line into this stage** (§5, §14 D1). F3: the gate R7 leaned on to catch a
+half-landed §14 freeze is made **vacuous** by the same commit's mandatory re-anchoring — **a repair is
+specified and R7's "no new mechanism is needed" is retracted** (§12, §13 `MOVERFROZEN`).
 
 ⚠️ **Do not read the plan gate's PASS as evidence of anything.** It runs for minutes on a plan this
 size. It did fail-then-pass on this artifact — four structural findings on the first hook-mode run,
@@ -464,14 +489,20 @@ with no transform applied.** Registry size at measurement: 152.
 | **§5 as written** (adds the two wrapper renames), code positions only | **9** |
 | §5 + the `js/browse.js` rename, code positions only | **9** — *the Browse-side rename rots nothing; no registration anchors on `beginHold`/`endHold`/`dropHold` in that file* |
 | §12's freeze alone | **3** |
-| **FULL — §5 + Browse + freeze, code positions only** | **12** |
-| FULL, with the identifiers renamed in comments too | **13** |
+| FULL — §5 + Browse + freeze, code positions only | 12 |
+| **FULL — the transform this plan specifies, comments included** | **13** |
 
 **The declared co-change set is the union of three classes, and the first draft carried only part of
 class (a).** Cited by name, never by index — the registry is 152 entries and every insertion shifts
 later ones.
 
-**(a) `from` anchors that stop matching** — 12 code-only, 13 if comments are renamed too:
+**(a) `from` anchors that stop matching** — **thirteen.** ⛔ **The comment rename is not optional, so
+thirteen is the declared figure and twelve is a sub-measurement** (round 2 F1): `js/app.js:346-374`,
+`:398-431`, `:1048` and `:1071` name `takeRowHold`, `dropRowHold`, `session.hold` and `Browse.endHold`
+in current-truth explanatory comments, and StandardsDocument §6.6 covers comments explicitly, so
+leaving them stale is not an outcome the plan permits. Twelve is retained as the code-only layer
+because step 5b applies the layers separately, and a control that cannot distinguish them cannot say
+which layer moved. The thirteen:
 `stage6a (a) re-anchored: the Browse hold releases BEFORE the applyScreen it must follow`;
 `stage6a (b): session/d null BEFORE the hold release`;
 `stage6c W: the supersession recovery omits the finishing=false clear`;
@@ -483,6 +514,10 @@ later ones.
 `S2-32 RECOVERYPARITY: the supersession recovery releases the row hold BEFORE applying the source
 screen`; and from the freeze, `S2-35 MOVERSHAPE`, `S2-36 MOVERSHAPE`, `S2-39 MOVERSHAPE`. Renaming the
 identifiers inside comments adds `stage6c G2/G3: the finalize cur===session guard is removed`.
+⚠️ **The three MOVERSHAPE re-anchorings carry an obligation on their `to` side as well as their
+`from`** — §12 states it, and §17 step 5b's fourth check is what makes it checkable. The minimal
+correct-looking re-anchoring (update `from`, leave `to`) satisfies §12's repaired predicate as three
+false wrapper-deletion mutants (round 2 F3a).
 
 **(b) `to` sides that INJECT an identifier the rename retires** — **nine**, and this class did not
 appear in the first draft at all. Measured by scanning every `to` string for `dropRowHold`,
@@ -498,11 +533,53 @@ stale-finalize defect it names. That is the "reddens for the wrong reason is ind
 working" hazard this campaign already recorded for `S2-23 NOGHOSTATALL`. **The `to` sides are renamed
 in the same commit, and the anchors gate cannot see whether that was done.**
 
-**(c) Non-registry source-text readers** — one: `ADAPTER_DECL` at
-`test/swipe-declone-stage2-subtraction.test.js:211`, which is the literal
-`'const toMover = (m) => ({'` and stops matching the moment the freeze lands. That is the reader
-detecting rot, working as designed (§14 of the subtraction plan predicts it), but it is a co-change
-and the first draft named neither the item nor the file.
+**(c) Non-registry readers of the retired text** — **three**, of which only the first was named before
+round 2. Round 1 struck this plan for an enumeration measured rather than read, and round 2 F1
+measured that the repair had left the same class open one surface over.
+
+1. **`ADAPTER_DECL`** at `test/swipe-declone-stage2-subtraction.test.js:211` — the literal
+   `'const toMover = (m) => ({'`, which stops matching the moment the freeze lands. That is the reader
+   detecting rot, working as designed (§14 of the subtraction plan predicts it), but it is a co-change
+   and it is re-pinned in the same commit.
+2. ⛔ **`tools/gen-swipe-model.mjs` and the file it emits, `docs/swipe-model.generated.txt` — WATCHED
+   BY NOTHING.** The generator carries `endHold` and `dropRowHold` in current-truth prose inside the
+   model text (`:244`, `:246`, `:426`, `:430`), mirrored into the generated document (`:144`, `:148`).
+   `test/swipe-model.test.js` compares generated against generator only, so **both rot together and
+   the suite stays green** while a current-truth model document describes two functions that no longer
+   exist. The generator is edited and the document **REGENERATED**, never hand-edited, in the same
+   commit. *(The durable form of this class is already settled and is NOT re-opened here: the decision
+   log's 2026-08-04 entries rule that an enumeration of sites in a generated record is checked by a
+   gate — a token assertion over the rendered output the comparison test already reads. Round 2
+   scoped that out of stage 7 and routed the class to the coverage auditor; this plan discharges the
+   INSTANCE by scrub, under the predicate below, and leaves the class where the reviewer put it.)*
+3. **Three current-truth COMMENTS that no gate reads** — `js/virtuallist.js:140-141` ("Owner:
+   browse.js (beginHold / endHold)"), `test/parked-page-rides-home-browse.test.js:194` and
+   `test/swipe-model.test.js:62-63`. MEASURED here rather than inherited: a word-boundary sweep of
+   `js/`, `test/` and `tools/` for the five retired identifiers returns sixteen files, and these three
+   are the ones outside every declared set whose only occurrences are in comments — which is why a
+   live-reference scan does not see them, and why §6.6 requires them anyway. **Measured control: none
+   of the three carries a mutation anchor.** The one registration targeting `js/virtuallist.js`
+   anchors on the document scroll-listener line and names no retired identifier, and no registration
+   targets either test file — so scrubbing all three rots nothing further and class (a)'s thirteen is
+   unchanged by them.
+
+**Eight further test files carry LIVE references and are deliberately named as a class rather than
+enumerated per line:** `browse-virtual`, `swipe-declone-stage2-browse`, `swipe-stage6`,
+`swipe-gesture`, `swipe-stage5-wiring`, `browse-empty-after-home-commit`,
+`swipe-declone-stage2-subtraction` and `swipe-stage6c`. Step 5b clause 3 already requires the whole
+suite green, and a live reference to a renamed function fails loudly and names its own line, so a
+per-line list would be a second inventory to maintain in exchange for nothing the suite does not
+already say. **They are declared so that a build which goes red in them recognises the failure as
+predicted rather than as a blast-radius miss** — which is the cost round 2 predicted if they stayed
+unnamed.
+
+**Build-time obligation, with an executable predicate (round 2 F1's acceptance predicate).**
+`grep -rn 'endHold\|dropRowHold' docs/ tools/gen-swipe-model.mjs` returns NOTHING after the build, and
+`docs/swipe-model.generated.txt` is regenerated in the same commit. **MEASURED at `c2369f8`, before
+the build: six matching lines in two files** — `docs/swipe-model.generated.txt:144`, `:148` and
+`tools/gen-swipe-model.mjs:244`, `:246`, `:426`, `:430`. A `docs/` sweep for all five retired
+identifiers returns that one file and no other, so the predicate's `docs/` half is complete rather
+than merely non-empty.
 
 **Every registration in classes (a) and (b) is re-anchored — `from` AND `to` — in the same commit,
 and `ADAPTER_DECL` is re-pinned with it.** §17 step 5b's equality rule now runs against this set.
@@ -513,7 +590,16 @@ and `ADAPTER_DECL` is re-pinned with it.** §17 step 5b's equality rule now runs
   now means.
 - `Claude/Subsystems/swipe-reveal.md` — the resource vocabulary, plus the stale `disposeOwnedPanes` /
   `holdGhostUntilPaintable` / `dropPanes` / `translateZ(0)` / stage-7 inheritance text (§2 GAP, §3).
+- `docs/swipe-model.generated.txt` — **REGENERATED** from `tools/gen-swipe-model.mjs`, not
+  hand-edited. Named separately from the records below because it is the one scrub target with no
+  gate behind it (class (c) item 2).
+- The three comment sites in class (c) item 3 (`js/virtuallist.js:140-141`,
+  `test/parked-page-rides-home-browse.test.js:194`, `test/swipe-model.test.js:62-63`), plus the
+  current-truth comments inside `js/app.js` that class (a)'s thirteenth registration depends on.
 - `Claude/Decisions/DecisionLog.md`, `Claude/Zelda/Board.md`, `Claude/Campaigns/swipe-stage7.json`.
+  ⚠️ The log's 2026-08-06 co-change entry reads "thirteen registrations in three classes plus **one**
+  non-registry reader"; class (c) is now three, and that entry is corrected to current truth in the
+  same scrub.
 - `tools/mutate.mjs:432-438` — the `swipe4 no-dead-fields` mutant's comment still reads
   "`sameBrowseHost` is STILL unconsumed until stage 6". Stage 6 has passed and the field's planned
   consumer was retired; the mutant is live and correct, only its rationale is stale (round 1 F7).
@@ -584,11 +670,9 @@ the registry. The gate's own comment records that it narrowed an earlier `Object
 by co-occurrence with `toMover` to kill a false positive; **this commit is what collapses that
 narrowing**, because after the freeze the co-occurrence no longer discriminates.
 
-**The repair, specified here and owned by the test author.** The wrapper-deletion mutant is the unique
-registration whose `from` carries the wrapper and whose `to` does not — verified against the three
-re-anchoring candidates, every one of which keeps `Object.freeze(` on its `to` side because each only
-changes the key set inside the literal. So clause 3's `registered` predicate gains a `to`-side
-discriminator:
+**The repair, specified here and owned by the test author.** The wrapper-deletion mutant is to be the
+unique registration whose `from` carries the wrapper and whose `to` does not. So clause 3's
+`registered` predicate gains a `to`-side discriminator:
 
 ```
 p.from.includes('Object.freeze(') && p.from.includes('toMover')
@@ -596,13 +680,96 @@ p.from.includes('Object.freeze(') && p.from.includes('toMover')
 ```
 
 That is structural rather than a text pin: it asks whether the registration actually removes the
-construct it claims to remove, so re-anchoring, reformatting or reordering the key-set mutants leaves
-it green and only a missing wrapper-deletion mutant reddens it. It is `MOVERFROZEN`'s second clause in
-§13, and it must land in the same commit as the freeze — otherwise §14's part 2, the wrapper's only
-runnable witness, can go missing with the whole suite green.
+construct it claims to remove, so reformatting or reordering the key-set mutants leaves it green and
+only a missing wrapper-deletion mutant reddens it. It must land in the same commit as the freeze —
+otherwise §14's part 2, the wrapper's only runnable witness, can go missing with the whole suite green.
+
+### ⛔ The predicate's uniqueness is an OBLIGATION on the re-anchoring edit, not a fact about the registry
+
+The first revision stated it as a fact — "verified against the three re-anchoring candidates, every
+one of which keeps `Object.freeze(` on its `to` side" — and that wording was an active instruction not
+to check. **Round 2 F3a measured it false, and this plan reproduces the measurement rather than
+inheriting it.** At `c2369f8` the `to` strings of `S2-35`, `S2-36` and `S2-39` are full-line
+replacements written against the UNFROZEN literal, and none of the three contains `Object.freeze(`.
+MEASURED against the exported `MUTATIONS`, control first:
+
+| Registry variant | registrations matching the repaired predicate |
+|---|---|
+| **CONTROL — the registry at `c2369f8`, untransformed** | **0** (and 0 for the pre-repair co-occurrence form, so the freeze is genuinely absent) |
+| MINIMAL re-anchoring — `from` updated to the frozen line, `to` left as written, no wrapper-deletion mutant | **3** — `S2-35`, `S2-36`, `S2-39`, every one a FALSE wrapper-deletion |
+| **OBLIGATED re-anchoring — `from` AND `to` carry the wrapper, plus the wrapper-deletion mutant** | **1**, and it is the wrapper-deletion mutant |
+
+The middle row is the defect: the minimal correct-looking re-anchoring satisfies `registered` with no
+genuine mutant present, and **the exact vacuity round 1 measured returns through a different door.**
+
+**THE OBLIGATION.** *(Basis: an invariant the repaired predicate depends on. U11 — it is stated as a
+property the edit must produce, not as a choice of how to produce it.)* After re-anchoring, the `to`
+strings of `S2-35 MOVERSHAPE`, `S2-36 MOVERSHAPE` and `S2-39 MOVERSHAPE` carry `Object.freeze(`.
+This is not an artificial constraint invented for the gate: each of the three exists to change the
+adapter's KEY SET, and a key-set mutant whose replacement text also silently drops the freeze would
+perturb two mechanisms at once — the shape this project's own decision log names as a mutant that
+reddens for the wrong reason. §17 step 5b carries it as a fourth check, because it is the one property
+in this commit that no existing gate can see.
+
+*Considered and excluded, so it is not re-litigated.* A discriminator comparing `to` against `from`
+with the wrapper swapped out (`p.to === p.from.replace('Object.freeze(', '(')`) needs no obligation on
+siblings at all, and on the invariant alone it is the stronger shape. It is refused for two reasons.
+It pins the wrapper-deletion registration's replacement text to the byte, so any reformatting of that
+one entry reddens the gate on correct work — the false-positive class the cell's own comment
+(`test/swipe-declone-stage2-subtraction.test.js:672-677`) records this project losing three gates to.
+And the decision log already settled the discriminating question on 2026-08-06 in the `!to.includes`
+form — "a registration check must ask whether the registration REMOVES the construct it claims to
+remove, its replacement text must not contain it" — so the equality form would supersede a settled
+decision to buy a property the obligation already buys.
 
 The freeze remains two lines and one registration; what changed is that the plan no longer claims a
-free mechanism it does not have.
+free mechanism it does not have, and no longer claims a verified property it does not have either.
+
+### ⛔ `MOVERFROZEN`'s `NATURAL-b` mutates the REGISTRY, because no mutation of the predicate can redden the cell
+
+Round 2 F3b measured that the first revision's `NATURAL-b` — "the repaired predicate's replacement
+text clause is deleted" — cannot kill, and prescribed a two-part form that also weakens the predicate
+and removes the wrapper-deletion registration. **Both forms were executed here and BOTH survive.** The
+assertion is `assert.equal(registered, frozen)` (`test/swipe-declone-stage2-subtraction.test.js:693`)
+where `registered` is a `MUTATIONS.some(…)`; deleting a conjunct from a `some()` predicate can only
+move `registered` from false toward true, and post-commit it is already true. MEASURED over the
+post-commit registry, `frozen` true throughout:
+
+| Applied mutation | `registered` | assertion |
+|---|---|---|
+| **CONTROL — none; the repaired predicate over the obligated registry** | true | passes, correctly |
+| the `to`-side clause is deleted (one part) | true | **passes — the mutant SURVIVES** |
+| the `to`-side clause is deleted AND the wrapper-deletion registration is removed (two parts) | true | **passes — the mutant SURVIVES** |
+| the wrapper-deletion registration is removed, predicate intact | **false** | **fails — the cell REDDENS** |
+| **the wrapper-deletion registration STOPS REMOVING THE WRAPPER — its replacement text is changed to keep it — predicate intact** | **false** | **fails — the cell REDDENS** |
+| the same mutation, evaluated under the pre-repair co-occurrence predicate | true | passes |
+
+**The general fact, stated so a later cell does not repeat the mistake: a clause that WIDENS what a
+`some()` rejects is never witnessed by mutating the clause; it is witnessed by the mutant it newly
+catches.** No `also` pairing changes that, because both parts of the pair push `registered` in the
+same direction as the assertion.
+
+**`NATURAL-b` is therefore the last-but-one row: the wrapper-deletion registration stops deleting the
+wrapper.** Its final two rows are the pair that makes it worth registering — it reddens under the
+repaired predicate and is invisible to the predicate the repair replaced, so its kill is attributable
+to the `to`-side clause and to nothing else. That is §14 part 2 going missing in the one form the
+unrepaired gate could not see.
+
+**Three facts the test author needs with it, all measured at `c2369f8`.**
+
+- It targets `tools/mutate.mjs`, which `MUTUNIQ-a` and `MUTUNIQ-b` already do, so it needs **no new
+  precedent**. Round 2's note that no registration targets a `test/*.test.js` file reproduces exactly
+  — the non-`js/` targets are `test/fixtures/swipe-plan-spec.mjs`, `css/app.css` and
+  `tools/mutate.mjs` — but it does not constrain this shape, because the mutation lands on the
+  registry rather than on the cell's own predicate. The circularity round 2 flagged, a check asked to
+  witness its own weakening, is not entered at all.
+- `test/swipe-declone-stage2-subtraction.test.js` is **NOT** in `tools/mutation-sweep.mjs`'s
+  `SOURCE_TEXT_GATES` (`:119-125`), so the cell runs in the sweep and can be credited with the kill.
+- `test/mutation-anchors.test.js` **IS** excluded there, which matters for this mutant specifically:
+  applying it changes `tools/mutate.mjs`, so the mutant's own `from` anchor no longer matches the
+  mutated file. Were the anchors gate swept it would redden for that reason and produce the false
+  CAUGHT the exclusion list exists to prevent. Any OTHER killer the sweep reports is disclosed at step
+  5a in the registry's own convention, not assumed absent.
 
 ---
 
@@ -648,7 +815,7 @@ LEASEPAIRED | exactly one lease is acquired and one effective release performed 
 LEASEINVALID | a lease that is not the live one reconciles NOTHING and reports invalidated, whether it went stale because a newer gesture acquired or because a destructive Browse operation invalidated it, and on that path the deferred repaint queue is discarded rather than replayed and the gesture still settles and still reaches the idle state with no owner, AND the PRODUCTION trace line the release emits carries the status so the gesture announces the outcome of its own release rather than merely storing it | integration drive two routes on the app harness, first a supersession where a second gesture acquires while the first is still settling and the first then releases, and second a destructive cache clear during a live drag followed by the ordinary settle, asserting for each that the reconciliation performed no page activation and no class toggle that no deferred repaint ran and that the active session reads null afterwards; the trace clause asserts over the harness debug capture that a released line was emitted carrying the invalidated status on those routes and the ready status on an ordinary commit, which is what makes the status a production value and not a value only a test reads | FOUR mutants. NATURAL-a the live lease check is removed so a stale release reconciles against the successor's state. NATURAL-b the destructive operation stops invalidating so an outstanding lease still answers ready after its pages were destroyed. NATURAL-c the invalidated branch replays the deferred repaints instead of discarding them so a repaint runs against destroyed controllers. NATURAL-d the trace line stops interpolating the status and logs a constant so the only production reader of the value disappears and the field is dead again. expected killing cell for ALL FOUR is LEASEINVALID | integration app harness with the recording Browse fake and its debug capture, plus the real Browse module for the repaint half
 LEASEORDER | the lease is returned BEFORE the screen application that can hide the browse host on the finalize path and AFTER the screen render and the scroll restore on the recovery path, which are the two orderings whose inversions have each shipped as a measured defect namely the empty books page and the dematerialized kept rows | integration assert the ORDER of recorded calls rather than any geometry, driving a commit that leaves browse and asserting the release is recorded before the screen application, and driving a mid drag supersession and asserting the release is recorded after the screen application and after the scroll write; the cell asserts call order only because the harness has no layout and a measured box would be a false witness | TWO mutants. NATURAL-a the release on the finalize path is moved after the screen application which is the empty books page defect. NATURAL-b the release on the recovery path is moved before the screen render which is the dematerialized kept rows defect. expected killing cell for BOTH is LEASEORDER | integration app harness call order
 LEASECONTRACT | the boundary exposes exactly the three named entry points with exactly the declared shapes, the status is one of exactly two values, both the release and the invalidation are idempotent, and no promise is returned by any of them so finalization stays synchronous | unit drive the real Browse module directly, asserting the exported key set against an explicit list, asserting a second release with the same lease returns the invalidated status and performs nothing, asserting a second invalidation is inert, and asserting no returned value is a thenable which is what pins the refusal of the plan of record's promise shape | THREE mutants. NATURAL-a a fourth undeclared entry point is exported so the key set drifts. NATURAL-b the release returns a resolved promise so finalization becomes asynchronous. NATURAL-c the second release performs the reconciliation again rather than reporting invalidated. expected killing cell for ALL THREE is LEASECONTRACT | unit over the real Browse module
-MOVERFROZEN | the production mover object constructed by the L3 adapter is frozen at construction so a key attached to it after construction cannot ship, and the freeze itself is pinned over source with its deletion registered as a mutation so the guard cannot be removed silently, which is section 14's two part design landing together as its second trigger clause fires, AND the registration check can tell the wrapper deletion mutant apart from a key set mutant re anchored onto the same now frozen expression | source assert over js app that the adapter binding wraps its object literal in the freeze call and re pin the fixture sanity anchor that stops matching when it does, plus a REPAIRED third clause in the trigger gate whose registration predicate additionally requires the registration's replacement text to NOT contain the wrapper, which is what makes it name the mutant that removes the construct rather than any mutant that merely mentions it | TWO mutants. NATURAL-a the freeze wrapper is deleted from the adapter expression which the source pin must catch; the file is non strict so the freeze silences rather than throws which is exactly why the source pin and not a runtime assertion is the witness. NATURAL-b the repaired predicate's replacement text clause is deleted so the check reverts to co occurrence and is satisfied by the three re anchored key set registrations alone with no wrapper deletion mutant present, which is the vacuity the round one review measured. expected killing cell for BOTH is MOVERFROZEN | source scan over the one L3 adapter expression, plus a structural read of the mutation registry
+MOVERFROZEN | the production mover object constructed by the L3 adapter is frozen at construction so a key attached to it after construction cannot ship, and the freeze itself is pinned over source with its deletion registered as a mutation so the guard cannot be removed silently, which is section 14's two part design landing together as its second trigger clause fires, AND the registration check can tell the wrapper deletion mutant apart from a key set mutant re anchored onto the same now frozen expression | source assert over js app that the adapter binding wraps its object literal in the freeze call and re pin the fixture sanity anchor that stops matching when it does, plus a REPAIRED third clause in the trigger gate whose registration predicate additionally requires the registration's replacement text to NOT contain the wrapper, which is what makes it name the mutant that removes the construct rather than any mutant that merely mentions it | TWO mutants. NATURAL-a the freeze wrapper is deleted from the adapter expression which the source pin must catch; the file is non strict so the freeze silences rather than throws which is exactly why the source pin and not a runtime assertion is the witness. NATURAL-b the wrapper deletion registration STOPS REMOVING THE WRAPPER because its replacement text is changed to keep it, so the registry still mentions the wrapper on a from side while nothing removes it, which is section 14 part two going missing in the one form the unrepaired gate could not see; it targets tools mutate mjs the way MUTUNIQ-a and MUTUNIQ-b already do, and MEASURED it reddens under the repaired predicate and passes under the co occurrence predicate the repair replaced, which is what makes its kill attributable to the replacement text clause and to nothing else. ⛔ a mutation that DELETES the replacement text clause is NOT registered and cannot be, measured in both the one part and the two part form: widening a some predicate that is already true can only leave the assertion passing. expected killing cell for BOTH is MOVERFROZEN | source scan over the one L3 adapter expression, plus a structural read of the mutation registry
 ```
 
 ---
@@ -731,7 +898,7 @@ Mapped to coverage: `LEASEPAIRED`.
 | R4 | **The status ships with no real consumer** and becomes the exact dead field this campaign exists to delete — the shape the coverage audit's forward read named as the likeliest coordinate for the next externally-found defect. **The first draft was already there**: it cited a consumer that does not exist. | **Medium** | D1 scopes the trace line into this slice, so the consumer is built rather than cited. `LEASEINVALID`'s `NATURAL-d` reddens if the line stops reading the value, which is the route by which the field would silently become dead again. |
 | R5 | **The harness fake drifts kinder than reality** — it must gain the status and the invalidation without losing the stale-token discrimination it models deliberately. | **Medium** | `LEASEINVALID`'s second route and `LEASEPAIRED`'s two new clauses drive the REAL Browse module, so the fake cannot be the only witness of the invalidated path or of the reconciliation body. |
 | R6 | **The subsystem addendum is scrubbed to a wrong current truth**, because it is stale in several places this stage does not touch (§2 GAP). | **Low** | The scrub is scoped in §11 to the resource vocabulary plus the four named stale claims, each with a `file:line` in §3 for what replaced it. |
-| R7 | **`MOVERFROZEN` lands as half of §14's design, with the whole suite green.** ⛔ The first draft rated this Low on a mitigation that does not exist: the trigger gate's clause 3 is made VACUOUS by this commit's own mandatory re-anchoring, because the three re-anchored key-set registrations satisfy its `Object.freeze(` + `toMover` co-occurrence with no wrapper-deletion mutant present. | **Medium** *(raised from Low)* | §12's repair: clause 3's registration predicate gains a `to`-side discriminator requiring the replacement text NOT to contain the wrapper, which is `MOVERFROZEN`'s second clause and its `NATURAL-b` mutant. **The "no new mechanism is needed" claim is retracted.** |
+| R7 | **`MOVERFROZEN` lands as half of §14's design, with the whole suite green.** ⛔ The first draft rated this Low on a mitigation that does not exist: the trigger gate's clause 3 is made VACUOUS by this commit's own mandatory re-anchoring, because the three re-anchored key-set registrations satisfy its `Object.freeze(` + `toMover` co-occurrence with no wrapper-deletion mutant present. | **Medium** *(raised from Low)* | §12's repair: clause 3's registration predicate gains a `to`-side discriminator requiring the replacement text NOT to contain the wrapper. ⚠️ **Round 2 measured two further defects in that repair and both are closed in §12**: the predicate's uniqueness is an OBLIGATION on the three MOVERSHAPE `to` strings rather than a fact about them (step 5b check 4), and `NATURAL-b` is a registry-side mutant because no mutation of the predicate itself can redden the cell. **The "no new mechanism is needed" claim is retracted.** |
 | R8 | **A gate is trusted on a silence it never earned.** The plan gate takes minutes on an artifact this size, and a run given a path in argv instead of a hook payload on stdin exits 0 having parsed nothing. | **Low** | Recorded in the status block and the decision log: this artifact's gate PASS follows a real FAIL-then-fix cycle on the same file, so it is evidence about this artifact and nothing more. Per the persona's own honesty rule a passing gate is necessary and never sufficient; the review seat is the check. |
 
 ---
@@ -788,12 +955,12 @@ subtraction pass (whose §14 trigger it discharges). It gates nothing and is gat
 
 | # | Step | Owner | State |
 |---|---|---|---|
-| 1 | Temper this plan | the plan reviewer | **round 1 DONE (TEMPER, `5c2c065`); round 2 owed on this revision** |
+| 1 | Temper this plan | the plan reviewer | **DONE — round 1 (TEMPER, `5c2c065`) and round 2 (TEMPER, `c2369f8`), both applied. Round 3 is NOT owed: the reviewer waived it on condition the amendment stay confined to F1, F3a and F3b, and it did.** |
 | 2 | **Resolve U1** — strike the load-bearing promise (below) | the adversary | owed |
 | 3 | Author the red suite from §13 | the test author | owed |
 | 4 | Build green | the builder | owed |
 | 5a | Every mutant executed individually against its target file | the builder | owed |
-| 5b | **The blast-radius probe, THREE classes, control first** | the builder | owed |
+| 5b | **The blast-radius probe, THREE classes plus the freeze obligation, control first** | the builder | owed |
 | 6 | Code review | the code reviewer | owed |
 | 7 | Coverage audit | the coverage auditor | owed |
 | 8 | Records scrub (§11) | the assistant | owed |
@@ -801,16 +968,32 @@ subtraction pass (whose §14 trigger it discharges). It gates nothing and is gat
 **Step 5b, specified exactly, because its first version measured the wrong input.** Apply **the
 transform §5 and §12 together specify** — the session field, the two `Browse.*` call sites, the two
 wrapper renames, the `js/browse.js` renames, and the freeze — in memory, control-first (no transform
-must rot nothing), and then require all three of:
+must rot nothing), and then require all four of:
 
-1. **Class (a):** the rotted `from` set equals §11's declared twelve (thirteen if the identifiers are
-   renamed inside comments too).
+1. **Class (a):** the rotted `from` set equals §11's declared **thirteen**, the figure for the
+   transform this plan specifies. Twelve is the code-only layer and is a sub-measurement, not an
+   admissible end state: §6.6 makes the comment rename mandatory, so a build that stops at twelve has
+   left current-truth comments describing functions that no longer exist.
 2. **Class (b):** the `to`-side scan for `dropRowHold`, `takeRowHold`, `beginHold`, `endHold`,
-   `dropHold` at a word boundary returns empty after the re-anchoring. ⚠️ **The anchors gate cannot
-   see this class** — it checks `from` only — so this scan is the only thing standing between a
-   re-anchored registry and a mutant that kills its cell with a `ReferenceError` instead of with the
-   defect it names.
-3. **Class (c):** `ADAPTER_DECL` re-pinned, and the whole suite green.
+   `dropHold` **and the session field `.hold`** at a word boundary returns empty after the
+   re-anchoring. ⚠️ **The anchors gate cannot see this class** — it checks `from` only — so this scan
+   is the only thing standing between a re-anchored registry and a mutant that kills its cell with a
+   `ReferenceError` instead of with the defect it names. ⚠️ **The session field is in the scan by
+   design, not by luck** (round 2 F1): MEASURED, exactly one `to` string injects `.hold`
+   (`stage6c G2/G3`) and it also injects `dropRowHold`, so the five-identifier list happens to catch
+   it at HEAD — a future `to` injecting the field alone would be invisible to it, and §5 renames that
+   field.
+3. **Class (c):** `ADAPTER_DECL` re-pinned; `grep -rn 'endHold\|dropRowHold' docs/ tools/gen-swipe-model.mjs`
+   returns nothing with `docs/swipe-model.generated.txt` REGENERATED rather than hand-edited; the
+   three comment sites scrubbed; and the whole suite green. ⚠️ The suite is the witness for the eight
+   live-reference test files and for nothing else in this class — the generator/generated pair and
+   the three comments are green either way, which is why they are named.
+4. **The freeze obligation (§12):** the `to` strings of `S2-35 MOVERSHAPE`, `S2-36 MOVERSHAPE` and
+   `S2-39 MOVERSHAPE` contain `Object.freeze(` after the re-anchoring, and exactly ONE registration
+   satisfies `from.includes('Object.freeze(') && from.includes('toMover') && !to.includes('Object.freeze(')`
+   — the wrapper-deletion mutant. ⚠️ **No gate can see this**, and the minimal correct-looking
+   re-anchoring makes all three MOVERSHAPE registrations match the predicate as false wrapper
+   deletions (measured: three, §12). This check is four lines against the exported `MUTATIONS`.
 
 A measured set larger than the declared one is a blast-radius miss and the plan is amended before the
 commit lands. **A measured set SMALLER than the declared one is also a stop** — it means the
@@ -818,7 +1001,9 @@ transform applied is not the transform specified, which is precisely how the fir
 number.
 
 **Exit condition.** All of: every §13 cell active, green and mutation-verified; §11's measured
-co-change set equal to its declared set across all three classes; §14's D1–D3 holding and **U1
+co-change set equal to its declared set across all three classes with step 5b's fourth check green
+(exactly one registration matching §12's predicate, and it is the wrapper-deletion mutant); §14's
+D1–D3 holding and **U1
 resolved by the adversary rather than by a third reading**; the PolicyLedger entry reconciling; the
 §11 scrub complete; the campaign manifest `Claude/Campaigns/swipe-stage7.json` reading COMPLETE with
 every gate's verdict filed. **This stage is CI-complete — it owes no device gate**, because no cell
@@ -831,11 +1016,11 @@ that the endpoint fold which would make this structural is a trap, so the guaran
 an enumeration is where this campaign's defects live. Provable on the real DOM through the app
 harness.
 
-**Handoff order:** **the plan reviewer** (round 2 over this revision) → **the adversary** (resolve U1
-by striking the promise above) → **the test author** (red suite from §13; `LEASEPAIRED` red-first over
-all seven exits, `LEASEINVALID`'s trace clause red-first, and `MOVERFROZEN`'s repaired clause-3
-predicate red-first against the vacuity `NATURAL-b` describes) → **the builder** (green; the renames,
-the status, its trace line, the explicit invalidation, the §12 freeze pair, and the class (a)+(b)+(c)
+**Handoff order:** **the adversary** (resolve U1 by striking the promise above) → **the test author**
+(red suite from §13; `LEASEPAIRED` red-first over all seven exits, `LEASEINVALID`'s trace clause
+red-first, and `MOVERFROZEN`'s repaired clause-3 predicate red-first against the registry-side
+`NATURAL-b` §12 specifies) → **the builder** (green; the renames, the status, its trace line, the
+explicit invalidation, the §12 freeze pair with its `to`-side obligation, and the class (a)+(b)+(c)
 re-anchoring — `from` AND `to` — all in the SAME commit) → **the code reviewer** → **the coverage
 auditor**.
 
