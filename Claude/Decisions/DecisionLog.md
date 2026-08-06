@@ -1895,8 +1895,8 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   2026-08-06, the planner, closing plan-review round 1 finding F1. A plan declared one rotted mutation
   anchor and the number was true of a narrower transform than its own scope section describes.
   Re-measured control-first against the specified transform, the set is thirteen registrations in
-  three classes plus one non-registry reader. The declared set and the probe that produces it must
-  name the same transform, or the build's equality check fires on correct work at its last step.
+  three classes; its non-registry readers were declared as one and measured as several more, and the
+  live count lives in the plan's section 11. The probe and the declared set must name one transform.
 
 - A `to`-SIDE INJECTION IS A CO-CHANGE CLASS THE ANCHORS GATE CANNOT SEE — 2026-08-06, the planner.
   The gate checks each registration's `from` text against source. Nine registrations inject a retired
