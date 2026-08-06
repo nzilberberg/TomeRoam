@@ -5,6 +5,19 @@ Date: 2026-08-05
 Plan of record: `Claude/Plans/PLAN-swipe-declone-stage2-subtraction.md` (RATIFIED 2026-08-05), §11 steps 4–5
 Authored against HEAD `d8333b4`
 
+**Verdict: RED_SUITE_READY** — declared 2026-08-05 against HEAD `05d454e`, for all nine of §10's
+cells realized with all eighteen of its mutants registered and executed (§8, §9), re-verified at
+that HEAD: suite 884 / 883 pass / 0 fail / 1 skip, `node tools/source-gate-sweep.mjs` exit 0
+(4 swept, 0 uncaught, 0 not-behaviour-neutral), and this pass's own entries `S2-33`…`S2-39`
+re-swept by re-derived index — 0 uncaught, 0 unapplied, 0 stale flags.
+
+⚠️ **This token is a milestone, not a present-tense claim that the suite is red**, and the
+distinction is worth stating because three cells here (`NOOWNEDPANE`, `MOVERSHAPE`, `PILLSWEPT`'s
+arity half) were red at authoring HEAD and are green now. That is the build satisfying the
+constraint, which is the gate's whole purpose; it does not falsify the declaration. The gate order
+is plan-review → **red-suite** → build, so this gate asserts the suite was authored and handed on
+before the build opened — the same reading every completed campaign's Curie artifact carries.
+
 ---
 
 ## Index
