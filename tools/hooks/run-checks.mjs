@@ -101,6 +101,14 @@ function defaultSteps() {
     // actually changes a line count (an equal-size in-place edit shifts nothing), and lists
     // only LIVE records — a casebook's citation is a record of what was true when filed.
     ['decisionlog-citations', [join(ROOT, 'tools', 'hooks', 'decisionlog-citation-shift-check.mjs')]],
+    // The board's format requires a row ID to be unique for its lifetime, and rows are cited by
+    // ID from casebooks, plans and handoffs — so a duplicated ID makes every citation into it
+    // ambiguous, with no error and no diff. Measured 2026-08-06: `T-S7G` sat on two unrelated
+    // rows, and the session that found it added two MORE duplicates while filing new rows,
+    // because it read one block of the table and treated that reading as the whole enumeration.
+    // Reading is what fails here; executing is what caught it. Same family as the citation
+    // check above: a record other records point into, breaking silently.
+    ['board-ids', [join(ROOT, 'tools', 'hooks', 'board-id-unique-check.mjs')]],
   ];
 }
 
