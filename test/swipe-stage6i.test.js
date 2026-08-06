@@ -47,7 +47,9 @@ const realSleep = (ms) => new Promise((r) => realSetTimeout(r, ms));
 const swipeLog = (h) => h.log.calls.filter((c) => c.name === 'debug' && c.args[0] === 'SWIPE').map((c) => c.args[1]);
 const starts = (h) => swipeLog(h).filter((m) => /^start /.test(m));
 const settles = (h) => swipeLog(h).filter((m) => /^#\d+ (abort|commit) /.test(m));
-const ghosts = (h) => h.document.querySelectorAll('.nav-ghost').length;
+// (a `ghosts` counter lived here; it went with its two 0-vs-0 call sites — see SNAPSHOTGONE.
+// Leaving it would have created the zero-call-site helper this same audit finding names next
+// door in test/swipe-stage5-residuals.test.js.)
 const scrollCalls = (h) => h.log.calls.filter((c) => c.name === 'window.scrollTo');
 const parked = (h) => h.$('home').classList.contains('parked');
 const browseHidden = (h) => h.$('browse').classList.contains('hidden');
@@ -87,9 +89,32 @@ test('SNAPSHOTGONE — a committed browse→home builds no home-snapshot pane; t
       h.touch.move(80, 302);
       assert.equal(starts(h).length, 1, 'fixture: the Authors→Home back-swipe must go live');
 
-      // The heart of the slice: no snapshot pane, and the REAL #home is the incoming mover.
-      assert.equal(ghosts(h), 0,
-        'browse→home must build NO home-snapshot pane — the real fixed #home is the incoming mover (not a clone)');
+      // The heart of the slice: the REAL #home is the incoming mover.
+      //
+      // ⛔ THE `ghosts(h) === 0` ASSERTION THAT USED TO OPEN THIS BLOCK IS DELETED, and its twin
+      // after the finalize with it (coverage audit r2, N5). Both were structurally 0-vs-0: after
+      // the subtraction NO first-party source, no vendored source and no static markup can write
+      // the retired class, so the count could not be anything but zero and neither line could
+      // fail on its own account. MEASURED, not read: applying `S2-23 NOGHOSTATALL` — the one
+      // registered mutant that actually mounts a `.nav-ghost` — leaves this whole cell GREEN.
+      //
+      // Deleting loses no coverage, because the property is held twice over by cells that CAN
+      // fail, each with an executed mutant:
+      //   NOGHOSTATALL (test/swipe-declone-stage2-construction.test.js) — behavioural, across all
+      //     eight structural cases: no transition builds an owned pane. Mutant `S2-23`, CAUGHT.
+      //   NOGHOSTCLASS (test/retired-concepts-purge.test.js) — textual, over every first-party
+      //     file: no class WRITE of the token exists at all. Mutant `S2-25`, CAUGHT.
+      // Together those are strictly stronger than a count taken during one gesture.
+      //
+      // They were deleted rather than kept with a disclaimer because the MESSAGE on a vacuous
+      // assertion is what a later audit reads, and this campaign has now paid three times for a
+      // label that claimed more than its code did (a source-gate entry advertising a retired
+      // guard; mutant `#13` reporting `caught` on cells that no longer exist; a fire-drill
+      // control named in a test's title and absent from its array). A comment beside a live
+      // `assert.equal(…, 0, 'must build NO home-snapshot pane')` does not stop the next reader
+      // counting it as coverage of that promise. Re-anchoring was not available honestly: the
+      // pass's whole subject is that no such node exists, so there is no surviving node whose
+      // absence could witness it.
       assert.equal(parked(h), false,
         'the real #home must be UN-PARKED at drag start (home-host render), i.e. it is the fixed incoming mover');
       assert.notEqual(h.$('home').style.transform, '',
@@ -106,7 +131,7 @@ test('SNAPSHOTGONE — a committed browse→home builds no home-snapshot pane; t
       for (let i = 0; i < 4 && h.raf.pending(); i++) await h.raf.frame();
       await settle(h);
       assert.ok(/commit/.test(settles(h)[0] || ''), `fixture: the swipe must have committed — got ${settles(h)[0]}`);
-      assert.equal(ghosts(h), 0, 'after finalize there is no snapshot/ghost pane over home');
+      // (the post-finalize `ghosts(h) === 0` twin is deleted here — see the note above)
       assert.equal(parked(h), false, 'the real fixed #home rests active (un-parked) after the commit');
       assert.equal(browseHidden(h), true, 'the outgoing #browse is display:none\'d by applyScreen at commit');
     } finally { h.dispose(); }

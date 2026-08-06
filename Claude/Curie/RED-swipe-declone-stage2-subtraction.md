@@ -32,6 +32,7 @@ before the build opened — the same reading every completed campaign's Curie ar
 8. Exit accounting — every §10 cell against its realization
 9. The coverage audit's three gaps, closed — measured (2026-08-05)
 10. Round 2's N2, closed — the same blind spot, one step further (2026-08-05)
+11. Round 2's N5, closed — two vacuous assertions and two dead helpers deleted (2026-08-05)
 
 ---
 
@@ -551,6 +552,85 @@ unapplied, 0 stale flags` over all seven; no `*.mutbak` or `*.sgbak` left behind
 
 Full suite: **884 / 883 pass / 0 fail / 1 skip** — unchanged in count, because the work added
 controls to existing drill tests rather than new test cases. No build-number bump: `test/` only.
+
+---
+
+## 11. Round 2's N5, closed — two vacuous assertions and two dead helpers deleted (2026-08-05)
+
+Closing `Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction-r2.md` finding **N5** (round 1's
+F4, carried forward). Authored against HEAD `855004d`. N1 and the two unbuilt durable mechanisms
+are out of scope here and were not touched.
+
+### The absence claim, verified independently rather than accepted
+
+N5 rests on "no first-party source can write the retired class". That is an **absence** claim, and
+this campaign's absence claims have been wrong twice — a source-gate entry anchored to a retired
+guard for nine stages, and a registration naming killer cells that no longer existed. So the
+writer set was re-enumerated here rather than taken from the audit:
+
+| Channel checked | Result |
+|---|---|
+| The literal token under `js/` | **one** occurrence: `js/swipe.js:207`, prose inside a comment |
+| Case-insensitive `ghost` anywhere under `js/`, **including `js/vendor/`** | every hit is a comment about the retired concept, or the unrelated `GHOST_MS`/`ghostMs` peer-liveness timeout in `js/presence.js` and `js/logic.js`. `js/vendor/eruda.js`: **zero** |
+| `'nav-` fragments that a computed value could concatenate | two, both `js/nav.js:158-159`, values `nav-in-left` / `nav-in-right`; line 159 is a `classList.remove` |
+| Static markup in `index.html` | zero |
+
+⭐ **`js/vendor/` was checked deliberately, because `NOGHOSTCLASS` explicitly excludes the vendored
+bundle from its scan.** That exclusion is exactly where a surviving writer could hide from the gate
+that is supposed to hold this property. It is clean, but the exclusion is real and is the thing to
+re-check if the vendored bundle is ever replaced.
+
+⭐⭐ **And then it was MEASURED, which is what settles it.** Reading cannot prove an assertion is
+unable to fail. `S2-23 NOGHOSTATALL` — the one registered mutant that actually mounts a
+`.nav-ghost` — was applied and `test/swipe-stage6i.test.js` run: **`SNAPSHOTGONE` stayed GREEN, 6
+tests, 6 pass.** The strongest ghost-building mutant in the registry cannot make those two lines
+fire. The audit's reading holds.
+
+### The disposition, and why deletion rather than a disclaimer
+
+Both `assert.equal(ghosts(h), 0, …)` lines in `SNAPSHOTGONE` are deleted, and with them the two
+now-dead `ghosts` helpers — `test/swipe-stage6i.test.js` (its last two call sites were those
+assertions) and `test/swipe-stage5-residuals.test.js` (already zero call sites, N5's other half).
+Leaving the first helper behind would have created the very dead-helper class the same finding
+names next door.
+
+**Deleting loses no coverage**, and that was verified rather than argued: the property is held
+twice over by cells that CAN fail, both re-executed at this final state —
+
+- `NOGHOSTATALL` (behavioural, all eight structural cases): `S2-23` → CAUGHT, 13 failing, killer
+  list includes `NOGHOSTATALL`.
+- `NOGHOSTCLASS` (textual, every first-party file): `S2-25` → CAUGHT, **1 failing**, that cell
+  alone.
+
+Together those are strictly stronger than a count taken during one gesture.
+
+**Why not keep them with a statement that they witness nothing.** The MESSAGE on a vacuous
+assertion is what the next reader counts, and this pass has now paid three times for a label
+claiming more than its code does: a source-gate entry advertising a retired guard, mutant `#13`
+reporting `caught` on cells that no longer exist, and a fire-drill control named in a test's title
+and absent from its array. A comment beside a live
+`assert.equal(…, 0, 'must build NO home-snapshot pane')` does not stop that. **Why not re-anchor:**
+the pass's whole subject is that no such node exists, so there is no surviving node whose absence
+could witness the property — re-anchoring would be inventing coverage, which is not this seat's to
+invent.
+
+### Nothing was hollowed, and that was checked
+
+`SNAPSHOTGONE`'s remaining assertions (`parked`, the inline transform, `browseHidden`, the commit
+landmark) still carry it: re-swept at the final state, the cell is still a named killer for both
+`S2-36` (16 failing) and `S2-38` (42 failing). A cell stripped of dead assertions that stopped
+reddening would have been a worse outcome than the vacuity.
+
+Suite: **884 / 883 pass / 0 fail / 1 skip** — unchanged in count, because assertions were removed,
+not tests. Targeted sweep of `S2-23`, `S2-25`, `S2-36`, `S2-38` by re-derived index over the
+152-entry registry: `0 uncaught, 0 unapplied, 0 stale flags`, no `*.mutbak` or `*.sgbak` left. No
+build-number bump: `test/` only.
+
+⚠️ **Noted in passing, not acted on:** `.claude/worktrees/agitated-albattani-669a34/` holds a stale
+pre-declone copy of the tree in which `js/app.js:466` still reads `wrap.className = 'nav-ghost'`.
+It is not on any test path and no gate walks it, so it is not a hole in the purge — but a
+repo-wide grep for a retired token hits it first and reads as a surviving writer. Owner: the
+assistant, whenever that worktree is reaped.
 
 ---
 

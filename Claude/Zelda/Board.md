@@ -1793,6 +1793,33 @@ sentence over-claims against its own fixture sentence) and was deliberately not 
 **N3 and N4 are the assistant's at step 8** — N3 notes the new manifest reports `red-suite`,
 `build` and `adversary` red on verdict-token grounds, not coverage; **N5** carries F4 forward.
 
+**⭐ N5 CLOSED (2026-08-05, authored at `855004d`) — the two vacuous assertions and BOTH dead
+helpers deleted.** `Claude/Curie/RED-swipe-declone-stage2-subtraction.md` §11. **The absence claim
+was re-verified independently, not accepted** (this campaign's absence claims have been wrong
+twice): the retired class survives under `js/` at exactly one site — prose in a comment at
+`js/swipe.js:207`; every case-insensitive `ghost` hit elsewhere is a comment or the unrelated
+`GHOST_MS` peer-liveness timeout; the only `'nav-` fragments are `nav-in-left`/`nav-in-right` in
+`js/nav.js`; `index.html` has none; and **`js/vendor/eruda.js` has zero** — checked deliberately
+because `NOGHOSTCLASS` excludes the vendored bundle, which is exactly where a writer could hide
+from the gate holding this property. ⭐⭐ **Then MEASURED, which is what settles it**: applying
+`S2-23 NOGHOSTATALL` — the one registered mutant that actually mounts a `.nav-ghost` — leaves
+`SNAPSHOTGONE` GREEN. Reading cannot prove an assertion is unable to fail. **Disposition: delete,
+not disclaim** — the property is held twice by cells that CAN fail, both re-executed here
+(`S2-23`→`NOGHOSTATALL`, 13 failing; `S2-25`→`NOGHOSTCLASS`, 1 failing, alone), and a disclaimer
+beside a live `assert.equal(…, 0, 'must build NO home-snapshot pane')` does not stop the next
+audit counting the MESSAGE as coverage — the class this pass has paid for three times.
+Re-anchoring was not honestly available: the pass's subject is that no such node exists.
+`test/swipe-stage6i.test.js`'s `ghosts` helper went with its last two call sites (leaving it would
+have created the very dead-helper class N5 names next door); `test/swipe-stage5-residuals.test.js`'s
+had zero call sites already. **Nothing hollowed**: `SNAPSHOTGONE` is still a named killer for
+`S2-36` (16 failing) and `S2-38` (42 failing). Suite **884 / 883 / 0 fail / 1 skip** (unchanged —
+assertions removed, not tests); sweep of `S2-23`/`S2-25`/`S2-36`/`S2-38` by re-derived index:
+`0 uncaught / 0 unapplied / 0 stale flags`; no bump (`test/` only). ⚠️ **New, filed not fixed:**
+`.claude/worktrees/agitated-albattani-669a34/` holds a stale pre-declone tree where
+`js/app.js:466` still reads `wrap.className = 'nav-ghost'`. Not on any test path and no gate walks
+it, so not a purge hole — but a repo-wide grep for a retired token hits it first and reads as a
+surviving writer. Owner: the assistant, whenever that worktree is reaped.
+
 **⭐ Step 11 coverage audit ROUND 2: ADEQUATE — the suite spans §10 and every designated mutant is
 registered and executed.** `Claude/Mendeleev/AUDIT-swipe-declone-stage2-subtraction-r2.md` (audited
 at `d4ae127`; supersedes the round-1 file, which is not edited — the `-rN` suffix makes

@@ -27,7 +27,10 @@ async function settle(h, n = 12) { for (let i = 0; i < n; i++) await h.settle();
 const swipeLog = (h) => h.log.calls
   .filter((c) => c.name === 'debug' && c.args[0] === 'SWIPE').map((c) => c.args[1]);
 const starts = (h) => swipeLog(h).filter((m) => /^start /.test(m));
-const ghosts = (h) => h.document.querySelectorAll('.nav-ghost').length;
+// (a `ghosts` counter lived here with ZERO call sites — deleted at the r2 coverage audit's N5.
+// It was left behind when this file's ghost cells were retired, and no mechanism in the tree
+// sees a dead test helper: ESLint ignores test/**, and neither the purge scan nor the anchors
+// gate walks it.)
 function addRow(h) {
   const row = h.document.createElement('div');
   row.className = 'book';
