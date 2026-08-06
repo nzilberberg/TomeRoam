@@ -33,6 +33,7 @@ before the build opened — the same reading every completed campaign's Curie ar
 9. The coverage audit's three gaps, closed — measured (2026-08-05)
 10. Round 2's N2, closed — the same blind spot, one step further (2026-08-05)
 11. Round 2's N5, closed — two vacuous assertions and two dead helpers deleted (2026-08-05)
+12. N1's narrowing, absorbed into the cell and the registry (2026-08-06)
 
 ---
 
@@ -631,6 +632,91 @@ pre-declone copy of the tree in which `js/app.js:466` still reads `wrap.classNam
 It is not on any test path and no gate walks it, so it is not a hole in the purge — but a
 repo-wide grep for a retired token hits it first and reads as a surviving writer. Owner: the
 assistant, whenever that worktree is reaped.
+
+---
+
+## 12. N1's narrowing, absorbed into the cell and the registry (2026-08-06)
+
+The planner resolved round-2 finding **N1** at `58f81cb`: §10 `MOVERSHAPE`'s behaviour sentence is
+narrowed to the adapter EXPRESSION its fixture commissions, and the lifetime invariant is deferred
+at §14 with an owner, a trigger and a measured two-part design (§13 decision 22). Two scrubs
+followed to this seat. Authored against HEAD `58f81cb`. §14's deferred work was not touched and the
+freeze was not added.
+
+### What changed — comment text only, verified mechanically
+
+`git diff -U0` filtered to non-comment, non-blank lines returns **empty** for both files. No
+assertion, no anchor, no `from`/`to`, no entry name; the registry is 152 entries before and after.
+
+**`test/swipe-declone-stage2-subtraction.test.js`** — the cell header.
+
+- The headline claimed the mover "**records** carries … NO third key, so a dropped or an
+  **orphaned key cannot ship silently**" — a LIFETIME claim — **thirty-seven lines above the same
+  header's honest-limit paragraph** saying a source assertion cannot see a key attached at
+  runtime. The file contradicted itself, and the larger sentence is the one an audit reads as the
+  promise. Narrowed to the adapter expression, with what the cell deliberately does NOT claim
+  stated in the headline's own breath and pointed at §14.
+- The layer sentence named only "the app harness over a REAL gesture". That is §13 decision 16's
+  named failure mode — true, checkable and incomplete, which survives indefinitely because every
+  reader who checks it finds it true. Corrected to the two layers §10 now names: a source scan
+  over the one adapter expression, plus the app harness for the seam read set and the base half.
+- The counterexample paragraph is re-scoped: `own: 'borrowed-real'` is a third key **in the
+  adapter expression**, so it sits INSIDE the narrowed claim. The paragraph stays because the
+  cell's history is why the source assertion exists.
+- The honest-limit paragraph now names §14 as the home of its runtime half, so it and the headline
+  agree explicitly rather than by a reader's inference.
+
+**`tools/mutate.mjs`** — `S2-39`'s narrative. It said the cell's claim "was therefore false" and
+"the repair is the SOURCE assertion §10 specifies", which now reads as though the repair closed the
+whole claim. One clause added: this mutant closes the **construction-site route only**; the
+post-construction route is still open, §10 was narrowed to match, and the mutant that will witness
+it — deletion of the `Object.freeze(` wrapper — is owed to §14 and registers in the commit that
+adds the wrapper, because its anchor does not exist at HEAD. The quoted superseded sentence at
+`:1691` is left standing deliberately: it is a quotation inside the record of what went wrong, not
+a live claim.
+
+### The acceptance-mutant question — agreed, on a sharper ground than "no new assertion"
+
+The planner states no acceptance mutant is owed. **Agreed**, and the checkable reason is not that
+no assertion was added — that is true here but is not the general rule. It is:
+
+> **The narrowed claim's mutant set is non-empty, and every member still lands INSIDE the narrowed
+> scope.**
+
+Verified by execution at this final state, indices re-derived by name over 152 entries:
+
+| Mutant | Result | Killing cells | Inside the narrowed scope? |
+|---|---|---|---|
+| `S2-35` (re-adds `own: m.ownership`) | CAUGHT, 2 failing | emitted-key-set + read-set | yes — the adapter expression |
+| `S2-36` (drops `base`) | CAUGHT, 16 failing | all three `MOVERSHAPE` tests | yes — the adapter expression |
+| `S2-39` (`own: 'borrowed-real'`) | CAUGHT, 1 failing | emitted-key-set **alone** | yes — the adapter expression |
+
+⭐ **This is where a narrowing CAN owe work, and it is the thing to check rather than the assertion
+count.** A narrowing that moved the claim's boundary *past* one of its mutants would strand that
+mutant reporting `caught` for a claim no longer made — which is exactly `#13`'s disease, one layer
+out. It did not: all three defects are construction-site defects, and the narrowed claim is about
+the construction site. The narrowed claim is in fact witnessed **more** completely than the wider
+one ever was, since `S2-39` is the shape that used to escape.
+
+**Manufacturing one would be worse than useless.** There is nothing executable to mutate; a
+comment mutation either reddens nothing or reddens a text gate for reasons unrelated to the claim —
+a false CAUGHT, the class `SOURCE_TEXT_GATES` exists to exclude. That is decision 21's error ("a
+fixture route variant is not a mutant") one layer out, as the planner says.
+
+⚠️ **The deferral's reasoning is sound; its risk is the follow-through, and this campaign has the
+scar.** Registering the `Object.freeze(` mutant now is impossible — the anchor does not exist, and
+it would rot `test/mutation-anchors.test.js` immediately. That is the same correct split used for
+the six mutants deferred to step 6 — and those then sat unregistered through a build, a review and
+a fix round while the sweep printed `0 uncaught` (§9 F1). §14 naming an owner, a trigger and a
+consumer is what that earlier deferral lacked, which is why it is a scheduled gate rather than a
+repeat.
+
+### Result
+
+Nothing reddens that should not, and nothing that should redden has stopped: the three `MOVERSHAPE`
+mutants all still bite, `0 uncaught / 0 unapplied / 0 stale flags`, no `*.mutbak` or `*.sgbak`.
+Suite **884 / 883 pass / 0 fail / 1 skip**, unchanged — the change is comment text. No
+build-number bump: `test/` and `tools/` only.
 
 ---
 

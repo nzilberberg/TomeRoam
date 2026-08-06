@@ -1692,6 +1692,16 @@ const MUTATIONS = [
   // covered, which is worse than an absent cell: an audit reads a false claim as a swept one.
   // The repair is the SOURCE assertion §10 specifies and §13 decision 20 rules on.
   // MEASURED 2026-08-05 after the repair (1 failing): the MOVERSHAPE emitted-key-set test alone.
+  //
+  // ⛔ THIS MUTANT CLOSES THE CONSTRUCTION-SITE ROUTE ONLY, and the other route is still OPEN —
+  // stated because the paragraph above otherwise reads as though the repair closed the whole
+  // claim. What is now witnessed is that the adapter EXPRESSION cannot emit a third key. A key
+  // attached to a member of `d.movers` AFTER construction still ships uncaught at whole-suite
+  // scope; §10's behaviour sentence was narrowed to match (§13 decision 22) and the lifetime
+  // invariant is deferred at §14 with an owner, a trigger and a measured two-part design. The
+  // mutant that will witness THAT route — deletion of the `Object.freeze(` wrapper — is owed to
+  // §14's work and registers in the commit that adds the wrapper, not here: registering it now
+  // would anchor on text that does not exist.
   { name: 'S2-39 MOVERSHAPE: the L3 adapter emits a THIRD key whose value is a constant, so a field with no reader and no seam source ships silently (-> MOVERSHAPE emitted-key-set test)',
     from: '      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot) });',
     to:   "      const toMover = (m) => ({ el: m.element, base: baseOf(m.slot), own: 'borrowed-real' });" },

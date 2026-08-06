@@ -85,17 +85,41 @@ function addPillFloat(h) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════
-// MOVERSHAPE — the production mover the L3 adapter records carries the element reference and
-// the base offset and NO third key, so a dropped or an orphaned key cannot ship silently.
-// Plan §10 MOVERSHAPE / §6 Rule R / §4 D12.
+// MOVERSHAPE — the ONE adapter EXPRESSION that constructs a production mover emits exactly the
+// element reference and the base offset and no third key, so the retired ownership field cannot
+// be re-added at the site where session movers are built.
+// Plan §10 MOVERSHAPE / §13 decision 22 / §6 Rule R / §4 D12.
 // ════════════════════════════════════════════════════════════════════════════════════════
+//
+// ⛔ WHAT THIS CELL DELIBERATELY DOES NOT CLAIM, stated in the headline's own breath because the
+// two used to disagree. The key set the recorded mover CARRIES OVER ITS LIFETIME is NOT claimed
+// here. A key attached to a member of `d.movers` after construction is outside what any witness
+// in this cell can see — MEASURED at whole-suite scope, it ships uncaught. That stronger
+// invariant is deferred at plan §14 with an owner, a trigger (the next change that writes to a
+// member of `d.movers` outside `toMover`, or threads a new value to the settle path) and a
+// measured two-part design; it is a scheduled gate, not a backlog line.
+//
+// This header formerly opened "…so a dropped or an ORPHANED KEY CANNOT SHIP SILENTLY" — a
+// LIFETIME claim — thirty-seven lines above its own honest-limit paragraph saying a source
+// assertion cannot see a key attached at runtime. The file contradicted itself, and the larger
+// sentence was the one a later audit would have read as the promise. Narrowed to the fixture's
+// scope rather than the fixture grown to the sentence's, per §13 decision 22: the occupant that
+// would have closed the lifetime claim (`Object.freeze` on the adapter literal) is production
+// surface added to serve a test, which decision 20 already forbids here — and it was measured
+// INERT, since `js/app.js` is non-strict, so the freeze silences the offending write instead of
+// throwing. A guard that makes a defect quiet is worse than a named deferral.
 //
 // WHY A NEW CELL RATHER THAN A MIGRATED ONE. There is no key-completeness cell to migrate: the
 // `F1a-L3` cell that pinned `toMover`'s key set was deleted at step 10
 // (test/swipe-stage5-residuals.test.js retains only its retirement note), on the correct ground
-// that its fixture required a built pane. Its layer is chosen accordingly — the app harness
-// over a REAL gesture, because the fake-env construction layer never executes the adapter
-// mapping at all.
+// that its fixture required a built pane.
+//
+// ITS LAYER IS TWO, and naming only one was true, checkable and incomplete — the failure mode
+// that survives indefinitely (§13 decision 16). A SOURCE scan over the one L3 adapter
+// expression, PLUS the app harness over a real gesture for the seam read set and for the base
+// half. This header formerly named only the app-harness half, on the ground that the fake-env
+// construction layer never executes the adapter mapping — still true of (2) and (3), and never
+// true of (1), which reads the file.
 //
 // ⭐ THE CELL IS THREE TESTS AND THEY ARE A SET, not one test with two spares. Each sees a
 // different class of defect and none of them subsumes another:
@@ -113,10 +137,11 @@ function addPillFloat(h) {
 // The coverage audit applied
 //     const toMover = (m) => ({ el: m.element, base: baseOf(m.slot), own: 'borrowed-real' });
 // — a third key whose value is a CONSTANT rather than a read of a seam field — and the whole
-// behaviour suite stayed green. An orphaned key shipped silently, which is the exact outcome
-// this cell's stated claim forbids, and it did so on the pass's own subject: a field with no
-// reader is what the pass exists to delete. The 1:1 argument was true only over the shapes the
-// plan enumerated, and a mutant is not obliged to stay inside an enumeration.
+// behaviour suite stayed green. That defect is INSIDE the narrowed claim: it is a third key in
+// the adapter expression itself, at the construction site, and it shipped silently on the pass's
+// own subject — a field with no reader is what the pass exists to delete. The 1:1 argument was
+// true only over the shapes the plan enumerated, and a mutant is not obliged to stay inside an
+// enumeration.
 //
 // (1) is the assertion §10 specifies and §13 decision 20 rules on — "asserts over SOURCE, not
 // over a runtime observer", because a runtime observer for `d.movers` would add exactly the
@@ -127,7 +152,8 @@ function addPillFloat(h) {
 // assertion cannot see a key attached elsewhere at runtime, and it reads ONE expression, so it
 // says nothing about an adapter that moved. Its fixture-sanity assertion is what keeps that from
 // being silent — if the binding it reads stops existing, it FAILS rather than finding nothing
-// and passing.
+// and passing. The runtime half of that limit is the invariant deferred at plan §14; the
+// headline above now scopes to it rather than over it, so this paragraph and the headline agree.
 //
 // (2)'s scope, stated as exactly what it is: the set of SEAM FIELDS the adapter READS, captured
 // by handing the real `start()` a Construction whose movers expose their real values through
