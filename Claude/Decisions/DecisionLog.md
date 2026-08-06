@@ -1855,3 +1855,38 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   and the shipped form of a device-gated pass is not changed for it after the pass closes. The
   deferral is only legitimate when it carries an owner, a TRIGGER condition, a named consumer and a
   measured design, so the next pass inherits the work rather than re-deriving it.
+
+- STAGE 7 OF THE SWIPE/REVEAL PLAN IS THE BROWSE HOLD BOUNDARY AND NOTHING ELSE — 2026-08-06, the
+  planner. The stage's inherited deferral list was checked item by item against current source:
+  seven of its ten items have no subject in the tree, because the de-clone removed every owned pane
+  and the subtraction pass removed the machinery that acted on them. Two further items had their
+  premise inverted — they asked for the elimination of a real-view transform that is now the ratified
+  design. `Claude/Plans/PLAN-swipe-stage7.md` §3 carries the per-item table with a citation for each.
+
+- A DEFERRED ITEM WHOSE SUBJECT HAS BEEN DELETED IS NOT DEFERRED — 2026-08-06, the planner. It is
+  closed, and a later plan must not carry it forward. A deferral list written before three
+  intervening plans lands describes a tree that no longer exists, and reading it as a backlog
+  schedules work against absent code. The rule is that a deferral is re-verified against source at
+  the moment its stage opens, with a citation per item, before any of it is planned.
+
+- THE PLAN-OF-RECORD'S LEASE RETURN SHAPE IS STALE AND ITS TWO ASYNCHRONOUS ELEMENTS ARE REFUSED —
+  2026-08-06, the planner. `PLAN-swipe-reveal.md` §3.5 gives the Browse lease release a
+  `ready: Promise` and a `settledScrollY` argument. Neither has a consumer at HEAD: the promise
+  existed for a paint barrier inside a reveal path that no longer exists, and awaiting an
+  immediately-resolved promise would make finalization asynchronous for no gain, which the
+  Engineering Contract forbids; the scroll argument's subject moved to each browse page, which owns
+  its own offset. The release returns a status and takes the landed descriptor, and nothing else.
+
+- SECTION 14'S MOVER-LIFETIME INVARIANT IS OWED BY STAGE 7 ON ITS SECOND TRIGGER CLAUSE — 2026-08-06,
+  the planner. MEASURED against the real gate on the real file: a positive control writing a mover
+  member reddens `MOVERLIFETIMETRIGGER`, and the stage-7 transform leaves it green, so the mechanical
+  clause does not fire. The prose clause "threads any new value to the settle path" does fire — the
+  release status is that value — and the gate is silent on that clause by construction. The two-part
+  freeze design therefore lands with stage 7 rather than being deferred again by the change that
+  trips its trigger.
+
+- A GATE THAT READS A HOOK PAYLOAD FROM STDIN EXITS ZERO WHEN GIVEN A PATH AS AN ARGUMENT —
+  2026-08-06, the planner. The plan gate was run with the plan's path in argv and reported success;
+  it had in fact parsed no file at all. A negative control with a required section removed also
+  reported success, which is what exposed it. Validate an instrument's ability to fail before
+  trusting its silence, and prefer a negative control over a second reading of the passing run.
