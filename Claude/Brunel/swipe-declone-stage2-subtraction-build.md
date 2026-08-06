@@ -324,3 +324,14 @@ a local edit. Left untouched, per "implement ONLY the sanctioned findings."
 `6b25a15` — all pre-commit gates passed (same twelve as the subtraction commit). HEAD verified via
 `git rev-parse HEAD`. Not pushed. This is a between-stages fix; no new stage started. Next: the
 user's go to continue (re-review, or the coverage auditor).
+
+## Verdict
+
+verdict: BUILD_GREEN
+
+Declared against HEAD `05d454e` (re-verified 2026-08-05, after Poirot's fix-then-ship review, this
+seat's response at `6b25a15`, and Curie's two coverage-audit gap closures) — not against the `49efe4f`
+state this log was originally written for. Re-run at that HEAD: full suite 884 tests / 883 pass /
+0 fail / 1 skip; full mutation sweep 152/152 mutants (12 shards) / 0 uncaught / 0 unapplied / 0 stale
+flags / no `*.mutbak`; `node tools/source-gate-sweep.mjs` (run directly, not imported) exit 0, 4/4
+fingerprints caught, 0 not-behaviour-neutral, no `.sgbak` left; tree clean throughout.
