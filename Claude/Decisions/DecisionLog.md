@@ -1890,3 +1890,44 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   it had in fact parsed no file at all. A negative control with a required section removed also
   reported success, which is what exposed it. Validate an instrument's ability to fail before
   trusting its silence, and prefer a negative control over a second reading of the passing run.
+
+- A CO-CHANGE SET IS MEASURED FROM THE TRANSFORM THE PLAN SPECIFIES, NOT FROM A PROBE OF PART OF IT —
+  2026-08-06, the planner, closing plan-review round 1 finding F1. A plan declared one rotted mutation
+  anchor and the number was true of a narrower transform than its own scope section describes.
+  Re-measured control-first against the specified transform, the set is thirteen registrations in
+  three classes plus one non-registry reader. The declared set and the probe that produces it must
+  name the same transform, or the build's equality check fires on correct work at its last step.
+
+- A `to`-SIDE INJECTION IS A CO-CHANGE CLASS THE ANCHORS GATE CANNOT SEE — 2026-08-06, the planner.
+  The gate checks each registration's `from` text against source. Nine registrations inject a retired
+  identifier in their REPLACEMENT text, and one of the nine has a `from` that survives the rename, so
+  the gate reports it clean while the mutant kills its cell with a ReferenceError instead of with the
+  defect it names. A rename's declared blast radius covers `from` anchors, `to` injections and
+  non-registry source-text readers as three separate classes.
+
+- A REQUIRED-BUT-UNBUILT DIAGNOSTIC IS NOT A PRODUCTION CONSUMER — 2026-08-06, the planner, closing
+  plan-review round 1 finding F2. A plan justified a new field by naming a structured trace its parent
+  plan requires; the interface that trace is exposed through occurs nowhere in the tree and no
+  existing trace line mentions the subject. The Engineering Contract already decides this case: a
+  future stage is not a consumer. The correction is to build the one line in the same slice, not to
+  cite one that does not exist, and not to substitute a test that reads the field.
+
+- A GATE'S DISCRIMINATOR CAN BE COLLAPSED BY THE SAME COMMIT THAT NEEDS IT — 2026-08-06, the planner,
+  closing plan-review round 1 finding F3. A gate identified a required mutant by the co-occurrence of
+  two tokens in its anchor text. The commit that introduces the guard must also re-anchor three
+  unrelated mutants onto the same expression, after which they carry both tokens and satisfy the check
+  with the required mutant absent. A registration check must ask whether the registration REMOVES the
+  construct it claims to remove — its replacement text must not contain it — rather than whether it
+  mentions it.
+
+- A DEFENDED REFUSAL IS NOT A DELETED SUBJECT — 2026-08-06, the planner, closing plan-review round 1
+  finding F7. A field that source reasons about refusing and that a live registered mutant reddens on
+  re-introduction is watched, not gone. Filing it beside a concept that occurs nowhere in the repo
+  loses the distinction the next plan to revisit that surface would need: one has a witness saying why
+  not, the other has nothing.
+
+- A QUESTION THE RECEIVING SEAT CANNOT ANSWER IS AN OPEN UNKNOWN, NOT A BLOCKING QUESTION —
+  2026-08-06, the planner, closing plan-review round 1 finding F6. Asking a reading seat to certify an
+  enumeration's completeness produces a reading, and this project's record is eight enumerations that
+  read as complete and were not, every one settled by executing. Such an item is routed to the seat
+  that executes, and agreeing readings are recorded as readings rather than as an answer.

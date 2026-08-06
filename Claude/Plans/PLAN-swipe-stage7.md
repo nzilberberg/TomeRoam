@@ -11,7 +11,28 @@ Type: plan
   "staged_records":["Claude/Plans/PLAN-swipe-reveal.md","Claude/Subsystems/swipe-reveal.md","Claude/Zelda/Board.md","Claude/Decisions/DecisionLog.md","Claude/Campaigns/swipe-stage7.json"],
   "blocking_questions":["LEASEPAIRED","LEASEINVALID","LEASEORDER","MOVERFROZEN"]} -->
 
-Status: **DRAFT — not reviewed. Blocked on the plan reviewer.** Nothing here is cleared to build.
+Status: **TEMPER APPLIED (round 1) — returning to the plan reviewer.** Nothing here is cleared to build.
+`Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r1.md` (`5c2c065`), verdict TEMPER.
+
+**The scope determination survived, and it was re-derived independently.** The plan reviewer checked
+all ten inheritance rows itself against HEAD — reading every cited line and sweeping `js/`, `css/`,
+`test/` and `tools/` for each named subject — and every row held. No row wrote off a live subject.
+**The deletion set did not move.** §3 is unchanged except for one re-categorisation (F7).
+
+**What the review broke was this plan's verification machinery, in three places, and all three are
+repaired here.** F1: §11's headline MEASURED co-change set was measured from a transform NARROWER
+than §5 declares — **re-measured here, control-first, and the full set is thirteen registrations in
+three classes plus one non-registry reader, not one** (§11). F2: the release status had no production
+consumer, because the trace it named does not exist at HEAD — **resolved by scoping the trace line
+into this stage** (§5, §14 D1). F3: the gate R7 leaned on to catch a half-landed §14 freeze is made
+**vacuous** by the same commit's mandatory re-anchoring — **a repair is specified and R7's "no new
+mechanism is needed" is retracted** (§12, §13 `MOVERFROZEN`).
+
+⚠️ **Do not read the plan gate's PASS as evidence of anything.** It runs for minutes on a plan this
+size. It did fail-then-pass on this artifact — four structural findings on the first hook-mode run,
+green after exactly those four were fixed — so on this artifact it demonstrated it can fire; but per
+the persona's own honesty rule a passing gate is necessary and never sufficient, and the review seat
+is the check that matters.
 
 ---
 
@@ -30,7 +51,7 @@ Status: **DRAFT — not reviewed. Blocked on the plan reviewer.** Nothing here i
 11. [Compatibility, migration and the MEASURED co-change list (U10)](#11-compatibility-migration-and-the-measured-co-change-list-u10)
 12. [The §14 lifetime-invariant trigger — measured, not read](#12-the-14-lifetime-invariant-trigger--measured-not-read)
 13. [Coverage Model](#13-coverage-model)
-14. [Blocking questions](#14-blocking-questions)
+14. [Decisions taken at round 1, and the one open unknown that remains](#14-decisions-taken-at-round-1-and-the-one-open-unknown-that-remains)
 15. [Risk registry](#15-risk-registry)
 16. [What this does NOT do, each with its consumer named (U2 deferrals)](#16-what-this-does-not-do-each-with-its-consumer-named-u2-deferrals)
 17. [Sequence, owners, exit condition and handoff](#17-sequence-owners-exit-condition-and-handoff)
@@ -44,13 +65,17 @@ interface."* Its substance was expected to come from the DEFERRED-to-7 clause at
 entry — ten items, each said to be "behind the consumer that does not yet exist."
 
 **That clause was written before 6f, 6g, 6h, 6i, before de-clone Stages 1 and 2, and before the
-subtraction pass. It has now been checked against current source, item by item, and seven of the ten
-items no longer have a subject in the tree.** §3 carries the table with a `file:line` for every
-determination. The de-clone removed every owned pane, so the pane-lifecycle work that was the bulk of
-the clause — `pane.release()`, the pane object, the `dispose(reason)` enum, pane-owning supersession,
-the `.nav-ghost` production guard — has nothing left to be done to. Two further items (the two
-real-view transform eliminations) had their PREMISE INVERTED: 6f's axis was *never transform the real
-in-flow view*, and the ratified design at HEAD is that **every** transition moves its real element.
+subtraction pass. It has now been checked against current source, item by item, and SIX of the ten
+items have no subject in the tree, a seventh is already built, and an eighth is a defended refusal
+rather than a live deferral.** §3 carries the table with a `file:line` for every determination. The
+de-clone removed every owned pane, so the pane-lifecycle work that was the bulk of the clause —
+`pane.release()`, the pane object, the `dispose(reason)` enum, pane-owning supersession, the
+`.nav-ghost` production guard — has nothing left to be done to. Two further items (the two real-view
+transform eliminations) had their PREMISE INVERTED: 6f's axis was *never transform the real in-flow
+view*, and the ratified design at HEAD is that **every** transition moves its real element.
+*(The count reads six rather than the first draft's seven because round 1 F7 separated
+`sameBrowseHost` — a reasoned refusal with a live registered mutant — from the concepts that are
+simply gone. Nothing about what stage 7 builds changed.)*
 
 **So stage 7 is what its own one line always said it was, and nothing more: the Browse hold boundary.**
 That is the whole subject. Three inherited items survive with live subjects and are deferred again
@@ -84,9 +109,17 @@ that two ratified plans have since replaced. Where the Engineering Contract and 
 
 ## 3. The inherited deferral list, verified against current source
 
-Four verdicts are used. **Still deferred** — subject alive, not built, deferred again with a consumer.
+Five verdicts are used. **Still deferred** — subject alive, not built, deferred again with a consumer.
 **Already built** — shipped and consumed at HEAD. **Unreachable** — the code exists but no path
-reaches it. **Subject deleted** — the thing the item was about is not in the tree.
+reaches it. **Subject deleted** — the thing the item was about is not in the tree. **Guarded refusal**
+— the field is deliberately not emitted, the refusal is reasoned in source, and a live registered
+mutant reddens if it returns. *(The fifth verdict is round 1 F7: flattening a defended absence into
+"subject deleted" loses the distinction a future plan would need.)*
+
+**Every row below was re-derived independently by the plan reviewer at `79840d7`** — each cited line
+read, each named subject swept for across `js/`, `css/`, `test/` and `tools/` — and every row held.
+That is a second reading by a second seat, not an execution; it is worth what two readings are worth,
+which is why the rows carry their own MEASURED evidence where a gate could supply it.
 
 ⚠️ Every row below is a **source reading** unless its Evidence cell says MEASURED. Reading is what has
 been wrong eight times in this campaign; the rows most likely to be wrong are the ones that assert an
@@ -97,7 +130,7 @@ those cheaply when a build needs certainty.
 |---|---|---|---|---|
 | 1 | `F(release)` — the paint-gated `pane.release()` half (I10/I17 reveal centralization) | **Subject deleted** | `js/app.js:708` (`holdGhostUntilPaintable` — DELETED), `js/app.js:645` (`fadePanes`/`FADE_MS` — DELETED), `js/app.js:1012-1015` (no hold, no pane to drop; `cover.dropAt` set unconditionally), `js/swipe.js:181-192` (`constructionPlanFor` emits only `real-source`/`real-destination`) | reading + MEASURED (`no-view-clone-gate`, `retired-concepts-purge`, `swipe-construction` all green at HEAD, 50/50) |
 | 2 | the rest of the finalization plan (`commit`/`abort-scroll`/`stackEffect`/`reveal` + the unified `planFor()` wrapper) | **SPLIT.** `reveal` and `paneRemovalPolicy`: subject deleted. `abort.render`: subject deleted. `commit.stackEffect`, `commit.screen`, `commit.scroll`, `abort.scroll`: **still deferred** — alive as inline decisions | deleted half: `js/swipe.js:18-23` (`finalizationPlanFor` retired with its `abortRender` decision); alive half: `js/app.js:702-706` (the three-branch stack effect), `js/app.js:1032` (commit screen + scroll), `js/app.js:1038-1039` (abort screen + scroll) | reading |
-| 3 | `sourceHost` / `destinationHost` / `sameBrowseHost` host fields | `sourceHost`/`destinationHost`: **already built**. `sameBrowseHost`: **subject deleted** | built: `js/swipe.js:111-114` (projection), `:129` (emitted), `:240`+`:251`+`:260` (consumed by `buildConstruction`), `js/app.js:511-513`+`:515-533` (the env branch selectors). deleted: `js/swipe.js:86-91` — its only planned consumer, the stage-6 abort re-render, was retired with the clone | reading |
+| 3 | `sourceHost` / `destinationHost` / `sameBrowseHost` host fields | `sourceHost`/`destinationHost`: **already built**. `sameBrowseHost`: **GUARDED REFUSAL** — *not* subject deleted (round 1 F7) | built: `js/swipe.js:111-114` (projection), `:129` (emitted), `:240`+`:251`+`:260` (consumed by `buildConstruction`), `js/app.js:511-513`+`:515-533` (the env branch selectors). refused: `js/swipe.js:86-91` records the reasoned refusal — its only planned consumer, the stage-6 abort re-render, was retired with the clone — and `tools/mutate.mjs:434-438` registers a **live** mutant that adds `sameBrowseHost: false` to the frozen classification so a re-introduction reddens a no-dead-fields gate | reading |
 | 4 | the full pane object and the remaining `dispose(reason)` enum members | **Subject deleted** | `disposeOwnedPanes` occurs nowhere under `js/` (only in tombstone comments at `tools/mutate.mjs:555-564`, `test/swipe-stage5-residuals.test.js:92`); `paneRemovalPolicy` occurs nowhere in the repo; `js/swipe.js:174-181` — no transition builds an owned pane | reading + MEASURED (`NOOWNEDPANE` green) |
 | 5 | PANE-OWNING supersession at the SETTLING/REVEALING phase (home↔browse, →home) | **Subject deleted** | `js/app.js:386-390` — "Every session is pane-less now that no transition constructs an owned pane… the stage-6c PANE-OWNING/PANE-LESS split this gate used to draw no longer has two sides" | reading |
 | 6 | the `recoverSession` pre/post-stack matrix | **Still deferred** — subject alive | `recoverSession` occurs nowhere in the repo. The pre-stack recovery exists inline at `js/app.js:398-431`; there is **no** post-stack recovery — a throwing finalize leaves the stack mutated and only clears `finishing` (`js/app.js:1078-1081`) | reading |
@@ -128,7 +161,7 @@ device-pending fixes are in the tree. **Neither is stage-7 work**; both are reco
 |---|---|---|
 | `boundary_relocation` | **false** | No code moves between modules. `beginHold`/`endHold` stay in `js/browse.js`; the swipe's wrappers stay in `js/app.js`. Only the interface between them is reshaped. |
 | `callee_replacement` | **true** | `Browse.endHold` is replaced by `Browse.finishGestureHold`, and it carries a large observable-effect surface beyond its signature (controller deactivation, `parked`/`hidden` toggles, activation, realization, deferred-repaint replay, scroll-suspension release). §8 assigns every one. |
-| `contract_shape` | **true** | The Browse public surface changes: two exported names are replaced and one is added. Gated by the exact-key contract gate reference in §6. |
+| `contract_shape` | **true** | The Browse public surface changes: two exported names are replaced and one is added. **The gate over that surface is `LEASECONTRACT` (§13), whose exported-key-set assertion runs against an explicit list.** It is NOT `test/contract-function-gate.test.js`, whose `CONTRACT`/`NON_CONTRACT` exact-key classification governs the `Swipe.*` contract-object factories and does not reach `js/browse.js` — §6 states that, and round 1 F5 found the first draft's chain ended in nothing. |
 | `state_transfer` | **true** | The session field `hold` (a numeric token, `0` as the released sentinel) becomes `lease` (an opaque handle, `null` as the released sentinel), and its release ordering against `applyScreen` is load-bearing. §7 and §9 carry it. |
 | `async_change` | **false** | **Deliberately, and it is the plan's central refusal.** No promise is introduced. §6 F1 records why the plan-of-record's `ready: Promise` is refused and what would reopen it. |
 | `persistence_migration` | **false** | Nothing serialized, cached to disk, or versioned is touched. |
@@ -151,8 +184,17 @@ Recorded so a future run's warning is not mistaken for a defect.
   entry `invalidateGestureHold()` so a destructive Browse operation invalidates the lease
   **explicitly** (`PLAN-swipe-reveal.md` §3.5) instead of as an unnamed private side effect.
 - `js/app.js` — `session.hold` → `session.lease`; `takeRowHold`/`dropRowHold` renamed to
-  `takeLease`/`returnLease`; `returnLease` reads the status and records the outcome on the session for
-  the retained diagnostic trace (`PLAN-swipe-reveal.md` §7, "lease acquired/released").
+  `takeLease`/`returnLease`.
+- **`js/app.js` — `returnLease` EMITS a production trace line reading the status**, e.g.
+  `PBDebug.log('SWIPE', 'lease released status=' + status + ' sid=' + session.id)`, guarded by
+  `window.PBDebug` exactly as the three existing swipe trace lines are (`js/app.js:399`, `:535`,
+  `:699`). ⚠️ **This line is IN SCOPE and is what makes the status a live field.** Round 1 F2
+  measured that `Swipe.debugSnapshot`/`debugTrace` occur nowhere in `js/`, `test/` or `tools/` and
+  that none of the three existing trace lines mentions the hold — so the trace the first draft named
+  as the status's consumer was a future deliverable, not a retained one, and the status would have
+  shipped with no reader. **The status is not recorded on the session as its terminus**; it is
+  recorded and then read by this line, in the same slice, with `LEASEINVALID` asserting the harness
+  captures it (`test/app-harness.js:632`). See §14 D1.
 
 **STAYS — byte-unchanged, and each is stated because a reviewer must be able to check it:**
 - The three release CALL SITES and their positions (`js/app.js:427`, `:1026`, `:1079`). §9 records
@@ -185,9 +227,12 @@ recorded so it is not mistaken for an oversight.
 ## 6. The contract shape (U3)
 
 The Browse public surface is an object literal at `js/browse.js:964`. It is not a deep-frozen contract
-object, so `test/contract-function-gate.test.js`'s exact-key check does not govern it today; the
-migration in §11 states which gate does. `Swipe.buildConstruction`'s `NON_CONTRACT` exemption is
-untouched by this stage.
+object, and `test/contract-function-gate.test.js` does not govern it: that gate classifies the
+`Swipe.*` exports into `CONTRACT`/`NON_CONTRACT` and does not reach `js/browse.js` at all.
+**`LEASECONTRACT` (§13) is the gate over this surface**, and its exported-key-set assertion against an
+explicit list is what makes the change checkable. `Swipe.buildConstruction`'s `NON_CONTRACT` exemption
+is untouched by this stage. *(Round 1 F5: the first draft pointed §6 at §11 for "which gate does", and
+§11 named none.)*
 
 ```
 Browse.beginGestureHold() -> Lease
@@ -200,9 +245,20 @@ Browse.finishGestureHold(lease: Lease, landed: Descriptor|null) -> 'ready' | 'in
                    Idempotent: a second call with the same lease also returns 'invalidated'.
 
 Browse.invalidateGestureHold() -> void
-    Idempotent. Called by every destructive Browse operation. After it, every outstanding
-    lease answers 'invalidated'.
+    Idempotent IN OBSERVABLE EFFECT, not in state. Called by every destructive Browse
+    operation. After it, every outstanding lease answers 'invalidated'.
 ```
+
+⚠️ **"Idempotent" is qualified deliberately, and the qualification is the plan reviewer's.**
+`dropHold` bumps `holdGen` on every call, so two calls consume two generations. Nothing depends on
+generation contiguity — `beginGestureHold` returns `++holdGen`, so `0` is never issued and stays a
+safe sentinel — which is what makes it sound; but a flat "idempotent" would claim state invariance
+this does not have, and a later reader relying on that claim is how a sentinel assumption breaks.
+
+⚠️ **The release's early return is TWO conditions, not one.** `js/browse.js:166` is
+`token !== holdGen || !holdRows`. The second condition is what makes a second call with a still-live
+token inert, which is the idempotency promised above. A repair that keeps only the token comparison
+would satisfy the prose and lose the property.
 
 ```vitruvius-contract
 # field | class
@@ -257,20 +313,29 @@ non-throwing for the reason its own comment gives — a throw on this path runs 
 # name | class | dir | producer | consumer | owner | lifecycle | verification
 lease handle | identity | out | Browse beginGestureHold | the swipe session field and finishGestureHold | Browse | one gesture from start to the single release | LEASEPAIRED cell
 session lease field | state | inout | the swipe takeLease wrapper at start | the swipe returnLease wrapper at each of the three exits | the gesture session | from start until the first release which nulls it | LEASEPAIRED cell
-release status | value | in | Browse finishGestureHold | the swipe returnLease wrapper which records it on the session for the retained diagnostic trace | Browse | one value per release call | LEASEINVALID cell
+release status | value | in | Browse finishGestureHold | the production trace line returnLease emits in this same slice which reads the status into its message | Browse | one value per release call | LEASEINVALID cell trace assertion
 landed descriptor | value | out | the swipe currentDesc read at the release call | the Browse landed branch selector | the swipe | read once per release | LANDEDPAGESHOWS cell retained
 invalidation | behavior | out | Browse reset and clearCache through invalidateGestureHold | every outstanding lease which then answers invalidated | Browse | from the destructive operation until the next acquire | LEASEINVALID cell
-scroll suspension | behavior | inout | beginGestureHold sets it and finishGestureHold and invalidateGestureHold clear it | the virtual list scroll realize handler | Browse | one gesture | LEASEPAIRED cell scroll suspension assertion
+scroll suspension | behavior | inout | beginGestureHold sets it and finishGestureHold and invalidateGestureHold clear it | the virtual list scroll realize handler | Browse | one gesture | LEASEPAIRED cell suspension clause which asserts it and carries its own mutant
 deferred repaint queue | state | inout | the Browse render path while the lease is live | the finishGestureHold replay tail | Browse | one gesture, replayed once on ready and discarded on invalidated | LEASEINVALID cell repaint assertion
 release ordering against the screen application | behavior | inout | the swipe finalize which calls returnLease before applyScreen | the Browse fallback activation which needs a measurable container | the swipe | one release per gesture | LEASEORDER cell
 ```
 
 **U4 consumer-now check, stated per row.** The lease handle, the session field, the landed descriptor,
 the scroll suspension, the deferred-repaint queue and the ordering all have production consumers at
-HEAD and keep them. **`release status` is the one NEW value, and its consumer is the retained
-diagnostic trace that `PLAN-swipe-reveal.md` §7 requires to survive the migration** ("resources
-acquired/released · lease acquired/released"). §14 F1 asks the plan reviewer to rule on whether a
-required diagnostic satisfies EC §4.15, and carries the fallback design if it does not.
+HEAD and keep them. **`release status` is the one NEW value, and its consumer is the trace line
+`returnLease` emits in THIS slice** (§5) — production code, in the same commit, with `LEASEINVALID`
+asserting the harness records it.
+
+⛔ **The first draft named a different consumer and it did not exist.** It cited "the retained
+diagnostic trace that `PLAN-swipe-reveal.md` §7 requires to survive the migration". Round 1 F2
+measured that clause's named interface — `Swipe.debugSnapshot` / `Swipe.debugTrace` — as occurring
+nowhere in `js/`, `test/` or `tools/`, and none of the three existing `PBDebug.log('SWIPE', …)` lines
+mentions the hold. That trace is a future deliverable, and EC §4.15 is not ambiguous: "a future stage
+is not a consumer." **The correction is to build the one line rather than to cite one that is not
+there** — the smaller change, and the one that makes the field genuinely live. A test reading the
+session field would not have closed it: a test is not a production consumer, which is the exact
+substitution §4.15 names.
 
 ---
 
@@ -284,14 +349,14 @@ read as silently altering page visibility.
 
 ```vitruvius-effects
 # effect | owner | predecessor | successor | verification
-clear the row-hold flag before anything else so a deferred repaint cannot re-defer | Browse finishGestureHold | the live-lease check | release the scroll suspension | LEASEPAIRED cell
-release the virtual-list scroll suspension | Browse finishGestureHold | the row-hold flag clear | compute the landed key | LEASEPAIRED cell scroll suspension assertion
+clear the row-hold flag before anything else so a deferred repaint cannot re-defer | Browse finishGestureHold | the live-lease check | release the scroll suspension | LEASEPAIRED cell flag-order clause with its own mutant
+release the virtual-list scroll suspension | Browse finishGestureHold | the row-hold flag clear | compute the landed key | LEASEPAIRED cell suspension clause with its own mutant
 deactivate every non-landed controller while its box still measures | Browse finishGestureHold | compute the landed key | the parked and hidden class toggles | LANDEDPAGESHOWS cell retained
 remove parked and set hidden on every page except the landed one | Browse finishGestureHold | the deactivate loop | activate and realize the landed page | LANDEDPAGESHOWS cell retained
 activate and realize the landed page exactly once against the settled scroll | Browse finishGestureHold | the class toggles | replay the deferred repaints | LANDEDPAGESHOWS cell retained
 the fallback branch for a landing that names no cached browse page | Browse finishGestureHold | the landed key lookup miss | replay the deferred repaints | LANDEDPAGESHOWS browse to home half retained
 replay every deferred repaint exactly once and clear the queue | Browse finishGestureHold | the landed or fallback branch | return the ready status | LEASEINVALID cell repaint assertion
-return a status naming whether the reconciliation ran | Browse finishGestureHold | every effect above | the swipe records it for the retained trace | LEASEINVALID cell
+return a status naming whether the reconciliation ran | Browse finishGestureHold | every effect above | the swipe trace line returnLease emits reads it | LEASEINVALID cell trace assertion
 perform NONE of the effects above and discard the deferred repaints | Browse invalidateGestureHold | a destructive Browse operation | every outstanding lease answers invalidated | LEASEINVALID cell
 ```
 
@@ -299,7 +364,15 @@ perform NONE of the effects above and discard the deferred repaints | Browse inv
 `dropHold()` already clears the queue and releases the scroll suspension without reconciling, because
 the pages it would reconcile are being destroyed in the same call. This stage names that behaviour and
 makes it observable to the gesture; it does not change it (EC §4.19: behaviour-preserving extraction,
-plus one NEW POLICY item — the status value itself — declared in §11).
+plus one NEW POLICY item — the status value and its trace line — declared in §11).
+
+⚠️ **Every row of this table names a cell that ASSERTS that row's effect and a mutant that removes
+it.** Round 1 F4 found three rows here and in §7 citing `LEASEPAIRED` for effects `LEASEPAIRED` did
+not assert — it declared acquire/release counts and nothing about the flag order or the scroll
+suspension, and all three of its mutants were acquire/release placement mutants. §8 exists so that
+"the body is unchanged" is checkable rather than asserted; a citation to a cell that does not assert
+the cited effect is the assurance it exists to replace. `LEASEPAIRED` gains both clauses and both
+mutants in §13 rather than a new cell being created for them.
 
 ---
 
@@ -373,15 +446,66 @@ reference. No module-load-time DOM access is introduced anywhere.
   "a fake that accepted any token would pass a leak"). The fake must gain the status return and
   `invalidateGestureHold`; it must NOT become kinder than reality. Same commit.
 
-**⭐ The MEASURED co-change item.** Applying the lease transform to `js/app.js` and running the
-anchors gate reddens exactly one registration:
+### The MEASURED co-change set
 
-> `#120 [js/app.js] S2-20 LANDEDPAGESHOWS: the landed descriptor is read BEFORE the screen is applied…`
+⛔ **The first draft declared ONE rotted registration, and the number was true of a transform this
+plan does not specify.** §12's probe renamed only the session field and the two `Browse.*` call sites;
+§5 also renames `takeRowHold`→`takeLease` and `dropRowHold`→`returnLease`, and §12 mandates the
+freeze. Round 1 F1 caught it. **The set below was RE-MEASURED here, control-first, entirely in memory
+— the repo was never written to — by applying each transform layer to the source text and running the
+anchors gate's own predicate (`readFile(file).includes(lf(part.from))` over `MUTATIONS` and each
+`m.also`, with the gate's CRLF normalisation) against the result.** The control ran first: **0 rotted
+with no transform applied.** Registry size at measurement: 152.
 
-It is re-anchored in the same commit. **This was found by executing the transform, not by reading the
-registry** — which is this campaign's R10 ruling applied rather than restated. The builder runs the
-same probe before committing (§17 step 5b) and the measured rot set must equal this declared one; a
-larger measured set is a blast-radius miss and the plan is amended before the commit lands, not after.
+| Transform layer | Rotted `from` anchors |
+|---|---|
+| **CONTROL — none** | **0** |
+| §12's probe alone (session field + `Browse.*` call sites), code positions only | 1 |
+| **§5 as written** (adds the two wrapper renames), code positions only | **9** |
+| §5 + the `js/browse.js` rename, code positions only | **9** — *the Browse-side rename rots nothing; no registration anchors on `beginHold`/`endHold`/`dropHold` in that file* |
+| §12's freeze alone | **3** |
+| **FULL — §5 + Browse + freeze, code positions only** | **12** |
+| FULL, with the identifiers renamed in comments too | **13** |
+
+**The declared co-change set is the union of three classes, and the first draft carried only part of
+class (a).** Cited by name, never by index — the registry is 152 entries and every insertion shifts
+later ones.
+
+**(a) `from` anchors that stop matching** — 12 code-only, 13 if comments are renamed too:
+`stage6a (a) re-anchored: the Browse hold releases BEFORE the applyScreen it must follow`;
+`stage6a (b): session/d null BEFORE the hold release`;
+`stage6c W: the supersession recovery omits the finishing=false clear`;
+`stage3: finalize does not end ownership`;
+`swipe5 F7b: the row hold no longer precedes the clobbering render`;
+`S2-20 LANDEDPAGESHOWS: the landed descriptor is read BEFORE the screen is applied`;
+`EMPTYAFTERHOME-a: the early dropRowHold() is removed`;
+`EMPTYAFTERHOME-b: the early dropRowHold() is wired to the ABORT branch only`;
+`S2-32 RECOVERYPARITY: the supersession recovery releases the row hold BEFORE applying the source
+screen`; and from the freeze, `S2-35 MOVERSHAPE`, `S2-36 MOVERSHAPE`, `S2-39 MOVERSHAPE`. Renaming the
+identifiers inside comments adds `stage6c G2/G3: the finalize cur===session guard is removed`.
+
+**(b) `to` sides that INJECT an identifier the rename retires** — **nine**, and this class did not
+appear in the first draft at all. Measured by scanning every `to` string for `dropRowHold`,
+`takeRowHold`, `beginHold`, `endHold`, `dropHold` at a word boundary:
+`stage6a (a) re-anchored…`, `stage6a (b)…`, `stage6c W…`, **`stage6c G2/G3…`**, `stage3: finalize does
+not end ownership`, `S2-20 LANDEDPAGESHOWS…`, `EMPTYAFTERHOME-b…`, `S2-32 RECOVERYPARITY…` (all
+injecting `dropRowHold`) and `swipe5 F7b…` (injecting `takeRowHold`); `S2-20 LANDEDPAGESHOWS…` also
+injects `endHold`.
+⛔ **`stage6c G2/G3` is in class (b) but NOT in class (a)'s code-only set** — its `from` survives the
+rename and its `to` does not, so an anchors gate that checks `from` only reports it clean. The mutant
+still APPLIES and then kills its designated cell with a `ReferenceError` instead of with the
+stale-finalize defect it names. That is the "reddens for the wrong reason is indistinguishable from
+working" hazard this campaign already recorded for `S2-23 NOGHOSTATALL`. **The `to` sides are renamed
+in the same commit, and the anchors gate cannot see whether that was done.**
+
+**(c) Non-registry source-text readers** — one: `ADAPTER_DECL` at
+`test/swipe-declone-stage2-subtraction.test.js:211`, which is the literal
+`'const toMover = (m) => ({'` and stops matching the moment the freeze lands. That is the reader
+detecting rot, working as designed (§14 of the subtraction plan predicts it), but it is a co-change
+and the first draft named neither the item nor the file.
+
+**Every registration in classes (a) and (b) is re-anchored — `from` AND `to` — in the same commit,
+and `ADAPTER_DECL` is re-pinned with it.** §17 step 5b's equality rule now runs against this set.
 
 **Records scrubbed on approval (StandardsDocument §6.6):**
 - `Claude/Plans/PLAN-swipe-reveal.md` — a one-line pointer on the stage-7 entry to this plan. **The
@@ -390,11 +514,20 @@ larger measured set is a blast-radius miss and the plan is amended before the co
 - `Claude/Subsystems/swipe-reveal.md` — the resource vocabulary, plus the stale `disposeOwnedPanes` /
   `holdGhostUntilPaintable` / `dropPanes` / `translateZ(0)` / stage-7 inheritance text (§2 GAP, §3).
 - `Claude/Decisions/DecisionLog.md`, `Claude/Zelda/Board.md`, `Claude/Campaigns/swipe-stage7.json`.
+- `tools/mutate.mjs:432-438` — the `swipe4 no-dead-fields` mutant's comment still reads
+  "`sameBrowseHost` is STILL unconsumed until stage 6". Stage 6 has passed and the field's planned
+  consumer was retired; the mutant is live and correct, only its rationale is stale (round 1 F7).
 
 **PolicyLedger (EC §4.19).** One NEW POLICY entry: *a destructive Browse operation invalidates the
-lease explicitly, and the gesture learns the outcome of its own release.* Everything else in this
-stage is behaviour-preserving extraction. The entry is `knownRed: false` and names `LEASEINVALID` as
-its enforcing test, so `test/policy-ledger-gate.test.js` reconciles it.
+lease explicitly, and the gesture learns the outcome of its own release and reports it.* Everything
+else in this stage is behaviour-preserving extraction. The entry is `knownRed: false` and names
+`LEASEINVALID` as its enforcing test, so `test/policy-ledger-gate.test.js` reconciles it.
+⚠️ **This entry is CONDITIONAL on §14 D1 and is not a free choice** (round 1's ruling on the first
+draft's F2). The classification rests entirely on the reporting: with the status and its trace line,
+the gesture learning and announcing the outcome of its own release is a genuine new observable and the
+entry is correct. Under D1's fallback the reporting is gone, what remains is a private function
+promoted to public with a byte-identical body — a rename plus a public-surface migration — and **the
+entry must not be written**. D1 takes the first branch, so the entry stands.
 
 ---
 
@@ -414,6 +547,15 @@ afterwards):
 | **Positive control** | `m.lease = tr;` added inside the settle loop over `cur.movers` | **RED** — reported `js/app.js:604 writes \`m.lease\`` |
 | **The stage-7 shape** | `session.hold` → `session.lease`; `Browse.beginHold`/`endHold` → `beginGestureHold`/`finishGestureHold(t, {…})`; the status recorded on the session in the finalize path | **GREEN** |
 
+⚠️ **The "stage-7 shape" row above used the same NARROW transform §11 was wrong about** (round 1 F8) —
+it did not rename the wrappers. **The ruling survives it, on a reason that does not depend on the
+transform's width:** the gate's discriminator is an assignment terminating at depth 1 on a
+mover-rooted expression, and all six mover-touching sites in `js/app.js` (`:557`, `:578`, `:604`,
+`:617`, `:701`, `:1083`) read `m.el`/`m.base` or write `m.el.style.…`, which the discriminator
+explicitly excludes. A rename of two wrapper functions introduces no assignment of that shape. The
+narrowing is recorded rather than quietly repaired, because §11's defect was exactly a measurement
+whose input went unstated.
+
 **Ruling.** The mechanical trigger does **not** fire: this stage writes no mover member and touches
 `.movers` in no new form, and the control proves that negative is evidence rather than silence.
 **§14's SECOND clause DOES fire** — the release status is a new value threaded to the settle path.
@@ -423,10 +565,44 @@ scheduled gate rather than a backlog line is something that fires at the trigger
 **Therefore this plan carries §14's two-part design as a required deliverable** (`MOVERFROZEN`, §13):
 wrap the adapter literal in `Object.freeze(` **and** pin that wrapper in the source assertion with its
 deletion registered as a mutant. ⛔ Neither half is sound alone — `js/app.js` is non-strict, so the
-freeze silences an offending write instead of throwing. The gate's clause 3 already checks both
-directions and will redden if one half lands without the other, which is what makes this cheap to get
-right. It is two lines and one registration; the reason it is in scope rather than deferred again is
-that the trigger has fired and a deferral cannot be renewed by the change that trips it.
+freeze silences an offending write instead of throwing.
+
+### ⛔ RETRACTED: the gate does NOT catch a half-landed §14, and a new mechanism IS needed
+
+The first draft said the trigger gate's clause 3 "already checks both directions and will redden if
+one half lands without the other", and R7 concluded "no new mechanism is needed". **Both statements
+are false, and round 1 F3 is right.** Clause 3's `registered` half is
+
+```
+p.from.includes('Object.freeze(') && p.from.includes('toMover')
+```
+
+and §11 class (a) requires `S2-35 MOVERSHAPE`, `S2-36 MOVERSHAPE` and `S2-39 MOVERSHAPE` to be
+re-anchored onto the frozen literal **in this same commit**. Their `from` then contains both tokens,
+so `registered` is satisfied by the re-anchoring alone — with no wrapper-deletion mutant anywhere in
+the registry. The gate's own comment records that it narrowed an earlier `Object.freeze(`-only search
+by co-occurrence with `toMover` to kill a false positive; **this commit is what collapses that
+narrowing**, because after the freeze the co-occurrence no longer discriminates.
+
+**The repair, specified here and owned by the test author.** The wrapper-deletion mutant is the unique
+registration whose `from` carries the wrapper and whose `to` does not — verified against the three
+re-anchoring candidates, every one of which keeps `Object.freeze(` on its `to` side because each only
+changes the key set inside the literal. So clause 3's `registered` predicate gains a `to`-side
+discriminator:
+
+```
+p.from.includes('Object.freeze(') && p.from.includes('toMover')
+  && typeof p.to === 'string' && !p.to.includes('Object.freeze(')
+```
+
+That is structural rather than a text pin: it asks whether the registration actually removes the
+construct it claims to remove, so re-anchoring, reformatting or reordering the key-set mutants leaves
+it green and only a missing wrapper-deletion mutant reddens it. It is `MOVERFROZEN`'s second clause in
+§13, and it must land in the same commit as the freeze — otherwise §14's part 2, the wrapper's only
+runnable witness, can go missing with the whole suite green.
+
+The freeze remains two lines and one registration; what changed is that the plan no longer claims a
+free mechanism it does not have.
 
 ---
 
@@ -441,71 +617,107 @@ measured rect — a cell green because a rect is zero would be a false witness.
 
 | # | Dimension | Applicable? | What the suite must prove |
 |---|---|---|---|
-| 1 | **Lifetime and reuse** | **Yes — the stage's core.** | Exactly one acquire and one effective release per live gesture, across every §3.7 exit; a second release is a no-op; a gesture that arms and never goes live acquires nothing. `LEASEPAIRED`. |
+| 1 | **Lifetime and reuse** | **Yes — the stage's core.** | Exactly one acquire and one effective release per live gesture, across every §3.7 exit; a second release is a no-op; a gesture that arms and never goes live acquires nothing; **and the two paired resources the release owns are released with it — the scroll suspension once per gesture on both the ready and invalidated paths, and the row-hold flag cleared first so a deferred repaint cannot re-defer.** `LEASEPAIRED` (five mutants; the last two are round 1 F4's, which found §7 and §8 citing this cell for effects it did not assert). |
 | 2 | **Trust boundaries and hostile inputs** | **Yes, narrowly.** | A stale lease presented after a newer gesture acquired must return `'invalidated'` and reconcile nothing — the stale-finalizer class the token semantics exist for. `LEASEINVALID`. |
 | 3 | **Concurrency** | **Yes.** | The interleaving the design permits is supersession: a second gesture acquiring while the first is settling. The first's later release must not reconcile against the second's state. `LEASEINVALID` (supersession route). No thread or worker concurrency exists in this subsystem. |
 | 4 | **Shape and platform matrices** | **Yes, as the landing matrix.** | The landed descriptor's two branches — a landing that names a cached browse page and one that does not — on both the commit and the abort outcome. Retained by the existing `LANDEDPAGESHOWS` cells, which this stage must leave green; no new cell. |
 | 5 | **Failure and rejection paths** | **Yes.** | A throwing `runFinalize` still releases the lease through the `finally` guard and still clears `finishing`; a destructive Browse operation mid-gesture invalidates and the gesture still settles and reaches IDLE. `LEASEINVALID` + the retained `2 — a throw in finalize restores finishing` and `DESTROYEDMOVER` cells. |
 | 6 | **Numerical edges and determinism** | **No.** | The lease carries no arithmetic. The one numeric property — that `null`/`0` is never a valid lease — is a contract fact covered by `LEASEPAIRED`'s sentinel assertion, not a numerical edge. |
-| 7 | **Contract claims** | **Yes.** | Every absolute claim in §6 and §8: the status enum has exactly two values; `finishGestureHold` is idempotent; `invalidateGestureHold` is idempotent; the reconciliation body's effects are unchanged. `LEASECONTRACT` + the retained `LANDEDPAGESHOWS` cells as the effect witnesses. |
+| 7 | **Contract claims** | **Yes.** | Every absolute claim in §6 and §8: the status enum has exactly two values; `finishGestureHold` is idempotent; `invalidateGestureHold` is idempotent **in observable effect and not in state** (it consumes a generation per call — §6 qualifies it and the cell must assert the qualified claim, not the flat one); nothing returned is a thenable; the reconciliation body's effects are unchanged. `LEASECONTRACT` + the retained `LANDEDPAGESHOWS` cells as the effect witnesses. |
 | 8 | **Composition** | **Yes.** | The lease crossed against: a virtualized source (scroll suspension), a browse→browse pair (two `.browsepage` movers), a landing off browse entirely (the fallback branch), and a mid-gesture nav tap. Covered by driving `LEASEPAIRED` over those four fixtures rather than one. |
 | 9 | **Persistence round-trip and version evolution** | **No.** | The lease is process-local and never serialized, stored, or versioned. Nothing in this stage touches IndexedDB, the service worker, or `build.json`. |
 | 10 | **Functional achievement (the feature oracle)** | **Yes.** | End to end: a real gesture over the real `Browse` reconciliation leaves exactly the landed page shown and activated, its rows reused rather than rebuilt — the property the hold exists for. Retained `LANDEDPAGESHOWS` + `VR` + `KEEPER`; this stage adds no new oracle because the outcome is unchanged. |
 
-**New mechanism check (the amendment discipline).** Two mechanisms enter the plan — the status value
-and explicit invalidation — and each was crossed against all ten dimensions above rather than only the
-dimension that prompted it. Dimension 1 gains `LEASEPAIRED`, 2/3/5 gain `LEASEINVALID`, 7 gains
-`LEASECONTRACT`, 9 is not-applicable-with-reason for both, and 4/8/10 are discharged by retained cells
-that must stay green.
+**New mechanism check (the amendment discipline).** Three mechanisms are now in the plan — the status
+value, explicit invalidation, and (added at round 1) **the production trace line that reads the
+status** — and each was crossed against all ten dimensions rather than only the dimension that
+prompted it. Dimension 1 gains `LEASEPAIRED` and its two new clauses; 2/3/5 gain `LEASEINVALID`; 7
+gains `LEASECONTRACT`; 9 is not-applicable-with-reason for all three; 4/8/10 are discharged by
+retained cells that must stay green. **The trace line's own pass:** lifetime — it holds nothing and
+is emitted once per release, covered by `LEASEPAIRED`'s release count; trust — it takes no external
+input; concurrency — it reads `session.id` inside `returnLease`, which the ordering in §9 already
+pins to run before `endOwnership` nulls the session, so it cannot read a successor's id; failure —
+it is guarded by `window.PBDebug` exactly as the three existing lines are, so its absence is not a
+throw; contract — `LEASEINVALID`'s `NATURAL-d` is what keeps it reading the value rather than a
+constant; persistence and numerics — not applicable, it emits a string; composition and oracle — it
+changes no outcome.
 
 ```vitruvius-coverage
 # id | behavior | fixture | mutation | layer
-LEASEPAIRED | exactly one lease is acquired and one effective release performed per LIVE gesture across every exit the state machine defines namely a committed settle an aborted settle a supersession during the drag a supersession while settling a vertical abandon an armed cancel and a throwing finalize, and a gesture that arms without crossing the direction lock acquires none at all, and the session field is nulled by the first release so a second release is a no-op | integration boot the app harness and drive each exit in turn asserting the recorded acquire count and the recorded release count and that every release presents the CURRENT lease not a stale one, driven over four compositions namely a virtualized source a browse to browse pair a landing off browse entirely and a mid gesture nav tap | THREE mutants. NATURAL-a the release call is removed from the recovery path so an interrupted gesture leaks its lease. NATURAL-b the session field is not nulled on release so the leak guard in the finalize finally performs a SECOND effective release. NATURAL-c the acquire is moved from the live start to the arm so a gesture that never crosses the direction lock acquires a lease nothing releases. expected killing cell for ALL THREE is LEASEPAIRED | integration app harness over the real swipe with the recording Browse fake
-LEASEINVALID | a lease that is not the live one reconciles NOTHING and reports invalidated, whether it went stale because a newer gesture acquired or because a destructive Browse operation invalidated it, and on that path the deferred repaint queue is discarded rather than replayed and the gesture still settles and still reaches the idle state with no owner | integration drive two routes on the app harness, first a supersession where a second gesture acquires while the first is still settling and the first then releases, and second a destructive cache clear during a live drag followed by the ordinary settle, asserting for each that the reconciliation performed no page activation and no class toggle that the status the swipe recorded is the invalidated one that no deferred repaint ran and that the active session reads null afterwards | THREE mutants. NATURAL-a the live lease check is removed so a stale release reconciles against the successor's state. NATURAL-b the destructive operation stops invalidating so an outstanding lease still answers ready after its pages were destroyed. NATURAL-c the invalidated branch replays the deferred repaints instead of discarding them so a repaint runs against destroyed controllers. expected killing cell for ALL THREE is LEASEINVALID | integration app harness with the recording Browse fake plus the real Browse module for the repaint half
+LEASEPAIRED | exactly one lease is acquired and one effective release performed per LIVE gesture across every exit the state machine defines namely a committed settle an aborted settle a supersession during the drag a supersession while settling a vertical abandon an armed cancel and a throwing finalize, and a gesture that arms without crossing the direction lock acquires none at all, and the session field is nulled by the first release so a second release is a no-op, AND the release clears the row hold flag before it does anything else so a deferred repaint cannot re defer, AND the virtual list scroll suspension taken at acquire is released exactly once per gesture on the ready path and on the invalidated path alike | integration boot the app harness and drive each exit in turn asserting the recorded acquire count and the recorded release count and that every release presents the CURRENT lease not a stale one, driven over four compositions namely a virtualized source a browse to browse pair a landing off browse entirely and a mid gesture nav tap; the flag order and the suspension are asserted against the REAL Browse module because the recording fake models the token semantics and not the reconciliation body | FIVE mutants. NATURAL-a the release call is removed from the recovery path so an interrupted gesture leaks its lease. NATURAL-b the session field is not nulled on release so the leak guard in the finalize finally performs a SECOND effective release. NATURAL-c the acquire is moved from the live start to the arm so a gesture that never crosses the direction lock acquires a lease nothing releases. NATURAL-d the scroll suspension release is deleted from the release body so a suspended virtual list never resumes realizing. NATURAL-e the row hold flag clear is moved to the end of the release body so a deferred repaint replayed by the tail re defers itself and never runs. expected killing cell for ALL FIVE is LEASEPAIRED | integration app harness over the real swipe with the recording Browse fake, plus the real Browse module for the flag order and suspension clauses
+LEASEINVALID | a lease that is not the live one reconciles NOTHING and reports invalidated, whether it went stale because a newer gesture acquired or because a destructive Browse operation invalidated it, and on that path the deferred repaint queue is discarded rather than replayed and the gesture still settles and still reaches the idle state with no owner, AND the PRODUCTION trace line the release emits carries the status so the gesture announces the outcome of its own release rather than merely storing it | integration drive two routes on the app harness, first a supersession where a second gesture acquires while the first is still settling and the first then releases, and second a destructive cache clear during a live drag followed by the ordinary settle, asserting for each that the reconciliation performed no page activation and no class toggle that no deferred repaint ran and that the active session reads null afterwards; the trace clause asserts over the harness debug capture that a released line was emitted carrying the invalidated status on those routes and the ready status on an ordinary commit, which is what makes the status a production value and not a value only a test reads | FOUR mutants. NATURAL-a the live lease check is removed so a stale release reconciles against the successor's state. NATURAL-b the destructive operation stops invalidating so an outstanding lease still answers ready after its pages were destroyed. NATURAL-c the invalidated branch replays the deferred repaints instead of discarding them so a repaint runs against destroyed controllers. NATURAL-d the trace line stops interpolating the status and logs a constant so the only production reader of the value disappears and the field is dead again. expected killing cell for ALL FOUR is LEASEINVALID | integration app harness with the recording Browse fake and its debug capture, plus the real Browse module for the repaint half
 LEASEORDER | the lease is returned BEFORE the screen application that can hide the browse host on the finalize path and AFTER the screen render and the scroll restore on the recovery path, which are the two orderings whose inversions have each shipped as a measured defect namely the empty books page and the dematerialized kept rows | integration assert the ORDER of recorded calls rather than any geometry, driving a commit that leaves browse and asserting the release is recorded before the screen application, and driving a mid drag supersession and asserting the release is recorded after the screen application and after the scroll write; the cell asserts call order only because the harness has no layout and a measured box would be a false witness | TWO mutants. NATURAL-a the release on the finalize path is moved after the screen application which is the empty books page defect. NATURAL-b the release on the recovery path is moved before the screen render which is the dematerialized kept rows defect. expected killing cell for BOTH is LEASEORDER | integration app harness call order
 LEASECONTRACT | the boundary exposes exactly the three named entry points with exactly the declared shapes, the status is one of exactly two values, both the release and the invalidation are idempotent, and no promise is returned by any of them so finalization stays synchronous | unit drive the real Browse module directly, asserting the exported key set against an explicit list, asserting a second release with the same lease returns the invalidated status and performs nothing, asserting a second invalidation is inert, and asserting no returned value is a thenable which is what pins the refusal of the plan of record's promise shape | THREE mutants. NATURAL-a a fourth undeclared entry point is exported so the key set drifts. NATURAL-b the release returns a resolved promise so finalization becomes asynchronous. NATURAL-c the second release performs the reconciliation again rather than reporting invalidated. expected killing cell for ALL THREE is LEASECONTRACT | unit over the real Browse module
-MOVERFROZEN | the production mover object constructed by the L3 adapter is frozen at construction so a key attached to it after construction cannot ship, and the freeze itself is pinned over source with its deletion registered as a mutation so the guard cannot be removed silently, which is section 14's two part design landing together as its second trigger clause fires | source assert over js app that the adapter binding wraps its object literal in the freeze call, plus the existing trigger gate's third clause which already checks the pin and the freeze and the registration in BOTH directions so a half landing reddens | ONE mutant. NATURAL the freeze wrapper is deleted from the adapter expression which the source pin must catch; the file is non strict so the freeze silences rather than throws which is exactly why the source pin and not a runtime assertion is the witness. expected killing cell is MOVERFROZEN | source scan over the one L3 adapter expression
+MOVERFROZEN | the production mover object constructed by the L3 adapter is frozen at construction so a key attached to it after construction cannot ship, and the freeze itself is pinned over source with its deletion registered as a mutation so the guard cannot be removed silently, which is section 14's two part design landing together as its second trigger clause fires, AND the registration check can tell the wrapper deletion mutant apart from a key set mutant re anchored onto the same now frozen expression | source assert over js app that the adapter binding wraps its object literal in the freeze call and re pin the fixture sanity anchor that stops matching when it does, plus a REPAIRED third clause in the trigger gate whose registration predicate additionally requires the registration's replacement text to NOT contain the wrapper, which is what makes it name the mutant that removes the construct rather than any mutant that merely mentions it | TWO mutants. NATURAL-a the freeze wrapper is deleted from the adapter expression which the source pin must catch; the file is non strict so the freeze silences rather than throws which is exactly why the source pin and not a runtime assertion is the witness. NATURAL-b the repaired predicate's replacement text clause is deleted so the check reverts to co occurrence and is satisfied by the three re anchored key set registrations alone with no wrapper deletion mutant present, which is the vacuity the round one review measured. expected killing cell for BOTH is MOVERFROZEN | source scan over the one L3 adapter expression, plus a structural read of the mutation registry
 ```
 
 ---
 
-## 14. Blocking questions
+## 14. Decisions taken at round 1, and the one open unknown that remains
 
-**F1 — Does a diagnostic required by the plan of record satisfy the no-dead-fields rule? Owner: the
-plan reviewer.** The release status's only production consumer at this stage is the structured trace
-`PLAN-swipe-reveal.md` §7 requires to survive the migration ("lease acquired/released"). Engineering
-Contract §4.15 demands "a real production consumer and a test proving that consumer uses it". A trace
-line is production code and the harness records it, so the letter is met; whether the spirit is met is
-a contract-interpretation question this plan should not settle for itself.
-**Recommendation: ship the status.** The alternative below is strictly worse, and the trace is a
-deliverable of the parent plan rather than an invention of this one.
-**Fallback if ruled insufficient:** `finishGestureHold` returns nothing and `invalidateGestureHold`
-still lands, so invalidation becomes explicit at the producing end while the gesture stays unaware.
-`LEASEINVALID` then asserts over Browse's own state rather than over the gesture's record, and
-`LEASECONTRACT` loses its status clauses. This is a real degradation — the gesture cannot report
-`lease released reason=invalidated` — and it is recorded so the choice is visible.
-Mapped to coverage: `LEASEINVALID`.
+The first draft filed four blocking questions. **Round 1 ruled that three of them were mis-assigned**
+— one was answerable by the contract rather than by interpretation, one was not an independent choice
+at all, and one was not answerable at a seat that can only read. They are recorded here as decisions
+(D1–D3) and one open unknown (U1), because a question a seat cannot answer is not a blocking question,
+it is an unknown wearing one.
 
-**F2 — Is `invalidateGestureHold` a rename or a new policy? Owner: the plan reviewer.** The body is
-today's `dropHold()` unchanged; what is new is that it is public, named, and that its effect is
-reportable. §11 files it as NEW POLICY on the strength of the reporting. If the reviewer rules it a
-pure rename, the PolicyLedger entry is dropped and `test/policy-ledger-gate.test.js` must not be given
-a stale entry.
-Mapped to coverage: `LEASEINVALID`.
+### D1 — SETTLED. The status ships, and this stage builds its consumer.
 
-**F3 — Is the `LEASEPAIRED` exit set complete? Owner: the plan reviewer, then the adversary.** §9
-records that the structural guarantee is unavailable at the endpoint, so I3 rests on an ENUMERATION of
-exits — precisely the shape this campaign has got wrong eight times. The seven exits named in the cell
-are drawn from `PLAN-swipe-reveal.md` §3.7 and from the four `sessionDone`/`endOwnership` call sites in
-`js/app.js`. **This is a reading and is labelled as one.** The adversary's commissioned fracture is an
-eighth exit that returns without releasing.
+The first draft's question presupposed a diagnostic that exists; it does not (§7). Engineering
+Contract §4.15 requires a production consumer **in the same slice** and says a future stage is not
+one, so the question resolves by the contract rather than by interpretation. **Decision: ship the
+status AND emit it, from one production trace line in `returnLease` (§5), with `LEASEINVALID`'s trace
+clause asserting the harness captures it and `NATURAL-d` reddening if the line stops reading the
+value.**
+
+*Why this branch and not the fallback.* The fallback — return nothing, keep `invalidateGestureHold`
+— costs the whole point of the boundary: invalidation becomes explicit at the producing end while the
+gesture stays unaware of the outcome of its own release, which is what HEAD already does. The chosen
+branch costs one guarded log line of the same shape as the three that already exist
+(`js/app.js:399`, `:535`, `:699`) and makes every other clause in `LEASECONTRACT` and `LEASEINVALID`
+real. **The fallback is not retained as a live option**; recording it as still-available would leave
+§11's PolicyLedger classification conditional on a choice that has been made.
+
+### D2 — SETTLED, as a consequence of D1, not as a free choice.
+
+`invalidateGestureHold` is **NEW POLICY**, and the reason is the reporting, not the promotion. The
+first draft presented rename-vs-policy as an independent question; it is not — with the status and its
+trace line, the gesture announcing the outcome of its own release is a genuine new observable and the
+PolicyLedger entry is correct; without them it would be a public rename over a byte-identical body and
+the entry must not be written. §11 states the dependency explicitly so a later reader cannot re-open
+one half without the other.
+
+### D3 — SETTLED. The freeze is runtime-neutral; its only disturbance is anchor rot, and that is §11's.
+
+Nothing in `js/app.js` writes to a mover object after construction: all six mover-touching sites
+(`:557`, `:578`, `:604`, `:617`, `:701`, `:1083`) read `.el`/`.base` or write `m.el.style.…`. So
+`Object.freeze` on the literal changes no behaviour, in a non-strict file where it would silence
+rather than throw in any case. Its disturbance is `S2-35 MOVERSHAPE`, `S2-36 MOVERSHAPE`,
+`S2-39 MOVERSHAPE` and the `ADAPTER_DECL` fixture anchor — all now in §11's declared set, measured
+here rather than inherited from another plan's prose. **Not a blocking question; a build-time
+verification, and §17 step 5b is its home.**
+
+### U1 — OPEN UNKNOWN, owned by the adversary. Is the `LEASEPAIRED` exit set complete?
+
+**This is not a question for a reading seat, and re-classifying it is round 1's ruling.** §9 records
+that the structural guarantee is unavailable at the endpoint — folding the three release sites into
+`sessionDone` breaks two measured ordering requirements — so I3 rests on an ENUMERATION, which is the
+shape this campaign has been wrong about eight times, every one found by executing.
+
+Two independent readings now exist and agree. The planner's: seven exits drawn from
+`PLAN-swipe-reveal.md` §3.7 and the `sessionDone`/`endOwnership` call sites. The plan reviewer's:
+acquire at `js/app.js:500`; releases at `:427` (recovery, covering both supersession routes, since
+`begin()`'s predicate at `:398` admits `d` mid-drag and `finishing && session` while settling), `:1026`
+(commit and abort) and `:1079` (throwing finalize); the two lease-free exits at `:570` (vertical
+abandon) and `:591` (armed end) both precede or exclude `start()`, the sole acquire site; and
+finalize's stale guard at `:1070` ends a live session without releasing **correctly**, because the
+superseding `begin()` already released at `:427`.
+
+⛔ **Two agreeing readings are two readings.** This campaign's eight misses were each confirmed by
+reading before they were found by executing. **The adversary's strike (§17 step 2) is the resolution
+of U1 and must not be treated as confirmatory of the above.** Commissioned fracture: a reachable exit
+that ends a live gesture without returning its lease.
 Mapped to coverage: `LEASEPAIRED`.
-
-**F4 — Does the freeze wrapper disturb anything the adapter feeds? Owner: the plan reviewer, settled
-by the builder's measurement.** §14 states the freeze is behaviour-neutral to the whole suite and that
-exactly two things redden — the three anchor registrations on that line and the emitted-key-set
-fixture's sanity anchor. That claim is inherited, not re-measured here. Step 5b measures it.
-Mapped to coverage: `MOVERFROZEN`.
 
 ---
 
@@ -513,13 +725,14 @@ Mapped to coverage: `MOVERFROZEN`.
 
 | # | Risk | Severity | Mitigation |
 |---|---|---|---|
-| R1 | **The rename's blast radius is larger than §11 declares.** Four passes in this campaign have declared a co-change set complete and been wrong; the fourth missed two anchors the third had already identified. | **High** | Step 5b: apply the transform in memory and run the whole suite plus the anchors gate BEFORE the commit; the measured failing set must equal §11's declared one, item for item. The one item in §11 was itself produced this way, not by reading the registry. |
-| R2 | **The `LEASEPAIRED` exit enumeration is incomplete**, so I3 is proven over six exits and violated on a seventh. | **High** | F3 routes it to the adversary as the commissioned fracture. The leak is bounded (§10), so the failure mode is degradation rather than corruption — which is why an enumerated guard is acceptable here and would not be elsewhere. |
-| R3 | **A future slice reintroduces `ready`/`await` on the finalize path**, making finalization asynchronous and deferring the stack mutation past a microtask. | **Medium** | `LEASECONTRACT`'s no-thenable assertion pins the refusal, with the promise return as its registered mutant. F1's reopening condition is stated in §6 so a legitimate reintroduction is recognisable. |
-| R4 | **The status ships with no real consumer** and becomes the exact dead field this campaign exists to delete — the shape the coverage audit's forward read named as the likeliest coordinate for the next externally-found defect. | **Medium** | F1 blocks on it rather than assuming it; the fallback design is written so refusing costs a paragraph, not a re-plan. |
-| R5 | **The harness fake drifts kinder than reality** — it must gain the status and the invalidation without losing the stale-token discrimination it models deliberately. | **Medium** | `LEASEINVALID`'s second route drives the REAL Browse module for the repaint half, so the fake cannot be the only witness of the invalidated path. |
+| R1 | **The declared co-change set is measured from the wrong input** — the failure this plan already committed once. The first draft's set was measured from §12's narrow probe while §5 specifies a wider transform, and §17 step 5b's equality rule would then have fired on correct work at roughly twelve to one, at the last step of the build. | **High** | §11 is re-measured from the transform §5 actually specifies, control-first, in three classes; §17 step 5b names the exact transform it must apply, so the probe and the specification cannot drift apart again. ⚠️ **The residual is the same class one layer out:** step 5b measures `from` anchors, and class (b) — a `to` side injecting a retired identifier — is invisible to the anchors gate. Step 5b therefore carries its own `to`-side scan. |
+| R2 | **The `LEASEPAIRED` exit enumeration is incomplete**, so I3 is proven over six exits and violated on a seventh. | **High** | U1 routes it to the adversary as the commissioned fracture; two agreeing readings are recorded there as readings and not as an answer. The leak is bounded (§10), so the failure mode is degradation rather than corruption — which is why an enumerated guard is acceptable here and would not be elsewhere. |
+| R3 | **A future slice reintroduces `ready`/`await` on the finalize path**, making finalization asynchronous and deferring the stack mutation past a microtask. | **Medium** | `LEASECONTRACT`'s no-thenable assertion pins the refusal, with the promise return as its registered mutant. §6 F1's reopening condition is stated so a legitimate reintroduction is recognisable. |
+| R4 | **The status ships with no real consumer** and becomes the exact dead field this campaign exists to delete — the shape the coverage audit's forward read named as the likeliest coordinate for the next externally-found defect. **The first draft was already there**: it cited a consumer that does not exist. | **Medium** | D1 scopes the trace line into this slice, so the consumer is built rather than cited. `LEASEINVALID`'s `NATURAL-d` reddens if the line stops reading the value, which is the route by which the field would silently become dead again. |
+| R5 | **The harness fake drifts kinder than reality** — it must gain the status and the invalidation without losing the stale-token discrimination it models deliberately. | **Medium** | `LEASEINVALID`'s second route and `LEASEPAIRED`'s two new clauses drive the REAL Browse module, so the fake cannot be the only witness of the invalidated path or of the reconciliation body. |
 | R6 | **The subsystem addendum is scrubbed to a wrong current truth**, because it is stale in several places this stage does not touch (§2 GAP). | **Low** | The scrub is scoped in §11 to the resource vocabulary plus the four named stale claims, each with a `file:line` in §3 for what replaced it. |
-| R7 | **`MOVERFROZEN` lands as half of §14's design.** | **Low** | The existing trigger gate's clause 3 already checks both directions and reddens on a half landing; no new mechanism is needed. |
+| R7 | **`MOVERFROZEN` lands as half of §14's design, with the whole suite green.** ⛔ The first draft rated this Low on a mitigation that does not exist: the trigger gate's clause 3 is made VACUOUS by this commit's own mandatory re-anchoring, because the three re-anchored key-set registrations satisfy its `Object.freeze(` + `toMover` co-occurrence with no wrapper-deletion mutant present. | **Medium** *(raised from Low)* | §12's repair: clause 3's registration predicate gains a `to`-side discriminator requiring the replacement text NOT to contain the wrapper, which is `MOVERFROZEN`'s second clause and its `NATURAL-b` mutant. **The "no new mechanism is needed" claim is retracted.** |
+| R8 | **A gate is trusted on a silence it never earned.** The plan gate takes minutes on an artifact this size, and a run given a path in argv instead of a hook payload on stdin exits 0 having parsed nothing. | **Low** | Recorded in the status block and the decision log: this artifact's gate PASS follows a real FAIL-then-fix cycle on the same file, so it is evidence about this artifact and nothing more. Per the persona's own honesty rule a passing gate is necessary and never sufficient; the review seat is the check. |
 
 ---
 
@@ -544,9 +757,18 @@ Mapped to coverage: `MOVERFROZEN`.
   and the plan reviewer of `PLAN-swipe-stage6b` already ruled that this bookkeeping has no
   DOM-observable witness of its own — deferring it again is that ruling standing, not new debt.
 
-**Not deferred — no subject.** Rows 1, 3 (`sameBrowseHost`), 4, 5, 8, 9 and 10 of §3 are not deferred
-by this plan and must not be carried forward by a later one: the thing each names does not exist. A
+**Not deferred — no subject.** Rows 1, 4, 5, 8, 9 and 10 of §3 are not deferred by this plan and must
+not be carried forward by a later one: the thing each names does not exist anywhere in the repo. A
 future plan that revives one must first re-establish its subject.
+
+**Not deferred — a DEFENDED REFUSAL, which is a different thing and must not be filed with the six
+above.** `sameBrowseHost` (§3 row 3) is not gone: `js/swipe.js:86-91` records a reasoned decision not
+to emit it, and `tools/mutate.mjs:432-438` registers a **live** mutant that adds it back to the frozen
+classification specifically so a re-introduction reddens a no-dead-fields gate. Its subject exists,
+is guarded, and is watched. Round 1 F7 caught the first draft flattening it in with
+`paneRemovalPolicy`, which occurs nowhere in the repo at all — and the distinction is exactly what a
+future plan revisiting the host projection would need: one of these has a witness telling you why not,
+and the other has nothing.
 
 **Deferred, independent, unchanged:**
 - **The headline compositor flash** on the incoming-`#browse` family. Untouched
@@ -566,22 +788,41 @@ subtraction pass (whose §14 trigger it discharges). It gates nothing and is gat
 
 | # | Step | Owner | State |
 |---|---|---|---|
-| 1 | Temper this plan; rule F1–F4 | the plan reviewer | **owed — the gate this plan is blocked on** |
-| 2 | Strike the load-bearing promise (below) | the adversary | owed |
+| 1 | Temper this plan | the plan reviewer | **round 1 DONE (TEMPER, `5c2c065`); round 2 owed on this revision** |
+| 2 | **Resolve U1** — strike the load-bearing promise (below) | the adversary | owed |
 | 3 | Author the red suite from §13 | the test author | owed |
 | 4 | Build green | the builder | owed |
 | 5a | Every mutant executed individually against its target file | the builder | owed |
-| 5b | **Apply the transform in memory, run the WHOLE suite and the anchors gate, and require the measured failing set to equal §11's declared one** | the builder | owed |
+| 5b | **The blast-radius probe, THREE classes, control first** | the builder | owed |
 | 6 | Code review | the code reviewer | owed |
 | 7 | Coverage audit | the coverage auditor | owed |
 | 8 | Records scrub (§11) | the assistant | owed |
 
+**Step 5b, specified exactly, because its first version measured the wrong input.** Apply **the
+transform §5 and §12 together specify** — the session field, the two `Browse.*` call sites, the two
+wrapper renames, the `js/browse.js` renames, and the freeze — in memory, control-first (no transform
+must rot nothing), and then require all three of:
+
+1. **Class (a):** the rotted `from` set equals §11's declared twelve (thirteen if the identifiers are
+   renamed inside comments too).
+2. **Class (b):** the `to`-side scan for `dropRowHold`, `takeRowHold`, `beginHold`, `endHold`,
+   `dropHold` at a word boundary returns empty after the re-anchoring. ⚠️ **The anchors gate cannot
+   see this class** — it checks `from` only — so this scan is the only thing standing between a
+   re-anchored registry and a mutant that kills its cell with a `ReferenceError` instead of with the
+   defect it names.
+3. **Class (c):** `ADAPTER_DECL` re-pinned, and the whole suite green.
+
+A measured set larger than the declared one is a blast-radius miss and the plan is amended before the
+commit lands. **A measured set SMALLER than the declared one is also a stop** — it means the
+transform applied is not the transform specified, which is precisely how the first draft got its
+number.
+
 **Exit condition.** All of: every §13 cell active, green and mutation-verified; §11's measured
-co-change set equal to its declared set; §14's four questions ruled; the PolicyLedger entry
-reconciling; the §11 scrub complete; the campaign manifest `Claude/Campaigns/swipe-stage7.json`
-reading COMPLETE with every gate's verdict filed. **This stage is CI-complete — it owes no device
-gate**, because no cell asserts geometry, stacking or paint, and the standing device hold is
-unaffected by it either way.
+co-change set equal to its declared set across all three classes; §14's D1–D3 holding and **U1
+resolved by the adversary rather than by a third reading**; the PolicyLedger entry reconciling; the
+§11 scrub complete; the campaign manifest `Claude/Campaigns/swipe-stage7.json` reading COMPLETE with
+every gate's verdict filed. **This stage is CI-complete — it owes no device gate**, because no cell
+asserts geometry, stacking or paint, and the standing device hold is unaffected by it either way.
 
 **The load-bearing promise, commissioned to the adversary.** *Every live gesture returns its lease
 exactly once, on every exit the state machine can reach, and a lease that is not the live one
@@ -590,10 +831,13 @@ that the endpoint fold which would make this structural is a trap, so the guaran
 an enumeration is where this campaign's defects live. Provable on the real DOM through the app
 harness.
 
-**Handoff order:** **the plan reviewer** (temper; rule F1–F4) → **the adversary** (strike the promise
-above) → **the test author** (red suite from §13; `LEASEPAIRED` red-first over all seven exits) →
-**the builder** (green; the rename, the status, the explicit invalidation, the §12 freeze pair, and the
-anchor re-anchor in the SAME commit) → **the code reviewer** → **the coverage auditor**.
+**Handoff order:** **the plan reviewer** (round 2 over this revision) → **the adversary** (resolve U1
+by striking the promise above) → **the test author** (red suite from §13; `LEASEPAIRED` red-first over
+all seven exits, `LEASEINVALID`'s trace clause red-first, and `MOVERFROZEN`'s repaired clause-3
+predicate red-first against the vacuity `NATURAL-b` describes) → **the builder** (green; the renames,
+the status, its trace line, the explicit invalidation, the §12 freeze pair, and the class (a)+(b)+(c)
+re-anchoring — `from` AND `to` — all in the SAME commit) → **the code reviewer** → **the coverage
+auditor**.
 
 **Campaign definition of done:** `Claude/Campaigns/swipe-stage7.json` (to be authored at step 1's
 close). ⚠️ Its `verdictArtifactGlob`s must carry a wildcard on the stem so a later round's `-rN`
