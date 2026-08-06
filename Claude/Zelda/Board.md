@@ -2,7 +2,9 @@
 
 The single home of **tactical state**: what's in flight, what's shipped-unverified, what's
 open, what's next. Update the SAME turn state changes. Derive the build from
-`js/debug.js` / `build.json` — never a number written here.
+`js/debug.js` / `build.json` — never a number written here. Derive HEAD from `git rev-parse HEAD`
+— never a commit id written here: the commit that writes the line is the commit that moves HEAD, so
+a board line naming HEAD is stale the instant it lands.
 
 **Division — do not duplicate (each fact has one home):**
 - Settled decisions → `Claude/Decisions/DecisionLog.md`
@@ -21,8 +23,10 @@ tactical state instead of keeping their own copy.
 **Handoff packet: `Claude/Zelda/HANDOFF-2026-08-06.md`** — written to be picked up *without* the
 conversation that produced it. It carries the spine, the next action, the open items and the traps.
 
-- **HEAD `e9783f4` · build `2026-08-05.2` · suite 887 / 886 pass / 0 fail / 1 skip · 14 of 14
-  campaigns COMPLETE.**
+- **`main` == `origin/main`, tree clean · build `2026-08-05.2` · suite 887 / 886 pass / 0 fail /
+  1 skip · 14 of 14 campaigns COMPLETE.** Re-executed and confirmed 2026-08-06: the suite via
+  `node --test "test/*.test.js"`, the manifests via `tools/campaign/stage-gate-check.mjs` over
+  every file in `Claude/Campaigns/`.
 - ⛔ **There is no "phase 1–10."** That framing exists in no plan and cost three failed attempts to
   answer "where are we". The spine is **`Claude/Plans/PLAN-swipe-reveal.md` §7, line 736 — PLAIN
   TEXT, not markdown**, which is why markdown-shaped greps never found it. Ten stages.
