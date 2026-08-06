@@ -1833,3 +1833,25 @@ global (`~/.claude/personas/`) and are not restated here. The tactical board is 
   had NO runnable mutation evidence for that whole span: the mutation strings sat at the top of
   `tools/mutate.mjs` and no entry referenced them. A declared-but-unreferenced constant is invisible to
   the anchors gate, which checks registered entries and cannot know about a string nothing registers.
+
+- A COVERAGE ROW CLAIMS WHAT ITS FIXTURE COMMISSIONS, NOT WHAT ITS SUBJECT DESERVES — 2026-08-06,
+  the planner, closing coverage-audit r2 finding N1. A cell whose behaviour sentence claimed a key
+  set held over an object's whole LIFETIME was witnessed by a fixture that reads one construction
+  EXPRESSION over source. The two sentences disagreed about scope and the larger one was narrowed to
+  the smaller, because a cell whose stated claim is false is worse than an absent cell: an audit reads
+  it as covered. The gap was measured, not argued — a line-neutral edit attaching a key to the object
+  AFTER construction shipped with the whole suite green.
+
+- A STRUCTURAL GUARD THAT SILENCES A DEFECT NEEDS A SECOND ASSERTION PINNING THE GUARD — 2026-08-06,
+  the planner. Freezing a constructed object closes a key set by construction, but in a non-strict
+  file the offending write silently no-ops instead of throwing, so the guard makes the defect inert
+  rather than visible. Measured: with the freeze in place the offending write changes no test result
+  at all. A guard of this shape is sound only when it ships together with a source assertion over the
+  guard itself and a mutant that deletes it; either half alone is unguarded.
+
+- A COMPLETED PASS DEFERS A NEW STRUCTURAL GUARANTEE RATHER THAN REOPENING FOR IT — 2026-08-06, the
+  planner. A subtraction pass establishes that a field is no longer produced; it does not thereby
+  establish that the field can never be attached. The stronger invariant is new production surface,
+  and the shipped form of a device-gated pass is not changed for it after the pass closes. The
+  deferral is only legitimate when it carries an owner, a TRIGGER condition, a named consumer and a
+  measured design, so the next pass inherits the work rather than re-deriving it.

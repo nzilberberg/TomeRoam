@@ -1852,6 +1852,28 @@ assistant, step 8.** [W84] N4 — F6 is larger than round 1 named: the plan's St
 §11's step rows 5, 5b and 6 still read `open`. **Step 7 (device re-confirm) is UNRUN and nothing in
 the suite or the records claims otherwise; step 8 (records scrub) is not done.**
 
+**⭐ [W85] N1 CLOSED (2026-08-06) — the planner NARROWED the sentence rather than commissioning the
+occupant.** `Claude/Plans/PLAN-swipe-declone-stage2-subtraction.md` §10 `MOVERSHAPE`, §13 decision 22,
+§14. §10's behaviour sentence now claims the **one adapter EXPRESSION** its fixture reads, and says in
+the row itself that the recorded mover's key set over its LIFETIME is not claimed here. **Both of the
+audit's measurements were re-derived independently at `fb191bc`, not accepted:** the line-neutral
+post-construction third key ships **884 / 883 / 0 fail / 1 skip — UNCAUGHT**, and the `Object.freeze`
+occupant reddens **exactly two** tests (the anchors gate, and the emitted-key cell's own
+fixture-sanity assertion) with no behavioural cell firing. ⭐ **One measurement the audit did not
+make:** with the freeze in place *and* the offending write stacked on it, the failing set is
+**identical** — so in this non-strict file the guard makes the defect **inert, not loud**, which is
+why the occupant is only sound shipped together with a source assertion pinning the wrapper. Grounds
+for narrowing: decision 20 forbids adding production surface to serve a test; decision 17 is the
+precedent for deferring a better gate rather than folding it into a closed commit; and a freeze
+changes the shipped form of a pass whose device gate stands at 5 of 6. §14 carries the deferral with
+an owner, a **trigger** (the next change that writes to a `d.movers` member outside `toMover`), a
+consumer and the measured two-part design. Three DecisionLog entries. **Records only — no build bump,
+no source or test change.** ⛔ **One scrub follows and is the test author's:**
+`test/swipe-declone-stage2-subtraction.test.js:89` still states the old lifetime claim in the cell's
+header, thirty-seven lines above the same header's own honest-limit paragraph that contradicts it —
+the exact shape this campaign already filed against a gate file whose header advertised a guard it no
+longer had.
+
 ## ✅ Recently closed (kept only as "don't re-investigate")
 - **"iOS keeps an unclearable cover cache" — DISPROVEN, CLOSED (`.149`).** Epoch-clean reading proved every cover goes through the SW and re-caches; covers just re-download fast, which *looks* like nothing cleared. Airplane mode is not a valid test of the clear.
 - **Options→HUB refactor · library-scaling virtualization · durable-progress spine + device-delete** — all built; scaling on-device gate passed → `[[tomeroam-durable-progress-plan]]`, `[[tomeroam-library-scaling-plan]]`.

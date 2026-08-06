@@ -12,6 +12,7 @@ Type: plan
   "blocking_questions":["NOGHOSTCLASS","NOOWNEDPANE","NOCLB","MOVERSHAPE","RECOVERYPARITY","DESTROYEDMOVER","PILLSWEPT"]} -->
 
 Status: **COMPLETE — built, reviewed and audited; every campaign gate green.** Steps 1-6 and 8 are discharged (`Claude/Campaigns/swipe-declone-stage2-subtraction.json` reads COMPLETE: plan-review FORGE, red-suite RED_SUITE_READY, adversary FRACTURE_FOLDED, build BUILD_GREEN, code-review PASS, coverage-audit ADEQUATE r2). **The one thing still owed is step 7, the device re-confirm — the user’s, and unrun.**
+The audit's five findings are closed: N2–N5 in code and records, and **N1 by the planner narrowing §10 `MOVERSHAPE`'s behaviour sentence to the adapter expression its fixture commissions**, with the lifetime invariant deferred, triggered and designed at §14 (§13 decision 22). One scrub follows N1 and is the test author's — `test/swipe-declone-stage2-subtraction.test.js:89`.
 `Claude/Curie/RED-swipe-declone-stage2-subtraction.md` (`b2327f5`): 884 tests, 880 pass, **3
 intentional red-first cells** (`NOOWNEDPANE`, `MOVERSHAPE`, `PILLSWEPT`'s arity half) and nothing
 else, against an 849/0 baseline. Every mutant was executed **individually against its target file**
@@ -586,7 +587,7 @@ because §5's collapse and §7's ruling *do* depend on it.
 NOGHOSTCLASS | no first-party script under js/ writes the retired ghost class to a className or classList or class attribute, so the recovery branch that only that class could arm cannot be re-armed by an edit | gate scan every js file excluding the vendored bundle for a class write whose value contains the retired token, by the same resolution rules the view-clone gate already uses, and fail naming file and line; the fixture must first PROVE it can fire by scanning a synthetic source that contains the write | ADDITIVE inject a class write of the retired token into an existing first-party file so the derived set gains a site and the gate reddens; expected killing cell NOGHOSTCLASS | gate source scan over first-party js
 NOOWNEDPANE | the retired ownership tag occurs nowhere under js/ AS A STRING VALUE in any quoting form, so no mover can be tagged with an ownership kind for which no teardown path remains, whether the tag is written inline at the call or held in a named constant | gate scan every js file excluding the vendored bundle for a STRING LITERAL in any of the three quoting forms whose content is exactly the retired tag, and fail naming file and line; a bare occurrence in a comment or in an identifier must NOT match, which the fire drill proves with a negative control alongside its positive one | TWO ADDITIVE mutants, one per re-introduction shape. NATURAL-a inject the tag inline at a mover construction site. NATURAL-b inject it as a named module constant that is never referenced, which the inline-only reading would miss. expected killing cell for BOTH is NOOWNEDPANE | gate source scan over first-party js
 NOCLB | the two retired clobber identifiers from the stage that removed the runtime build-side-effect byproduct occur nowhere under js/ IN CODE POSITION, closing the coverage audit finding that their purge gate was deleted with its file while its subject stayed live | gate scan every js file excluding the vendored bundle for either identifier occurring outside comments and outside string literals, and fail naming file and line; a prose mention of the retired concept in a comment must NOT match, because a record explaining why a concept was retired is exactly what should survive, and the fire drill proves that with a negative control | TWO ADDITIVE mutants. NATURAL-a inject a declaration of one identifier into an existing first-party file. NATURAL-b inject a read of the other, so a scan that only sees declarations is caught. expected killing cell for BOTH is NOCLB | gate source scan over first-party js
-MOVERSHAPE | the production mover object the adapter records on the session carries exactly the element reference and the base offset and no third key so a dropped or an orphaned key cannot ship silently | unit assert over SOURCE that the adapter's mover-construction expression reads exactly the two seam fields it is entitled to and emits exactly the two production keys, because the session movers are module-private and have no runtime observer; the base half is additionally covered behaviourally by the existing filmstrip cells which assert the incoming mover carries a signed offset so a dropped base is not source-only evidence | TWO mutants. NATURAL-a the adapter re-adds the retired ownership key so a field with no reader ships again. NATURAL-b the adapter drops the base key so the incoming mover has no offset. expected killing cell for BOTH is MOVERSHAPE | integration app harness over the real adapter
+MOVERSHAPE | the ONE adapter expression that constructs a production mover emits exactly the element reference and the base offset and no third key so the retired ownership field cannot be re-added at the site where session movers are built; the key set the recorded mover CARRIES over its lifetime is deliberately NOT claimed by this cell, because a key attached after construction is outside what any witness here can see, and that stronger invariant is deferred with its consumer named in section 14 | unit assert over SOURCE that the adapter's mover-construction expression reads exactly the two seam fields it is entitled to and emits exactly the two production keys, because the session movers are module-private and have no runtime observer; the base half is additionally covered behaviourally by the existing filmstrip cells which assert the incoming mover carries a signed offset so a dropped base is not source-only evidence | TWO mutants. NATURAL-a the adapter re-adds the retired ownership key so a field with no reader ships again. NATURAL-b the adapter drops the base key so the incoming mover has no offset. expected killing cell for BOTH is MOVERSHAPE | source scan over the one L3 adapter expression, plus integration app harness for the seam read set and for the base half
 RECOVERYPARITY | the collapsed leftover-state recovery does exactly what the surviving branch did before the collapse namely suppress the screen reset restore the session-start scroll release the hold in that order AND sweep the transient now playing pill decoration for every entry route that still exists | integration boot the app harness and drive the three surviving entry routes namely a mid-drag second touch and a settling session superseded before finalize and a live drag interrupted by a nav tap and assert for each that the source screen is restored without a re-render that the session-start scroll is written exactly once that the row hold is released after the screen is applied AND that a pill float node present at the start of the recovery is gone at the end of it which is the only witness that the recovery still reaches the pill sweep now that the explicit style reset call is deleted and the path runs through the screen application alone | FOUR mutants. NATURAL-a the collapsed call passes the default screen reset so the recovery scrolls the destination to top. NATURAL-b the session-start scroll restore is dropped. NATURAL-c the hold release is moved ahead of the screen application which dematerializes the kept rows. NATURAL-d the screen application is REMOVED from the recovery so the recovery never reaches the style reset at all and the pill float survives which is the leak the deleted witness used to catch; moving the call instead does NOT bite because the screen application still executes and reaches the style reset as its first statement regardless of where it sits. expected killing cell for ALL FOUR is RECOVERYPARITY and the fourth assertion is authored as its own named test inside the cell so the sweep output names it | integration app harness over the real recovery
 DESTROYEDMOVER | a live browse to browse gesture whose two movers are destroyed mid drag by a cache clear still settles leaves no page carrying an inline transform and releases the session so the next touch does not trip the leftover-state hard reset | integration boot the app harness with the real browse renderer and fake timers drive a browse to browse past the direction lock so both movers carry inline transforms then destroy the movers and advance past the settle and the finalize and assert a settle line was emitted that no page in the document carries a non-empty inline transform and that the active session reads null; the fixture drives THREE ROUTE COORDINATES with the same assertions namely the cache clear the container wipe and a mid-gesture screen application with rendering enabled | THREE mutants ONE PER ASSERTION not one per route since driving a different route is a fixture variant and not a source mutation. NATURAL-a the settle timer fallback is removed so a gesture whose transition-end anchor was detached never settles which reddens the settle assertion. NATURAL-b the page push is dropped from the style reset so a page still in the document keeps its transform. NATURAL-c the ownership release is removed from the finalize so the session survives and the next touch trips the hard reset. expected killing cell for ALL THREE is DESTROYEDMOVER | integration app harness with the real browse renderer
 PILLSWEPT | the transient now playing pill decoration is still removed by the style reset after the ghost-sweep parameter is deleted so the one owned resource the swipe still creates cannot leak | unit drive the real style reset against the real index fixture with a pill float node present and assert it is removed and separately assert the reset is declared with no parameters so no caller can re-introduce a conditional on it | TWO mutants. NATURAL-a the pill float sweep line is deleted alongside the ghost sweep line which is the exact defect the parent plan's mis-cited retention clause invites. NATURAL-b the reset regains a parameter and guards the pill sweep behind it. expected killing cell for BOTH is PILLSWEPT | unit nav reset against the real fixture
@@ -675,6 +676,24 @@ source assertion cannot see a key attached elsewhere at runtime. The `base` half
 covered behaviourally — the existing filmstrip cells assert the incoming mover carries a signed
 offset — so a dropped `base` is not source-only evidence. The `own` half has no behavioural witness by
 construction, because after D12 nothing reads it; that is the point of deleting it.
+
+⛔ **[N1] The row's behaviour sentence is NARROWED to the expression, because the lifetime claim it
+used to make was measurably false and this pass never built it.** The old sentence said the mover
+"carries … no third key so a dropped or an orphaned key cannot ship silently" — a claim about the
+recorded object over its whole life. The fixture sentence one cell to its right commissions
+something strictly narrower: a source assertion over the adapter *expression*. **Re-measured here by
+execution, not by reading, at HEAD `fb191bc`:** leaving the `toMover` literal untouched and rewriting
+the single existing line `for (const m of d.movers) …` in place so that each recorded mover gains a
+third key after construction ships **884 tests, 883 pass, 0 fail, 1 skip — UNCAUGHT**. The two
+witnesses that catch the *inserting* form — the swipe-model region fingerprint and the anchors gate —
+witness text having MOVED, not the property, so a line-neutral edit evades both;
+`tools/dead-return-fields.mjs` cannot reach it either, because the session mover is an internal
+object and that tool is scoped to registered seam returns by construction. **A cell whose stated
+claim is false is worse than an absent cell, because an audit reads it as covered** — so the sentence
+is brought down to what the cell witnesses and the stronger invariant is scheduled rather than
+implied (§13 decision 22, §14). The row's layer field is corrected in the same edit under decision
+16: the cell spans two layers and naming only the app-harness half was true, checkable and
+incomplete, which is the failure mode that survives indefinitely.
 
 ⛔ **Both `NOOWNEDPANE` and `NOCLB` need comment-and-string discrimination, and they need OPPOSITE
 halves of it — the round-2 claim that `NOCLB` was the first and only such gate is FALSE and is
@@ -983,6 +1002,38 @@ the stage beneath it.
     CAUGHT without ever being applied. Re-derived to one mutant per ASSERTION over three route
     coordinates. The general rule: a mutant edits source; anything that edits only the fixture is a
     coordinate, and counting it as a mutant inflates a coverage claim with something that cannot fail.
+22. **`MOVERSHAPE` claims the adapter EXPRESSION, not the recorded mover's lifetime; the lifetime
+    invariant is deferred with its consumer named [coverage-audit r2 N1].** The row's two sentences
+    disagreed about scope and the behaviour sentence was the larger one, so it is narrowed to the
+    fixture's scope rather than the fixture grown to the behaviour's. Four grounds, and the first two
+    are this plan's own rulings applied consistently rather than new reasoning:
+    - **Decision 20's ground forbids the occupant here.** Decision 20 ruled `MOVERSHAPE` over source
+      because adding production surface to serve a test "adds exactly the kind of surface this pass
+      exists to remove". The measured occupant — `Object.freeze` on the adapter literal — is
+      production surface added to serve a coverage claim. Admitting it would reverse decision 20
+      inside the same plan, and the new ground that would justify reversing it does not exist.
+    - **Decision 17's precedent governs the timing.** A *better* gate was deferred there "as scope not
+      as design — new derivation machinery at the end of a fourteen-item commit". This is the same
+      shape: a real improvement arriving after its commit closed.
+    - **The occupant is INERT, not loud, and that is measured rather than argued.** `js/app.js` is a
+      classic script (`index.html:263`, no `type="module"`) with no `'use strict'`, so it is
+      non-strict and a write onto a frozen mover silently no-ops. Measured at HEAD `fb191bc`: the
+      freeze alone reddens exactly two tests, both by design — the anchors gate (three registrations
+      anchor that exact line) and the emitted-key-set cell's own fixture-sanity assertion; **and with
+      the offending post-construction write stacked on top of the freeze the failing set is
+      identical**, so nothing throws and no behavioural cell fires. The occupant therefore does not
+      make the defect visible; it makes it silent. It is the right occupant, and it is only sound
+      when it arrives together with a source assertion pinning the `Object.freeze(` wrapper itself,
+      because a later removal of the wrapper otherwise re-opens the route with nothing reddening.
+    - **The pass is closed and the shipped form is device-gated.** §11 step 7's own rationale is that
+      "the form device-tested is the form that ships". A freeze changes the shipped form, so
+      commissioning it re-owes a device confirm that stands at 5 of 6 PASS with one item deferred for
+      want of a fixture, and costs three mutation re-anchors and a re-review besides. That is not the
+      smallest sound thing.
+    **This is a narrowing, not a retreat into vigilance.** The standing law is that where a rule can
+    be made structural it is made structural; §14 gives the invariant a scheduled structural home with
+    an owner, a trigger and a measured design, which is that law applied at the right commit rather
+    than abandoned.
 ## 14. Deliberately out of scope, with the consumer named
 
 - **W46 / addendum F2 — a same-key `browse→browse` pair resolves both mover slots to one node.**
@@ -1019,6 +1070,28 @@ the stage beneath it.
   edit above it. It is deferred because it is new derivation machinery in a gate this pass otherwise
   only re-registers, at the end of a fourteen-item commit. **Consumer:** the first task that needs to
   know *which* document-scroll writer vanished; until then the group count still says *that* one did.
+- ⭐ **The recorded mover's key set closed for its LIFETIME, not only at its construction expression
+  [coverage-audit r2 N1].** Owner: the planner, as a contract guarantee; the build and the test author
+  execute it. `MOVERSHAPE` witnesses the one adapter expression (§13 decision 22); a key attached to a
+  recorded mover *after* construction ships uncaught, measured at HEAD `fb191bc` at whole-suite scope.
+  **Trigger — the one condition that makes this owed rather than optional:** the next change that
+  writes to a member of `d.movers` outside `toMover`, or that threads any new value to the settle
+  path. The coverage audit's forward read names that as the likeliest coordinate for the next
+  externally-found defect, so this deferral is a scheduled gate and not a backlog line.
+  **Consumer:** that change's own coverage model, which cannot claim a closed key set without it.
+  **The design, MEASURED here so it is inherited rather than re-derived, and it is TWO parts that must
+  land together:**
+  1. **Build** — wrap the adapter literal: `const toMover = (m) => Object.freeze({ el: m.element,
+     base: baseOf(m.slot) });`. Behaviour-neutral to the whole suite; the only two tests that redden
+     are the anchors gate (three registrations in `tools/mutate.mjs` anchor that exact line and are
+     re-anchored in the same commit) and the emitted-key-set cell's fixture-sanity assertion, whose
+     anchor `const toMover = (m) => ({` stops matching — the reader detecting rot, working as designed.
+  2. **Test author** — the source assertion must ALSO pin the `Object.freeze(` wrapper, with the
+     wrapper's deletion registered as its mutant. ⚠️ **Without part 2, part 1 is unguarded**: the file
+     is non-strict, so the freeze silences the offending write instead of throwing, and a later
+     removal of the wrapper re-opens the route with nothing reddening.
+  ⛔ **Neither part is sound alone.** Shipping the freeze without the pin buys silence and no witness;
+  shipping the pin without the freeze pins a wrapper that is not there.
 - **Addendum A9 — the read-after-`applyScreen` invariant holds only on non-throwing paths.** A
   comment correction; the code review already owns it.
 - **`text-size-adjust`, the additive-overlay premise, the two disagreeing host vocabularies.** Named
