@@ -16,6 +16,33 @@ tactical state instead of keeping their own copy.
 
 ---
 
+## 📍 CURRENT STATE — 2026-08-06 (read this first)
+
+**Handoff packet: `Claude/Zelda/HANDOFF-2026-08-06.md`** — written to be picked up *without* the
+conversation that produced it. It carries the spine, the next action, the open items and the traps.
+
+- **HEAD `e9783f4` · build `2026-08-05.2` · suite 887 / 886 pass / 0 fail / 1 skip · 14 of 14
+  campaigns COMPLETE.**
+- ⛔ **There is no "phase 1–10."** That framing exists in no plan and cost three failed attempts to
+  answer "where are we". The spine is **`Claude/Plans/PLAN-swipe-reveal.md` §7, line 736 — PLAIN
+  TEXT, not markdown**, which is why markdown-shaped greps never found it. Ten stages.
+- **Stages 1–6 done** (6 sliced 6a…6i, each with its own sub-plan and manifest). **Stage 7 is IN PLAN
+  REVIEW — round 2 owed.** Stages 8, 9, 10 not started.
+- ⚠️ **Two independent numbering systems both say "stage"** — the reveal spine above, and the de-clone
+  workstream whose numbers the campaign manifests use. Always say which one you mean.
+- **NEXT ACTION — dispatch Charpy round 2 on `PLAN-swipe-stage7.md`, scoped to F1/F2/F3 only.** The
+  scope determination already survived independent re-derivation in round 1; re-striking it is
+  ceremony. After a FORGE, the adversary — which is the plan's own step 2, and where its exit
+  enumeration is routed as an open unknown.
+- **Open, none blocking stage 7:** §14's deferred lifetime invariant, now trigger-gated by
+  `MOVERLIFETIMETRIGGER`; two unbuilt tooling mechanisms (registry-vs-declared mutants;
+  stated-vs-measured killers); **`T-LP1`** letter pickers (user-deferred, pre-existing, symptoms not
+  yet derived — ask before routing); de-clone device item 5, which needs a >600-item library the user
+  does not have. `tools/bench-virtual-swipe.mjs` narrows item 5 on Blink but **does NOT close it** —
+  it reads DOM geometry, not paint, and says nothing about iOS WebKit.
+
+---
+
 ## ⛔⛔ Standing priority — real-device verification is OUTSTANDING
 The whole `.164`+ durable-arbitration arc and the `.178`+ swipe work are **shipped-unverified**.
 `test/DEVICE_VERIFICATION_CROSSDEVICE.md` (12 scenarios) has never been run. The device
