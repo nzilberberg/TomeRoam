@@ -30,6 +30,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { boot } = require('./app-harness.js');
 const { ROOT } = require('./dom-fixture.js');
 
@@ -237,34 +238,42 @@ const CLOSERS = { '{': '}', '(': ')', '[': ']' };
 // this reader does not distinguish division from a regex literal. The expression it reads is an
 // object literal of element references and numeric offsets; if that ever stops being true, this
 // is the assumption to revisit.
-function scanBalanced(s, i, onChar) {
+// `opts.stopAtBalance` (default true) returns at the closer that brings depth back to 0 — what a
+// literal reader wants. MOVERLIFETIMETRIGGER below needs the other mode: a scan of a WHOLE file,
+// where an early return at the first balanced `}` would silently truncate the input. `onChar` also
+// receives the character's INDEX, which the same gate needs to turn a hit into a line number.
+// One state machine with two callers, deliberately: the plan's own §10 argues that two ad-hoc
+// scanners double the surface a silent scanner defect can hide on, and this file has already been
+// bitten twice by exactly that defect (quote state, then comment state).
+function scanBalanced(s, i, onChar, opts) {
+  const stopAtBalance = !opts || opts.stopAtBalance !== false;
   let depth = 0, quote = null, comment = null;
   for (let j = i; j < s.length; j++) {
     const c = s[j];
     if (comment === 'line') {
-      onChar(c, depth, false, true);
+      onChar(c, depth, false, true, j);
       if (c === '\n') comment = null;
       continue;
     }
     if (comment === 'block') {
-      onChar(c, depth, false, true);
-      if (c === '*' && s[j + 1] === '/') { onChar('/', depth, false, true); j++; comment = null; }
+      onChar(c, depth, false, true, j);
+      if (c === '*' && s[j + 1] === '/') { onChar('/', depth, false, true, j + 1); j++; comment = null; }
       continue;
     }
     if (quote) {
-      if (c === '\\') { onChar(c, depth, true, false); onChar(s[++j], depth, true, false); continue; }
+      if (c === '\\') { onChar(c, depth, true, false, j); onChar(s[j + 1], depth, true, false, j + 1); j++; continue; }
       if (c === quote) quote = null;
-      onChar(c, depth, true, false);
+      onChar(c, depth, true, false, j);
       continue;
     }
     // Comment openers are tested BEFORE quote openers: a `'` inside a comment must not open a
     // quote, and a `//` inside a string must not open a comment. Order is what separates them.
-    if (c === '/' && s[j + 1] === '/') { comment = 'line'; onChar(c, depth, false, true); onChar('/', depth, false, true); j++; continue; }
-    if (c === '/' && s[j + 1] === '*') { comment = 'block'; onChar(c, depth, false, true); onChar('*', depth, false, true); j++; continue; }
-    if (c === "'" || c === '"' || c === '`') { quote = c; onChar(c, depth, true, false); continue; }
-    if (CLOSERS[c]) { depth++; onChar(c, depth, false, false); continue; }
-    if (c === '}' || c === ')' || c === ']') { onChar(c, depth, false, false); depth--; if (depth === 0) return j; continue; }
-    onChar(c, depth, false, false);
+    if (c === '/' && s[j + 1] === '/') { comment = 'line'; onChar(c, depth, false, true, j); onChar('/', depth, false, true, j + 1); j++; continue; }
+    if (c === '/' && s[j + 1] === '*') { comment = 'block'; onChar(c, depth, false, true, j); onChar('*', depth, false, true, j + 1); j++; continue; }
+    if (c === "'" || c === '"' || c === '`') { quote = c; onChar(c, depth, true, false, j); continue; }
+    if (CLOSERS[c]) { depth++; onChar(c, depth, false, false, j); continue; }
+    if (c === '}' || c === ')' || c === ']') { onChar(c, depth, false, false, j); depth--; if (depth === 0 && stopAtBalance) return j; continue; }
+    onChar(c, depth, false, false, j);
   }
   return -1;
 }
@@ -457,6 +466,307 @@ test('MOVERSHAPE — the base offset reaches the real transform: every mover car
         + `the base key writes translateX(NaNpx) and the page never leaves the viewport: got "${t}"`);
     }
   } finally { h.dispose(); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════
+// MOVERLIFETIMETRIGGER [GATE] — plan §14's deferred lifetime invariant becomes OWED the moment
+// anything writes to a mover MEMBER outside the adapter. This is the thing that fires then.
+// Plan §14 / §13 decision 22 / coverage-audit r2 N1.
+// ════════════════════════════════════════════════════════════════════════════════════════
+//
+// WHY THIS EXISTS. MOVERSHAPE above claims the adapter EXPRESSION and deliberately not the
+// recorded mover's lifetime; the stronger invariant is deferred at §14 with an owner, a trigger
+// and a measured two-part design. ⛔ An owner, a trigger and a consumer written in prose are
+// still prose. The six mutants deferred to step 6 of this very pass had a name and an intent too,
+// and they sat unregistered through a build, a review and a fix round while the standing sweep
+// printed `0 uncaught` — a green counter stating execution, not coverage. What makes a deferral a
+// SCHEDULED GATE rather than a backlog line is something that fires at the trigger.
+//
+// §14 states the trigger in checkable terms, which is unusual and is what makes this cheap:
+//     "the next change that writes to a member of `d.movers` outside `toMover`, or that threads
+//      any new value to the settle path."
+//
+// THE DISCRIMINATOR, and why this one. A mover is `{el, base}`. MEASURED at HEAD: every site that
+// touches a mover writes `m.el.style.…` — the ELEMENT's style, two levels deep through `.el` —
+// and there are ZERO writes to a mover member anywhere. That is precisely why the audit's
+// counterexample was line-neutral and shipped uncaught. So the discriminating property is:
+//
+//     an assignment whose left-hand side TERMINATES AT DEPTH 1 on a mover-rooted expression.
+//
+// `m.own = x` and `m.el = x` terminate at depth 1 and fire. `m.el.style.transform = x` does not.
+// That is a structural rule, not a text pin: renaming the loop variable, reordering the loops,
+// reformatting them, or adding another `m.el.style.…` line all stay green, because none of them
+// changes the depth at which an assignment lands.
+//
+// ⛔ BINDINGS ARE SCOPED TO THEIR OWN LOOP BODY, and that is MEASURED as necessary rather than
+// chosen for tidiness. `js/app.js` binds the identifier `m` to THREE different things: the SEAM
+// mover inside `toMover` (`:541`, where the mapping is legitimate and is MOVERSHAPE's subject,
+// not this gate's), the production movers in the five iteration sites, and two unrelated locals
+// (`:2900` a `<meta>` element, `:2902` an array). A file-wide identifier rule would have fired on
+// all three. Scoping each binding to the body it was introduced in is what makes the rule sound.
+//
+// ⛔ AND IT READS CODE, NOT COMMENTS. The comment text of `js/app.js` is blanked before the scan
+// (offsets preserved, so reported line numbers stay true). A prose line describing the defect —
+// exactly the kind of line a future reader will write next to this gate's subject — must not fire
+// it. This file has already paid for the "a comment is not code" lesson once, in the reader above.
+// The gate itself lives in `test/` and scans `js/`, so it cannot match its own text under any
+// resolution rule.
+//
+// ⚠️ WHAT IT DOES NOT CLAIM. This is a TEXTUAL bound on `js/app.js`, the one file that builds and
+// animates `d.movers`. It is not a proof that no code path anywhere can attach a key to a
+// recorded mover — that proof is §14's two-part design, and this gate exists to make it land on
+// time, not to substitute for it.
+const APP_JS = path.join(ROOT, 'js', 'app.js');
+const MUTATE_MJS = path.join(ROOT, 'tools', 'mutate.mjs');
+
+/**
+ * `src` with every COMMENT and every STRING-LITERAL character blanked to a space (newlines kept,
+ * so offsets and therefore reported line numbers survive).
+ *
+ * ⚠️ STRINGS ARE BLANKED TOO, and that was a false positive this gate's own drill caught: a
+ * `'m.own = 1'` inside a debug log line — and every one of these loops sits beside debug logging
+ * that builds strings out of mover fields — fired the gate on correct code. Comments alone were
+ * not enough. Blanking the delimiters as well as the interior is deliberate: it leaves no quote
+ * state for the later scans to get wrong, and a `;` inside a string becomes a space, so it cannot
+ * be mistaken for the end of a single-statement loop body.
+ */
+function codeOnly(src) {
+  let out = '';
+  scanBalanced(src, 0, (c, depth, inQuote, inComment) => {
+    out += (inComment || inQuote) && c !== '\n' ? ' ' : c;
+  }, { stopAtBalance: false });
+  return out;
+}
+
+const lineOf = (src, idx) => src.slice(0, idx).split('\n').length;
+
+/** End of the loop body starting at `from`: the matching `}`, or the next top-level `;`. */
+function bodyEnd(code, from) {
+  let k = from;
+  while (k < code.length && /\s/.test(code[k])) k++;
+  if (code[k] === '{') {
+    const end = scanBalanced(code, k, () => {});
+    return end === -1 ? code.length : end;
+  }
+  let end = -1;
+  scanBalanced(code, k, (c, depth, inQuote, inComment, idx) => {
+    if (end === -1 && !inQuote && !inComment && depth === 0 && c === ';') end = idx;
+  }, { stopAtBalance: false });
+  return end === -1 ? code.length : end;
+}
+
+/**
+ * Depth-1 member writes on `binding` within `code[from..to]`.
+ * Excludes `==`, `===`, `=>`, `!=`, `<=`, `>=` — `js/app.js:617` really does read
+ * `m.base === 0`, so that exclusion is a live negative control, not a hypothetical one.
+ */
+// ⚠️ COMPOUND ASSIGNMENT COUNTS, and its absence was a FALSE NEGATIVE in this function's first
+// form — found while designing the drill below, before the drill existed. `m.base += 1` mutates a
+// mover member exactly as `m.base = 1` does, and an operator check that only accepted a bare `=`
+// walked straight past it. A gate that misses the trigger is the failure this whole deferral
+// exists to avoid, so the operator set is enumerated rather than assumed.
+//
+// ⛔ `<` AND `>` ARE DELIBERATELY ABSENT from the compound set: `>=` and `<=` are COMPARISONS,
+// while `>>=` and `<<=` are assignments. Listing the two-character shifts and omitting the bare
+// angle brackets is what separates them; adding `>` "for symmetry" would fire on every
+// `if (m.base >= 0)`.
+const COMPOUND = /^(\*\*|>>>|<<|>>|&&|\|\||\?\?|[+\-*/%&|^])=(?!=)/;
+function depth1Writes(code, binding, from, to) {
+  const re = new RegExp(`\\b${binding}\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\s*`, 'g');
+  const hits = [];
+  const body = code.slice(from, to);
+  let mm;
+  while ((mm = re.exec(body)) !== null) {
+    const after = body.slice(mm.index + mm[0].length);
+    // A bare `=` that is not `==`, `===` or `=>`. (`!=`, `<=`, `>=` put their first character
+    // before the `=`, so they never reach this branch at all.)
+    const simple = after[0] === '=' && after[1] !== '=' && after[1] !== '>';
+    if (!simple && !COMPOUND.test(after)) continue;
+    hits.push({ prop: mm[1], at: from + mm.index });
+  }
+  return hits;
+}
+
+test('MOVERLIFETIMETRIGGER [GATE] — nothing writes a mover MEMBER outside the adapter, so §14\'s deferred lifetime invariant is not yet owed', async () => {
+  const raw = fs.readFileSync(APP_JS, 'utf8').replace(/\r\n/g, '\n');
+  const code = codeOnly(raw);
+
+  // ── 1. Every `.movers` usage must classify into a form this gate understands ──────────
+  // An UNRECOGNISED way of touching the mover list is exactly the situation a human should
+  // look at, so it reddens here and says so. This is the inventory half: without it the gate
+  // could go green because a new form walked past its patterns, which is the false-clean this
+  // whole campaign keeps paying for.
+  const FORMS = [
+    [/\.movers\s*=\s*\[/g, 'construction — the adapter assigns the list'],
+    [/\.movers\s*\.\s*push\s*\(/g, 'construction — a decoration is appended'],
+    [/for\s*\(\s*(?:const|let|var)\s+[A-Za-z_$][\w$]*\s+of\s+[A-Za-z_$][\w$]*\.movers\s*\)/g, 'iteration — a for..of binding'],
+    [/\.movers\s*\.\s*(?:forEach|map|filter|find|some|every)\s*\(/g, 'iteration — a callback form'],
+    [/\.movers\s*\[\s*\d+\s*\]/g, 'index access'],
+    // ⭐ A DIFFERENT OBJECT, and this guard found it on its first run rather than by a reading.
+    // `c.movers` is the SEAM Construction's mover MAP, keyed by slot, whose members carry the
+    // external shape `{element, ownership, slot}`. `d.movers` is the PRODUCTION array of
+    // `{el, base}`. Only the second is this gate's subject: the seam is MOVERSHAPE's read-set
+    // half and NOGHOSTATALL's, and §14's trigger is about the recorded production mover. Two
+    // things spelled `.movers` two lines apart is precisely why the inventory half is not
+    // decorative — without it the gate's patterns would have walked past this silently.
+    [/\.movers\s*\.\s*(?:outgoing|incoming|decoration)\b/g, 'seam read — the Construction mover map by slot, NOT the production array'],
+  ];
+  const claimed = new Set();
+  for (const [re, _why] of FORMS) {
+    let mm; const r = new RegExp(re.source, 'g');
+    while ((mm = r.exec(code)) !== null) for (let k = mm.index; k < mm.index + mm[0].length; k++) claimed.add(k);
+  }
+  const unclassified = [];
+  { let mm; const r = /\.movers\b/g;
+    while ((mm = r.exec(code)) !== null) if (!claimed.has(mm.index)) unclassified.push(`js/app.js:${lineOf(code, mm.index)}`); }
+  assert.deepEqual(unclassified, [],
+    'a `.movers` usage appeared in a form this gate does not classify. That is not automatically a '
+    + 'defect — it may be a legitimate new shape — but it means the gate can no longer claim to '
+    + 'have seen every way the mover list is touched, so it refuses to report green. Widen the '
+    + 'FORMS list above with the new shape and a word saying what it is, and re-read whether the '
+    + '§14 trigger has fired. Unclassified: ' + unclassified.join(', '));
+
+  // ── 2. No depth-1 member write on any mover binding ───────────────────────────────────
+  const OWED = 'plan §14 (§13 decision 22): the lifetime invariant is now OWED. §14 specifies '
+    + 'TWO halves that must land TOGETHER — wrap the adapter literal in `Object.freeze(` (build) '
+    + 'AND pin that wrapper in the source assertion with its deletion registered as a mutant '
+    + '(test author). ⚠️ `js/app.js` is non-strict, so the freeze SILENCES this write rather than '
+    + 'throwing: half one alone buys quiet, not a witness.';
+
+  const findings = [];
+  { let mm; const r = /for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+[A-Za-z_$][\w$]*\.movers\s*\)/g;
+    while ((mm = r.exec(code)) !== null) {
+      const from = mm.index + mm[0].length;
+      for (const h of depth1Writes(code, mm[1], from, bodyEnd(code, from))) {
+        findings.push(`js/app.js:${lineOf(code, h.at)} writes \`${mm[1]}.${h.prop}\``);
+      }
+    } }
+  { let mm; const r = /\.movers\s*\.\s*(?:forEach|map|filter|find|some|every)\s*\(\s*\(?\s*([A-Za-z_$][\w$]*)/g;
+    while ((mm = r.exec(code)) !== null) {
+      const from = mm.index + mm[0].length;
+      for (const h of depth1Writes(code, mm[1], from, bodyEnd(code, from))) {
+        findings.push(`js/app.js:${lineOf(code, h.at)} writes \`${mm[1]}.${h.prop}\``);
+      }
+    } }
+  // A write with no binding at all: `cur.movers[0].own = x`.
+  { let mm; const r = /\.movers\s*\[\s*\d+\s*\]\s*\.\s*([A-Za-z_$][\w$]*)\s*=(?!=|>)/g;
+    while ((mm = r.exec(code)) !== null) findings.push(`js/app.js:${lineOf(code, mm.index)} writes \`.movers[n].${mm[1]}\``); }
+
+  assert.deepEqual(findings, [],
+    'a mover MEMBER is written outside the adapter, which is the exact trigger ' + OWED
+    + ' Writing `m.el.style.…` is NOT this — that is the element\'s style, two levels deep, and '
+    + 'every current site does it. What fires here is an assignment landing ON the mover object '
+    + `itself. Sites: ${findings.join('; ')}`);
+
+  // ── 3. §14's two halves may only exist TOGETHER ───────────────────────────────────────
+  // "Neither part is sound alone": the freeze without the pin buys silence and no witness; the
+  // pin without the freeze pins a wrapper that is not there. Checked in BOTH directions, so this
+  // clause is green today for a stated reason rather than vacuously.
+  //
+  // ⚠️ The registry is read STRUCTURALLY (its `from` fields), never as text. `tools/mutate.mjs`
+  // already contains the string `Object.freeze(` in S2-39's narrative COMMENT explaining this
+  // very deferral, so a text search would match the record of the plan instead of the mutant —
+  // the same "a comment is not code" trap this file has paid for once already.
+  const frozen = /const\s+toMover\s*=\s*\(m\)\s*=>\s*Object\.freeze\s*\(/.test(code);
+  const pinned = ADAPTER_DECL.includes('Object.freeze(');
+  // ⚠️ THE ANCHOR MUST NAME THE ADAPTER, NOT MERELY THE CONSTRUCT — a false positive this gate
+  // produced on its FIRST run and which is recorded rather than quietly fixed. Searching the
+  // registry for `Object.freeze(` alone matched FIVE unrelated entries (js/swipe.js freezing the
+  // decorations list and the construction plan), so the gate reddened at HEAD on correct work.
+  // That is the failure mode this project has lost three gates to. `Object.freeze(` is a common
+  // construct; only its co-occurrence with the `toMover` binding identifies §14's wrapper.
+  const { MUTATIONS } = await import(pathToFileURL(MUTATE_MJS).href);
+  const registered = MUTATIONS.some((m) => [m, m.also].filter(Boolean)
+    .some((p) => typeof p.from === 'string'
+      && p.from.includes('Object.freeze(') && p.from.includes('toMover')));
+
+  assert.equal(pinned, frozen,
+    frozen
+      ? 'js/app.js wraps the adapter literal in `Object.freeze(` but the source assertion above '
+        + 'does not PIN the wrapper — ADAPTER_DECL still matches the bare literal. §14: without '
+        + 'the pin the freeze is unguarded, because the file is non-strict so the freeze silences '
+        + 'the offending write rather than throwing, and a later removal of the wrapper re-opens '
+        + 'the route with nothing reddening.'
+      : 'the source assertion pins an `Object.freeze(` wrapper that js/app.js does not have. §14: '
+        + 'the pin without the freeze pins a wrapper that is not there. Both halves land together '
+        + 'or neither does.');
+  assert.equal(registered, frozen,
+    frozen
+      ? 'js/app.js wraps the adapter literal in `Object.freeze(` but no registered mutation '
+        + 'deletes that wrapper, so the pin has no runnable evidence — a pinned wrapper nobody can '
+        + 'break is a claim, not a witness. §14 half two is a pin AND its mutant.'
+      : 'a mutation is registered against an `Object.freeze(` wrapper that js/app.js does not '
+        + 'have. Its anchor cannot match, so test/mutation-anchors.test.js should already be red; '
+        + 'register it in the commit that ADDS the wrapper, not before.');
+});
+
+// ⛔ FIRE DRILL for the gate above, over SYNTHETIC sources only — the gate's own file is never
+// read here, so the drill has no text of its own the scan could collide with.
+//
+// ⚖️ THE FALSE-POSITIVE SURFACE IS THE POINT OF THIS DRILL, not an afterthought. A gate that
+// fires on legitimate mover work gets switched off, and this project has lost gates that way three
+// times; the negative list below is therefore longer than the positive one, and every row in it
+// is a shape that exists in `js/app.js` today or is one refactor away.
+const gateHits = (src) => {
+  const code = codeOnly(src);
+  const out = [];
+  let mm; const r = /for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+[A-Za-z_$][\w$]*\.movers\s*\)/g;
+  while ((mm = r.exec(code)) !== null) {
+    const from = mm.index + mm[0].length;
+    for (const h of depth1Writes(code, mm[1], from, bodyEnd(code, from))) out.push(`${mm[1]}.${h.prop}`);
+  }
+  const r2 = /\.movers\s*\.\s*(?:forEach|map)\s*\(\s*\(?\s*([A-Za-z_$][\w$]*)/g;
+  while ((mm = r2.exec(code)) !== null) {
+    const from = mm.index + mm[0].length;
+    for (const h of depth1Writes(code, mm[1], from, bodyEnd(code, from))) out.push(`${mm[1]}.${h.prop}`);
+  }
+  const r3 = /\.movers\s*\[\s*\d+\s*\]\s*\.\s*([A-Za-z_$][\w$]*)\s*=(?!=|>)/g;
+  while ((mm = r3.exec(code)) !== null) out.push(`movers[n].${mm[1]}`);
+  return out;
+};
+
+test('MOVERLIFETIMETRIGGER fire drill — POSITIVE: every shape of a mover-member write is reported', () => {
+  const cases = [
+    ['the audit\'s counterexample, inside the real loop shape', "for (const m of d.movers) if (m.base) m.own = 'borrowed-real', m.el.style.transform = 't';", ['m.own']],
+    ['a braced body', 'for (const m of d.movers) { m.own = 1; }', ['m.own']],
+    ['re-pointing the element itself', 'for (const m of d.movers) { m.el = other; }', ['m.el']],
+    ['mutating the base after construction', 'for (const m of d.movers) { m.base = 5; }', ['m.base']],
+    ['COMPOUND assignment, which a bare-`=` check misses', 'for (const m of d.movers) { m.base += 1; }', ['m.base']],
+    ['a shift-assign, which must not be read as a comparison', 'for (const m of d.movers) { m.base >>= 1; }', ['m.base']],
+    ['a RENAMED binding — the rule is structural, not a text pin', 'for (const mv of cur.movers) { mv.own = 1; }', ['mv.own']],
+    ['a callback iteration instead of for..of', 'cur.movers.forEach((mv) => { mv.own = 1; });', ['mv.own']],
+    ['a direct index write with no binding at all', "cur.movers[0].own = 'x';", ['movers[n].own']],
+    ['a write buried after several legitimate ones', "for (const m of d.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.own = 1; }", ['m.own']],
+  ];
+  for (const [label, src, expected] of cases) {
+    assert.deepEqual(gateHits(src), expected, `${label}: this shape MUST fire the trigger gate`);
+  }
+});
+
+test('MOVERLIFETIMETRIGGER fire drill — NEGATIVE: legitimate mover work, comparisons, comments and unrelated bindings never fire it', () => {
+  const clean = [
+    ['the five real HEAD sites, verbatim in shape', "for (const m of d.movers) if (m.base) m.el.style.transform = 'translateX(' + m.base + 'px)';"],
+    ['a multi-write braced body — the :701 shape', "for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }"],
+    ['a `===` comparison on a member — the :617 shape, live at HEAD', "for (const m of cur.movers) m.el.style.transform = (m.base === 0 ? a : b);"],
+    ['a `!==` comparison', "for (const m of cur.movers) { if (m.base !== 0) m.el.style.transition = ''; }"],
+    ['a `>=` comparison, which must not read as a compound assign', "for (const m of cur.movers) { if (m.base >= 0) m.el.style.willChange = ''; }"],
+    ['a `<=` comparison', "for (const m of cur.movers) { if (m.base <= 0) m.el.style.willChange = ''; }"],
+    ['an ARROW inside the body — `=>` is not an assignment', 'for (const m of cur.movers) m.el.style.transform = f(() => m.base);'],
+    ['a deeper write through .el', "for (const m of d.movers) { m.el.dataset.k = 'v'; }"],
+    ['a mover-member write inside a LINE COMMENT', "for (const m of d.movers) { // m.own = 'x' would be the defect\n  m.el.style.transform = 't'; }"],
+    ['a mover-member write inside a BLOCK COMMENT', "for (const m of d.movers) { /* m.own = 'x' */ m.el.style.transform = 't'; }"],
+    ['a mover-member write inside a STRING', "for (const m of d.movers) { m.el.style.transform = \"m.own = 1\"; }"],
+    // ⭐ The scoping control. js/app.js binds `m` to a <meta> element at :2900 and to an array at
+    // :2902; a file-wide identifier rule would have fired on both.
+    ['an UNRELATED binding of the same name outside any movers loop', "for (const m of d.movers) m.el.style.transform = 't';\nconst m = document.querySelector('meta'); m.content = 'x';"],
+    ['the SEAM mover inside the adapter, which is MOVERSHAPE\'s subject and not this gate\'s', 'const toMover = (m) => ({ el: m.element, base: baseOf(m.slot) });'],
+    ['construction of the list itself — a member of the SESSION, not of a mover', 'd.movers = [toMover(a), toMover(b)];\nd.movers.push(toMover(c));'],
+  ];
+  for (const [label, src] of clean) {
+    assert.deepEqual(gateHits(src), [],
+      `${label}: this is legitimate work and MUST NOT fire. A gate that reddens on correct code `
+      + 'gets switched off, and then the trigger it exists to catch arrives with nothing watching.');
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════

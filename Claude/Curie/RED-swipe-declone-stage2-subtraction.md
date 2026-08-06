@@ -34,6 +34,7 @@ before the build opened — the same reading every completed campaign's Curie ar
 10. Round 2's N2, closed — the same blind spot, one step further (2026-08-05)
 11. Round 2's N5, closed — two vacuous assertions and two dead helpers deleted (2026-08-05)
 12. N1's narrowing, absorbed into the cell and the registry (2026-08-06)
+13. `MOVERLIFETIMETRIGGER` — the deferral given something that fires (2026-08-06)
 
 ---
 
@@ -717,6 +718,123 @@ Nothing reddens that should not, and nothing that should redden has stopped: the
 mutants all still bite, `0 uncaught / 0 unapplied / 0 stale flags`, no `*.mutbak` or `*.sgbak`.
 Suite **884 / 883 pass / 0 fail / 1 skip**, unchanged — the change is comment text. No
 build-number bump: `test/` and `tools/` only.
+
+---
+
+## 13. `MOVERLIFETIMETRIGGER` — the deferral given something that fires (2026-08-06)
+
+§12 closed with a caveat of my own: *an owner, a trigger and a consumer written in prose are still
+prose; the risk in this deferral is follow-through, not reasoning.* This builds the gate for that
+caveat. Authored against HEAD `d661957`. §14's deferred work is untouched and the freeze is not
+added — this is the thing that will make that work land on time, not the work.
+
+**Where it lives.** `test/swipe-declone-stage2-subtraction.test.js`, immediately after the
+`MOVERSHAPE` block, as one gate plus two fire-drill tests. Beside the claim it defends rather than
+in a file of its own, so a reader of the narrowed cell meets the deferral — and so it reuses the
+`scanBalanced` state machine the cell already owns. Plan §10's own argument decided that: two
+ad-hoc scanners double the surface a silent scanner defect can hide on, and this file has been bitten
+by exactly that defect twice.
+
+### The discriminator, and why this one
+
+§14 states the trigger checkably: *the next change that writes to a member of `d.movers` outside
+`toMover`.* Verified at HEAD before designing anything — every site that touches a mover writes
+`m.el.style.…`, the ELEMENT's style two levels deep (`js/app.js:557`, `:578`, `:604`, `:617`,
+`:701`, plus a `cur.movers[0].el` read at `:1083`), and there are **zero** member writes. That is
+why the audit's counterexample was line-neutral and shipped uncaught. So:
+
+> **an assignment whose left-hand side TERMINATES AT DEPTH 1 on a mover-rooted expression.**
+
+`m.own = x` and `m.el = x` fire; `m.el.style.transform = x` does not. Structural, not a text pin —
+renaming the binding, reordering or reformatting the loops, or adding another `m.el.style.…` line
+all stay green, because none changes the depth an assignment lands at. That matters: `M1WRITERSET`
+pins by source text and is right to, but a text pin on a *scheduled trigger* would redden on
+innocuous edits for however many stages pass before the trigger arrives, and be switched off first.
+
+⛔ **Bindings are scoped to their own loop body, and that was MEASURED as necessary rather than
+chosen.** `js/app.js` binds the identifier `m` to three different things: the SEAM mover inside
+`toMover` (`:541` — legitimate, and `MOVERSHAPE`'s subject, not this gate's), the production movers
+in the five iteration sites, and two unrelated locals (`:2900` a `<meta>` element, `:2902` an
+array). A file-wide identifier rule would have fired on all three. I checked that before writing
+the rule, and it is what decided the design.
+
+**Three clauses**, the third being §14's "neither part is sound alone" made mechanical:
+
+1. **Inventory** — every `.movers` usage must classify into a known form, else the gate refuses to
+   report green and says its own inventory is incomplete. Without this the gate could go green
+   because a new form walked past its patterns — the false-clean this campaign keeps paying for.
+2. **The rule** — no depth-1 member write, by `for..of` binding, by callback binding, or by direct
+   `.movers[n].prop =` with no binding at all.
+3. **The two halves** — the `Object.freeze(` wrapper exists **iff** the source assertion pins it
+   **iff** a mutant deleting it is registered. Checked in both directions, so it is green today for
+   a stated reason rather than vacuously, and the pin cannot be written against a wrapper that is
+   not there.
+
+### Executed — red then green, on the real file, at whole-suite scope
+
+| Phase | Suite | Result |
+|---|---|---|
+| Counterexample applied (`m.own = 'borrowed-real'` inside the real `:557` loop, line-neutral) | 887 | **1 fail — `MOVERLIFETIMETRIGGER` and nothing else** |
+| Restored (`md5sum -c` OK, `js/app.js` absent from `git status`) | 887 | 886 pass, **0 fail**, 1 skip |
+
+The failure names the site and the line and states what is now owed. ⭐ The single-failure count is
+the load-bearing number: the same counterexample previously shipped **uncaught across the entire
+suite**, and it is now caught by exactly one cell with clean attribution.
+
+### The false-positive surface — three found by execution, two of them mine
+
+⚖️ A gate that fires on legitimate work gets switched off; this project has lost gates that way
+three times. The drill is 10 positive controls and 14 negative ones, and the negative list is the
+longer of the two deliberately. **Three false positives were found by running it, not by reading:**
+
+1. **The inventory guard fired on its own first run** — `c.movers.outgoing` is the SEAM
+   Construction's mover MAP (members `{element, ownership, slot}`), a different object from the
+   production array two lines away. Classified as its own form. This is the guard earning its keep
+   rather than being decorative: the gate's patterns would otherwise have walked past it silently.
+2. **`Object.freeze(` alone matched FIVE unrelated registered mutants** (`js/swipe.js` freezing the
+   decorations list and the construction plan), so clause 3 reddened at HEAD on correct work.
+   Narrowed to co-occurrence with the `toMover` binding. `Object.freeze(` is a common construct;
+   only its pairing with the adapter identifies §14's wrapper.
+3. **A mover-member write inside a STRING fired the rule** — and every one of these loops sits
+   beside debug logging built out of mover fields, so this is one log line away, not hypothetical.
+   `codeOnly` now blanks string literals as well as comments.
+
+And one **false negative**, found while designing the drill before the drill existed: `m.base += 1`
+mutates a member exactly as `m.base = 1` does, and an operator check accepting only a bare `=`
+walked past it. The compound-assignment set is now enumerated — with `<` and `>` deliberately
+ABSENT, because `>=`/`<=` are comparisons while `>>=`/`<<=` are assignments, and adding the bare
+angle brackets "for symmetry" would fire on every `if (m.base >= 0)`.
+
+⭐ **The negative controls are not invented shapes.** Every row is either live in `js/app.js` today
+(the `:701` multi-write body, the `:617` `m.base === 0` comparison, the `:541` seam adapter, the
+`:542-543` construction) or one refactor away. The `===` exclusion in particular is a live control,
+not a hypothetical one.
+
+**Registry-wide false-positive check.** Rather than assume, I derived every registered mutant whose
+`from`/`to` mentions `movers` or `toMover` — twelve of them (`#17`, `#24`, `#32`, `#98`, `S2-23`,
+`S2-33`…`S2-39`) — and swept exactly those. **The new gate fired on ZERO**, and all twelve are
+still caught by their own cells with unchanged counts: `0 uncaught, 0 unapplied, 0 stale flags`.
+A mutant in the mover neighbourhood does not trip it; only the trigger shape does.
+
+### What happens when the wrapper legitimately lands
+
+Clause 3 flips from *demanding the trigger be honoured* to *demanding the two halves be complete*:
+the freeze without the pin fails ("the file is non-strict, so the freeze silences the write rather
+than throwing"), and the pin without the freeze fails ("pins a wrapper that is not there"). §10's
+`ADAPTER_DECL` anchor also stops matching when the wrapper lands, so the emitted-key cell's own
+fixture-sanity assertion reddens — the reader detecting rot, working as designed, exactly as §14
+predicts. Three registrations anchor that line and are re-anchored in the same commit.
+
+### Result
+
+Suite **887 / 886 pass / 0 fail / 1 skip** (884 before; +1 gate, +2 drills). No `*.mutbak` or
+`*.sgbak`; `js/app.js` restored byte-identically and absent from `git status`. No build-number
+bump: `test/` only.
+
+⚠️ **What this gate does NOT claim**, stated so a later audit does not over-read it: it is a
+TEXTUAL bound on `js/app.js`, the one file that builds and animates `d.movers`. It is not a proof
+that no code path anywhere can attach a key to a recorded mover. That proof is §14's two-part
+design; this makes it land on time rather than substituting for it.
 
 ---
 
