@@ -109,6 +109,13 @@ function defaultSteps() {
     // Reading is what fails here; executing is what caught it. Same family as the citation
     // check above: a record other records point into, breaking silently.
     ['board-ids', [join(ROOT, 'tools', 'hooks', 'board-id-unique-check.mjs')]],
+    // A row whose NEXT ACTION hands a decision to the user while its BLOCKER says nothing is
+    // blocking it: the two cells contradict, and the row reads as tracked and moving when it is
+    // really parked on a person who was never told they were holding it. Measured 2026-08-06:
+    // a row naming an owner, blocker "none", next action "ask the user whether to pursue" — for
+    // a routing the scheme's own table settles. The rule: if you are waiting on the user, the
+    // user IS the blocker; name them and this is silent. If you are not, make the call.
+    ['board-rows', [join(ROOT, 'tools', 'hooks', 'board-row-blocker-check.mjs')]],
   ];
 }
 
