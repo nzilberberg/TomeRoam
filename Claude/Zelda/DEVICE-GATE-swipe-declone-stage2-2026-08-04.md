@@ -28,6 +28,56 @@ better answer, because it does not depend on the user's collection growing.
 **Gesture / Observable / Source for item 5 are unchanged** — they are recorded at item 5 below and
 remain runnable the moment a qualifying list exists.
 
+### Item 5 — NARROWED by bench, 2026-08-05. Still not PASS.
+
+`tools/bench-virtual-swipe.mjs` (+ `.page.js`) now drives item 5's gestures in headless Blink at
+375×812 against a **synthetic 900-book / 900-author library with a 700-book author page**, seeded
+through `Store`. It takes the `>600` branch **by volume, with `pb_forceVirtual` written `'0'`** —
+the branch a real device takes — and asserts the largest model exceeded 600, so it cannot pass on a
+sub-threshold fixture. ⚠️ Volume rather than the flag because the user has already reported
+reproducing a defect *"with windowed browse off"* and called the flag-as-substitute assumption false.
+
+**Executed, 18 gestures per run** (all four of item 1's gestures, both directions, commit and abort,
+across three routes: windowed page on one end, on **both** ends, and scrolled 60% into the model):
+
+| Run | Fire drill | Largest model | Result |
+|---|---|---|---|
+| Volume, flag off | fired | 900 | **0 violations** |
+| Flag on, 100-item library | fired | 100 | 0 violations |
+| ≤600 control, flag off | could not fire | 0 | **18 VACUOUS**, 0 behavioural violations |
+
+Fewest rows visible at any instant of a slide: **7** at the top of Books/Authors, **6** on the author
+page, **9** scrolled deep — never 0. Landed pages carried 19 realized rows of 900 at the top, 31 deep.
+Every abort landed on its source page, every commit elsewhere, exactly one page composited at rest,
+none left `.parked`. The ≤600 control is the differential a deletion pass wants — the same gestures on
+the classic branch behave the same, so nothing measured is windowed-specific.
+
+**WHAT THIS CLOSES:** row presence during the slide, landing per item 1, and no empty-then-fill reveal
+— on Blink.
+
+⛔ **WHAT IT DOES NOT, and why item 5 is NOT marked PASS:** it reads **DOM geometry, not paint** — a
+laid-out row box is not proof the row painted or its cover decoded — and it runs **desktop Blink under
+emulation, so it says nothing about iOS WebKit**, which is the engine that drops decoded covers and
+the whole reason the parking machinery exists. Also untested: real touch input, real timing (`d.vx` is
+pinned at 0, so flick handling and frame pacing are unexercised), the A–Z strip, and Home-scroll
+survival. **Item 5 remains device-owed for paint on iOS** and closes only when a qualifying list
+exists on the user's device — or when a WebKit bench does.
+
+⭐ **Four findings from building it, each of which would have made a naive bench report a false pass:**
+`.skrow` carries the class `book` (`js/browse.js:92`), so counting `.book` scores a page of grey
+shimmer bars as a full page — *the exact failure item 5 names*; `.browselist` has `padding-right: 34px`
+(`css/app.css:460`) for the A–Z gutter, so a page-box-scoped row check reports 4 false violations on
+every correct back-drag; a gesture that never arms scores as a clean abort; and `js/net.js`'s backoff
+poll calls `Browse.clearCache()` mid-drag on an unreachable server (`js/app.js:3033`), which presents
+as a destination sliding in as a 9-row skeleton — real app behaviour, not a windowed defect.
+
+⭐⭐ **The observer changed the observed.** Reading every page's rect per touchmove forces a layout;
+`d.vx` only updates when a move lands >8 ms after the last (`js/app.js:580`), so on the deep-scrolled
+route a 12 px synthetic step read as **1.3 px/ms — over `FLICK_V = 0.4`** — and a 25%-of-width drag
+**committed as a flick**, failing three aborts while the other two routes passed. The instrument was
+turning aborts into commits. The fix is the gate's own instruction to users: hold still a beat before
+lifting. Recorded because any future bench sampling per-move inherits it.
+
 ---
 
 Filed by Zelda, 2026-08-04. **Status: PASS — all six items, run on build `2026-08-03.306`.**
