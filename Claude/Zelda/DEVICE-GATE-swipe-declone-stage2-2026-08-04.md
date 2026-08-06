@@ -1,5 +1,35 @@
 # Device gate — swipe de-clone Stage 2 (`PLAN-swipe-declone.md` §13 step 10b)
 
+---
+
+## ⭐ STEP 7 RE-CONFIRM AFTER THE SUBTRACTION — 2026-08-05, build `2026-08-05.2`
+
+Run again after the subtraction pass deleted twelve items of dead machinery from `js/app.js` and
+`js/nav.js`. This is the **re-confirm**, distinct from the 2026-08-04 pass below which cleared the
+de-clone itself. A deletion pass is checked for what **stopped** working, not for anything new.
+
+> *"1-4 pass. 6 passes. I dont have a list over 600 items so cant test. defer"* — the user.
+
+- **Items 1, 2, 3, 4: PASS** — browse↔browse commit and abort on long and short lists; no jump at
+  drag start; scroll surviving a trip to Home; the A–Z strip through both drag kinds.
+- **Item 6: PASS** — all four cross-screen transitions, committed and aborted.
+- **Item 5: DEFERRED — NOT TESTED, and not a pass.** The user has no library list exceeding
+  `FULL_RENDER_MAX = 600` (`js/virtuallist.js:33`), so the windowed-rendering path has no fixture on
+  their device. ⛔ Do not record this as cleared, and do not let a later reader infer it from "the
+  device gate passed": past 600 items the app renders through a **different code path**, and that
+  path is the one this item exists to exercise.
+
+**Consequence, stated so it is not rediscovered.** The subtraction is device-confirmed on every path
+the user's library can reach. The virtualized path is confirmed only by the suite and by
+`test/browse-virtual.test.js` — jsdom, therefore no layout and no paint. Closing item 5 needs either
+a library that crosses the threshold or a bench with a synthetic one. The second is cheap and is the
+better answer, because it does not depend on the user's collection growing.
+
+**Gesture / Observable / Source for item 5 are unchanged** — they are recorded at item 5 below and
+remain runnable the moment a qualifying list exists.
+
+---
+
 Filed by Zelda, 2026-08-04. **Status: PASS — all six items, run on build `2026-08-03.306`.**
 
 > *"All six pass."* — the user, 2026-08-04.
