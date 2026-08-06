@@ -436,8 +436,14 @@ justification does not survive reading it.
 **Compatibility (U10).** ⚠️ There is **no** surviving key-completeness cell to migrate — the `F1a-L3`
 cell that pinned `toMover`'s key set was **deleted in step 10** (`test/swipe-stage5-residuals.test.js:80-86`
 retains only its retirement note), on the correct ground that its fixture required a built pane.
-`MOVERSHAPE` is therefore a **new cell**, and its layer is chosen accordingly: the app harness over a
-real gesture, because the fake-env construction layer never executes `toMover`. The nearest survivor,
+`MOVERSHAPE` is therefore a **new cell**, and it spans two layers: **a source scan over the one
+`toMover` expression, which carries the headline key-set claim**, plus the app harness over a real
+gesture for the seam read set and for the `base` half — the fake-env construction layer never executes
+`toMover` at all, and the app harness cannot observe `d.movers`, which is module-private (§10, §13
+decision 20). ⚠️ **This sentence said "the app harness over a real gesture" alone until 2026-08-06**,
+which was the round-1 specification and was superseded at step 5 when that fixture was found not to be
+constructible; it is corrected here with §10's row under decision 16, because a stale layer claim is
+true, checkable and incomplete, which is the failure mode that survives. The nearest survivor,
 `test/swipe-construction.test.js`'s `F1.1`, asserts the *external* mover does not emit the production
 keys — a different subject, kept, with a wording correction where it names `own` as a production key.
 `js/nav.js`'s `resetSwipeStyles` loses a parameter; `test/np-hidden-writer-set.test.js`
