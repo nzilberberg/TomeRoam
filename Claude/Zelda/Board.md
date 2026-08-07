@@ -38,11 +38,14 @@ conversation that produced it. It carries the spine, the next action, the open i
   applied `734b393`, no round 3 owed); the adversary's §17 step-2 strike DONE (`d0201d7`, **HELD
   STONE**) — struck blind, and U1 is resolved by execution rather than by a third reading. §17
   **step 3, the test author**, is the next campaign step.
-- **NEXT ACTION — the planner applies the navstack ROUND-2 temper (`decfbd9`), findings F9-F12.**
-  All eight round-1 dispositions HELD under independent re-derivation; nothing re-opened. No design
-  change — the reviewer sizes the repairs as one drive, one corrected claim, one corrected step and
-  one citation. The design and the standalone-and-first ruling have survived both rounds.
-  ⭐ Stage 7's per-range shifts `0/0/0/+11/+16` are now CONFIRMED by the reviewer, not just claimed.
+- **NEXT ACTION — navstack plan review ROUND 3, dispatched**, scoped to the F9-F12 dispositions only
+  and expected to close the plan if they hold. Round-2 temper applied at `7d44127` (plan only;
+  registry still 152 at HEAD, so 161 stays a build declaration). The design and the
+  standalone-and-first ruling have survived all three rounds.
+  ⭐ Stage 7's per-range shifts `0/0/0/+11/+16` are CONFIRMED by the reviewer, not merely claimed.
+- ⚠️ **Three rounds on a one-function fix.** Each round found real Structural defects and none
+  re-opened settled ground, so the rounds were earned — but `T-TOOL3` is the standing reason two of
+  them were needed at all.
 - ⚠️ **Stage 7 owes a PER-RANGE re-measure once the navstack slice lands, never a constant shift.**
   The plan now states `0, 0, 0, +11, +16` across stage 7's five ranges, **superseding round 1's
   `+4`/`+8`** — the numbers moved because the temper changed the prescribed edit text. Round 2 is
