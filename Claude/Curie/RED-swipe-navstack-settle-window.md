@@ -11,11 +11,13 @@ Suite file: `test/swipe-navstack-settle.test.js`.
 
 Verdict: **RED_SUITE_READY**.
 
-**This record covers two authoring rounds over the same suite file.** Sections 1–8 are the original
+**This record covers three authoring rounds over the same suite file.** Sections 1–8 are the original
 red suite (12 red cells + 7 live), measured at `aa69953` and built green at `8acbdff`; every count in
 them is pinned to that HEAD and is not restated as current. **Section 9 is the post-review
 amendment's one added cell** — `NAVAPPLIES`'s abort-token clause, plan §13 step 9a — authored and
-measured at `c488677`.
+measured at `c488677`. **Section 10 is the post-audit round's one added cell** — `NAVAPPLIES`'s
+newNav clear clause with its precondition established, plan §17.5 item 1 — authored and measured at
+`26cb18a`.
 
 ---
 
@@ -30,6 +32,7 @@ measured at `c488677`.
 7. [Honest limits](#7-honest-limits)
 8. [How the measurements were taken](#8-how-the-measurements-were-taken)
 9. [Round 2 — the abort-token clause (plan §13 step 9a)](#9-round-2--the-abort-token-clause-plan-13-step-9a)
+10. [Round 3 — the newNav clear clause, precondition established (plan §17.5 item 1)](#10-round-3--the-newnav-clear-clause-precondition-established-plan-175-item-1)
 
 ---
 
@@ -474,7 +477,147 @@ is **936**.
 
 ---
 
-**Handoff:** the test author → **the builder** (plan §13 step 9b: remove the ONE remaining skip,
-drive it red, apply §4.1's three-arm token, register `NAVTOKEN-a`, re-stamp; and close the review's
-F2, F3, F4) → **the coverage auditor** (step 7). The suite is filed at
-`test/swipe-navstack-settle.test.js` and this record is its companion.
+## 10. Round 3 — the newNav clear clause, precondition established (plan §17.5 item 1)
+
+Date: 2026-08-07. Input HEAD for every measurement in this section: `26cb18a` (`main` ==
+`origin/main`, tree clean, no `*.mutbak`, `tools/mutate.mjs` holding **162** registrations, build
+`2026-08-05.4`). Commissioned by plan §17.5 item 1, which the plan's §17 ruling derived from
+`Claude/Mendeleev/AUDIT-swipe-navstack-settle-window-2026-08-07.md`.
+
+### 10.1 The defect this cell closes
+
+`NAVAPPLIES (newNav branch)` asserts that no forward gesture arms after a Now Playing → chapter-list
+commit, and the suite credits the assertion. Its drive reaches Now Playing through `#player` →
+`openNowPlaying` (`js/app.js:182`, `js/app.js:2751`) → `navTo`, and `navTo` empties `fwdStack` in the
+same statement (`js/app.js:141`). The clear inside the commit branch (`js/app.js:715`) therefore has
+nothing to clear on that drive, so the cell cannot fail: **the precondition it needs is never
+established.** The audit measured the consequence — deleting that clear reddens no behavioural cell
+anywhere in the suite.
+
+### 10.2 The cell
+
+One cell added to `test/swipe-navstack-settle.test.js`:
+`NAVAPPLIES (newNav branch, NON-EMPTY fwdStack) — a NP → chapter-list commit reached with forward
+history clears it, so no forward gesture arms after it (mutant NAVFWDCLEAR-a)`.
+
+Drive: plan §17.1 route A, shipped gestures only. Now Playing → chapter list (right-edge commit);
+chapter list → Now Playing (left-edge back commit, whose back branch pushes the chapter list onto
+`fwdStack`, `js/app.js:714`); Now Playing → chapter list again. The third commit reaches the `newNav`
+arm with `fwdStack` non-empty because that arm precedes the forward-replay arm on the right edge
+(`js/app.js:444` ahead of `js/app.js:445`).
+
+Oracle kind: **feature oracle** — the forward history the user can reach, executed and read as
+whether a shipped right-edge gesture goes live. No consistency oracle, no geometry.
+
+The precondition is **read, not assumed**: the back commit's settle line must report
+`commit back files→nowplaying nav=applied`, and on the back branch `nav=applied` is the app's own
+report that `fwdStack.push(navStack.pop())` ran.
+
+Status on shipped source: **GREEN**, no skip. It is a preservation cell of the same shape as the
+other three `NAVAPPLIES` stack cells, which carry no skip either; its red demonstration is under the
+mutant, not against HEAD.
+
+### 10.3 How the oracle was demonstrated able to FAIL, in the same run
+
+`fwdGestureArms(h, el)` is a boolean reader, and one that returned `false` unconditionally would
+green this cell forever. The **same function** is therefore run first at a state where a forward
+gesture must go live — home, with `fwdStack` holding `books` after a committed back-swipe — where it
+must read `true`, and then at the subject state where it must read `false`. One reader, one run, one
+value accepted and one rejected. Under `NAVFWDCLEAR-a` the run reaches the second reading, so the
+positive control is confirmed passing in the same execution that produces the failure.
+
+### 10.4 The acceptance split, REPRODUCED — not inherited from §17.2
+
+Plan §17.2 states a pre-measured acceptance split. It was re-run here from scratch on copies of the
+tracked tree outside the repo, control first, before the cell was authored. Three probe cells sharing
+one assertion — one at the empty-`fwdStack` state, one at route A's precondition, one at route B's:
+
+| Source | Probe result |
+|---|---|
+| Shipped `js/app.js` | **3 tests / 3 pass / 0 fail** |
+| W1 (`fwdStack.length = 0` deleted from the `newNav` commit branch) | **3 tests / 1 pass / 2 fail** — the empty-`fwdStack` probe passes; both route probes fail on the arming assertion (`expected false, actual true`) |
+
+Route B's shipped book menu read `["Download book", "Manage downloads", "Reset Progress"]` and route
+A's settle lines read `#1 commit fwd nowplaying→files nav=applied` then
+`#2 commit back files→nowplaying nav=applied`, both matching §17.1's recorded readings.
+
+**The authored cell then reproduces the split against the shipped companion cell**, in one file, in
+one run:
+
+| Source | `test/swipe-navstack-settle.test.js` |
+|---|---|
+| Shipped | **21 tests / 21 pass / 0 fail / 0 skip** |
+| W1 | **21 / 20 / 1 / 0** — the ONE failure is the new cell, on the clause assertion (`expected false, actual true`); `NAVAPPLIES (newNav branch)`, the empty-`fwdStack` drive, PASSES in the same run |
+
+That is plan §17.2's acceptance bullet, met exactly.
+
+### 10.5 The audit's W1 suite figure, re-measured, and what changes
+
+Full-suite set subtraction on the same two copies:
+
+| Copy | Full suite |
+|---|---|
+| Clean, **before** this cell | **936 / 933 pass / 2 fail / 1 skip** |
+| Clean, **with** this cell | **937 / 934 / 2 / 1** |
+| W1, **with** this cell | **937 / 930 / 6 / 1** |
+
+The two failures common to every out-of-repo run are the git-only gates (`every hook script is
+EXECUTABLE in git's index`, `THE REAL ARTIFACT: this repo's own history passes the gate`), which
+cannot pass in a tree with no `.git`. Subtracting this cell, the W1 delta is the same three
+source-text gates the audit and §17.2 both name, so both figures are confirmed. **With this cell the
+W1 delta gains a fourth entry, and it is behavioural**: `swipe-navstack-settle.test.js` is not in
+`tools/mutation-sweep.mjs`'s `SOURCE_TEXT_GATES` list. `NAVFWDCLEAR-a` therefore now has exactly one
+behavioural killer, which is what plan §17.5's ordering exists to produce.
+
+### 10.6 The registration is DEFERRED to the builder, and this is why
+
+`NAVFWDCLEAR-a` is **not** registered in this commit.
+
+- Plan §17.5 assigns it as item 2, to the builder, explicitly after item 1.
+- `tools/mutate.mjs` is outside this seat's writable surface for this work.
+- **Measured, so the deferral costs nothing:** `test/mutation-anchors.test.js` reads **6 tests /
+  6 pass / 0 fail** in the repo with this cell in the tree. This commit adds no registration and
+  changes no source, so it cannot rot an anchor. The anchor collision §17.2 warns of —
+  `NAVSTALE-b` and `NAVAPPLIES-b` both carry the `newNav` commit line inside their multi-line `from`
+  anchors (`tools/mutate.mjs:363` and `:379`) — is a hazard the builder meets while writing the new
+  registration, not a state this commit produces.
+
+The transform the builder needs, measured to apply uniquely against `js/app.js` at `26cb18a`:
+`from` = the single line
+`          else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav`,
+`to` = the same line with the `fwdStack` clear removed.
+
+### 10.7 Honest limits of this round
+
+- **Nothing was measured about a device.** jsdom has no layout or paint, so no drag geometry —
+  threshold, velocity, committed distance — is modelled. The cell asserts call outcomes and state.
+- **`fwdStack` is never read directly.** Its state is inferred from two behavioural readings: the
+  app's own `nav=applied` settle line on the back branch, and whether a shipped gesture arms. Under
+  W1 the arming reads `true` after the commit, and the commit's only `fwdStack` write is the deleted
+  clear, so the stack is proven non-empty at the commit.
+- **Route B is measured but not shipped as a cell.** Plan §17.2 retains it as a second witness only;
+  its probe reproduced the split here and route A is the drive.
+- **Nothing in plan §17 was found wrong.** Every figure re-measured in 10.4 and 10.5 matched the
+  plan's, including the menu item list, the route-A settle lines, and the audit's W1 suite delta.
+- **This suite is not audited by its author.** The coverage audit is the auditor's.
+
+### 10.8 How this round's measurements were taken
+
+Control first in every case. The repo's `js/app.js` and `tools/mutate.mjs` were never written to:
+every transform ran on copies of the tracked tree (`git archive HEAD`) outside the repo, with
+`node_modules` reached by a directory junction, so no probe could write to the repo.
+`git status --porcelain` in the repo named only `test/swipe-navstack-settle.test.js` and this record
+before and after every probe, and no `*.mutbak` exists anywhere in the repo.
+**`tools/source-gate-sweep.mjs` was never imported, because importing it mutates `js/app.js`**;
+`tools/mutation-sweep.mjs` was not run. Every count above was read from the runner's own totals — a
+module whose CLI runs at import kills the runner and reports a green `# tests 1` for a file holding
+many, and the count is the only tell. This file's is **21**, and the repo suite's is **937**
+(936 pass, 0 fail, 1 skip).
+
+---
+
+**Handoff:** the test author → **the builder** (plan §17.5 item 2: register `NAVFWDCLEAR-a` in
+`tools/mutate.mjs`, registry **162 → 163**, using the transform in 10.6; run it foreground and
+individually; confirm no `*.mutbak`) → **the planner** (item 3: §9 dimension 4(a)'s newNav sub-cell
+moves from PARTIAL to SWEPT). The suite is filed at `test/swipe-navstack-settle.test.js` and this
+record is its companion.

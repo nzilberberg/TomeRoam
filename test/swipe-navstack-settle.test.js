@@ -613,6 +613,130 @@ test('NAVAPPLIES (newNav branch) — a clean NP → chapter-list forward commit 
   } finally { h.dispose(); }
 });
 
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// NAVAPPLIES — THE newNav CLEAR CLAUSE, WITH ITS PRECONDITION ESTABLISHED (plan §17.2, §17.5 item 1).
+//
+// WHY A SECOND newNav CELL. The cell above asserts the same outcome this one does — that no forward
+// gesture arms after a newNav commit — but its drive reaches Now Playing through `#player` →
+// openNowPlaying (js/app.js:182, js/app.js:2751) → navTo, and navTo empties fwdStack in the same
+// statement (js/app.js:141). The commit's own clear therefore runs with nothing to clear, and the
+// clause is CREDITED WITHOUT BEING TESTED: the coverage audit measured that deleting the clear from
+// the newNav commit branch reddens no behavioural cell anywhere in the suite
+// (Claude/Mendeleev/AUDIT-swipe-navstack-settle-window-2026-08-07.md, transform W1 — the three cells
+// it does redden all assert on the TEXT of js/app.js and all sit in the sweep's own
+// SOURCE_TEXT_GATES exclusion list). This cell supplies the missing PRECONDITION — a non-empty
+// fwdStack carried into the commit — which is what turns that assertion into an oracle.
+//
+// THE DRIVE (plan §17.1 route A; shipped gestures only, no test-only stack pokes). Now Playing →
+// chapter list, a right-edge commit; chapter list → Now Playing, a left-edge back commit whose back
+// branch pushes the chapter list onto fwdStack (js/app.js:714); Now Playing → chapter list again.
+// That third commit is the subject. It reaches the newNav arm with fwdStack non-empty because
+// begin() takes that arm on the right edge whenever Now Playing is current (js/app.js:444) and the
+// arm sits AHEAD of the general forward-replay arm (js/app.js:445) — a non-empty fwdStack is carried
+// into the commit rather than diverting the gesture into a different one.
+//
+// THE PRECONDITION IS READ, NOT ASSUMED. The back commit's settle line must report
+// `commit back files→nowplaying nav=applied`, and on the back branch `nav=applied` IS the report
+// that `fwdStack.push(navStack.pop())` ran (js/app.js:714). The fwdStack write is therefore taken
+// from the shipped debug channel rather than inferred from the drive's shape.
+//
+// ⛔ THE ORACLE IS DEMONSTRATED ABLE TO FAIL, IN THIS RUN. `fwdGestureArms` is a boolean reader, and
+// one that returned false unconditionally would green this cell forever — the same worthless
+// observable the abort-token cell below guards against. So the SAME function is run FIRST at a state
+// where a forward gesture MUST arm (home, with fwdStack holding `books` after a committed
+// back-swipe) and must read true there, then at the subject state where it must read false. One
+// reader, one run, one value accepted and one rejected.
+//
+// MUTANT: NAVFWDCLEAR-a — the fwdStack clear deleted from the newNav commit branch (js/app.js:715),
+// which is the audit's W1 transform exactly. MEASURED on copies of the tree outside the repo, at
+// HEAD 26cb18a: on shipped source this cell and the empty-fwdStack cell above both PASS; under
+// NAVFWDCLEAR-a this cell FAILS on the arming assertion (expected false, actual true) while the
+// empty-fwdStack cell still PASSES. The two drives are different states rather than a duplicated
+// one, and this cell cannot pass by matching everything. Registering the mutant is the builder's
+// (plan §17.5 item 2), and it must land after this cell or the sweep reports it UNCAUGHT.
+//
+// ⛔ jsdom HAS NO LAYOUT OR PAINT. Nothing here reads geometry: the landed screen comes from the
+// classes js/nav.js writes, the stack state from whether a shipped gesture arms, and the fwdStack
+// write from the settle line the app itself emits.
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * THE READER, shared by this cell's positive control and its subject assertion: does a right-edge
+ * forward gesture GO LIVE from `el`? A short outward drag with no velocity sample, so the gesture
+ * aborts below THRESH and the nav stacks are left exactly as they were.
+ */
+async function fwdGestureArms(h, el) {
+  const before = starts(h);
+  const rx = h.window.innerWidth - 2;
+  h.touch.start(rx, 300, el);
+  h.touch.move(rx - 80, 302);
+  const armed = starts(h) > before;
+  h.touch.end(rx - 80, 302); await ms(h); await fireSettle(h);
+  return armed;
+}
+
+test('NAVAPPLIES (newNav branch, NON-EMPTY fwdStack) — a NP → chapter-list commit reached with '
+  + 'forward history clears it, so no forward gesture arms after it (mutant NAVFWDCLEAR-a)',
+async () => {
+  const h = boot({ fakeTimers: true, realOptions: true });
+  try {
+    await ms(h);
+
+    // (1) THE READER'S POSITIVE CONTROL, before the subject exists. A committed back-swipe out of
+    // Books leaves fwdStack = [books], so a right-edge gesture MUST go live here.
+    h.tap('.navbtn[data-nav="books"]'); await ms(h);
+    await backCommit(h, addRow(h));
+    await fireSettle(h);
+    assert.equal(landed(h), 'home', 'control fixture: the setup back-swipe must land home, leaving fwdStack=[books]');
+    assert.equal(await fwdGestureArms(h, h.$('home')), true,
+      'the arming reader must be able to report TRUE: with fwdStack holding `books` a right-edge '
+      + 'gesture takes the forward-replay arm (js/app.js:445) and goes live. If this fails, every '
+      + 'false this reader returns below is vacuous and the cell proves nothing.');
+
+    // (2) Now Playing, through the shipped mini-player. openNowPlaying → navTo empties fwdStack.
+    const cover = h.document.querySelector('[data-book="bookA"] .covertap');
+    assert.ok(cover, 'fixture: a book tile must be present to start playback from');
+    cover.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await ms(h);
+    h.tap('#player'); await ms(h);
+    assert.equal(landed(h), 'nowplaying', 'fixture: Now Playing must be the current screen');
+
+    // (3) First NP → chapter-list commit. fwdStack is empty here — this is the state the existing
+    // newNav cell above already constructs, and it is NOT the subject.
+    await fwdCommit(h, h.$('nowplaying'));
+    await fireSettle(h);
+    assert.equal(landed(h), 'browse', 'fixture: the first NP → chapter-list commit lands the chapter list');
+
+    // (4) THE PRECONDITION. A committed back-swipe out of the chapter list runs the back branch,
+    // which pushes it onto fwdStack and leaves Now Playing current. Read from the settle line.
+    const beforeBack = settles(h).length;
+    await backCommit(h, addRow(h));
+    await fireSettle(h);
+    assert.equal(landed(h), 'nowplaying', 'the back commit must return to Now Playing');
+    assert.match(settles(h)[beforeBack] || '', /^#\d+ commit back files→nowplaying nav=applied/,
+      'THE PRECONDITION, read from the app\'s own settle line: on the back branch nav=applied IS the '
+      + 'report that fwdStack.push(navStack.pop()) ran, so fwdStack now holds the chapter list. '
+      + `Without it the commit below has nothing to clear and this cell is the one it replaces; got ${JSON.stringify(settles(h)[beforeBack])}`);
+
+    // (5) THE SUBJECT. The second NP → chapter-list commit runs the newNav arm with fwdStack
+    // NON-EMPTY, so its clear does real work.
+    const beforeFwd = settles(h).length;
+    await fwdCommit(h, h.$('nowplaying'));
+    await fireSettle(h);
+    assert.match(settles(h)[beforeFwd] || '', /^#\d+ commit fwd nowplaying→files nav=applied/,
+      `the subject gesture must be a committed, applied newNav forward; got ${JSON.stringify(settles(h)[beforeFwd])}`);
+    assert.equal(landed(h), 'browse', 'the newNav commit lands the chapter list in the browse host');
+
+    // (6) THE CLAUSE. A fresh forward navigation drops the forward history the user could have
+    // reached, so the very next right-edge gesture must not arm at all (js/app.js:446).
+    assert.equal(await fwdGestureArms(h, addRow(h)), false,
+      'the newNav commit must clear fwdStack even when it was NOT empty: the same reader that read '
+      + 'TRUE at step 1 must read false here. Under mutant NAVFWDCLEAR-a it reads true and the user\'s '
+      + 'next right-edge swipe carries them forward into a duplicate chapter list from a screen they '
+      + 'never backed out of.');
+  } finally { h.dispose(); }
+});
+
 test('NAVAPPLIES (abort) — an aborted gesture still mutates NEITHER stack', async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
