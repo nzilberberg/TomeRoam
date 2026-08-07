@@ -707,7 +707,7 @@
           && (cur.dir === 'back' ? navStack.length > 1
             : cur.newNav ? true
               : fwdStack[fwdStack.length - 1] === cur.dest);
-        if (window.PBDebug) PBDebug.log('SWIPE', `#${seq} ${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v} nav=${applies ? 'applied' : 'superseded'}`
+        if (window.PBDebug) PBDebug.log('SWIPE', `#${seq} ${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v} nav=${!commit ? 'abort' : applies ? 'applied' : 'superseded'}`
           + ` tgt=${tg && tg.isConnected ? 'live' : 'detached'}:${tgDesc} sid=${cur.id}`);
         for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }
         if (applies) {

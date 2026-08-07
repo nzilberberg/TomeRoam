@@ -171,13 +171,21 @@ listener stays on `window` until that session's own `drop()` fires (at latest it
 BOUNDED transient double-listener (at most one per concurrently-pending reveal), NOT the unbounded
 accumulation a missing removal would cause.
 
-**12. Normal completion behavior.** Commit: mutate the stack, applyScreen the destination,
-release panes after the paint barrier. Abort: restore the source; browse→browse re-renders the
-source into #browse; restore starting scroll. Both honor exactly-once finalize.
+**12. Normal completion behavior.** Commit: the stack mutation is conditional on the gesture's
+claim still holding (`applies` — `PLAN-swipe-navstack-settle-window.md` §5). When it holds,
+mutate the stack, applyScreen the destination, release panes after the paint barrier. When it
+does not (stack-superseded, item 13), the mutation is skipped and no new claim is asserted.
+Abort: restore the source; browse→browse re-renders the source into #browse; restore starting
+scroll. All three outcomes honor exactly-once finalize.
 
-**13. Recovery authority boundary.** The nav-stack mutation. PRE-stack failure → restore source
-+ starting scroll. POST-stack failure → render from the stack top + destination scroll (I18,
-§4.17). Do not restore a source beneath a stack that already names the destination.
+**13. Recovery authority boundary.** The nav-stack mutation, over three cases. PRE-stack failure
+→ restore source + starting scroll. POST-stack failure → render from the stack top + destination
+scroll (I18, §4.17). STACK-SUPERSEDED — `commit` true, `applies` false; a navigation inside the
+settle window invalidated the gesture's claim before the mutation ran (`PLAN-swipe-navstack-
+settle-window.md` §5) — → render from the stack top, write no scroll: neither the pre-gesture
+source scroll (a screen the user has left) nor the destination's default reset (would jump the
+newer screen back to its top). Do not restore a source beneath a stack that already names a
+destination the gesture did not choose.
 
 **14. Emergency disposal rules.** `begin()`'s hard reset disposes an ORPHAN pane (no owner)
 before arming, via the DOM-global `resetSwipeStyles` sweep. A pane-owning DRAGGING supersession

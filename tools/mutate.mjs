@@ -404,6 +404,14 @@ const MUTATIONS = [
     + 'window.scrollTo clause, MEASURED 0 → 1 recorded call)',
     from: '        else if (commit) applyScreen(dest, { render: false, resetScroll: false });   // stack-superseded',
     to:   '        else if (commit) { applyScreen(dest, { render: false, resetScroll: false }); window.scrollTo(0, cur.scroll0); }   // mutated: NAVRECONCILE-b' },
+  // ── PLAN-swipe-navstack-settle-window.md §16 F1/O3 — the post-review amendment's abort arm ──
+  { name: "NAVTOKEN-a: the settle line's nav= token loses its abort arm, so the two-arm ternary "
+    + "returns and every plain abort again reports a supersession that did not happen (-> NAVAPPLIES, "
+    + 'the abort-token clause — MEASURED: applying this to the amended source reproduces the shipped '
+    + '`js/app.js` at e80fcbe/8acbdff/c488677 byte-for-byte, so this mutant is the shipped defect '
+    + 'exactly and not an approximation of it)',
+    from: "nav=${!commit ? 'abort' : applies ? 'applied' : 'superseded'}`",
+    to:   "nav=${applies ? 'applied' : 'superseded'}`" },
   // DEFENCE IN DEPTH — each half alone was MEASURED insufficient, so both must go or
   // the sweep would wrongly report the guard as undefended.
   { name: 'swipe: duplicate-end defence removed, BOTH guards (-> I13 duplicate-end test)',

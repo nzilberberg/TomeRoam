@@ -670,7 +670,7 @@ test('NAVAPPLIES (abort) — an aborted gesture still mutates NEITHER stack', as
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 test('NAVAPPLIES (abort token) — an uninterfered ABORT reports nav=abort and NEVER a supersession, '
   + 'paired IN THE SAME RUN with an uninterfered commit reporting nav=applied',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     h.tap('.navbtn[data-nav="books"]'); await ms(h);
