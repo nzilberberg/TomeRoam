@@ -74,8 +74,18 @@ conversation that produced it. It carries the spine, the next action, the open i
   Mendeleev **ADEQUATE** (`c40bb10`). Manifest flipped to `COMPLETE`; **15 of 15 campaigns COMPLETE**.
   All 12 registrations swept foreground, each reddening its declared cell with no drift.
   ⚠️ **Shipped-UNVERIFIED on device** — the slice's gates are met, and no gate in it is a device gate.
-- **NEXT ACTION — the planner, on `T-NS-COV1`** (a credited cell that cannot fail), then **stage 7**,
-  which is now unblocked and owes its per-range re-measure `0/0/0/+11/+16`.
+- ✅ **`T-NS-COV1`'s ruling is RE-DERIVED BY EXECUTION** (`db49e86`) after a first pass that could
+  only read. **M1 CONFIRMED, not refuted:** both routes driven end-to-end on the real app, control
+  first, with the probe marker assembled at runtime. `fwdStack.length` at `js/app.js:715` before the
+  clear — route A: **0 then 1**; route B: **1**. So the clear is load-bearing.
+- ⭐⭐ **The redo bought a number the reading could not.** Deleting the clear reddens **ZERO
+  behavioural cells** — only 3 source-text gates, all already in `SOURCE_TEXT_GATES`. So
+  `NAVFWDCLEAR-a` registered today would report **UNCAUGHT**. And the precondition is pre-validated:
+  three probe cells with an identical assertion pass 3/3 on shipped source, while under the mutant
+  the empty-stack cell **passes** and both route cells **fail**. The cell design is proven before it
+  is authored.
+- **NEXT ACTION — the test author**, §17.5 item 1. Then **stage 7**, unblocked, still owing its
+  per-range re-measure `0/0/0/+11/+16`.
 - **15 campaigns now, not 14.** `Claude/Campaigns/swipe-navstack.json` is filed IN_PROGRESS with
   plan-review already passing and four gates owed. ⛔ It binds **no adversary gate** — the plan's
   §13 names none, and that sequence is what three rounds forged.
