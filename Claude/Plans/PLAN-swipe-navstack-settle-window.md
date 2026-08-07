@@ -12,7 +12,8 @@ Type: plan
   "blocking_questions":["NAVSTALE","NAVIDENT","NAVAPPLIES","NAVRECONCILE","NAVTOTAL","NAVPAIR"]} -->
 
 Status: **BUILT, CODE-REVIEWED AND COVERAGE-AUDITED. A POST-AUDIT COVERAGE RULING landed 2026-08-07
-(§17); ONE cell is owed to the test author and its registration to the builder.**
+(§17) and was RE-DERIVED BY EXECUTION the same day at HEAD `9825eac`; ONE cell is owed to the test
+author and its registration to the builder.**
 The slice was forged at plan-review round 3, built at `8acbdff` (build `2026-08-05.3`), reviewed at
 `Claude/Poirot/POIROT-swipe-navstack-settle-window-8acbdff.md` (verdict **PASS — fix-then-ship**),
 amended and rebuilt at `9506f3a` (build `2026-08-05.4`), and audited at
@@ -20,10 +21,11 @@ amended and rebuilt at `9506f3a` (build `2026-08-05.4`), and audited at
 cleared this plan's last campaign gate. **§17 exists because that audit returned ADEQUATE with one
 coverage question left open and both of its dispositions written out**: the `newNav` commit's
 *clears the forward stack* clause is credited by §9 dimension 4(a) and is measured unable to fail.
-§17 rules the state **production-reachable**, so the claim stands, the clause is a test-author gap
-rather than dead surface, and the cell that makes it able to fail is specified there. §17 also
-answers the audit's dimension-8 note. **It reverses no gate, re-opens no verdict and changes no
-source.** Next seats: **the test author** for §17's cell, then **the builder** for its registration.
+§17 **measures** the state production-reachable — both routes driven on the app harness — so the
+claim stands, the clause is a test-author gap rather than dead surface, and the cell that makes it
+able to fail is specified there and pre-measured satisfiable. §17 also answers the audit's
+dimension-8 note. **It reverses no gate, re-opens no verdict and changes no source.** Next seats:
+**the test author** for §17's cell, then **the builder** for its registration.
 
 **What this post-review amendment changes (2026-08-06), and why.** Three things, all of them
 consequences of one measured defect and one measured omission.
@@ -1074,14 +1076,57 @@ Commissioned by `Claude/Mendeleev/AUDIT-swipe-navstack-settle-window-2026-08-07.
 **ADEQUATE**, audited at `8e114e0`, filed at `c40bb10` — which cleared this plan's coverage gate and
 routed two open positions to the planner with both dispositions of each written out. This section
 rules on both. **It is a model correction over §9. It reverses no gate, re-opens no verdict, changes
-no source, no test and no registration, and adds no step to §13's sequence.** Written against HEAD
-`1c89fad`, build `2026-08-05.4`, registry **162**, suite **936 / 935 pass / 0 fail / 1 skip**.
+no source, no test and no registration, and adds no step to §13's sequence.**
 
-### 17.1 M1 — RULED: the state is PRODUCTION-REACHABLE, so the claim stands
+**Provenance, in two passes.** The ruling was first written on 2026-08-07 from shipped source alone,
+against HEAD `1c89fad`. It was **re-derived by EXECUTION the same day** against HEAD `9825eac`,
+build `2026-08-05.4`, registry **162** (counted by importing `tools/mutate.mjs`), suite in the repo
+**936 tests / 935 pass / 0 fail / 1 skip** (count read from the runner), tree clean, no `*.mutbak`
+anywhere. Every figure below was produced on copies of the tree at `9825eac` **outside the repo**,
+control first, `node_modules` reached by a directory junction; the untransformed control copy reads
+**936 / 933 pass / 2 fail / 1 skip**, the two failures being the git-only gates that cannot pass in
+a tree with no `.git`. No probe wrote to the repo: `git status --porcelain` named nothing before or
+after. `tools/source-gate-sweep.mjs` was never imported, because importing it mutates `js/app.js`.
+
+### 17.1 M1 — MEASURED: the state is PRODUCTION-REACHABLE, so the claim stands
 
 The question is whether a `newNav` commit can ever run with `fwdStack` non-empty. If it cannot, the
 `fwdStack.length = 0` at `js/app.js:715` performs no work in any reachable state and §9 dimension
-4(a) must stop claiming it. **It can.**
+4(a) must stop claiming it. **It can, and both routes below were driven.**
+
+**THE MEASUREMENT.** Routes A and B were driven end to end on `test/app-harness.js`, through the
+real touch listeners and the real shipped click handlers, against the real `js/app.js`. A
+probe-only log statement inside the `newNav` commit arm reported `fwdStack.length` **at that exact
+statement, before the clear**; its marker name is assembled at runtime from parts and never appears
+as a literal, because `test/swipe-model.test.js` echoes `js/app.js` source text back and a literal
+marker would draw a false hit from it. Readings:
+
+| Route | `newNav` arm executions | `fwdStack.length` at `js/app.js:715`, in order |
+|---|---|---|
+| A (three gestures) | 2 | **0**, then **1** |
+| B (taps) | 1 | **1** |
+
+The settle lines the same run recorded, read from the debug channel: route A emitted
+`#1 commit fwd nowplaying→files nav=applied`, `#2 commit back files→nowplaying nav=applied`,
+`#3 commit fwd nowplaying→files nav=applied`; route B emitted one
+`#1 commit fwd nowplaying→files nav=applied`. **A second, UNINSTRUMENTED drive of both routes
+confirms the clear does work**: after each route's final `newNav` commit a right-edge forward
+gesture does **not** arm on shipped source, and **does** arm once `fwdStack.length = 0` is deleted
+(17.2).
+
+**Route B's shipped controls, as executed.** `#npDl` long-press (a `pointerdown` followed by the
+500 ms timer) opened the book menu, whose items read `["Download book", "Manage downloads",
+"Reset Progress"]`; clicking *Manage downloads* landed `downloads`; the ‹ Back returned
+`nowplaying` with `fwdStack` holding it. **Honest scope on that one control:** the harness stubs
+`DownloadsScreen.init`, so the Downloads screen's own back button has no wiring under test. The
+drive uses `#dgBack`, which `js/app.js:3107` binds unconditionally to `closeSub` — the same
+function `js/app.js:3088` hands the Downloads screen as `onBack`. Same callee, different button.
+**And jsdom has no layout or paint**, so drag geometry — threshold, velocity, committed distance —
+is not modelled here; that is the standing scope of every gesture cell in this suite, not a
+narrowing peculiar to this drive.
+
+**The mechanism the measurement confirms** is recorded below, because a reading that agrees with an
+execution is worth keeping and a reading that disagrees with one is the fault report.
 
 **Why a non-empty `fwdStack` does not divert the gesture.** `begin()` takes the `newNav` arm on the
 right edge whenever the current screen is Now Playing (`js/app.js:444`), and that arm sits **ahead
@@ -1106,13 +1151,13 @@ Two enumerations over the six stack writers §5 already establishes settle it.
    `js/app.js:179`) pushes a settings sub onto Now Playing — the menu Now Playing opens on a
    long-press (`js/nowplaying-screen.js:106`).
 
-**Route A — three shipped gestures, no taps.** Open Now Playing; commit the right-edge Now
+**Route A — three shipped gestures, no taps. DRIVEN.** Open Now Playing; commit the right-edge Now
 Playing → chapter-list swipe (`navStack` gains the chapter list, `fwdStack` empty); commit a
 left-edge back swipe from that chapter list, whose back branch pushes it onto `fwdStack` and leaves
 Now Playing current (`js/app.js:714`); commit the right-edge Now Playing → chapter-list swipe again.
 That third commit runs `js/app.js:715` with `fwdStack` non-empty.
 
-**Route B — taps only.** From Now Playing, long-press → book menu → *Manage downloads* (pushes
+**Route B — taps only. DRIVEN.** From Now Playing, long-press → book menu → *Manage downloads* (pushes
 `downloads` over Now Playing and clears `fwdStack`); then that screen's own ‹ Back
 (`onBack: closeSub`, `js/app.js:3088`), where `closeSub` reads the entry below as the Now Playing
 descriptor — not the Options hub — and falls through to `goBack` (`js/app.js:177`), leaving
@@ -1126,12 +1171,14 @@ route A, the Downloads settings screen on route B — from a screen they never b
 that gesture does not arm at all (`js/app.js:446`). The clause §9 dimension 4(a) credits is therefore
 a real promise about the forward history the user can reach.
 
-**This agrees with the audit's measurement rather than disputing it.** The drive that carries the
-cell today reaches Now Playing through `navTo` (`#player` → `openNowPlaying`, `js/app.js:182` and
-`js/app.js:2751`), which clears `fwdStack` in the same statement — which is precisely why the audit
-measured the branch reached once in 936 tests with `fwdStack` already empty, and why deleting the
-clear reddens no behavioural cell. The audit measured the suite; this rules on the app. The state is
-one further gesture, or one tap pair, away from the state the suite already constructs.
+**This agrees with the audit's measurement rather than disputing it, and the audit's figure was
+RE-MEASURED here.** The drive that carries the cell today reaches Now Playing through `navTo`
+(`#player` → `openNowPlaying`, `js/app.js:182` and `js/app.js:2751`), which clears `fwdStack` in the
+same statement — which is precisely why the audit measured the branch reached once in 936 tests with
+`fwdStack` already empty. The instrumented route-A run reproduces exactly that: its **first**
+`newNav` commit reads `fwdStack.length` **0**, the state the suite already constructs, and only the
+**third** gesture reads **1**. The audit measured the suite; this measures the app. The state is one
+further gesture, or one tap pair, away.
 
 ### 17.2 The cell that belongs in the bare half — specified, not authored
 
@@ -1140,8 +1187,10 @@ word for word; what is missing is the **precondition**, because the assertion is
 `fwdStack` had something in it to clear. §9's coverage block carries it.
 
 - **Drive.** Route A above, on the app harness, through the real touch listeners against the real
-  `js/app.js`. Route B is the alternative if three committed gestures cannot be sequenced there; it
-  reaches `closeSub` the way §1's drive B′ already does.
+  `js/app.js`. **MEASURED buildable**: three committed gestures sequence there, so route A is the
+  drive and route B is not needed. Route B is retained as a second witness only; it reaches
+  `closeSub` through `#dgBack` the way §1's drive B′ already does, because the harness stubs
+  `DownloadsScreen.init` and the Downloads screen's own back button therefore has no wiring.
 - **Assertion.** Unchanged: a right-edge forward gesture attempted after the commit does **not** arm.
 - **Oracle kind.** A feature oracle — the forward history the user can reach — not a consistency
   oracle. No cell may assert only that the system does the same thing twice.
@@ -1152,9 +1201,47 @@ word for word; what is missing is the **precondition**, because the assertion is
   this drive; the existing empty-`fwdStack` newNav drive stays **green** in the same run, so the
   cell cannot pass by matching everything and the two drives are shown to be different states rather
   than a duplicated one. Read the suite count from the runner. Confirm no `*.mutbak` afterwards.
+- **The acceptance was PRE-MEASURED on probes outside the repo, so the test author inherits a
+  known-satisfiable specification rather than a hope.** Three probe cells with the assertion above —
+  one at the empty-`fwdStack` state, one at route A's precondition state, one at route B's — were
+  run against a clean copy and against a copy carrying W1. On shipped source **3 / 3 pass**. Under
+  W1 the empty-`fwdStack` cell **passes** and both precondition cells **fail**: exactly the
+  pass/fail split this bullet requires, and the demonstration that the split is produced by the
+  state and not by the assertion text, which is identical in all three.
 - **What is NOT owed.** No source change, no build stamp, no device gate, no plan-review round.
 
+**The audit's W1 figure, RE-MEASURED here by set subtraction.** The full suite was run on a clean
+copy and on a copy carrying W1, at the same tree, in the same way. Clean: **936 tests / 933 pass /
+2 fail / 1 skip**. W1: **936 / 930 / 5 / 1**. The delta is exactly three cells, and every one of
+them asserts on the TEXT of `js/app.js` rather than on behaviour:
+
+| Cell that reddens under W1 | File | Kind |
+|---|---|---|
+| `every mutation anchor still matches the source it targets` | `test/mutation-anchors.test.js` | source-text gate |
+| `the committed model is exactly what the generator produces` | `test/swipe-model.test.js` | generated-artifact gate |
+| `the navStack append census is unchanged, so reachability still derives` | `test/swipe-model.test.js` | source-census gate |
+
+The two failures common to both copies are the git-only gates. **All three delta cells are already
+named in `tools/mutation-sweep.mjs`'s own `SOURCE_TEXT_GATES` exclusion list**, so the sweep does
+not count them. **The consequence, and it is the reason §17.5's items are ordered as they are:
+registered today, `NAVFWDCLEAR-a` would be reported UNCAUGHT by the sweep — it has zero behavioural
+killers.** Item 1 must land before item 2, and item 2's sweep result is then the acceptance rather
+than a formality. The anchor gate reddens because two shipped registrations, `NAVSTALE-b` and
+`NAVAPPLIES-b`, anchor on source text containing the `fwdStack.length = 0;` fragment; that is an
+anchor collision the builder will meet while registering, not a coverage signal.
+
 ### 17.3 N1 — RULED: dimension 8's browse→browse pair owes NO cell, and the reason is recorded
+
+**The load-bearing half of this ruling was MEASURED, not read.** A superseded browse→browse settle
+was driven on the harness — a committed back-swipe out of Books, with a bottom-nav *Authors* tap
+inside the settle window — and the argument `Browse.endHold` actually received was recorded through
+the harness's own recorder. One `endHold` call per gesture in both runs. Readings: the superseded
+drive emits `#1 commit back books→home nav=superseded` and `endHold(current, "authors")` — the
+screen the newer navigation reached, not the gesture's destination `home` and not its source
+`books`. Its control, the identical gesture with no mid-settle tap, emits
+`#1 commit back books→home nav=applied` and `endHold(current, "home")` — the gesture's own
+destination. The two readings differ, so the oracle is shown able to distinguish the two states
+rather than reporting one value regardless.
 
 The reason is written into §9 dimension 8's own cell so it travels with the matrix rather than living
 only here: which browse page is left showing at the end of **any** gesture is decided at exactly one
@@ -1172,24 +1259,41 @@ do not already kill. **Falsifier, named so the ruling is checkable:** a shipped 
 which browse page shows without passing `currentDesc()` through that one call re-opens the position,
 and a cell becomes owed.
 
-### 17.4 How this ruling was derived, and what falsifies it
+### 17.4 What is measured, what remains unexecuted, and what falsifies it
 
-**Stated plainly because this campaign has paid for it fifteen times: 17.1 and 17.3 are derived from
-shipped source, not executed.** The planning seat that produced them held read tools only — no suite
-run, no mutation, no harness drive was taken here, and not one of the audit's figures was
-re-measured. Every claim above is a citation to source at HEAD `1c89fad`.
+**What is measured.** 17.1's reachability claim, on both routes, by driving them; 17.2's acceptance
+split, by applying W1 to a copy and reading which probe cells redden; the audit's W1 suite figure,
+by set subtraction over a control and a transformed copy; 17.3's `endHold` claim, by reading the
+argument the recorder captured on a superseded settle and on its control. The named failure mode —
+*the precondition drive cannot be built through shipped controls* — **did not occur**; three
+committed gestures sequence on the harness, and route B's tap pair does too.
 
-The ruling is therefore built so the execution that settles it is the cell's own acceptance, and the
-two failure modes are named in advance:
+**What remains unexecuted, stated so nothing here reads as more than it is.**
 
-- **If the precondition drive cannot be built through shipped controls**, that is a measurement
-  against 17.1. The disposition flips to the audit's second arm: §9 dimension 4(a) stops claiming the
-  clause, and `fwdStack.length = 0` at `js/app.js:715` becomes a dead-surface lead for the code
-  reviewer. It returns here, to the planner, and is not resolved by weakening the cell.
+1. **17.3's negative half.** That a settle-window browse→browse cell *would distinguish no mutant
+   the registered killers do not already kill* is a claim over the whole mutant space. No sweep was
+   run against it. What was measured is the positive half: the one statement that decides the shown
+   page receives the newer navigation's screen.
+2. **The audit's bearing-set figure for `LANDEDPAGESHOWS`** (`test/swipe-declone-stage2-browse.test.js:324`
+   and `:361`) was not re-measured; it is carried from the audit.
+3. **Device behaviour.** Routes A and B are plain sequences of completed gestures and taps with no
+   settle-window race, so §12's 340 ms residual does not apply to them — but jsdom has no layout or
+   paint, so nothing here measures drag geometry on a device.
+
+**Falsifiers, named so the ruling stays checkable.**
+
+- **If a future change makes the `newNav` arm unreachable with a non-empty `fwdStack`** — for
+  instance by clearing `fwdStack` on entry to Now Playing — 17.1 is falsified and the disposition
+  flips to the audit's second arm: §9 dimension 4(a) stops claiming the clause, and
+  `fwdStack.length = 0` at `js/app.js:715` becomes a dead-surface lead for the code reviewer. It
+  returns here, to the planner, and is not resolved by weakening the cell.
 - **The outcome that must NOT be produced is the middle one** — the clause credited by a drive whose
   `fwdStack` is empty. That is the state the audit found, and a cell that cannot fail is worse than a
   missing cell because the suite credits it. A drive that reaches `js/app.js:715` with `fwdStack`
-  empty has not been written as specified, whatever it asserts.
+  empty has not been written as specified, whatever it asserts. The probe measurement above is what
+  makes this checkable rather than exhortative: the same assertion is green at that state under W1.
+- **17.3's falsifier is unchanged**: a shipped writer that changes which browse page shows without
+  passing `currentDesc()` through `Browse.endHold` re-opens the position, and a cell becomes owed.
 
 ### 17.5 Owed work
 
@@ -1199,5 +1303,18 @@ two failure modes are named in advance:
 | 2 | Register `NAVFWDCLEAR-a` in `tools/mutate.mjs` (registry **162 → 163**), run it foreground and individually, confirm no `*.mutbak` | the builder | owed, after item 1 |
 | 3 | §9 dimension 4(a)'s newNav sub-cell moves from PARTIAL to SWEPT once item 1 is measured red under item 2 | the planner | owed, after item 2 |
 
+**Two measured facts the owners inherit, so neither is re-derived.** Item 1's specification is
+known satisfiable: the drive is buildable on the harness and its assertion is green at the
+empty-`fwdStack` state and red at both precondition states under W1 (17.2). Item 2's ordering is
+load-bearing rather than tidy: run out of order, the sweep reports `NAVFWDCLEAR-a` **UNCAUGHT**,
+because every cell W1 reddens today sits in the sweep's own `SOURCE_TEXT_GATES` exclusion list.
+Item 2 also meets an anchor collision — `NAVSTALE-b` and `NAVAPPLIES-b` both anchor on text
+containing `fwdStack.length = 0;`.
+
 Nothing above blocks the slice, which is built, reviewed, audited ADEQUATE and shipped at build
 `2026-08-05.4`.
+
+**Status of §17 itself: RE-DERIVED BY EXECUTION, 2026-08-07, at HEAD `9825eac`.** 17.1 is measured
+on both routes; 17.2's acceptance split and the audit's W1 suite figure are measured; 17.3's
+`endHold` claim is measured on a superseded settle and its control. 17.4 carries what remains
+unexecuted. No source, test, registration or gate verdict changed in this pass.
