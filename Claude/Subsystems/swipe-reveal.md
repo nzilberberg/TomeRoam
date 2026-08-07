@@ -173,10 +173,14 @@ accumulation a missing removal would cause.
 
 **12. Normal completion behavior.** Commit: the stack mutation is conditional on the gesture's
 claim still holding (`applies` — `PLAN-swipe-navstack-settle-window.md` §5). When it holds,
-mutate the stack, applyScreen the destination, release panes after the paint barrier. When it
-does not (stack-superseded, item 13), the mutation is skipped and no new claim is asserted.
-Abort: restore the source; browse→browse re-renders the source into #browse; restore starting
-scroll. All three outcomes honor exactly-once finalize.
+mutate the stack and applyScreen the destination with no re-render (`render: false`) — the
+destination is already rendered live, so this reconciles rather than repaints; no pane machinery
+is involved (there is no owned pane on this path, and no pane-release code exists anywhere in
+`js/`). When it does not (stack-superseded, item 13), the mutation is skipped and no new claim is
+asserted, and the destination is reconciled the same no-render way. Abort: applyScreen the
+destination with no re-render — the source element was never overwritten, so there is nothing to
+restore (PLAN-swipe-declone.md Invariant D3) — and restore starting scroll. All three outcomes
+honor exactly-once finalize.
 
 **13. Recovery authority boundary.** The nav-stack mutation, over three cases. PRE-stack failure
 → restore source + starting scroll. POST-stack failure → render from the stack top + destination

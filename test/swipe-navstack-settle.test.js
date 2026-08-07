@@ -22,11 +22,10 @@
 // a cell.
 //
 // STATE OF THE SKIPS. The twelve cells authored red against the pre-guard source were driven red
-// and built green at `8acbdff`, and carry no skip now. ONE skip remains: NAVAPPLIES's abort-token
-// clause, authored at the post-review amendment against `c488677` and RED there because the shipped
-// token is a two-arm ternary over `applies` alone. It is lifted by the amendment build (plan §13
-// step 9b). The other four NAVAPPLIES cells carry no skip: they are the preservation cells and are
-// green before and after every build in this slice.
+// and built green at `8acbdff`, and carry no skip now. The thirteenth, NAVAPPLIES's abort-token
+// clause, was authored at the post-review amendment against `c488677` and RED there because the
+// shipped token was a two-arm ternary over `applies` alone; it was lifted by the amendment build
+// (plan §13 step 9b, `9506f3a`). NO SKIP remains in this file.
 //
 // ⛔ THE THROW ORACLE, AND WHY IT IS INSTRUMENTED (plan §12). `h.clock.advance` SWALLOWS a throwing
 // timer callback (test/app-harness.js: `try { next.fn(); } catch { }`), so a bare "runFinalize did
@@ -53,9 +52,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { ROOT } = require('./dom-fixture.js');
 const { boot } = require('./app-harness.js');
-
-const SKIP = 'SKIP-PENDING-BUILD — RED until the settle line\'s `nav=` token gains its THIRD arm '
-  + '(PLAN-swipe-navstack-settle-window.md §4.1, §13 step 9b). Remove this skip to drive it red.';
 
 // REAL wall clock, captured BEFORE boot() patches setTimeout. app.js move() only resamples velocity
 // after >8ms of real time, so synthetic moves fired back-to-back leave vx holding the outward flick

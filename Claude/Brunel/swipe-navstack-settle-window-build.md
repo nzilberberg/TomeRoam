@@ -79,7 +79,7 @@ anywhere after each restore, confirmed after the last one.**
 
 | Mutant | Designated cell | Result |
 |---|---|---|
-| `NAVAPPLIES-a` (re-anchor) | I11 abort test (`test/swipe-invariants.test.js`) | **Fires on the intended assertion** (stack mutated on abort). **CORRECTED (Poirot F3, re-measured at the post-review amendment, §11.6):** the collateral stated here as "also reddens `I7` and `NAVRECONCILE` control 2" was wrong. MEASURED over the whole suite on a copy outside the repo: **14** further behavioural cells redden alongside I11 — `I7`, `NAVRECONCILE` control 2, `NAVAPPLIES` (abort), `PEERFINALIZE` ×2, `NPRECONCILE` ×2, `HOMESTAYSLIVE`, `LANDEDPAGESHOWS` ×3, `PS`, `ABORT` — because the re-anchor moves the mutation onto the line gating BOTH the stack write and edit 2's reconcile, replacing the whole abort reconcile path, not just the stack write. Not one of the nine; the coverage claim (I11 fires) survives, the enumeration above it does not. |
+| `NAVAPPLIES-a` (re-anchor) | I11 abort test (`test/swipe-invariants.test.js`) | **Fires on the intended assertion** (stack mutated on abort). **CORRECTED (Poirot F3, re-measured at the post-review amendment, §11.6; list corrected in place per Poirot F1 on `9506f3a`, §12):** the collateral stated here as "also reddens `I7` and `NAVRECONCILE` control 2" was wrong. MEASURED over the whole suite on a copy outside the repo: **14** further behavioural cells redden alongside I11 — `I7`, `NAVRECONCILE` control 2, `NAVAPPLIES` (abort), `NAVAPPLIES` (abort token), `PEERFINALIZE` ×2, `NPRECONCILE` ×2, `HOMESTAYSLIVE`, `LANDEDPAGESHOWS` ×3, `PS`, `ABORT` — because the re-anchor moves the mutation onto the line gating BOTH the stack write and edit 2's reconcile, replacing the whole abort reconcile path, not just the stack write. Not one of the nine; the coverage claim (I11 fires) survives, the enumeration above it does not. |
 | `NAVSTALE-a` | `NAVIDENT` (I, S) + `NAVRECONCILE`, NOT `NAVSTALE` | Matches plan exactly, extra witness as documented. |
 | `NAVIDENT-a` | `NAVIDENT` drive I only, not S | Matches plan exactly. |
 | `NAVTOTAL-a` | `NAVTOTAL` (source) only, no behavioural cell | Matches plan exactly. |
@@ -338,3 +338,62 @@ confirmed unchanged), `build.json`/`sw.js`/`js/debug.js`/`index.html` (stamp),
 casebooks, the board, the manifest and the decision log were read, not written.
 
 **Next owner: the coverage auditor** (plan §13 step 7).
+
+## 12. Fix-then-ship pass on Poirot's `9506f3a` review — 2026-08-07
+
+Input HEAD: `0845590`, `main` == `origin/main`, tree clean, no `*.mutbak`, 162 registrations, suite
+936 / 935 pass / 0 fail / 1 skipped. Review: `Claude/Poirot/POIROT-swipe-navstack-settle-window-9506f3a.md`,
+verdict PASS — fix-then-ship. Three findings, F1–F3, all owned by this seat.
+
+### 12.1 F1 — §6's `NAVAPPLIES-a` row, list corrected in place
+
+Re-measured myself, control first, on a copy outside the repo (`node_modules` copied in — a bare
+`git archive` copy has no `node_modules` and mass-fails on `Cannot find module 'jsdom'`, which is
+not a defect in the source):
+
+```
+control: 936 / 933 pass / 2 fail / 1 skipped   (the 2 git-only gates)
+mutant (index 22, NAVAPPLIES-a): 936 / 916 pass / 19 fail / 1 skipped
+```
+
+19 fails − 4 noise floor (2 git-only + `every mutation anchor still matches…` + `the no-mutbak CLI
+exits 0…`) = **15** behavioural cells, matching Poirot's figure exactly. §6's declared "14 further"
+(alongside designated cell I11) was already right; its list was one short, missing `NAVAPPLIES
+(abort token)` — the cell the whole amendment exists to add. §6's row corrected in place to name
+all fourteen. Mutant restored; no `*.mutbak` anywhere afterward.
+
+### 12.2 F2 — `swipe-reveal.md` item 12 rewritten to current truth
+
+Re-derived from source, not from the prior sentence. `grep -rn "pane" js/` returns no executable
+occurrence, only comments (`js/swipe.js:245`, `js/app.js:387-388`); no pane-release code exists.
+The abort branch (`js/app.js:1054`) is `applyScreen(dest, { render: false, resetScroll: false })` —
+no re-render, per `js/app.js:721-722`'s own comment on the branch's removal. Item 12 rewritten to
+state the current no-render reconcile on both commit and abort paths and to drop both retired
+clauses. Item 13 read and confirmed still correct; not touched. §2's certification of item 12 is
+the planner's and is not touched here.
+
+### 12.3 F3 — dead `SKIP` constant and stale header removed
+
+`test/swipe-navstack-settle.test.js:57-58`'s unused `const SKIP` deleted (zero `{ skip: SKIP }`
+sites remain in the file, confirmed by grep). The "STATE OF THE SKIPS" header (`:24-29`) rewritten
+to state that the thirteenth cell's skip was lifted at `9506f3a` and none remain. No assertion,
+oracle, or drive touched.
+
+### 12.4 Suite after all three fixes
+
+```
+node --test "test/*.test.js"   →   936 tests / 935 pass / 0 fail / 1 skipped
+```
+
+Same count as input HEAD — these are records/test-comment changes only. No shipped asset
+(`js/`, `css/`, `index.html`, `sw.js`, `build.json`) was touched, so no build-number bump applies.
+
+### 12.5 Scope discipline
+
+Writable set respected: `Claude/Subsystems/swipe-reveal.md` (item 12 only), this build log (§6's
+row, this section), `test/swipe-navstack-settle.test.js` (the dead constant and header only). The
+plan, both Poirot casebooks, the campaign manifest, the board and the decision log were read, not
+written.
+
+**Next owner: unchanged — the coverage auditor** (plan §13 step 7); this pass does not advance the
+campaign.
