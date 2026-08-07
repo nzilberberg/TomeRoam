@@ -5,7 +5,8 @@
 // WHAT THIS SLICE PROMISES (plan §5). A committed gesture's nav-stack mutation is applied only
 // while the nav stacks still describe the navigation that gesture planned. When they do not, the
 // gesture mutates NEITHER stack, the settle reconciles whatever the stacks now name and writes no
-// scroll, and the SWIPE settle line reports `nav=applied` or `nav=superseded`.
+// scroll, and the SWIPE settle line reports the outcome that actually occurred — `nav=applied`,
+// `nav=superseded` or `nav=abort` (plan §5's three-row table is the token's whole value domain).
 //
 // THE DEFECT. A swipe that has been released SETTLES for up to 340ms, and the rest of the UI is
 // live inside that window. `runFinalize`'s commit branch (js/app.js:702-706) mutates the stacks
@@ -13,13 +14,19 @@
 // two stack-READING branches that throws (`Cannot read properties of undefined (reading 'v')`); on
 // the identity-preserving interferences it silently mutates the wrong entry.
 //
-// ⚠️ SKIP-PENDING-BUILD. Every cell below marked `{ skip: SKIP }` is authored RED against current
-// HEAD and committed skipped so the pre-commit battery (which runs the whole suite; this project
-// does not use --no-verify) stays green. Each was CONFIRMED RED with the skip removed — the exact
-// failing assertion per cell is recorded in Claude/Curie/RED-swipe-navstack-settle-window.md. THE
-// BUILDER REMOVES THE SKIPS FIRST, drives them red, then builds to green. Do NOT weaken an
-// assertion to green a cell. NAVAPPLIES carries NO skip: it is the preservation cell and is green
-// at HEAD and after the build alike.
+// ⚠️ SKIP-PENDING-BUILD. A cell marked `{ skip: SKIP }` is authored RED against current HEAD and
+// committed skipped so the pre-commit battery (which runs the whole suite; this project does not
+// use --no-verify) stays green. Each is CONFIRMED RED with the skip removed — the exact failing
+// assertion per cell is recorded in Claude/Curie/RED-swipe-navstack-settle-window.md. THE BUILDER
+// REMOVES THE SKIP FIRST, drives it red, then builds to green. Do NOT weaken an assertion to green
+// a cell.
+//
+// STATE OF THE SKIPS. The twelve cells authored red against the pre-guard source were driven red
+// and built green at `8acbdff`, and carry no skip now. ONE skip remains: NAVAPPLIES's abort-token
+// clause, authored at the post-review amendment against `c488677` and RED there because the shipped
+// token is a two-arm ternary over `applies` alone. It is lifted by the amendment build (plan §13
+// step 9b). The other four NAVAPPLIES cells carry no skip: they are the preservation cells and are
+// green before and after every build in this slice.
 //
 // ⛔ THE THROW ORACLE, AND WHY IT IS INSTRUMENTED (plan §12). `h.clock.advance` SWALLOWS a throwing
 // timer callback (test/app-harness.js: `try { next.fn(); } catch { }`), so a bare "runFinalize did
@@ -47,8 +54,8 @@ const path = require('node:path');
 const { ROOT } = require('./dom-fixture.js');
 const { boot } = require('./app-harness.js');
 
-const SKIP = 'SKIP-PENDING-BUILD — RED until the settle-window staleness guard is built '
-  + '(PLAN-swipe-navstack-settle-window.md §4.1). Remove this skip to drive it red.';
+const SKIP = 'SKIP-PENDING-BUILD — RED until the settle line\'s `nav=` token gains its THIRD arm '
+  + '(PLAN-swipe-navstack-settle-window.md §4.1, §13 step 9b). Remove this skip to drive it red.';
 
 // REAL wall clock, captured BEFORE boot() patches setTimeout. app.js move() only resamples velocity
 // after >8ms of real time, so synthetic moves fired back-to-back leave vx holding the outward flick
@@ -137,11 +144,23 @@ async function fwdCommit(h, el) {
 /** Fire the 340ms settle fallback and let its continuations run. */
 async function fireSettle(h) { await h.clock.advance(400); await ms(h); }
 
-/** The `nav=` token of the Nth settle line, or null when the line carries none (HEAD). */
+/**
+ * The `nav=` token of the Nth settle line: its LITERAL value, `null` when the line exists but
+ * carries no token, and a named marker when there is no such line — so "absent", "no line" and
+ * "wrong value" are three distinguishable readings rather than one silent pass.
+ *
+ * ⚠️ IT CAPTURES WHATEVER VALUE IS THERE. It does NOT match an enumeration of the values expected
+ * today. An earlier form matched `(applied|superseded)` only, which reports `null` for any value
+ * added later — indistinguishable from "the line carries no token" — and which would have made the
+ * abort-token clause below UNSATISFIABLE by the very build that fixes it, because that build emits
+ * a value the reader did not list. The token's value domain is decided by TWO bindings, `commit`
+ * and `applies` (plan §9 dimension 4(c)); a reader that enumerates the values of one of them
+ * repeats, in the oracle, the exact defect the clause exists to catch.
+ */
 function navToken(h, n) {
   const line = settles(h)[n];
   if (line == null) return '(no settle line)';
-  const m = /\bnav=(applied|superseded)\b/.exec(line);
+  const m = /\bnav=(\S+)/.exec(line);
   return m ? m[1] : null;
 }
 
@@ -520,16 +539,21 @@ async () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
-// NAVAPPLIES (§9, integration) — THE PRESERVATION CELL. An UNINTERFERED committed gesture still
-// mutates the stacks exactly as it does today on all three commit branches, and an ABORTED gesture
-// still mutates neither. NO SKIP: this is green at HEAD and must stay green through the build. It
-// is what stops the guard being written so tight that the ordinary case stops working.
+// NAVAPPLIES (§9, integration) — THE PRESERVATION CELL, PLUS THE TOKEN CLAUSE. An UNINTERFERED
+// committed gesture still mutates the stacks exactly as it does today on all three commit branches,
+// and an ABORTED gesture still mutates neither. The four stack cells carry NO SKIP: they are green
+// at HEAD and must stay green through every build in this slice. They are what stops the guard
+// being written so tight that the ordinary case stops working.
+//
+// AND the settle line the gesture emits must NAME THE OUTCOME THAT ACTUALLY OCCURRED. That is the
+// fifth cell below, and it is the one that carries a skip.
 //
 // MUTANTS: NAVAPPLIES-a is the RE-ANCHORED existing registration `swipe: abort mutates the nav
 // stack like a commit`, whose killing cell stays the existing I11 abort cell — NOT this one.
 // NAVAPPLIES-b (the whole conditional block deleted, so a clean commit mutates nothing) is expected
 // to redden HERE: with no mutation the settle reconciles the source screen and every landed-screen
-// assertion below flips.
+// assertion below flips. NAVTOKEN-a (the abort arm deleted from the settle line's token, so the
+// two-arm ternary returns) is expected to redden the token cell alone.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 test('NAVAPPLIES (back branch) — a clean back commit still moves navStack\'s top onto fwdStack: it '
   + 'lands home AND leaves a forward gesture armable', async () => {
@@ -611,6 +635,81 @@ test('NAVAPPLIES (abort) — an aborted gesture still mutates NEITHER stack', as
     await fireSettle(h);
     assert.equal(landed(h), 'home',
       'the abort must not have popped navStack — the next back commit must still reach home');
+  } finally { h.dispose(); }
+});
+
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// NAVAPPLIES — THE ABORT-TOKEN CLAUSE (§9 contract claim (c), dimension 4(c), and dimension 10's
+// device-log oracle half). Added at the post-review amendment (plan §13 step 9a, §16 F1/O3).
+//
+// THE CLAIM. The `nav=` token names what the gesture did to the nav stacks and why, and that has
+// THREE outcomes, not two (plan §5's table is the whole domain): the gesture wrote them (`applied`);
+// it was entitled to write and a newer navigation invalidated the claim (`superseded`); or it never
+// claimed the right at all, because the user did not complete the gesture (`abort`). `superseded` is
+// defined for `commit === true` ALONE.
+//
+// RED AT `c488677`, MEASURED by running this cell with the skip removed: the shipped token is
+// `nav=${applies ? 'applied' : 'superseded'}` and `applies` is `commit && …`, so it is false on an
+// abort BY CONSTRUCTION and an uninterfered abort's settle line reads `nav=superseded` — a
+// supersession that did not happen, on roughly half of every device log's settle lines. The build
+// that greens this is §4.1's three-arm token, plan §13 step 9b.
+//
+// ⛔ THE PAIRING IS THE ORACLE'S PROOF OF NON-BLINDNESS, AND IT IS WHY BOTH DRIVES ARE IN ONE RUN.
+// A cell asserting only "the abort line reads abort" could be satisfied by a token that read
+// `abort` on every settle line, commit and abort alike — the same class of worthless observable the
+// two-arm token already is, inverted. So the COMMIT half is read FIRST, by the SAME reader, from
+// the SAME recorded debug channel, in the SAME booted app: at `c488677` that half PASSES (`applied`)
+// and the abort half then FAILS (`superseded`, required `abort`). One reader, one run, one value
+// accepted and one rejected — which is the demonstration that this oracle can fail, rather than an
+// assertion that it can.
+//
+// MUTANT: NAVTOKEN-a (plan §9) deletes the abort arm, returning the two-arm ternary. MEASURED, not
+// read: applied to §4.1's amended source it reproduces `c488677`'s (and `e80fcbe`'s, and
+// `8acbdff`'s — one identical blob) `js/app.js` BYTE FOR BYTE, so the registered mutant is the
+// shipped defect exactly and not an approximation of it.
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+test('NAVAPPLIES (abort token) — an uninterfered ABORT reports nav=abort and NEVER a supersession, '
+  + 'paired IN THE SAME RUN with an uninterfered commit reporting nav=applied',
+{ skip: SKIP }, async () => {
+  const h = boot({ fakeTimers: true, realOptions: true });
+  try {
+    h.tap('.navbtn[data-nav="books"]'); await ms(h);
+
+    // (1) An uninterfered ABORT: released back inside THRESH, and NO mid-settle input of any kind.
+    const el = addRow(h);
+    h.touch.start(10, 300, el);
+    h.touch.move(80, 302); await realSleep(14);
+    h.touch.move(200, 304); await realSleep(14);
+    h.touch.move(30, 304); await realSleep(14);
+    h.touch.end(30, 304); await ms(h);
+    await fireSettle(h);
+
+    // (2) An uninterfered COMMIT, in the SAME run, read by the SAME oracle.
+    await backCommit(h, addRow(h));
+    await fireSettle(h);
+
+    // Fixture first: the two settle lines must really be an abort and a commit, read from the
+    // statement's OWN `${commit ? 'commit' : 'abort'}` interpolation and not from the token under
+    // test — otherwise a token failure and a drive that did not do what it was asked look alike.
+    assert.match(settles(h)[0] || '', /^#\d+ abort back /,
+      `fixture: settle line 0 must be the ABORT — got ${JSON.stringify(settles(h)[0])}`);
+    assert.match(settles(h)[1] || '', /^#\d+ commit back /,
+      `fixture: settle line 1 must be the COMMIT — got ${JSON.stringify(settles(h)[1])}`);
+    assert.equal(landed(h), 'home',
+      'fixture: the commit was uninterfered, so it landed its own destination and its claim held');
+
+    // The PAIRED half, read first. Green at c488677 and after the build alike.
+    assert.equal(navToken(h, 1), 'applied',
+      'an uninterfered commit whose claim still held must report nav=applied — this half is the '
+      + 'proof the reader is not blind, so if it fails the abort assertion below proves nothing '
+      + `(line: ${JSON.stringify(settles(h)[1])})`);
+
+    // The clause. RED at c488677: this reads `superseded`.
+    assert.equal(navToken(h, 0), 'abort',
+      'an ABORTED gesture never held a claim on the nav stacks for a newer navigation to '
+      + 'invalidate, so its settle line must report nav=abort. `superseded` here is a supersession '
+      + 'that did not happen, and plan §5 defines that word for a commit ALONE (mutant NAVTOKEN-a '
+      + `deletes exactly this arm; line: ${JSON.stringify(settles(h)[0])})`);
   } finally { h.dispose(); }
 });
 

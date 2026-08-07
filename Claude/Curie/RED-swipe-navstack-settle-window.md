@@ -11,6 +11,12 @@ Suite file: `test/swipe-navstack-settle.test.js`.
 
 Verdict: **RED_SUITE_READY**.
 
+**This record covers two authoring rounds over the same suite file.** Sections 1–8 are the original
+red suite (12 red cells + 7 live), measured at `aa69953` and built green at `8acbdff`; every count in
+them is pinned to that HEAD and is not restated as current. **Section 9 is the post-review
+amendment's one added cell** — `NAVAPPLIES`'s abort-token clause, plan §13 step 9a — authored and
+measured at `c488677`.
+
 ---
 
 ## Index
@@ -23,6 +29,7 @@ Verdict: **RED_SUITE_READY**.
 6. [Coverage-Model findings routed to the planner](#6-coverage-model-findings-routed-to-the-planner)
 7. [Honest limits](#7-honest-limits)
 8. [How the measurements were taken](#8-how-the-measurements-were-taken)
+9. [Round 2 — the abort-token clause (plan §13 step 9a)](#9-round-2--the-abort-token-clause-plan-13-step-9a)
 
 ---
 
@@ -86,9 +93,12 @@ the arming assertion taken after one further navigation; drive B′ on the throw
 recorded against its control's `0`); drives I and S on the landed screen; drive T on the landed
 screen (`playback`, control `general`).
 
-`NAVAPPLIES` carries **no skip by design**. It is the preservation cell — the thing that stops the
-guard being written so tight the ordinary case breaks — so it must be live from the moment it lands,
-not from the moment the build opens.
+`NAVAPPLIES`'s four **stack** cells carry **no skip by design**. They are the preservation cells —
+the thing that stops the guard being written so tight the ordinary case breaks — so they must be live
+from the moment they land, not from the moment the build opens.
+
+**This table is the round-1 suite and stops at cell 19.** Cell 20, `NAVAPPLIES`'s abort-token clause,
+was added at the post-review amendment and is §9.
 
 ---
 
@@ -142,10 +152,16 @@ Proven able to fail: it returns six distinct values across the builds measured �
 ### 3.3 The `nav=` token oracle
 
 Read off the real SWIPE settle line through the harness's `PBDebug` recorder. `navToken()` returns
-`null` when the line exists but carries no token, so "absent" and "wrong value" are distinguishable
-and the HEAD red is `expected 'applied', actual null` rather than a silent pass. Proven able to
-fail: it reads `applied` on every control and `superseded` on every interfering drive under the
-prescribed build, and `null` at HEAD.
+`null` when the line exists but carries no token and a named marker when there is no such line, so
+"absent", "no line" and "wrong value" are three distinguishable readings rather than one silent
+pass. Proven able to fail: it reads `applied` on every control and `superseded` on every interfering
+drive under the prescribed build, and `null` at `aa69953`, where no token exists at all.
+
+⛔ **A DEFECT IN THIS ORACLE, found by measurement at round 2 and corrected there (§9.4).** The
+round-1 reader matched `/\bnav=(applied|superseded)\b/` — an *enumeration of the values expected
+then*. Any value added later reads `null`, which is indistinguishable from "the line carries no
+token", so the sentence above was false outside those two values. The reader now captures whatever
+value is present.
 
 ### 3.4 The two scroll oracles — the ONLY ones the red-first demonstration does not prove
 
@@ -307,6 +323,158 @@ count is the only tell, and this file's is 19.
 
 ---
 
-**Handoff:** the test author → **the builder** (remove the skips first, drive them red, then build
-to green; then the coverage auditor). The suite is filed at
+---
+
+## 9. Round 2 — the abort-token clause (plan §13 step 9a)
+
+Authored 2026-08-06 against HEAD `c488677` (`main` == `origin/main`, tree clean, no `*.mutbak`,
+`tools/mutate.mjs` holding **161** registrations, build `2026-08-05.3`). Repo suite before this
+cell: **935 tests / 934 pass / 0 fail / 1 skip**, count read from the runner.
+
+`js/app.js` is **one identical blob at `8acbdff`, `e80fcbe` and `c488677`** — `git diff` between any
+pair names no change to it — so the plan's "red on `e80fcbe`" and this record's "red at `c488677`"
+are statements about the same source.
+
+### 9.1 The cell
+
+One test added to the `NAVAPPLIES` block of `test/swipe-navstack-settle.test.js`:
+
+> `NAVAPPLIES (abort token) — an uninterfered ABORT reports nav=abort and NEVER a supersession,
+> paired IN THE SAME RUN with an uninterfered commit reporting nav=applied`
+
+It realizes §9's contract claim (c), dimension 4(c)'s third token value and dimension 10's device-log
+oracle half. It ships behind `SKIP-PENDING-BUILD`; the builder lifts the skip at step 9b.
+
+**§9's pairing requirement, and how it is satisfied.** The commit half is read **first**, by the
+**same** reader, from the **same** recorded debug channel, in the **same** booted app, before the
+abort half is read. A cell asserting only "the abort line reads `abort`" would be satisfied by a
+token that read `abort` on every settle line — the same class of worthless observable the shipped
+two-arm token is, inverted. Two fixture assertions run ahead of both, reading the statement's own
+`${commit ? 'commit' : 'abort'}` interpolation rather than the token under test, so a token failure
+and a drive that did not do what it was asked cannot be confused.
+
+### 9.2 The symptom, driven and read — not inferred
+
+Counts read from the runner in every row.
+
+| Run | Source | Result |
+|---|---|---|
+| the one file, skip removed, in the repo | `c488677` | **20 tests / 19 pass / 1 fail / 0 skipped** |
+| the one file, skip removed, control copy outside the repo | `c488677` | **20 tests / 19 pass / 1 fail / 0 skipped** |
+| the one file, skip removed, copy with §4.1's three-arm token | amended | **20 tests / 20 pass / 0 fail / 0 skipped** |
+| whole suite, control copy outside the repo, skip removed | `c488677` | **936 / 932 pass / 3 fail / 1 skip** — the 2 git-only gates **+ this cell** |
+| whole suite, copy with §4.1's three-arm token, skip removed | amended | **936 / 933 pass / 2 fail / 1 skip** — the 2 git-only gates alone |
+| whole suite, in the repo, skip in place | `c488677` | **936 / 934 pass / 0 fail / 2 skip** |
+
+The failing assertion, verbatim from the runner: `expected 'abort'`, `actual 'superseded'`, on the
+recorded line
+
+```
+#1 abort back books→home nav=superseded tgt=live:div.book sid=1
+```
+
+That line is an **uninterfered** abort with no mid-settle input of any kind. What actually happened
+to the nav stacks during that gesture is asserted independently and green at `c488677` by the
+unskipped `NAVAPPLIES (abort)` cell: neither stack was mutated, because a following back commit still
+reaches `home`. So the token asserts a supersession on a gesture that provably never touched the
+stacks and never held a claim for a newer navigation to invalidate.
+
+The other two values were read in the same suite run rather than assumed: `applied` on every
+uninterfered control, and `superseded` on the disturbed commit `NAVRECONCILE` drives — both green
+at `c488677`, both unskipped.
+
+### 9.3 How the oracle was demonstrated able to FAIL
+
+Not asserted — read off one run. In the failing run, the **same** `navToken` reader **accepted**
+`applied` on settle line 1 and **rejected** `superseded` on settle line 0. An oracle that could not
+fail would have passed both; an oracle that failed on everything would have failed the first. One
+reader, one run, one value accepted and one rejected.
+
+The satisfiability half is the fourth and fifth rows of §9.2: with §4.1's prescribed token and
+nothing else changed, the cell is **green**, so it is not an unsatisfiable cell handed to the builder
+(the failure class §6's C1 records).
+
+### 9.4 A defect in the round-1 oracle, corrected here
+
+`navToken` matched `/\bnav=(applied|superseded)\b/`. Against the amended source it would have
+returned `null` for `nav=abort` — indistinguishable from "the line carries no token" — and the cell
+would have been **unsatisfiable by the very build that fixes the defect**. The reader now captures
+whatever value is present (`/\bnav=(\S+)/`). The generalisation is the plan's own §9 lesson landing
+in the test file: the token's value domain is decided by **two** bindings, `commit` and `applies`, so
+a reader enumerating the values of one of them repeats, in the oracle, the defect the cell exists to
+catch. Measured harmless to the ten cells already using it: the repo suite reads **0 fail** with the
+change in place.
+
+### 9.5 `NAVTOKEN-a` — the plan's claim, verified by execution
+
+Plan §8.1 item 4 and §16 O3 claim that applying `NAVTOKEN-a` to the amended source reproduces the
+reviewed build's `js/app.js` byte-for-byte. **Verified, with negative controls, on the tracked blob**
+(`git show e80fcbe:js/app.js`, which equals HEAD's):
+
+| Measurement | Result |
+|---|---|
+| two-arm token occurrences in the shipped source | **1** |
+| three-arm token occurrences in the amended source | **1** (so the anchor is unique) |
+| line delta, shipped → amended | **0** |
+| `NAVTOKEN-a(amended)` vs shipped `js/app.js`, byte-for-byte | **identical** |
+| CONTROL — a *different* two-arm mutant vs shipped | **not identical** |
+| CONTROL — the amended source itself vs shipped | **not identical** |
+
+**Its killing cell, measured rather than assigned.** `NAVTOKEN-a` applied to the amended source *is*
+the source at `c488677`, and the whole suite on that source reddens **exactly one** cell of 936 — this
+one — plus the two git-only gates that cannot pass outside a git tree. No mutation sweep was run and
+no `*.mutbak` was created anywhere; the identity above makes the sweep unnecessary for this mutant.
+
+**Blast radius of the token change, measured for the builder.** `test/swipe-navstack-settle.test.js`
+is the **only** consumer of the `nav=` token in `test/` or `tools/` — an executed grep for `nav=`
+across both returns nothing else but `data-nav=` selectors.
+
+### 9.6 The registration is DEFERRED to the builder, and this is why
+
+**MEASURED, control first, on a copy outside the repo.** `NAVTOKEN-a`'s anchor is text §4.1
+introduces, which does not exist at `c488677`:
+
+| Tree | `test/mutation-anchors.test.js` |
+|---|---|
+| control — pristine registry, `c488677` source | **6 tests / 6 pass / 0 fail** |
+| `NAVTOKEN-a` registered, `c488677` source | **6 tests / 5 pass / 1 fail** — `not ok 1 — every mutation anchor still matches the source it targets`, reported as ANCHOR NOT FOUND and naming `NAVTOKEN-a` |
+| `NAVTOKEN-a` registered, amended source | **6 tests / 6 pass / 0 fail**; `MUTATIONS.length` **162** |
+
+Registering it in this commit would land a red gate on a tree whose amendment build has not opened.
+Plan §13 step 9b already assigns the registration to the builder, and this measurement is why that
+assignment is correct. The registration text measured above, which the builder may take as written:
+`from` = the three-arm token substring, `to` = the two-arm token substring — a single-line anchor
+that resolves uniquely and needs no `occurrence`.
+
+### 9.7 Honest limits of this round
+
+- **Nothing was measured about a device.** The clause is a jsdom integration drive; it asserts a
+  recorded diagnostic string, never geometry or paint.
+- **The abort drive is one shape of abort** — a left-edge back gesture released back inside `THRESH`.
+  Other abort routes (a cancelled touch, an abort on the forward edge) are not driven here. The
+  token's abort arm reads a single binding, `commit`, which is fixed at release and before the settle
+  window opens, so no interleaving can change which arm it takes; that reasoning is the plan's (§9
+  dimension 3) and is a reading, not something this round measured.
+- **The plan's §13 step 9a is satisfied; step 9b is not this seat's.** The source at HEAD still emits
+  the two-arm token.
+- **This suite is not audited by its author.** The coverage audit is the auditor's.
+
+### 9.8 How this round's measurements were taken
+
+Control first in every case. The repo's `js/app.js` and `tools/mutate.mjs` were never written to:
+every transform ran on a copy of the tracked tree outside the repo
+(`…\scratchpad\tTOK`), `node_modules` reached by a directory junction. `git status --porcelain`
+in the repo named only `test/swipe-navstack-settle.test.js` and this record before and after every
+probe, and no `*.mutbak` exists anywhere. `tools/mutate.mjs` was imported (it is CLI-guarded);
+**`tools/source-gate-sweep.mjs` was never imported, because importing it mutates `js/app.js`**;
+`tools/mutation-sweep.mjs` was not run at all. Every count above was read from the runner's own
+totals — a module whose CLI runs at import kills the runner and reports a green `# tests 1` for a
+file holding many, and the count is the only tell. This file's is **20**, and the repo suite's
+is **936**.
+
+---
+
+**Handoff:** the test author → **the builder** (plan §13 step 9b: remove the ONE remaining skip,
+drive it red, apply §4.1's three-arm token, register `NAVTOKEN-a`, re-stamp; and close the review's
+F2, F3, F4) → **the coverage auditor** (step 7). The suite is filed at
 `test/swipe-navstack-settle.test.js` and this record is its companion.
