@@ -9,34 +9,42 @@ Type: plan
   "callee_ranges":[],
   "affected_contracts":["tools/mutate.mjs:322","docs/swipe-model.generated.txt:1","build.json:1","Claude/Subsystems/swipe-reveal.md:174","Claude/Subsystems/swipe-reveal.md:178"],
   "staged_records":["Claude/Subsystems/swipe-reveal.md","Claude/Plans/PLAN-swipe-stage7.md","Claude/Zelda/Board.md","Claude/Decisions/DecisionLog.md","Claude/Campaigns/swipe-navstack.json"],
-  "blocking_questions":["NAVSTALE","NAVIDENT","NAVAPPLIES","NAVRECONCILE","NAVTOTAL"]} -->
+  "blocking_questions":["NAVSTALE","NAVIDENT","NAVAPPLIES","NAVRECONCILE","NAVTOTAL","NAVPAIR"]} -->
 
-Status: **ROUND-1 TEMPER APPLIED — not cleared to build.** Next seat is the plan reviewer, for the
-round-2 disposition of this amendment.
+Status: **ROUND-2 TEMPER APPLIED — not cleared to build.** Next seat is the plan reviewer, for the
+round-3 disposition of this amendment.
 
-The temper is `Claude/Charpy/PLAN-swipe-navstack-settle-window-2026-08-06-r1.md` (verdict TEMPER,
-reviewed at `13a97b0`). **What changed:** §4 now prescribes the three edits as exact source text,
-because the placement it previously left to the builder decides the co-change set (§8); §8's blast
-radius is re-measured from all three edits and from the naive alternatives; §1's arming consequence
-is corrected against measurement; §9 gains `NAVIDENT`, the cell that gives the object-identity
-conjunct a killing witness on both stack-reading branches; §10's rebase arithmetic is replaced with
-three measured constants; §7 fixes the log-token placement; §8's scrub list gains two source comments
-that the superseded path falsifies. **What did not change:** the design, the predicate, the
-standalone-and-first ruling, §5's six-writer enumeration, and the four `gen-swipe-model` fingerprints.
-**What remains unexecuted:** the branch-B *chapter-list* route of §1 (library-data fixture) —
-its throw is the authoring execution, not re-derived at this round; the back branch's staleness
-handling is now driven through the settings route instead (drive S, §1).
+The round-2 temper is `Claude/Charpy/PLAN-swipe-navstack-settle-window-2026-08-06-r2.md` (verdict
+TEMPER, reviewed at `decfbd9`); round 1 is `…-r1.md` (reviewed at `13a97b0`) and its dispositions are
+in §14. **What changed at round 2:** `NAVTOTAL`'s source-only status is corrected — it holds for the
+`navStack.length` conjunct and is measurably false for the forward conjunct, which has a behavioural
+killer (drive T, §1) and now has its own cell `NAVPAIR` (§9); §5's per-writer identity argument is
+corrected to a per-*sequence* one; §9 dimension 4(b)'s interference matrix gains its third cell;
+§13 step 5b names the tree state each of its two refusal figures was measured against; §12's
+branch-B residual is retired by drive B′; §8 cites the gate that enforces "closed by construction".
+**What did not change:** the design, the predicate, the three prescribed edits, the standalone-and-first
+ruling, §8's blast radius and line delta, §10's rebase arithmetic, and every round-1 disposition —
+all eight were re-derived by the reviewer, control first, and none was re-opened. **What remains
+unexecuted:** §1's branch-B *chapter-list* route (the drill-back tap on a real chapter list) is still
+not driven; it is no longer load-bearing, because drive B′ produces the same throw with no library
+data. Whether drive T's two-tap interleaving is reachable inside a real 340 ms window on a device is
+a reading of the interaction, not a measurement — §12.
 
 Closes board row **`T-S7M`**, which routed this defect to the planner with two obligations:
 reproduce it, and rule on fold-into-stage-7 versus standalone. §1 is the reproduction; §10 is
 the ruling.
 
-Input state, executed at this amendment: HEAD `596c579`, `main` == `origin/main`, build
-`2026-08-05.2`, suite **916 tests / 915 pass / 0 fail / 1 skip** (count read from the runner, not
-inferred), no `*.mutbak`. `tools/mutate.mjs` holds **152** registrations (counted by importing the
-module, not by grep). Every measurement below was produced on a copy of the tree outside the repo,
-control first; `git status --porcelain` in the repo named no source, tooling or generated file before
-or after any probe.
+Input state, executed at this amendment: every round-2 measurement was taken against the tree at
+`decfbd9`; HEAD is now `c92c6fb`, whose only change from `decfbd9` is `Claude/Zelda/Board.md`
+(`git diff --name-only decfbd9 HEAD` — one record, no source, tooling, test or generated file), so
+every figure below stands unmoved. `main` == `origin/main`, build `2026-08-05.2`, no `*.mutbak`
+anywhere. `tools/mutate.mjs` holds **152** registrations across **161** anchor parts (counted by
+importing the module, not by grep). Suite at this amendment, count read from the runner:
+**916 tests / 915 pass / 0 fail / 1 skip**. Every measurement below was produced on a copy of the
+tree outside the repo, control first; `git status --porcelain` in the repo named no source, tooling,
+test or generated file before or after any probe. The round-2 amendment changes **no source text**,
+so §8's measured blast radius and §10's measured shifts are carried forward unchanged rather than
+re-measured.
 
 ---
 
@@ -56,6 +64,7 @@ or after any probe.
 12. [Residual doubt](#12-residual-doubt)
 13. [Sequence, owners, exit condition](#13-sequence-owners-exit-condition)
 14. [Round-1 temper — per-finding disposition](#14-round-1-temper--per-finding-disposition)
+15. [Round-2 temper — per-finding disposition](#15-round-2-temper--per-finding-disposition)
 
 ---
 
@@ -78,25 +87,33 @@ without checking that the stacks still hold it.
 Both stack-reading branches can be invalidated inside that window, and both were **executed** against
 the real `js/app.js` through `test/app-harness.js`, each with a passing negative control.
 
-⚠️ **Provenance, so the two are not confused.** Drive **F** and its controls were re-executed at the
-round-1 temper and their results are restated below from that run. Drive **B** as written here is the
-**authoring** execution and was NOT re-derived at the temper — its route reaches the chapter list from
-a home tile, which needs library data the harness fixture does not supply out of the box. The back
-branch is re-driven at the temper by drive **S** further down, which reaches the same commit branch
-through the settings sub-screen and exhibits the wrong-entry landing rather than the throw. §12 names
-who closes the gap.
+⚠️ **Provenance, so the routes are not confused.** Drive **F** and its controls were re-executed at
+the round-1 temper. The back branch's throw was re-executed at the **round-2** temper by drive **B′**,
+which reaches it with **no library data** — that measurement retires the fixture cost the plan
+previously assigned to it (F11). Drive **B** as written below is the original authoring execution over
+the chapter-list route and has still not been re-driven; it is no longer load-bearing, because B′
+produces the same throw on the same branch. The throw counts below come from the harness's fake timer
+**instrumented to record a throwing callback rather than swallow it** — `clock.advance` swallows one
+otherwise, so an un-instrumented drive cannot see it at all (§12).
 
 | # | Drive | Result |
 |---|---|---|
-| **F** (forward) | Home → Books → Options; back-swipe committed, leaving `fwdStack = [options]`. Right-edge forward swipe Books→Options released to commit. A bottom-nav tap inside the settle window runs `navTo`, whose `fwdStack.length = 0` (`js/app.js:141`) empties the stack. The 340 ms fallback fires. | `fwdStack.pop()` returns `undefined`, `navStack.push(undefined)`, `currentDesc()` is `undefined`, and **`TypeError: Cannot read properties of undefined (reading 'v')` is thrown at `js/app.js:1021:61`**, inside the `reportReveal(...)` argument list, called from `finalize` at `js/app.js:1078`. |
-| **B** (back) | Home → a chapter list opened from a home tile, so `navStack = [home, files]`. Left-edge back-swipe Files→Home released to commit. A tap on the chapter list's own drill back button inside the settle window runs `goBack()`, popping to `navStack = [home]`. The 340 ms fallback fires. | `navStack.pop()` runs unguarded, `navStack` becomes `[]`, `currentDesc()` is `undefined`, and **the same `TypeError` is thrown at the same line**. |
-| **F-control** | Drive F with no mid-settle tap. | No throw. |
+| **F** (forward) | Home → Books → Options; back-swipe committed, leaving `fwdStack = [options]`. Right-edge forward swipe Books→Options released to commit. A bottom-nav tap inside the settle window runs `navTo`, whose `fwdStack.length = 0` (`js/app.js:141`) empties the stack. The 340 ms fallback fires. | `fwdStack.pop()` returns `undefined`, `navStack.push(undefined)`, `currentDesc()` is `undefined`, and **`TypeError: Cannot read properties of undefined (reading 'v')` is thrown at `js/app.js:1021:61`**, inside the `reportReveal(...)` argument list, called from `finalize` at `js/app.js:1078`. **1** recorded throw. |
+| **B′** (back, no library data) | Books tab open, so `navStack = [home, books]`. Left-edge back-swipe Books→Home released to commit. Inside the settle window the shipped `closeSub` listener on `#dgBack` (bound unconditionally at boot, `js/app.js:3091`) runs; `books` is not a settings sub, so `closeSub` delegates to `goBack()` (`js/app.js:177` → `145`) and pops to `navStack = [home]`. The 340 ms fallback fires. | `navStack.pop()` runs unguarded, `navStack` becomes `[]`, `currentDesc()` is `undefined`, and **the same `TypeError` is thrown at the same line**: **1** recorded throw, message identical to drive F's. No chapter list, no library fixture, no drill-down. |
+| **B** (back, chapter list) | Home → a chapter list opened from a home tile, so `navStack = [home, files]`. Left-edge back-swipe Files→Home released to commit. A tap on the chapter list's own drill back button inside the settle window runs `goBack()`, popping to `navStack = [home]`. The 340 ms fallback fires. | The same throw. **Authoring execution only** — not re-derived at either temper; superseded as the branch's witness by B′. |
+| **F-control** | Drive F with no mid-settle tap. | **0** throws. |
 | **F-control-late** | Drive F with the tap AFTER the settle window closes. | No throw. |
-| **B-control** | Drive B with no mid-settle tap. | No throw. |
+| **B′-control** | Drive B′ with no mid-settle tap. | **0** throws; lands `home`. |
 
-Branch **B is new**: the adversary's casebook (`Claude/Loki/STRIKE-swipe-stage7-lease-exits-2026-08-06.md`
-§5) reports only the forward branch. The back branch is user-reachable through the shipped chapter-list
-back button and produces the identical throw.
+The throw oracle is proven able to FAIL in both directions in the same run: the same instrumented
+counter reads **1** on each interfering drive and **0** on each control, so a green control is not
+the oracle being blind.
+
+Branch **B is new to this plan**: the adversary's casebook
+(`Claude/Loki/STRIKE-swipe-stage7-lease-exits-2026-08-06.md` §5) reports only the forward branch. The
+back branch is reachable through more than one shipped control — the chapter-list drill back button
+(drive B) and any `closeSub` control that falls through to `goBack` (drive B′) — and produces the
+identical throw.
 
 **Consequences at HEAD.** The reveal diagnostic is lost; the commit's screen reconcile
 (`js/app.js:1032`) never runs, so the visible screen and the descriptor stack disagree; and on
@@ -124,9 +141,9 @@ was wrong and is replaced, not softened.)
 
 **Non-throwing corruption of the same class — driven, and now the coverage carrier.** Where the
 settle-window navigation leaves the stacks the right shape and only changes which screen the top
-descriptor names, no throw occurs and the commit still mutates the wrong entry. Two such drives were
-executed at this amendment, control first, reading the landed screen from the classes `js/nav.js`
-`setView` writes (`#home.parked`, every other view `.hidden`):
+descriptor names, no throw occurs and the commit still mutates the wrong entry. **Three** such drives
+have been executed, control first, reading the landed screen from the classes `js/nav.js` `setView`
+writes (`#home.parked`, every other view `.hidden`) — I and S at round 1, T at round 2:
 
 | # | Drive | HEAD | With the §5 predicate |
 |---|---|---|---|
@@ -134,9 +151,12 @@ executed at this amendment, control first, reading the landed screen from the cl
 | **I-control** | Drive I with no mid-settle tap. | Landed screen home (correct — the gesture's own destination). | Same, `nav=applied`. |
 | **S** (settings ‹ Back) | Books → Options hub → a settings sub-screen, so `navStack = [home, books, options, sub]`. Left-edge back-swipe sub→Options released to commit. The sub-screen's own ‹ Back (`closeSub`, `js/app.js:170`) is tapped inside the settle window and pops the sub. | Landed screen **browse**: the commit popped `options` as well, so ‹ Back overshot the hub by one screen. No throw. | Landed screen **options**, settle line `nav=superseded`. |
 | **S-control** | Drive S with no mid-settle tap. | Landed screen options. | Same, `nav=applied`. |
+| **T** (identity-preserving PAIR) | Books → Options hub → the General sub, then a committed back-swipe General→Options, so `navStack = [home, books, options]` and `fwdStack = [general]`. Right-edge **forward** swipe Options→General released to commit. Inside the settle window **two** shipped navigations that CANCEL on `navStack`: the Playback hub row (`openSub`, `js/app.js:163` — pushes and clears `fwdStack`) and then that sub-screen's own ‹ Back (`closeSub`, `js/app.js:174` — pops it back and pushes it onto `fwdStack`). At finalize `currentDesc()` is the **same object** the gesture captured as `cur.from`, so the identity conjunct is satisfied; `fwdStack`'s top is now `playback`, not `general`. | Landed screen **playback** — neither the gesture's destination (`general`) nor the user's last explicit action (`options`). No throw. | Landed screen **options**, settle line `nav=superseded`. |
+| **T-control** | Drive T with neither mid-settle tap. | Landed screen general (correct — the gesture's own destination). | Same, `nav=applied`. |
 
-The throw is the loud instance of a quiet class, and drives I and S are the quiet class made
-observable. §9's `NAVIDENT` is built on them.
+The throw is the loud instance of a quiet class, and drives I, S and T are the quiet class made
+observable. §9's `NAVIDENT` is built on I and S; `NAVPAIR` is built on T, which is the only drive
+that reaches the forward conjunct (§5).
 
 ---
 
@@ -243,7 +263,10 @@ it that `M1NAVWINS` anchors on, are untouched.
 
 **A builder who must deviate** — because a lint rule or a later HEAD makes this text impossible —
 re-runs §8's measurement against the text actually written and amends §8 before committing. The
-declared figure and the transform it was measured from move together or not at all.
+declared figure and the transform it was measured from move together or not at all. A deviation that
+re-creates the anchor collision this text forecloses is caught by `test/mutation-anchors.test.js`'s
+non-uniqueness subtest, which is measured red on exactly that writing (§8) — the gate is named so
+"closed by construction" is not read as "cannot happen".
 
 **What stays.**
 
@@ -283,12 +306,21 @@ const applies = commit && currentDesc() === cur.from
       : fwdStack[fwdStack.length - 1] === cur.dest);
 ```
 
-**Why the identity conjunct is the semantic guard.** `cur.from` is the descriptor object
-`currentDesc()` returned when the gesture armed (`js/app.js:441`). An **executed** grep for every
-write to either stack across `js/*.js` returns six sites, all in `js/app.js`: `navTo` (`139`, `140`,
-`141`), `goBack` (`147`), `openSub` (`163`), `closeSub` (`174`), `runFinalize` itself (`703-705`),
-and the `enterApp` rebind (`1181`). Every one of them replaces or removes `navStack`'s top, so the
-identity check detects all of them.
+**Why the identity conjunct is the semantic guard, and exactly how far it reaches.** `cur.from` is
+the descriptor object `currentDesc()` returned when the gesture armed (`js/app.js:441`). An
+**executed** grep for every write to either stack across `js/*.js` returns six sites, all in
+`js/app.js`: `navTo` (`139`, `140`, `141`), `goBack` (`147`), `openSub` (`163`), `closeSub` (`174`),
+`runFinalize` itself (`703-705`), and the `enterApp` rebind (`1181`). Every one of them replaces or
+removes `navStack`'s top, so the identity check detects **any single one of them**.
+
+⚠️ **It does not follow that the identity check detects every settle-window interference, and the
+round-2 temper measured that it does not (F9).** The enumeration is per *writer*; the window admits a
+*sequence*. `openSub` followed by `closeSub` — two of the six — compose to leave `navStack`
+byte-for-byte as it was, **top object identity included**, while `fwdStack`'s top is replaced. That
+pair is two taps of shipped controls and it is drive **T** (§1). Against it the identity conjunct is
+satisfied and the FORWARD conjunct is the only clause that refuses. The correct statement is
+therefore: the identity conjunct detects every single-writer interference; the branch conjuncts are
+what detect an identity-preserving *composition* of them.
 
 **Where the identity conjunct is load-bearing, MEASURED (round-1 F4).** The round-1 review measured
 that on §1's two sequences the identity conjunct decides nothing: the interfering navigation has
@@ -296,34 +328,50 @@ already falsified the branch conjunct (`navTo` sets `fwdStack.length = 0` on F; 
 `navStack` to length 1 on B), so deleting the identity conjunct changes no observable there. That
 measurement holds and is not disputed. It does **not** mean the conjunct is inert — it means §1's
 sequences are the wrong witnesses. The witnesses are the *non-throwing* class, where the stacks keep
-the right shape and only the top's meaning changes. Re-measured on drives I and S (§1), control
-first, across four builds of `js/app.js`:
+the right shape and only the top's meaning changes. Re-measured on drives I, S and T (§1), control
+first, across seven builds of `js/app.js`. **Every cell below is a landed screen read from the view
+classes `js/nav.js` writes, and each drive is paired with its own no-interference control, which
+lands on the gesture's own destination in every build** (drive I control `home`, drive S control
+`options`, drive T control `general`):
 
-| `applies` predicate | drive I landed screen | drive I `nav=` | drive S landed screen |
-|---|---|---|---|
-| HEAD (no guard) | home ← wrong | *(no token)* | browse ← wrong |
-| as specified | **browse** | superseded | **options** |
-| identity conjunct deleted (`NAVSTALE-a`) | home ← wrong | applied | browse ← wrong |
-| identity weakened to `currentDesc().v === cur.from.v` (`NAVIDENT-a`) | home ← wrong | applied | options |
-| branch conjuncts deleted, identity kept | browse | superseded | options |
+| `applies` predicate | drive I landed | drive I `nav=` | drive S landed | drive T landed | drive T `nav=` |
+|---|---|---|---|---|---|
+| HEAD (no guard) | home ← wrong | *(no token)* | browse ← wrong | **playback ← wrong** | *(no token)* |
+| as specified | **browse** | superseded | **options** | **options** | superseded |
+| identity conjunct deleted (`NAVSTALE-a`) | home ← wrong | applied | browse ← wrong | options | superseded |
+| identity weakened to `.v` (`NAVIDENT-a`) | home ← wrong | applied | options | options | superseded |
+| `navStack.length > 1` deleted (`NAVTOTAL-a`) | browse | superseded | options | options | superseded |
+| **`fwdStack[…] === cur.dest` deleted (`NAVTOTAL-b`)** | browse | superseded | options | **playback ← wrong** | **applied** |
+| both branch conjuncts deleted, identity kept | browse | superseded | options | **playback ← wrong** | **applied** |
 
-Both drives are red at HEAD, so `NAVIDENT` is red-first. Drive I is the only one of the two that
-separates object identity from `.v` equality — which is precisely the distinction §4.12 exists to
-force — so drive I is not droppable.
+Drives I, S and T are each red at HEAD, so `NAVIDENT` and `NAVPAIR` are both red-first. Drive I is
+the only one that separates object identity from `.v` equality — which is precisely the distinction
+§4.12 exists to force — so drive I is not droppable. Drive T is the only one that separates the
+forward conjunct from everything else, so drive T is not droppable either.
 
-**Why the branch conjuncts are kept even though that argument makes them redundant.** The argument
-above is an enumeration, and this campaign's enumerations have been wrong repeatedly — every miss
-found by executing, never by a further reading. The branch conjuncts do not depend on it: they make
-the `pop()` and the `fwdStack` read **total by construction**, so a future stack mutator that
-somehow preserved the top's identity still cannot produce `undefined`. A defence that holds by
+**Why the branch conjuncts are kept, and what pins each of them.** The per-writer argument above is
+an enumeration, and this campaign's enumerations have been wrong repeatedly — every miss found by
+executing, never by a further reading. The branch conjuncts do not depend on it: they make the
+`pop()` and the `fwdStack` read **total by construction**, so a stack mutator that preserved the
+top's identity still cannot produce `undefined` or a wrong entry. A defence that holds by
 construction closes the coordinate; a defence that holds because a list was complete does not.
-**Honest consequence, now measured rather than argued:** a build with BOTH branch conjuncts deleted
-— strictly stronger than either `NAVTOTAL-a` or `NAVTOTAL-b` alone — is indistinguishable from the
-specified predicate on every observable of drives F, I and S (last row of the table above). No
-behavioural cell reddens for it, so the conjuncts are pinned by a SOURCE assertion (`NAVTOTAL`), not
-by a behavioural cell. That is stated rather than hidden — a clause whose mutation no cell can kill
-is exactly the vacuity this project has shipped before, and the same audit has now been run against
-the identity conjunct, which passes it on the strength of `NAVIDENT`.
+
+**What is pinned by what, MEASURED at round 2 (F9), and stated with the drive set the claim ranges
+over.** The two conjuncts are **not** interchangeable and the round-1 amendment's "both deleted is
+indistinguishable" was true only of the drive set it ranged over:
+
+- **`navStack.length > 1` — a SOURCE cell (`NAVTOTAL`).** Deleting it alone (`NAVTOTAL-a`) is
+  indistinguishable from the specified predicate on every observable of **all five drives this plan
+  constructs — F, I, S, T and B′**. No writer removes from the *bottom* of `navStack`, so no
+  sequence can leave `cur.from` on top of a length-1 stack. The honesty label is exactly that
+  sentence: indistinguishable across the drives this plan constructs, **never** a claim about all
+  reachable drives.
+- **`fwdStack[…] === cur.dest` — a BEHAVIOURAL cell (`NAVPAIR`).** Deleting it alone (`NAVTOTAL-b`)
+  lands drive T on `playback` — neither the gesture's destination (`general`) nor the user's last
+  explicit action (`options`) — with `nav=applied`, while its control stays green. It is therefore
+  **not** source-only, and pinning it by a string match on the source would be the vacuity this
+  project has shipped before. Round 1 ran that audit against the identity conjunct and it passed on
+  the strength of `NAVIDENT`; round 2 ran it against this clause and it failed.
 
 **The stale outcome.** When `commit` is true and `applies` is false, the gesture is *stack-superseded*:
 the animation showed a transition the stacks no longer sanction. The stacks win (subsystem item 3),
@@ -436,6 +484,19 @@ explicit `occurrence: N`, `tools/mutate.mjs:1792-1799`). This plan does not spec
 it does not create the collision: **the collision is closed by construction in §4.1's text.** That is
 the structural form of the defence and it is why the co-change set is one registration and not three.
 
+**And the construction is backed by a gate, named here so neither reading of "by construction" goes
+wrong (F12).** The prescription is prose, and §4.1's escape hatch for a builder who must deviate is a
+discipline. The structure that catches a deviation is **`test/mutation-anchors.test.js`**, whose
+subtest *"no registered mutation anchor is non-unique without an explicit disambiguation"* hard-fails
+on exactly this collision. **MEASURED, control first:** on the pristine tree and on the built tree
+that subtest is green (6 tests / 6 pass / 0 fail in both); on a tree where edit 2 is written as a
+nested block reproducing `js/app.js:1038` verbatim it is **red** — `not ok 3`, with `M1NOWRITE` and
+`S2-24 ABORTNORENDER` each reported as a NON-UNIQUE ANCHOR occurring 2 times. So "closed by
+construction" means *the prescribed text does not create it*, and a deviation that does create it is
+caught by a gate rather than by anyone remembering to look. A reader who takes "by construction" to
+mean the failure is impossible would not look for the gate; a reader who knows the gate exists does
+not have to treat a deviation as unbounded risk.
+
 **The re-anchoring, specified.** The rotted registration's meaning is "an abort mutates the nav stack
 like a commit". Preserve it exactly by moving its anchor to the new predicate's first line:
 `const applies = commit && currentDesc() === cur.from` → `const applies = currentDesc() === cur.from`.
@@ -469,16 +530,16 @@ is a plain jsdom property), never a resulting position.
 
 | # | Dimension | Applicable? | What the suite must prove |
 |---|---|---|---|
-| 1 | **Lifetime and reuse** | **Yes — the stage's core.** | The gesture's claim on the stacks is valid only from arm to finalize, and only while the stacks still match it. Applied exactly once on an uninterfered commit; not at all on an abort; not at all on a stack-superseded commit. `NAVSTALE` + `NAVIDENT` + `NAVAPPLIES`. |
+| 1 | **Lifetime and reuse** | **Yes — the stage's core.** | The gesture's claim on the stacks is valid only from arm to finalize, and only while the stacks still match it. Applied exactly once on an uninterfered commit; not at all on an abort; not at all on a stack-superseded commit — including when the supersession is a *pair* of navigations that cancel on `navStack`. `NAVSTALE` + `NAVIDENT` + `NAVPAIR` + `NAVAPPLIES`. |
 | 2 | **Trust boundaries and hostile inputs** | **No.** | The predicate reads only in-process state the app itself wrote. There is no external, serialized or attacker-influenced input anywhere on this path. |
-| 3 | **Concurrency** | **Yes.** | The interleaving is a user input landing inside the 340 ms settle window — the only concurrency this subsystem has. Every drive in §1 — F, B, I and S — is exactly that interleaving. `NAVSTALE` + `NAVIDENT`. Gesture-vs-gesture supersession is already covered by the existing stage-6c cells, which must stay green. |
-| 4 | **Shape and platform matrices** | **Yes, as two matrices.** | (a) The commit-branch matrix: `back`, `fwd` (the `fwdStack` replay) and `newNav` (NP → chapter list). `NAVAPPLIES` drives all three; `NAVSTALE` drives `back` and `fwd`, the two that read a stack. `newNav` pushes a captured object and reads nothing, which is why it has no stale drive and why that is a decision, not a hole. (b) The **interference matrix**, added at the round-1 temper: a settle-window navigation either EMPTIES the stack the gesture reads (`NAVSTALE`) or leaves it the right shape and changes what its top MEANS (`NAVIDENT`). Only the second reaches the identity conjunct, and it splits again into a same-view replacement (identity vs `.v` disagree — drive I) and a cross-view pop (they agree — drive S). All four cells of (b) are driven. |
-| 5 | **Failure and rejection paths** | **Yes.** | `runFinalize` must not throw on §1's two THROW drives (F and B), and the existing "a throw in finalize restores `finishing`" cell must stay green — the `finally` guard is retained, not replaced. `NAVSTALE`. Drives I and S add no failure path: they do not throw at HEAD either. |
-| 6 | **Numerical edges and determinism** | **Yes, narrowly.** | The one numeric edge is the stack length at which the pop becomes unsound: `navStack.length > 1`. `NAVTOTAL` pins it over source, because no reachable drive isolates it — MEASURED, not assumed: a build with both branch conjuncts deleted is indistinguishable from the specified predicate on every observable of drives F, I and S (§5). |
-| 7 | **Contract claims** | **Yes, two.** | (a) *`currentDesc()` is total* — `navStack` is never empty and never holds a non-descriptor. `NAVSTALE` asserts the observable form: after either §1 drive **and one further navigation**, a subsequent left-edge back gesture still ARMS (at HEAD it does not; measured — see §1). (b) *A superseded gesture never re-decides where the user is* — the screen the stacks name after the settle is the one the newer navigation reached. `NAVIDENT` asserts it as the landed screen. |
-| 8 | **Composition** | **Yes.** | The guard crossed against the settle window's other occupants: a browse→browse pair, an overlay source, a settings sub-screen's own back control (`closeSub`, drive S), a same-view tab re-tap (`navTo`'s replacement branch, drive I), and a commit whose reconcile lands on a scroll-resetting screen (home / Options / a settings sub). `NAVIDENT` carries the middle two; `NAVRECONCILE` carries the last. |
+| 3 | **Concurrency** | **Yes.** | The interleaving is a user input landing inside the 340 ms settle window — the only concurrency this subsystem has. Every drive in §1 — F, B′, I, S and T — is exactly that interleaving, and T is the one that is a *pair* of inputs rather than a single one. `NAVSTALE` + `NAVIDENT` + `NAVPAIR`. Gesture-vs-gesture supersession is already covered by the existing stage-6c cells, which must stay green. |
+| 4 | **Shape and platform matrices** | **Yes, as two matrices.** | (a) The commit-branch matrix: `back`, `fwd` (the `fwdStack` replay) and `newNav` (NP → chapter list). `NAVAPPLIES` drives all three; `NAVSTALE` drives `back` and `fwd`, the two that read a stack. `newNav` pushes a captured object and reads nothing, which is why it has no stale drive and why that is a decision, not a hole. (b) The **interference matrix**, added at the round-1 temper and **re-counted at round 2 (F9), where it was measured to be missing a cell**. A settle-window interference is one of three kinds: it EMPTIES the stack the gesture reads (`NAVSTALE`); it leaves that stack the right shape and changes what its top MEANS (`NAVIDENT`), which splits again into a same-view replacement (identity vs `.v` disagree — drive I) and a cross-view pop (they agree — drive S); or it leaves the descriptor stack's top **object identity intact** and moves the OTHER stack (`NAVPAIR`, drive T). The third kind needs a *pair* of navigations, which is why a per-writer enumeration could not see it (§5). **Five cells, all driven** — the previous "all four cells of (b) are driven" was a count over the two-kind matrix and is superseded. |
+| 5 | **Failure and rejection paths** | **Yes.** | `runFinalize` must not throw on §1's two THROW drives (F and B′), and the existing "a throw in finalize restores `finishing`" cell must stay green — the `finally` guard is retained, not replaced. `NAVSTALE`. Drives I, S and T add no failure path: none of them throws at HEAD either — T's HEAD damage is a wrong landing, not an exception. |
+| 6 | **Numerical edges and determinism** | **Yes, narrowly.** | The one numeric edge is the stack length at which the pop becomes unsound: `navStack.length > 1`. `NAVTOTAL` pins **that conjunct** over source, and the claim is stated with the drive set it ranges over: deleting it is indistinguishable from the specified predicate across drives F, I, S, T and B′ — MEASURED, not assumed, and **not** a claim that no reachable drive isolates it (§5, F9). The forward conjunct is not a numeric edge and is not pinned here: it has a behavioural killer, `NAVPAIR`. |
+| 7 | **Contract claims** | **Yes, two.** | (a) *`currentDesc()` is total* — `navStack` is never empty and never holds a non-descriptor. `NAVSTALE` asserts the observable form: after either §1 drive **and one further navigation**, a subsequent left-edge back gesture still ARMS (at HEAD it does not; measured — see §1). (b) *A superseded gesture never re-decides where the user is* — the screen the stacks name after the settle is the one the newer navigation reached. `NAVIDENT` asserts it as the landed screen for a single interfering navigation and `NAVPAIR` for a composed pair; the claim is the same one, asserted on two interference shapes. |
+| 8 | **Composition** | **Yes.** | The guard crossed against the settle window's other occupants: a browse→browse pair, an overlay source, a settings sub-screen's own back control (`closeSub`, drive S), a same-view tab re-tap (`navTo`'s replacement branch, drive I), **two navigations composed inside one window** (`openSub` then `closeSub`, drive T), and a commit whose reconcile lands on a scroll-resetting screen (home / Options / a settings sub). `NAVIDENT` carries the two single-navigation cases, `NAVPAIR` the composed one, `NAVRECONCILE` the last. The composed case is the reason this dimension is not satisfied by driving each writer once. |
 | 9 | **Persistence round-trip and version evolution** | **No.** | Nothing on this path is serialized, stored or versioned (subsystem item 15). No IndexedDB, no service worker, no `build.json` semantics — the build *number* bumps, which is a stamp, not a format. |
-| 10 | **Functional achievement (the feature oracle)** | **Yes.** | End to end on the real app: after a settle-window navigation, the screen the user is looking at is the one their last explicit action reached, and back navigation from there still works. `NAVIDENT`'s landed-screen clause is the user-facing half, `NAVSTALE`'s arming clause the reachability half, `NAVRECONCILE` the scroll half. No new production surface is added to carry it. |
+| 10 | **Functional achievement (the feature oracle)** | **Yes.** | End to end on the real app: after a settle-window navigation, the screen the user is looking at is the one their last explicit action reached, and back navigation from there still works. `NAVIDENT`'s landed-screen clause is the user-facing half for a single interfering navigation and `NAVPAIR`'s is the half for a pair of them, `NAVSTALE`'s arming clause the reachability half, `NAVRECONCILE` the scroll half. No new production surface is added to carry it. |
 
 **New mechanism check (the amendment discipline).** One mechanism enters this plan — the staleness
 predicate — and it was crossed against all ten dimensions above rather than only dimension 1. Its
@@ -497,13 +558,26 @@ against the predicate anyway rather than only the two that prompted the change: 
 unchanged and their reasons still hold verbatim; 1, 3, 4, 7, 8 and 10 are updated above; 5 is
 unchanged, because `NAVIDENT`'s drives produce no throw at HEAD and therefore add no failure path.
 
+**Re-cross at round 2.** The round-2 temper likewise adds **no mechanism** — the predicate, the
+token, the reconcile case and the three prescribed edits are character-identical to round 1. What it
+adds is one cell, `NAVPAIR`, one interference kind, and two drives (T and B′). All ten dimensions
+were re-walked against the predicate rather than only the ones that prompted the change: **1** gains
+`NAVPAIR` to its cell list, since the claim it makes is about the same arm-to-finalize lifetime;
+**2** unchanged — a composed pair is still only in-process state the app itself wrote; **3, 4, 6, 8
+and 10** are updated above; **5** unchanged, because drive T produces no throw at HEAD (its damage
+is a wrong landing) and drive B′ is the branch-B failure path the dimension already names; **7**
+unchanged — `NAVPAIR` asserts contract claim (b), *a superseded gesture never re-decides where the
+user is*, on a third interference shape rather than adding a claim; **9** unchanged, nothing on this
+path is serialized. No new observable value enters, so the `nav=` token's own cross is unchanged.
+
 ```vitruvius-coverage
 # id | behavior | fixture | mutation | layer
-NAVSTALE | a committed gesture whose stack precondition is invalidated inside the settle window mutates NEITHER stack and does not throw, on BOTH stack reading branches; concretely a forward commit whose forward stack is emptied by a navigation tap in the window and a back commit whose descriptor stack is reduced to its root by a drill back tap in the window each leave the stacks exactly as the interfering navigation left them, and the settle line reports the superseded outcome so the device log names it; the arming oracle is stated in its MEASURED form, namely that after the corrupt settle AND one further navigation a fresh left edge back gesture still ARMS, which at head it does not, and it is NOT stated for the gesture attempted immediately after the settle because that one arms at head too and would be green before the fix | integration boot the app harness and drive each of the two sequences from section 1 verbatim against the real app source, asserting no throw escapes the settle timer with the harness fake timer instrumented to RECORD a throwing callback rather than swallow it, then performing ONE further navigation and asserting that a subsequent left edge touch produces a live gesture session, and asserting the settle log line carries the superseded token; each drive is paired with its own control that omits the mid settle tap and must show the applied token and a normal landing | THREE named registrations. NAVSTALE-a the identity conjunct is deleted so applies keeps only the commit flag and the branch conjuncts; MEASURED that this does NOT redden on either section 1 sequence because the branch conjunct is already false there, so its expected killing cell is NAVIDENT and not this one. NAVSTALE-b the guard is applied to the forward branch only so the back sequence throws while the forward one passes. NAVSTALE-c the superseded settle still performs the mutation but swallows the throw with a try block so the stacks corrupt silently and the arming clause is the only witness. expected killing cell for -b and -c is NAVSTALE | integration app harness driving the real js app source through the real touch listeners
+NAVSTALE | a committed gesture whose stack precondition is invalidated inside the settle window mutates NEITHER stack and does not throw, on BOTH stack reading branches; concretely a forward commit whose forward stack is emptied by a navigation tap in the window and a back commit whose descriptor stack is reduced to its root by a shipped back control in the window each leave the stacks exactly as the interfering navigation left them, and the settle line reports the superseded outcome so the device log names it; the arming oracle is stated in its MEASURED form, namely that after the corrupt settle AND one further navigation a fresh left edge back gesture still ARMS, which at head it does not, and it is NOT stated for the gesture attempted immediately after the settle because that one arms at head too and would be green before the fix | integration boot the app harness and drive the FORWARD sequence F and the BACK sequence B prime from section 1 verbatim against the real app source, B prime being the route that needs NO library data because the back control it fires is the shipped close sub listener that falls through to go back, asserting no throw escapes the settle timer with the harness fake timer instrumented to RECORD a throwing callback rather than swallow it, then performing ONE further navigation and asserting that a subsequent left edge touch produces a live gesture session, and asserting the settle log line carries the superseded token; each drive is paired with its own control that omits the mid settle tap and must show the applied token, a normal landing, and a recorded throw count of ZERO against the interfering drive count of ONE | THREE named registrations. NAVSTALE-a the identity conjunct is deleted so applies keeps only the commit flag and the branch conjuncts; MEASURED that this does NOT redden on either section 1 sequence because the branch conjunct is already false there, so its expected killing cell is NAVIDENT and not this one. NAVSTALE-b the guard is applied to the forward branch only so the back sequence throws while the forward one passes. NAVSTALE-c the superseded settle still performs the mutation but swallows the throw with a try block so the stacks corrupt silently and the arming clause is the only witness. expected killing cell for -b and -c is NAVSTALE | integration app harness driving the real js app source through the real touch listeners
 NAVIDENT | the object identity conjunct is load bearing and is defended, on BOTH stack reading branches, by the class of interference that leaves the stacks the RIGHT SHAPE and only changes WHICH screen the top descriptor names; concretely a back commit whose top descriptor is REPLACED by a same view tab tap inside the settle window must leave the user on the screen they tapped rather than silently returning them to the screen the gesture was heading for, and a back commit out of a settings sub screen whose own back control is tapped inside the window must land on the hub that control opened rather than one screen further back; the same view case is the one where object identity and value equality disagree, so it is the case that rules out the value comparison the identity discipline exists to forbid | integration two drives on the app harness. drive I open the books tab then release a left edge back gesture toward home and tap the SAME books tab inside the settle window, asserting the landed screen is the browse view and the settle line reports superseded; at head the landed screen is home and that is the red first demonstration. drive S open books then the options hub then a settings sub screen, release a left edge back gesture toward the hub and tap the sub screen back control inside the window, asserting the landed screen is the options hub; at head it is the browse view. each drive is paired with its own control that omits the mid settle tap and must land normally with the applied token | TWO named registrations. NAVSTALE-a the identity conjunct deleted, MEASURED to redden both drives. NAVIDENT-a the identity comparison weakened to a value comparison on the descriptor view field, MEASURED to redden drive I and NOT drive S, which is why drive I is the one that may not be dropped. expected killing cell for both is NAVIDENT | integration app harness driving the real js app source through the real touch listeners and reading the landed screen from the view classes nav writes
 NAVAPPLIES | an UNINTERFERED committed gesture still mutates the stacks exactly as it does today on all three branches namely the back branch which moves the top of the descriptor stack onto the forward stack, the forward replay branch which moves the top of the forward stack back onto the descriptor stack, and the fresh forward navigation branch which pushes the captured destination and clears the forward stack; and an ABORTED gesture still mutates neither stack | integration drive one clean commit per branch on the app harness and assert the landed screen and the subsequent back and forward reachability that each stack state implies, then drive an abort and assert both stacks are unchanged by reaching the same screens afterwards; the abort half is the existing I11 fixture and must keep passing unchanged | TWO named registrations. NAVAPPLIES-a is the RE ANCHORED existing registration swipe abort mutates the nav stack like a commit whose anchor moves onto the new predicate first line and whose replacement drops only the commit conjunct so an abort mutates the stack, expected killing cell the existing I11 abort cell not this one. NAVAPPLIES-b the applied path is made unconditional in the other direction by deleting the whole conditional block so a clean commit mutates nothing, expected killing cell is NAVAPPLIES | integration app harness over the real gesture plus the retained I11 abort cell
 NAVRECONCILE | a stack superseded settle reconciles the screen the stacks now name and writes NO scroll, meaning it neither restores the pre gesture document scroll which belongs to a screen the user has left nor allows the screen reset to default on and jump the newer screen back to its top, while an ordinary commit and an ordinary abort keep their existing scroll behaviour byte for byte | integration drive the forward sequence from section 1 with the mid settle tap landing on a scroll resetting screen namely home or the options hub or a settings sub screen whose panel scroll offset is set to a non zero value before the tap, then assert after the settle that the harness recorded no document scroll write attributable to the settle and that the panel scroll offset is unchanged; the two control drives assert the existing scroll writes are still issued on a plain commit and a plain abort | TWO named registrations, both anchored on the superseded reconcile statement section 4.1 prescribes. NAVRECONCILE-a drops the explicit no reset option from that statement so the screen reset defaults on and the newer screen jumps to its top. NAVRECONCILE-b appends the abort path scroll restore to that statement so the pre gesture document scroll is written over the newer screen. expected killing cell for BOTH is NAVRECONCILE | integration app harness asserting recorded calls and plain element properties never a measured rect
-NAVTOTAL | the two branch totality conjuncts are PRESENT in source so the descriptor stack pop and the forward stack read cannot produce an absent value even if a future stack writer preserved the identity of the descriptor stack top, which is the construction that makes the guarantee independent of the six site enumeration the identity conjunct rests on | source assert over js app that the predicate expression contains both the descriptor stack length comparison and the forward stack top identity comparison, in the one adapter expression, and re pin the assertion so it stops matching when either is removed; this is a SOURCE cell by necessity and the plan says so, because no drive reachable at head reddens either conjunct on its own | TWO named registrations. NAVTOTAL-a the descriptor stack length comparison is deleted from the predicate. NAVTOTAL-b the forward stack top identity comparison is deleted from the predicate. expected killing cell for BOTH is NAVTOTAL and for neither is any behavioural cell, which is MEASURED and not assumed by running a build with BOTH comparisons deleted at once, strictly stronger than either mutant alone, across drives F and I and S and finding it indistinguishable from the specified predicate on every observable those drives read | source scan over the one predicate expression in js app
+NAVTOTAL | the DESCRIPTOR STACK LENGTH conjunct is PRESENT in source so the descriptor stack pop cannot produce an absent value even if a future stack writer preserved the identity of the descriptor stack top; this conjunct alone carries a source cell, and the honesty label is that its mutant is indistinguishable from the specified predicate ACROSS THE FIVE DRIVES THIS PLAN CONSTRUCTS, namely F and I and S and T and B prime, never that no reachable drive isolates it | source assert over js app that the predicate expression contains the descriptor stack length comparison in the one adapter expression, and re pin the assertion so it stops matching when it is removed; this is a SOURCE cell for this one conjunct and the plan says so, with the drive set the claim ranges over stated in the same sentence; the forward stack conjunct is NOT covered here because it has a behavioural killer, which is NAVPAIR | ONE named registration. NAVTOTAL-a the descriptor stack length comparison is deleted from the predicate. expected killing cell is NAVTOTAL and no behavioural cell, which is MEASURED and not assumed by running that build against all five drives and finding every landed screen and every settle token identical to the specified predicate | source scan over the one predicate expression in js app
+NAVPAIR | the FORWARD STACK conjunct is load bearing against an interference that the identity conjunct cannot see, namely a PAIR of settle window navigations that CANCEL on the descriptor stack while replacing the forward stack top, so the top descriptor object identity is intact and only the forward stack has moved; concretely a committed forward replay whose destination sits on the forward stack, interrupted inside the window by a hub row drill in followed by that sub screens own back control, must land the user on the hub they are actually standing on rather than on the third screen the pair left on the forward stack | integration drive T on the app harness. reach the options hub with a settings sub on the forward stack by opening the sub and committing a back swipe out of it, release a right edge forward swipe toward that sub, then inside the settle window drill into a DIFFERENT hub row and immediately fire its own back control, asserting the landed screen is the options hub and the settle line reports superseded; at head the landed screen is the second sub screen and that is the RED FIRST demonstration; paired with its own control that omits the two taps and must land on the gesture destination with the applied token | ONE named registration. NAVTOTAL-b the forward stack top identity comparison is deleted from the predicate, MEASURED to redden drive T and to redden NO other drive this plan constructs, so drive T is not droppable and is the only witness this registration has. expected killing cell is NAVPAIR | integration app harness driving the real js app source through the real touch listeners and the real navigation intents, reading the landed screen from the view classes nav writes
 ```
 
 ---
@@ -568,12 +642,14 @@ carries it as item 6 with an owner rather than leaving it to the rebase.
   current plan covers and which stage 7 would then be rebasing across. **Consumer that does not
   exist yet:** a future nav-ownership slice; none is scheduled, and this plan does not schedule one.
 - **It does not add a mechanism for the non-throwing wrong-entry corruption beyond preventing it.**
-  §1's drives I and S are two executed cases where a settle-window navigation made the commit mutate
-  the wrong entry without throwing. The guard prevents both, because both fail the identity conjunct.
-  No separate production mechanism is added for them. **A separate cell IS owed and is filed**:
-  `NAVIDENT` (§9). The previous version of this plan said no cell was owed and named `NAVSTALE`'s
-  arming clause as the witness; measurement showed that clause does not witness this class, and the
-  class is the only place the identity conjunct is load-bearing (§5), so the deferral was wrong.
+  §1's drives I, S and T are three executed cases where a settle-window navigation made the commit
+  mutate the wrong entry without throwing. The guard prevents all three — I and S because they fail
+  the identity conjunct, T because it fails the **forward** conjunct with the identity conjunct
+  satisfied. No separate production mechanism is added for them. **Two separate cells ARE owed and
+  are filed**: `NAVIDENT` for I and S, `NAVPAIR` for T (§9). The round-1 version of this plan said no
+  cell was owed at all and named `NAVSTALE`'s arming clause as the witness; the round-2 version filed
+  one cell and called the forward conjunct source-only. Both were measured wrong, one round apart, on
+  the same class.
 - **It does not change the row hold, the lease, `dropRowHold`'s position, or the `finally` guard.**
   All four are stage 7's subject. It does change the descriptor `dropRowHold()` passes to
   `Browse.endHold` on the superseded path, and it corrects the two comments that promised otherwise
@@ -587,14 +663,19 @@ carries it as item 6 with an owner rather than leaving it to the rebase.
 
 Stated epistemically. This design survived the strikes below; that is not a claim of safety.
 
-- **The predicate rests on an enumeration for its *semantics*, not for its *totality*.** Six stack
-  writers were found by an executed grep and all six change the top's identity. If a seventh exists
-  that this grep missed, a stack-superseded settle could still be mis-classified as applicable. The
-  branch conjuncts are what keep that from producing an `undefined`; they do not keep it from
-  producing a *wrong* landing. The round-1 review re-ran the grep independently and got the same six
-  sites, so the enumeration has now survived two executions by two seats — which raises its
-  confidence and does not change its kind. It is still an enumeration, and this is still the
-  coordinate to attack.
+- **The predicate rests on an enumeration for its *semantics*, not for its *totality* — and the
+  enumeration has already been broken once, without a seventh writer.** Six stack writers were found
+  by an executed grep and each one, taken alone, changes the top's identity. The round-1 version of
+  this residual said a mis-classification would need "a seventh that this grep missed". **MEASURED at
+  round 2 (F9): it needs no seventh.** A *pair* of the known six — `openSub` then `closeSub` —
+  composes to leave `navStack`'s top identity intact while moving `fwdStack`, and that pair is drive
+  T. So the coordinate to attack is not the completeness of the writer list; it is the **closure of
+  the list under composition**, which nothing here proves and which a grep cannot decide. The branch
+  conjuncts are what caught this instance, and they are what would catch a further one that keeps the
+  descriptor stack's shape. A composition that left BOTH stacks' tops satisfying the predicate while
+  meaning something new would still be mis-classified; no such sequence is known, and "not known" is
+  a reading. The round-1 review re-ran the grep and got the same six sites, so the *membership* of
+  the list has survived three executions by two seats; its closure has survived none.
 - **`enterApp` was not driven.** It rebinds `navStack` wholesale (`js/app.js:1181`) and does **not**
   clear `fwdStack` — confirmed by reading `js/app.js:1170-1200`, so after a foreground re-entry the
   two stacks are inconsistent with each other independently of any gesture. That is a pre-existing
@@ -612,23 +693,34 @@ Stated epistemically. This design survived the strikes below; that is not a clai
   only through its consequences. The suite cell must therefore assert the consequences (no corrupt
   stack; a gesture arms after one further navigation — §1's measured form, not the immediate one) or
   instrument the timer explicitly and say so. A cell that quietly asserts "no throw" against a
-  harness that eats throws is vacuous. Both measurements at this amendment used the instrumented
-  form, and the instrumentation is a two-word change to `test/app-harness.js`'s timer catch —
-  whichever route the test author takes, the cell states which one it is.
+  harness that eats throws is vacuous. Every throw figure in §1 — drives F and B′ and both their
+  controls — was taken with the instrumented form, and the instrumentation is a two-word change to
+  `test/app-harness.js`'s timer catch. Whichever route the test author takes, the cell states which
+  one it is; and the count must be read on the control too, because a counter that reads 0
+  everywhere is the same vacuity in a new place.
 - **The reveal report is NOT a usable oracle for "did it throw".** Measured: the `@reveal` FLASH line
   is emitted when the observation window closes, not at the reveal, so its absence at the end of a
   test means nothing. An earlier version of this reproduction used exactly that oracle and its
   negative control failed. Recorded so the test author does not re-derive it.
-- **§1's branch-B route is the one drive not re-executed at this amendment.** Branch B as written
-  reaches the chapter list from a home tile, which needs library data the harness fixture does not
-  supply out of the box; the round-1 review did not build it either and recorded its branch-B
-  statements as readings. Its throw is the authoring execution and stands as such — not re-derived
-  here. What IS driven for the back branch is drive S (§1), which reaches the same commit branch
-  through the settings sub-screen and exhibits the wrong-entry landing rather than the throw.
-  **Who closes it:** the test author, when `NAVSTALE`'s branch-B half is written; the fixture work is
-  the library data, and if it proves expensive, drive S is the admissible substitute for the back
-  branch's staleness handling — but it is NOT a substitute for the branch-B *throw*, which is what
-  `NAVSTALE-b` expects to redden.
+- **The back branch's throw is CLOSED, and the cost this residual used to state was wrong (F11).**
+  The round-1 version of this entry assigned the test author a library-data fixture and offered drive
+  S as a partial substitute. **MEASURED at round 2:** drive B′ (§1) produces the same throw at HEAD —
+  **1** recorded, control **0** — with no library data, no chapter list and no new fixture; and drive
+  S records **0** throws in every build, so it was never a throw substitute at all. `NAVSTALE-b`'s
+  red-first demonstration therefore waits on nothing. What remains genuinely undriven is only §1's
+  *chapter-list* route as literally written, and nothing depends on it.
+- **Drive T's interleaving is constructible, not observed on a device.** Two deliberate taps inside
+  one 340 ms window is a tighter interaction than F, B′, I or S require. Both taps are shipped
+  controls and the harness builds the sequence deterministically, which is what a coverage cell needs;
+  whether a user reaches it is a reading of the interaction, not a measurement. This does not weaken
+  `NAVPAIR`: the cell's job is to keep the forward conjunct from being deleted, and it does that
+  whatever the field frequency. It does mean the *severity* of the shipped defect drive T exhibits is
+  stated as unquantified rather than as low or high.
+- **`NAVPAIR`'s fixture reaches `openSub` through the harness's `realOptions` boot option**
+  (`test/app-harness.js`, which wires the shipped `.hubrow[data-sub]` rows to the real `openSub`), and
+  reaches `closeSub` through the `#dgBack` listener `js/app.js:3091` binds unconditionally at boot.
+  Both are production paths; neither needs a new harness capability. The measurement above used
+  exactly those two.
 
 ---
 
@@ -640,35 +732,52 @@ Stated epistemically. This design survived the strikes below; that is not a clai
 | 2 | File `Claude/Campaigns/swipe-navstack.json` binding the gates below | the assistant | owed |
 | 3 | Author the red suite from §9 as `test/swipe-navstack-settle.test.js` | the test author | owed |
 | 4 | Build green: the three edits **as prescribed in §4.1**, the two comment scrubs in §8, the re-anchoring in §8, and **nine new registrations** in §9 — `NAVSTALE-a/b/c`, `NAVIDENT-a`, `NAVAPPLIES-b`, `NAVRECONCILE-a/b`, `NAVTOTAL-a/b`. `NAVAPPLIES-a` is the re-anchored existing registration and is not a new one; the registry therefore goes from 152 to 161 | the builder | owed |
-| 5a | Every named mutant executed individually, foreground, against its target file; confirm no `*.mutbak` anywhere afterwards. ⚠️ `NAVSTALE-a` and `NAVIDENT-a` are expected to redden **`NAVIDENT` and not `NAVSTALE`** — a run that reddens `NAVSTALE` instead means the drive has drifted, not that the mutant is stronger than declared | the builder | owed |
-| 5b | Blast-radius probe, **control first**: re-run §8's measurement against the built tree and require the **refused** set — rotted AND non-unique, both classes counted — to be exactly one registration, the four fingerprints unchanged, the append-census text unchanged, `docs/swipe-model.generated.txt` regenerated rather than hand-edited with its three census pins reading `715`, `716`, `1197`, and `test/mutation-anchors.test.js` green on all three subtests | the builder | owed |
+| 5a | Every named mutant executed individually, foreground, against its target file; confirm no `*.mutbak` anywhere afterwards. ⚠️ `NAVSTALE-a` and `NAVIDENT-a` are expected to redden **`NAVIDENT` and not `NAVSTALE`**, and `NAVTOTAL-b` is expected to redden **`NAVPAIR` and not `NAVTOTAL`** — a run that reddens the other cell means the drive has drifted, not that the mutant is stronger than declared | the builder | owed |
+| 5b | Blast-radius probe, **control first**, in **two halves against two named tree states** — the figure and the check must never be taken against different trees (see the rule below). **(i) Tree = the three source edits applied, `tools/mutate.mjs` UNCHANGED:** the **refused** set — rotted AND non-unique, both classes counted — is **exactly one** registration, the rotted `swipe: abort mutates the nav stack like a commit`. **(ii) Tree = the built tree, i.e. (i) plus §8's re-anchoring:** the refused set is **zero**, which is the same statement as `test/mutation-anchors.test.js` green — measured **6 tests / 6 pass / 0 fail**, count read from the runner. Both figures are measured in §8. Also on the built tree: the four fingerprints unchanged, the append-census text unchanged, and `docs/swipe-model.generated.txt` regenerated rather than hand-edited with its three census pins reading `715`, `716`, `1197` | the builder | owed |
 | 5c | `node tools/stamp-build.mjs` — the build number bumped in lockstep with `sw.js` and `js/debug.js` | the builder | owed |
 | 6 | Code review | the code reviewer | owed |
 | 7 | Coverage audit | the coverage auditor | owed |
 | 8 | Records scrub (§8, seven items, five of them owned outside the build commit) | the assistant and the planner, per §8's owner column | owed |
 
-**A measured set larger than §8's declared set is a blast-radius miss and this plan is amended before
-the commit lands. A measured set SMALLER is also a stop** — it means the transform applied is not the
-transform specified. **The declared set is measured from §4.1's exact text**; a deviation from that
-text re-opens the measurement rather than tripping the rule (§4.1).
+**The equality rule, and the two things it is measured against.** A measured set larger than §8's
+declared set is a blast-radius miss and this plan is amended before the commit lands. **A measured
+set SMALLER is also a stop** — it means the transform applied is not the transform specified. **The
+rule is evaluated per half of 5b, each against the tree state named in that half**, because the
+declared figure and the check are only comparable when both are taken against the same edit set AND
+the same tree state: half (i) is `1` against the source edits with the registry unchanged, half (ii)
+is `0` against the built tree after the re-anchoring. **The declared figures are measured from §4.1's
+exact text**; a deviation from that text re-opens the measurement rather than tripping the rule
+(§4.1).
 
-**Red-first is a step, not a report.** `NAVSTALE`'s and `NAVIDENT`'s drives must each be shown red on
-unmodified HEAD before the fix lands, and their expected reds are named so a partial red is not read
-as a red: at HEAD, `NAVSTALE`'s branch-F drive reddens on the throw assertion **and** on the arming
-assertion taken after one further navigation; `NAVIDENT`'s drives I and S redden on the landed screen.
-A drive that reddens on fewer assertions than these has not been written as specified.
+⚠️ **Why this step is written that way.** Round 2 measured that its previous wording — one figure of
+`1`, checked against the *built* tree, where the answer is `0` — halts a correct build at its last
+step (F10). This project has now had a blast-radius equality rule fire on correct work three times,
+each time because the declared figure and the gate's check were taken against different edit sets or
+different tree states. Board row `T-TOOL3` owns the durable tooling form; this step's job is only to
+be self-describing, and it is.
+
+**Red-first is a step, not a report.** `NAVSTALE`'s, `NAVIDENT`'s and `NAVPAIR`'s drives must each be
+shown red on unmodified HEAD before the fix lands, and their expected reds are named so a partial red
+is not read as a red: at HEAD, `NAVSTALE`'s branch-F drive reddens on the throw assertion **and** on
+the arming assertion taken after one further navigation, and its branch-B′ drive reddens on the throw
+assertion (**1** recorded throw against its control's **0**); `NAVIDENT`'s drives I and S redden on
+the landed screen; `NAVPAIR`'s drive T reddens on the landed screen (`playback`, where the control
+lands `general`). A drive that reddens on fewer assertions than these has not been written as
+specified.
 
 **Exit condition.** All of: every §9 cell active, green and mutation-verified, with `NAVTOTAL`'s
-source-only status recorded rather than papered over and `NAVSTALE-a`'s killing cell recorded as
-`NAVIDENT`; §8's measured co-change set equal to its declared set on all ten rows; the suite green at
-a count read from the runner, not inferred; the §8 records scrub complete on all seven items; the
-campaign manifest reading COMPLETE with every gate's verdict filed. **CI-complete — no device gate is
-owed.**
+source-only status recorded rather than papered over **and recorded with the drive set it ranges over
+(F, I, S, T, B′) rather than as a claim about all reachable drives**, `NAVSTALE-a`'s killing cell
+recorded as `NAVIDENT`, and `NAVTOTAL-b`'s recorded as `NAVPAIR`; §8's measured co-change set equal to
+its declared set on all ten rows, **each row read against the tree state 5b names for it**; the suite
+green at a count read from the runner, not inferred; the §8 records scrub complete on all seven items;
+the campaign manifest reading COMPLETE with every gate's verdict filed. **CI-complete — no device gate
+is owed.**
 
 **Handoff:** **the plan reviewer** → the test author → the builder → the code reviewer → the coverage
 auditor. The adversary is not commissioned again for this slice: the defect it would hunt is the one
-already executed in §1, and the fix's own fracture surface is the enumeration named in §12, which is
-the reviewer's target.
+already executed in §1, and the fix's own fracture surface is the composition question named in §12,
+which is the reviewer's target.
 
 ---
 
@@ -676,8 +785,8 @@ the reviewer's target.
 
 Casebook: `Claude/Charpy/PLAN-swipe-navstack-settle-window-2026-08-06-r1.md`, verdict TEMPER,
 reviewed at `13a97b0`. Every disposition below carries the measured result that settles it; all
-measurements were re-executed at this amendment against `596c579`, control first, on a copy outside
-the repo.
+measurements were executed at the **round-1** amendment against `596c579`, control first, on a copy
+outside the repo, and every one of them was re-derived independently by the reviewer at round 2.
 
 | # | Finding | Disposition | The measurement that settles it |
 |---|---|---|---|
@@ -690,7 +799,36 @@ the repo.
 | **F7** | No cell drives a same-view `navTo` replacement | **ACCEPTED, and it became the fix for F4.** Drive I is exactly that interference, and it is the drive that kills `NAVIDENT-a` | drive I with the identity conjunct weakened to `.v`: landed screen **home**, `nav=applied` — the user tapped Books and was returned to Home |
 | **F8** | `enterApp` rebinds `navStack` and does not clear `fwdStack` | **ACCEPTED into §12** with the `file:line` and the decision it waits on. Not closed here: it is a pre-existing hazard this plan neither creates nor removes | reading (`js/app.js:1170-1200`), stated as one |
 
-**What this amendment does not cover.** §1's branch-B *chapter-list* route was not re-executed at this
-round — its fixture needs library data — so its throw remains the authoring execution rather than a
-re-derivation. The back branch's staleness handling is driven instead through drive S. §12 names the
-owner and the substitution boundary.
+**Round-2 note on this table.** The plan reviewer re-derived all eight dispositions above at round 2,
+control first and by execution rather than by reading, and re-opened none of them. The round-1
+statement that followed this table — that §1's branch-B route was uncovered and that drive S stood in
+for it — was superseded by measurement at round 2 and is now §15's F11.
+
+---
+
+## 15. Round-2 temper — per-finding disposition
+
+Casebook: `Claude/Charpy/PLAN-swipe-navstack-settle-window-2026-08-06-r2.md`, verdict TEMPER,
+reviewed at `decfbd9`. Every disposition carries the measured result that settles it. **All four were
+re-executed independently at this amendment against `decfbd9`, control first, on copies of the tree
+outside the repo** (a pristine control copy, a drive copy whose harness fake timer records a throwing
+callback instead of swallowing it, and three registry trees), with `node_modules` reached by a
+directory junction. `git status --porcelain` in the repo named no source, tooling, test or generated
+file before or after any probe, and no `*.mutbak` exists anywhere. `tools/mutate.mjs` was imported
+(it is CLI-guarded); `tools/source-gate-sweep.mjs` was never imported, because importing it mutates
+`js/app.js`.
+
+| # | Finding | Disposition | The measurement that settles it |
+|---|---|---|---|
+| **F9** | `NAVTOTAL`'s source-only status is measured false for the forward conjunct; §12 anticipates the wrong crack; §9 dimension 4(b) is missing a cell | **RESOLVED, and the clause moved to a behavioural cell.** §5's per-writer argument is corrected to a per-sequence one and its table extended to seven builds × three drives; `NAVTOTAL` is narrowed to the `navStack.length` conjunct with its drive set stated in the sentence; **§9 gains `NAVPAIR`**, which owns `NAVTOTAL-b`; dimension 4(b) becomes a three-kind, five-cell matrix; §12's "seventh writer" residual is replaced by the closure-under-composition residual. The registration count is unchanged (152 → 161): only `NAVTOTAL-b`'s expected killing cell moves | drive T re-derived independently: at HEAD it lands **`playback`** — neither the gesture's destination `general` nor the user's last explicit action `options` — while its control lands `general`. Across seven builds: the specified predicate, `NAVSTALE-a`, `NAVIDENT-a` and `NAVTOTAL-a` all land T on **`options`** with `nav=superseded`; **`NAVTOTAL-b`** and both-deleted land it on **`playback`** with `nav=applied`. `NAVTOTAL-a` is indistinguishable from the specified predicate on every observable of **all five** drives F, I, S, T and B′; `NAVTOTAL-b` is distinguished by T and by T alone |
+| **F10** | §13 step 5b requires a refused count a correct build cannot produce | **RESOLVED, and made self-describing.** 5b is split into two halves, each naming the tree state its figure was measured against; the equality rule is re-scoped to apply per half. No measured number moved | control (untransformed copy) **0** refused of 152 registrations / 161 anchor parts; the three source edits with `tools/mutate.mjs` unchanged → **1** (the rotted `swipe: abort mutates the nav stack like a commit`, ANCHOR NOT FOUND); the built tree, i.e. those edits **plus** §8's re-anchoring → **0**, and `test/mutation-anchors.test.js` **6 tests / 6 pass / 0 fail** on that tree, count read from the runner. The previous wording compared the first figure against the second tree |
+| **F11** | The back branch's throw is drivable at HEAD with no library data, and drive S is not a throw substitute | **RESOLVED.** §1 gains drive B′ and its control and demotes the chapter-list route to a superseded authoring execution; §12's branch-B residual is retired and the fixture cost it assigned is withdrawn; `NAVSTALE`'s fixture names B′; §13's red-first list names B′'s expected red | drive B′ at HEAD: **1** recorded timer throw, `Cannot read properties of undefined (reading 'v')`; its control **0**. Under all six predicate builds: **0** throws and `nav=superseded`. Drive S records **0** throws in every build, so it never witnessed the throw. The interfering navigation is the shipped `closeSub` listener on `#dgBack` (`js/app.js:3091`) falling through to `goBack` (`js/app.js:177` → `145`) — no chapter list, no library data |
+| **F12** | "Closed by construction" does not name the enforcing gate | **ACCEPTED.** §8's construction paragraph and §4.1's deviation paragraph both cite `test/mutation-anchors.test.js`'s non-uniqueness subtest, with the measured red that proves it fires | the subtest is green on the pristine tree and on the built tree (6/6 in both) and **red** on a tree where edit 2 is written as a nested block reproducing `js/app.js:1038` verbatim — `not ok 3`, `M1NOWRITE` and `S2-24 ABORTNORENDER` each NON-UNIQUE with `from` occurring 2 times. The gate is therefore proven able to fail, not merely present |
+
+**What this amendment does not cover.** §1's branch-B *chapter-list* route as literally written is
+still not driven; nothing depends on it, because B′ drives the same branch to the same throw. Whether
+drive T's two-tap interleaving occurs inside a real 340 ms window on a device is not measured and is
+recorded in §12 as a reading. §8 item 10's *transformed-tree* suite run was not repeated: the round-2
+changes are prose only and alter no source, tooling, test or generated file, so that figure stands as
+measured. The repo's own suite WAS re-run at this amendment — **916 tests / 915 pass / 0 fail /
+1 skip**, count read from the runner — and `git status --porcelain` afterwards named only this plan.
