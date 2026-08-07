@@ -84,8 +84,15 @@ conversation that produced it. It carries the spine, the next action, the open i
   three probe cells with an identical assertion pass 3/3 on shipped source, while under the mutant
   the empty-stack cell **passes** and both route cells **fail**. The cell design is proven before it
   is authored.
-- **NEXT ACTION — the test author**, §17.5 item 1. Then **stage 7**, unblocked, still owing its
-  per-range re-measure `0/0/0/+11/+16`.
+- ✅ **`T-NS-COV1` IS CLOSED IN CODE.** Curie authored `NAVAPPLIES (newNav branch, NON-EMPTY
+  fwdStack)` (`e56ab21`) — ships green as a preservation cell, red under the mutant. Brunel
+  registered `NAVFWDCLEAR-a` (`14352b7`, registry 162 → **163**). **The acceptance split was
+  measured independently THREE times** — planner, test author, builder — and holds: the new cell
+  fails while its sibling passes in the same run. The transform's behavioural delta went **0 → 1**,
+  so the registration reports CAUGHT where it would have reported UNCAUGHT. Anchors gate 6/6 before
+  and after; suite **937 / 936 pass / 0 fail / 1 skip**.
+- **NEXT ACTION — the planner**, §17.5 item 3 (§9 dimension 4(a): PARTIAL → SWEPT). Then **stage 7**,
+  unblocked, still owing its per-range re-measure `0/0/0/+11/+16`.
 - **15 campaigns now, not 14.** `Claude/Campaigns/swipe-navstack.json` is filed IN_PROGRESS with
   plan-review already passing and four gates owed. ⛔ It binds **no adversary gate** — the plan's
   §13 names none, and that sequence is what three rounds forged.
