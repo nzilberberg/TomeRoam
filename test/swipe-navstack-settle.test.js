@@ -197,7 +197,7 @@ async function fixtureT(h) {
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 test('NAVSTALE (drive F, forward branch) — a settle-window navigation that empties fwdStack leaves '
   + 'the stacks alone, throws nothing, reports nav=superseded, and keeps the stack total',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   const inst = instrumentTimers(h);
   try {
@@ -233,7 +233,7 @@ test('NAVSTALE (drive F, forward branch) — a settle-window navigation that emp
 
 test('NAVSTALE (drive F CONTROL) — the same commit with no mid-settle tap throws nothing, lands the '
   + "gesture's own destination and reports nav=applied",
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   const inst = instrumentTimers(h);
   try {
@@ -253,7 +253,7 @@ test('NAVSTALE (drive F CONTROL) — the same commit with no mid-settle tap thro
 
 test("NAVSTALE (drive B′, back branch, NO library data) — a shipped #dgBack in the settle window "
   + 'pops navStack to its root without the commit throwing, and reports nav=superseded',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   const inst = instrumentTimers(h);
   try {
@@ -277,7 +277,7 @@ test("NAVSTALE (drive B′, back branch, NO library data) — a shipped #dgBack 
 
 test("NAVSTALE (drive B′ CONTROL) — the same back commit with no mid-settle tap throws nothing and "
   + 'reports nav=applied',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   const inst = instrumentTimers(h);
   try {
@@ -308,7 +308,7 @@ test("NAVSTALE (drive B′ CONTROL) — the same back commit with no mid-settle 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 test('NAVIDENT (drive I, same-view replacement) — re-tapping the ALREADY-OPEN Books tab inside the '
   + 'settle window leaves the user on Books, not on the screen the gesture was heading for',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     h.tap('.navbtn[data-nav="books"]'); await ms(h);      // navStack = [home, books]
@@ -327,7 +327,7 @@ test('NAVIDENT (drive I, same-view replacement) — re-tapping the ALREADY-OPEN 
 });
 
 test('NAVIDENT (drive I CONTROL) — with no mid-settle tap the same gesture lands Home and reports nav=applied',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     h.tap('.navbtn[data-nav="books"]'); await ms(h);
@@ -340,7 +340,7 @@ test('NAVIDENT (drive I CONTROL) — with no mid-settle tap the same gesture lan
 
 test("NAVIDENT (drive S, settings ‹ Back) — a sub-screen's own back control inside the settle window "
   + 'lands the Options hub, not one screen further back',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     await fixtureSub(h);                                   // [home, books, options, general]
@@ -357,7 +357,7 @@ test("NAVIDENT (drive S, settings ‹ Back) — a sub-screen's own back control 
 });
 
 test('NAVIDENT (drive S CONTROL) — with no mid-settle tap the same gesture lands the hub and reports nav=applied',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     await fixtureSub(h);
@@ -386,7 +386,7 @@ test('NAVIDENT (drive S CONTROL) — with no mid-settle tap the same gesture lan
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 test('NAVPAIR (drive T, identity-preserving PAIR) — openSub then closeSub inside the settle window '
   + 'leaves the user on the hub they are standing on, not on the sub the pair left on fwdStack',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     await fixtureT(h);                                     // [home, books, options], fwdStack [general]
@@ -409,7 +409,7 @@ test('NAVPAIR (drive T, identity-preserving PAIR) — openSub then closeSub insi
 
 test('NAVPAIR (drive T CONTROL) — with neither mid-settle tap the same forward replay lands `general` '
   + 'and reports nav=applied',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     await fixtureT(h);
@@ -450,7 +450,7 @@ test('NAVPAIR (drive T CONTROL) — with neither mid-settle tap the same forward
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 test('NAVRECONCILE — a stack-superseded settle reconciles the screen the stacks now name and writes '
   + 'NO scroll, neither the panel reset nor the pre-gesture document scroll',
-{ skip: SKIP }, async () => {
+async () => {
   const h = boot({ fakeTimers: true, realOptions: true });
   try {
     await fixtureSub(h);                                   // [home, books, options, general]
@@ -647,7 +647,7 @@ function appliesPredicate(src) {
 const hasStackLengthConjunct = (p) => p.ok && /navStack\.length\s*>\s*1/.test(p.text);
 
 test('NAVTOTAL — the staleness predicate in js/app.js carries the navStack.length > 1 conjunct (source)',
-{ skip: SKIP }, () => {
+() => {
   const src = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8');
   const p = appliesPredicate(src);
   assert.ok(p.ok, `the settle-window staleness predicate must exist as ONE \`const applies = …;\` — ${p.reason}`);

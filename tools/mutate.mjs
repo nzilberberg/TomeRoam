@@ -27,14 +27,16 @@ const BLOB_TO = "          if (blob) { curObjUrl = URL.createObjectURL(blob); us
 // Multi-line swipe anchors, built by join for the same reason as BLOB_FROM: writing
 // them as escaped literals is how trap T6 (CRLF vs '\n') and a mangled heredoc both
 // produced anchors that silently never matched.
-const ABORT_STACK_FROM = [
-  '        if (commit) {',
-  "          if (cur.dir === 'back') fwdStack.push(navStack.pop());",
-].join('\n');
-const ABORT_STACK_TO = [
-  '        if (true) {',
-  "          if (cur.dir === 'back') fwdStack.push(navStack.pop());",
-].join('\n');
+// Re-anchored (PLAN-swipe-navstack-settle-window.md §8): the old anchor
+// (`if (commit) {` + the back-pop line) rotted when the commit branch became conditional on
+// `applies` rather than `commit` alone. The rotted registration's meaning — "an abort mutates
+// the nav stack like a commit" — is preserved by moving the anchor onto the new predicate's
+// FIRST line and dropping only the `commit &&` conjunct, so an abort (where `applies` would
+// otherwise be false) still satisfies the mutated predicate whenever `currentDesc() ===
+// cur.from`. Do NOT re-anchor to `const applies = true`: that would also delete the staleness
+// guard, moving this mutant's killing cell from the I11 abort test to NAVSTALE.
+const ABORT_STACK_FROM = '        const applies = commit && currentDesc() === cur.from';
+const ABORT_STACK_TO = '        const applies = currentDesc() === cur.from';
 const END_RELEASE_FROM = ['    function end() {', '      releaseGesture();'].join('\n');
 const END_RELEASE_TO = ['    function end() {', '      /* mutated */'].join('\n');
 // stage 3: the superseded-session id on the hard-reset log line spans two source lines.
@@ -321,6 +323,87 @@ const MUTATIONS = [
     ].join('\n') },
   { name: 'swipe: abort mutates the nav stack like a commit (-> I11 abort test)',
     from: ABORT_STACK_FROM, to: ABORT_STACK_TO },
+  // ── PLAN-swipe-navstack-settle-window.md §9 — the settle-window staleness guard ──
+  // Nine registrations for the `applies` predicate and its two production consumers (the
+  // stack mutation and the superseded reconcile). The re-anchored registration immediately
+  // above is NAVAPPLIES-a, whose killing cell stays the existing I11 abort test — not any
+  // cell below. Expected killing cells are named per the plan's §9 Coverage Model / the RED
+  // record (Claude/Curie/RED-swipe-navstack-settle-window.md §4).
+  { name: 'NAVSTALE-a: the object-identity conjunct is deleted from the predicate, so the guard '
+    + 'no longer checks that currentDesc() is still cur.from (-> NAVIDENT, NOT NAVSTALE — MEASURED: '
+    + 'the branch conjuncts are already false on both §1 sequences, so this reddens NAVIDENT '
+    + "(drives I and S) and NAVRECONCILE's landed-screen clause, an extra witness, not drift)",
+    from: '        const applies = commit && currentDesc() === cur.from',
+    to:   '        const applies = commit' },
+  { name: 'NAVIDENT-a: the identity comparison is weakened to a value (`.v`) comparison, the exact '
+    + 'substitution Engineering Contract §4.12 forbids (-> NAVIDENT drive I ONLY, not drive S — '
+    + "drive I is the one interference where navTo's same-view REPLACEMENT changes object identity "
+    + 'while leaving `.v` unchanged)',
+    from: '        const applies = commit && currentDesc() === cur.from',
+    to:   '        const applies = commit && currentDesc().v === cur.from.v' },
+  { name: "NAVTOTAL-a: the back branch's navStack.length > 1 conjunct is deleted from the predicate "
+    + '(-> NAVTOTAL, a SOURCE cell, and no behavioural cell — MEASURED indistinguishable from the '
+    + 'specified predicate on every observable of drives F, I, S, T and B′, because no shipped '
+    + 'writer removes from below navStack\'s top)',
+    from: "          && (cur.dir === 'back' ? navStack.length > 1",
+    to:   "          && (cur.dir === 'back' ? true" },
+  { name: "NAVTOTAL-b: the forward replay's fwdStack[fwdStack.length - 1] === cur.dest conjunct is "
+    + 'deleted from the predicate (-> NAVPAIR, NOT NAVTOTAL — MEASURED to redden drive T alone: the '
+    + "openSub/closeSub PAIR leaves navStack's top identity intact but replaces fwdStack's top, which "
+    + 'only this conjunct catches)',
+    from: "              : fwdStack[fwdStack.length - 1] === cur.dest);",
+    to:   "              : true);" },
+  { name: 'NAVSTALE-b: the staleness guard is applied to the forward branches only, so a committed '
+    + "back gesture still pops navStack whenever commit is true, ignoring the guard's identity and "
+    + 'length conjuncts (-> NAVSTALE drive B′, which throws on an already-emptied navStack; drive F '
+    + 'stays behind the full predicate and is unaffected)',
+    from: [
+      '        if (applies) {',
+      "          if (cur.dir === 'back') fwdStack.push(navStack.pop());",
+      "          else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav",
+      '          else navStack.push(fwdStack.pop());',
+      '        }',
+    ].join('\n'),
+    to: [
+      "        if (commit && cur.dir === 'back') fwdStack.push(navStack.pop());",
+      '        else if (applies) {',
+      "          if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav",
+      '          else navStack.push(fwdStack.pop());',
+      '        }',
+    ].join('\n') },
+  { name: 'NAVAPPLIES-b: the whole conditional stack-mutation block is deleted, so a clean commit '
+    + 'mutates neither stack (-> NAVAPPLIES, the preservation cell, on all three commit branches)',
+    from: [
+      '        if (applies) {',
+      "          if (cur.dir === 'back') fwdStack.push(navStack.pop());",
+      "          else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav",
+      '          else navStack.push(fwdStack.pop());',
+      '        }',
+    ].join('\n'),
+    to: '        /* mutated: NAVAPPLIES-b — the stack mutation is never applied */' },
+  // NAVSTALE-c models the class RED-swipe-navstack-settle-window.md §4 explicitly declines to
+  // model: the mutation runs UNCONDITIONALLY (as at HEAD) but the resulting throw is caught at
+  // its one throw site (reportReveal's dest.v argument) rather than escaping to the settle
+  // timer, so a bare "did not throw" assertion is fooled and only the arming clause (a fresh
+  // gesture after ONE FURTHER navigation) witnesses the corruption.
+  { name: 'NAVSTALE-c: the stack mutation is made unconditional again (ignoring the staleness guard '
+    + 'entirely) and the reveal report that would otherwise throw on the corrupted stack has its '
+    + 'exception swallowed, so only the post-corruption arming clause witnesses it (-> NAVSTALE)',
+    from: '        if (applies) {',
+    to:   '        if (commit) {',
+    also: {
+      from: "        reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'), cover);",
+      to:   "        try { reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'), cover); } catch (e) { /* mutated: NAVSTALE-c swallows the throw */ }" } },
+  { name: "NAVRECONCILE-a: the superseded reconcile's explicit resetScroll: false is dropped, so "
+    + 'resetScroll defaults to true and jumps the newer screen back to its top (-> NAVRECONCILE, '
+    + 'the #options.scrollTop clause, MEASURED 300 → 0)',
+    from: '        else if (commit) applyScreen(dest, { render: false, resetScroll: false });   // stack-superseded',
+    to:   '        else if (commit) applyScreen(dest, { render: false });   // mutated: NAVRECONCILE-a drops resetScroll: false' },
+  { name: "NAVRECONCILE-b: the superseded reconcile has the abort path's document-scroll restore "
+    + 'appended, so the pre-gesture scroll is written over the newer screen (-> NAVRECONCILE, the '
+    + 'window.scrollTo clause, MEASURED 0 → 1 recorded call)',
+    from: '        else if (commit) applyScreen(dest, { render: false, resetScroll: false });   // stack-superseded',
+    to:   '        else if (commit) { applyScreen(dest, { render: false, resetScroll: false }); window.scrollTo(0, cur.scroll0); }   // mutated: NAVRECONCILE-b' },
   // DEFENCE IN DEPTH — each half alone was MEASURED insufficient, so both must go or
   // the sweep would wrongly report the guard as undefended.
   { name: 'swipe: duplicate-end defence removed, BOTH guards (-> I13 duplicate-end test)',
@@ -1318,11 +1401,15 @@ const MUTATIONS = [
   // after it. This mutant removes the early call, so the only remaining dropRowHold()
   // is the `finally` one, which runs after applyScreen — reproducing HEAD's shipped
   // ordering (and therefore the shipped defect) exactly.
+  // Re-anchored (PLAN-swipe-navstack-settle-window.md §8): the comment this anchor's first
+  // line came from was scrubbed — it asserted currentDesc() is unconditionally the settled
+  // destination here, which a stack-superseded settle falsifies. Moved onto the scrubbed
+  // comment's new last line; the mutation itself is unchanged.
   { name: 'EMPTYAFTERHOME-a: the early dropRowHold() is removed, so the hold release again '
     + 'runs only in finalize\'s `finally`, after applyScreen has already hidden #browse '
     + '(-> EMPTYAFTERHOME cell 1, then cell 2)',
-    from: "        // this function, well before this line.\n        dropRowHold();",
-    to:   "        // this function, well before this line.\n        /* mutated: EMPTYAFTERHOME-a — early release removed */" },
+    from: "        // it instead reads whatever screen a newer navigation already reached.\n        dropRowHold();",
+    to:   "        // it instead reads whatever screen a newer navigation already reached.\n        /* mutated: EMPTYAFTERHOME-a — early release removed */" },
 
   // ── EMPTYAFTERHOME-b — the half fix: the reorder applied to only one branch ──
   // Curie's RED-suite note specifies -b as "activate() reached, _realize() suppressed" —

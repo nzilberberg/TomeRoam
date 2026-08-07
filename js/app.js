@@ -347,11 +347,11 @@
     // full LEASE interface is stage 7. Null-safe like releaseGesture, for the same
     // leftover-cleanup reason. (takeRowHold runs in start(), where session is current.)
     const takeRowHold = () => { if (session && window.Browse && Browse.beginHold) session.hold = Browse.beginHold(); };
-    // The SINGLE wrapper around Browse.endHold, and therefore the one place the LANDED
-    // screen is read (Invariant D6, PLAN-swipe-declone.md §5.3.6). currentDesc() is the
-    // read: on a commit the stack mutation runs at the top of runFinalize (well before
-    // either call site below), so the descriptor is already the settled destination by
-    // the time either caller reaches it. The hard-reset path calls
+    // The SINGLE wrapper around Browse.endHold, and therefore the one place the LANDED screen is
+    // read (Invariant D6, PLAN-swipe-declone.md §5.3.6). currentDesc() is the read: on an
+    // APPLIED commit the mutation already ran at the top of runFinalize, so the descriptor is
+    // the settled destination there; a stack-SUPERSEDED commit (§5) skips it, so the descriptor
+    // instead names whatever screen a newer navigation reached. The hard-reset path calls
     // applyScreen(currentDesc(), …) immediately before dropRowHold() — a restore onto the
     // SOURCE, which applyScreen never hides, so ordering against it is not load-bearing.
     // The finalize path calls dropRowHold from INSIDE runFinalize, before the
@@ -696,10 +696,21 @@
         // Allocated HERE, once per settle, so the pairing cannot drift if a path ever
         // returns without reporting.
         const seq = ++revealSeq;
-        if (window.PBDebug) PBDebug.log('SWIPE', `#${seq} ${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v}`
+        // The settle window runs up to 340ms and the rest of the UI is live inside it, so a
+        // navigation can land between arm and finalize. The gesture BORROWS the nav stacks
+        // (subsystem item 3); it may write them only while they still describe the navigation it
+        // planned (Engineering Contract §4.6). Object identity, not `.v`: navTo REPLACES the top
+        // descriptor for a same-view tap (app.js:139) and a `.v` compare would miss it (§4.12).
+        // Evaluated ONCE, above the log line, so the reported outcome and the mutation cannot
+        // disagree.
+        const applies = commit && currentDesc() === cur.from
+          && (cur.dir === 'back' ? navStack.length > 1
+            : cur.newNav ? true
+              : fwdStack[fwdStack.length - 1] === cur.dest);
+        if (window.PBDebug) PBDebug.log('SWIPE', `#${seq} ${commit ? 'commit' : 'abort'} ${cur.dir} ${cur.from.v}→${cur.dest.v} nav=${applies ? 'applied' : 'superseded'}`
           + ` tgt=${tg && tg.isConnected ? 'live' : 'detached'}:${tgDesc} sid=${cur.id}`);
         for (const m of cur.movers) { m.el.style.transition = ''; m.el.style.transform = ''; m.el.style.willChange = ''; }
-        if (commit) {
+        if (applies) {
           if (cur.dir === 'back') fwdStack.push(navStack.pop());
           else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav
           else navStack.push(fwdStack.pop());
@@ -1019,17 +1030,22 @@
         // compared AGAINST — "covers reload on every transition" and "covers reload
         // only on aborts" call for completely different fixes.
         reportReveal((commit ? 'commit→' : 'abort→') + dest.v, dest.v === 'home' ? $('home') : $('browse'), cover);
-        // Release the row hold BEFORE applyScreen can hide #browse, not after (see the
-        // comment on dropRowHold's declaration above). currentDesc() already reads the
-        // settled destination here — the stack mutation for a commit is at the top of
-        // this function, well before this line.
+        // Release the row hold BEFORE applyScreen can hide #browse, not after (see the comment on
+        // dropRowHold's declaration above). On an APPLIED commit currentDesc() already reads the
+        // settled destination here; on a stack-SUPERSEDED commit (§5) the mutation was skipped, so
+        // it instead reads whatever screen a newer navigation already reached.
         dropRowHold();
         // dest already rendered live → reconcile only. Home keeps whatever scroll it showed
         // during the drag (resetScroll:false) — a committed swipe is not a fresh navigation,
         // and #home is a scroll-neutral park (css:98), so there is nothing to restore, only
         // nothing to clobber. Every other destination is unaffected: a fresh navbar Home tap
         // (navTo → applyScreen(desc), no opts) still resets to top (app.js:418-423 parity).
-        if (commit) applyScreen(dest, dest.v === 'home' ? { render: false, resetScroll: false } : { render: false });
+        // A stack-superseded settle mutated NEITHER stack, so `dest` is the screen a newer
+        // navigation reached, not this gesture's destination. Reconcile it with no render and NO
+        // scroll write: restoring cur.scroll0 would write a departed screen's offset, and letting
+        // resetScroll default to true would jump the newer screen to its top (js/nav.js:125).
+        if (applies) applyScreen(dest, dest.v === 'home' ? { render: false, resetScroll: false } : { render: false });
+        else if (commit) applyScreen(dest, { render: false, resetScroll: false });   // stack-superseded
         else {
           // Aborted → reconcile the current screen with NO re-render (nothing was
           // overwritten to restore — PLAN-swipe-declone.md Invariant D3) + put back the
