@@ -24,9 +24,10 @@ tactical state instead of keeping their own copy.
 conversation that produced it. It carries the spine, the next action, the open items and the traps.
 
 - **`main` == `origin/main`, tree clean · build `2026-08-05.2` · suite 900 / 899 pass / 0 fail /
-  1 skip · 14 of 14 campaigns COMPLETE.** Re-executed and confirmed 2026-08-06: the suite via
-  `node --test "test/*.test.js"`, the manifests via `tools/campaign/stage-gate-check.mjs` over
-  every file in `Claude/Campaigns/`. The count rose from 887 when the `board-ids` gate landed.
+  1 skip · **14 of 15 campaigns COMPLETE**, the 15th being `swipe-navstack`, filed IN_PROGRESS with
+  4 gates owed.** Re-executed and confirmed 2026-08-06: the suite via `node --test "test/*.test.js"`,
+  the manifests via `tools/campaign/stage-gate-check.mjs` over every file in `Claude/Campaigns/`.
+  The suite count rose from 887 when the `board-ids` and `board-rows` gates landed.
 - ⛔ **There is no "phase 1–10."** That framing exists in no plan and cost three failed attempts to
   answer "where are we". The spine is **`Claude/Plans/PLAN-swipe-reveal.md` §7, line 736 — PLAIN
   TEXT, not markdown**, which is why markdown-shaped greps never found it. Ten stages.
@@ -38,14 +39,15 @@ conversation that produced it. It carries the spine, the next action, the open i
   applied `734b393`, no round 3 owed); the adversary's §17 step-2 strike DONE (`d0201d7`, **HELD
   STONE**) — struck blind, and U1 is resolved by execution rather than by a third reading. §17
   **step 3, the test author**, is the next campaign step.
-- **NEXT ACTION — navstack plan review ROUND 3, dispatched**, scoped to the F9-F12 dispositions only
-  and expected to close the plan if they hold. Round-2 temper applied at `7d44127` (plan only;
-  registry still 152 at HEAD, so 161 stays a build declaration). The design and the
-  standalone-and-first ruling have survived all three rounds.
+- ✅ **The navstack plan is FORGED and CLEARED TO BUILD** (`b1cbcd0`, round 3, no round 4 owed).
+  Three rounds; each found real Structural defects and none re-opened settled ground, so the rounds
+  were earned — but `T-TOOL3` is the standing reason two of them were needed at all.
   ⭐ Stage 7's per-range shifts `0/0/0/+11/+16` are CONFIRMED by the reviewer, not merely claimed.
-- ⚠️ **Three rounds on a one-function fix.** Each round found real Structural defects and none
-  re-opened settled ground, so the rounds were earned — but `T-TOOL3` is the standing reason two of
-  them were needed at all.
+- **NEXT ACTION — the test author, on the red suite** (`test/swipe-navstack-settle.test.js`),
+  dispatched. Then the builder, the code reviewer, the coverage auditor.
+- **15 campaigns now, not 14.** `Claude/Campaigns/swipe-navstack.json` is filed IN_PROGRESS with
+  plan-review already passing and four gates owed. ⛔ It binds **no adversary gate** — the plan's
+  §13 names none, and that sequence is what three rounds forged.
 - ⚠️ **Stage 7 owes a PER-RANGE re-measure once the navstack slice lands, never a constant shift.**
   The plan now states `0, 0, 0, +11, +16` across stage 7's five ranges, **superseding round 1's
   `+4`/`+8`** — the numbers moved because the temper changed the prescribed edit text. Round 2 is
