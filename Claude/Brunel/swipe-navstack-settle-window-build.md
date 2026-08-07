@@ -397,3 +397,69 @@ written.
 
 **Next owner: unchanged — the coverage auditor** (plan §13 step 7); this pass does not advance the
 campaign.
+
+## 13. `NAVFWDCLEAR-a` registered (plan §17.5 item 2) — 2026-08-07
+
+Input HEAD `e56ab21` (`main` == `origin/main`, tree clean, no `*.mutbak`, `tools/mutate.mjs` holding
+**162** registrations, suite 937/936/0/1, build `2026-08-05.4`). Commissioned by plan §17.5 item 2,
+after item 1 landed in `Claude/Curie/RED-swipe-navstack-settle-window.md` §10.
+
+### 13.1 Transform verified against source, not pasted from the record
+
+§10.6's stated `from` line was checked against `js/app.js:715` directly and matches byte for byte:
+`          else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP →
+chapters is a fresh forward nav`. This is the audit's W1 transform exactly — the bare clause, no
+approximation.
+
+### 13.2 Registration
+
+Added to `tools/mutate.mjs`'s `MUTATIONS` array, immediately after `NAVTOKEN-a`: `NAVFWDCLEAR-a`
+deletes the `fwdStack.length = 0;` clause from the `newNav` commit branch, leaving the `else if`
+push unconditioned on clearing forward history. Registry **162 → 163** (confirmed by reading
+`MUTATIONS.length`, not inferred). Named killing cell: `NAVAPPLIES (newNav branch, NON-EMPTY
+fwdStack)` in `test/swipe-navstack-settle.test.js`, matching the test name verbatim (grepped from
+the test file, not copied from the RED record).
+
+### 13.3 Anchors gate, before and after
+
+`test/mutation-anchors.test.js`: **6/6** on input HEAD before this edit; **6/6** after. The
+`NAVSTALE-b`/`NAVAPPLIES-b` anchor collision §10.6 and plan §17.2 both name did not rot either
+existing registration — both anchor on multi-line `from` blocks that still resolve uniquely; the
+new single-line anchor is a distinct string from either.
+
+### 13.4 Mutant run — individual, foreground, against `js/app.js` — the acceptance split reproduced
+
+Applied by index (`node tools/mutate.mjs 33`, the index `NAVFWDCLEAR-a` resolved to at the time of
+this run — cited here by name in every other place per the campaign's naming rule). Target file only
+(`js/app.js`); no other file touched.
+
+`test/swipe-navstack-settle.test.js` under the mutant: **21 tests / 20 pass / 1 fail / 0 skipped.**
+`NAVAPPLIES (newNav branch, NON-EMPTY fwdStack)` — **FAILS**, on the intended assertion:
+`expected: false, actual: true` ("the newNav commit must clear fwdStack even when it was NOT
+empty... Under mutant NAVFWDCLEAR-a it reads true"). `NAVAPPLIES (newNav branch)` — **PASSES**, in
+the same run. This reproduces plan §17.2's and RED §10.4's acceptance split independently, a third
+time.
+
+Restored (`node tools/mutate.mjs --restore`). `git status --porcelain` afterward names only
+`tools/mutate.mjs`; no `*.mutbak` anywhere in the repo. `test/swipe-navstack-settle.test.js` back to
+**21/21/0/0**.
+
+### 13.5 Full suite
+
+`node --test "test/*.test.js"` → **937 tests / 936 pass / 0 fail / 1 skipped** — unchanged from input
+HEAD; this pass adds a mutation-table entry only, no test, no production source.
+
+### 13.6 Build-number bump — not needed
+
+No shipped asset (`js/`, `css/`, `index.html`, `sw.js`, `build.json`) changed; only `tools/mutate.mjs`,
+a dev tool outside the deploy surface, was written. No bump applies.
+
+### 13.7 Scope discipline
+
+Writable set respected: `tools/mutate.mjs` (one registration added, nothing else touched), this
+build log. `js/`, the plan, and both Curie/Mendeleev records were read, not written. No test file
+edited.
+
+**Next owner: the planner** (plan §17.5 item 3: §9 dimension 4(a)'s newNav sub-cell moves from
+PARTIAL to SWEPT, now that item 1 is measured red under item 2). Board and decision log left
+untouched, per this dispatch's boundary.

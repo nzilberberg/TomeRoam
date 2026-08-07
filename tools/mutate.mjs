@@ -412,6 +412,16 @@ const MUTATIONS = [
     + 'exactly and not an approximation of it)',
     from: "nav=${!commit ? 'abort' : applies ? 'applied' : 'superseded'}`",
     to:   "nav=${applies ? 'applied' : 'superseded'}`" },
+  // ── PLAN-swipe-navstack-settle-window.md §17.5 item 2 — the newNav fwdStack clear,
+  // precondition established by the RED record's own NON-EMPTY fwdStack drive ──
+  { name: "NAVFWDCLEAR-a: the forward stack clear is deleted from the fresh forward navigation's "
+    + 'commit branch, so a NP → chapter-list commit reached with forward history leaves that '
+    + "history live instead of clearing it (-> NAVAPPLIES (newNav branch, NON-EMPTY fwdStack), "
+    + 'test/swipe-navstack-settle.test.js — the empty-fwdStack NAVAPPLIES (newNav branch) cell '
+    + 'stays green in the same run, because its own drive never establishes the precondition '
+    + 'this clause needs)',
+    from: '          else if (cur.newNav) { navStack.push(cur.dest); fwdStack.length = 0; }   // NP → chapters is a fresh forward nav',
+    to:   '          else if (cur.newNav) { navStack.push(cur.dest); }   // mutated: NAVFWDCLEAR-a drops the fwdStack clear' },
   // DEFENCE IN DEPTH — each half alone was MEASURED insufficient, so both must go or
   // the sweep would wrongly report the guard as undefended.
   { name: 'swipe: duplicate-end defence removed, BOTH guards (-> I13 duplicate-end test)',
