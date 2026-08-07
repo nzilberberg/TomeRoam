@@ -91,8 +91,19 @@ conversation that produced it. It carries the spine, the next action, the open i
   fails while its sibling passes in the same run. The transform's behavioural delta went **0 → 1**,
   so the registration reports CAUGHT where it would have reported UNCAUGHT. Anchors gate 6/6 before
   and after; suite **937 / 936 pass / 0 fail / 1 skip**.
-- **NEXT ACTION — the planner**, §17.5 item 3 (§9 dimension 4(a): PARTIAL → SWEPT). Then **stage 7**,
-  unblocked, still owing its per-range re-measure `0/0/0/+11/+16`.
+- ✅✅ **`T-NS-COV1` AND `T-NS-COV2` ARE CLOSED.** §9 dimension 4(a) is **SWEPT** on a measured
+  red/green split (`1bc3326`, §17.6); `PARTIAL` appears nowhere in the plan; all three §17.5 items
+  read DONE. Plan gate rc=0 with its two standing warnings — **run by the assistant, because the
+  planner agent hit the weekly API limit immediately after committing.**
+  ⚠️ **That agent FAILED mid-turn but its work had already landed.** Reconciled rather than assumed:
+  tree clean, `main` == `origin/main`, no `*.mutbak`, the coverage machine block updated inside the
+  same commit, and the two surviving "unable to fail" strings are past-tense history, not live
+  claims. Nothing was left half-written.
+- ⛔ **BLOCKED ON THE WEEKLY API LIMIT — resets 3pm America/Los_Angeles.** No further seat can be
+  dispatched until then.
+- **NEXT ACTION when dispatch is available again — stage 7.** Its plan is FORGED and its adversary
+  strike HELD STONE; it owes the per-range re-measure `0/0/0/+11/+16` (never a constant) because the
+  navstack slice landed underneath it and moved its declared source ranges.
 - **15 campaigns now, not 14.** `Claude/Campaigns/swipe-navstack.json` is filed IN_PROGRESS with
   plan-review already passing and four gates owed. ⛔ It binds **no adversary gate** — the plan's
   §13 names none, and that sequence is what three rounds forged.
