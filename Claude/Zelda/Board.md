@@ -116,8 +116,26 @@ conversation that produced it. It carries the spine, the next action, the open i
 - ✅ **Stage 7's coordinates ARE re-measured** (`747cf58`, §18), each located by matching the
   construct rather than adding an offset. `0/0/0/+11/+16` reproduces at HEAD — re-derived, not
   adopted. The shift is **three regimes from two hunks**, confirming it is not uniform.
-- **NEXT ACTION — the plan reviewer, round 3 on stage 7**, to verify the amendment stayed confined
-  and issue a verdict of record. Everything below waits on it.
+- ✅ **Stage 7 now HAS a verdict of record: round 3 = TEMPER** (`e49d50f`). **Round 4 is owed, and no
+  conditional waiver was issued this time** — which is the whole reason the gap existed before.
+  Round 2's amendment was verified **CONFINED**, hunk by hunk across 14 hunks, every substantive
+  claim reproduced by execution at registry 163.
+- ⭐⭐ **Round 2's own F3b was WRONG, and the planner was right to deviate from it.** Measured: the
+  two-part mutation r2 prescribed leaves the assertion PASSING (the mutant survives); the
+  registry-side form the planner substituted reddens two rows and fails under the pre-repair
+  predicate. A review seat's prescription, corrected by execution.
+- ⛔ **F1 (Structural) — the slice gave a commit a THIRD outcome and §13 never grew an arm.**
+  `applies` at `js/app.js:706-709`, three branches at `:1047-1056`; §13 dim 4 still says two
+  outcomes and dim 3 says one interleaving, which is **false at HEAD**. Measured: `LANDEDPAGESHOWS`
+  drives commit+abort only, and `NAVRECONCILE` drives the superseded settle but reads the screen
+  from nav classes rather than **through the hold release**. The cell is the auditor's; §13's text
+  is the planner's.
+- ⛔ **My brief was wrong twice more, both caught by the seat rather than by me.** I told the
+  reviewer `a630d40` amended stage 7 — it touches **only** the navstack plan (`git show --name-only`
+  confirms). Stage 7's history since round 2 is `734b393` and `747cf58`, nothing else. Same shape as
+  the FORGE error: **a fact asserted about an artifact without opening it.**
+- **NEXT ACTION — the planner, round-4 items**: §13 dims 4 and 3, the two self-certifying clauses,
+  and two stale figures (the status block still cites a 900/899 suite; HEAD measures 937/936/0/1).
 - **15 campaigns now, not 14.** `Claude/Campaigns/swipe-navstack.json` is filed IN_PROGRESS with
   plan-review already passing and four gates owed. ⛔ It binds **no adversary gate** — the plan's
   §13 names none, and that sequence is what three rounds forged.
