@@ -5,7 +5,7 @@ Type: plan
 <!-- vitruvius-gate {"plan_type":"refactor",
   "patterns":{"boundary_relocation":false,"callee_replacement":true,"contract_shape":true,"state_transfer":true,"async_change":false,"persistence_migration":false,"lifecycle_ownership":true},
   "project_adapter":"tomeroam-js-dom",
-  "source_ranges":["js/app.js:346-374","js/app.js:424-428","js/app.js:499-500","js/app.js:1022-1026","js/app.js:1071-1081","js/browse.js:117-140","js/browse.js:242-248","js/browse.js:960-968"],
+  "source_ranges":["js/app.js:346-374","js/app.js:424-428","js/app.js:499-500","js/app.js:1033-1037","js/app.js:1087-1097","js/browse.js:117-140","js/browse.js:242-248","js/browse.js:960-968"],
   "callee_ranges":["js/browse.js:159-223"],
   "affected_contracts":["js/browse.js:964","js/app.js:349","js/app.js:373","test/app-harness.js:593","test/app-harness.js:597","tools/mutate.mjs:1","Claude/Subsystems/swipe-reveal.md:41","Claude/Decisions/PolicyLedger.mjs:1"],
   "staged_records":["Claude/Plans/PLAN-swipe-reveal.md","Claude/Subsystems/swipe-reveal.md","Claude/Zelda/Board.md","Claude/Decisions/DecisionLog.md","Claude/Campaigns/swipe-stage7.json"],
@@ -16,6 +16,14 @@ Status: **TEMPER APPLIED (round 2) — NO ROUND 3 IS OWED; next seat is the adve
 `Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r2.md` (`c2369f8`), verdict TEMPER, over round 1's
 `Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r1.md` (`5c2c065`). The reviewer waived round 3 on the
 condition that the amendment stay confined to its three edits, and it did.
+⚠️ **COORDINATES RE-MEASURED AT `29c4978` — see §18.** The settle-window nav-stack slice
+(`PLAN-swipe-navstack-settle-window.md`, built across `8acbdff` and `9506f3a`) landed underneath this
+plan and moved lines in `js/app.js` (3096 → 3112). Two of the five declared `source_ranges` moved and
+the `vitruvius-gate` block is corrected in place; the shift is **not uniform** (0 / 0 / 0 / +11 / +16,
+from two separate expansion hunks). §18 carries every re-derived coordinate, each located by matching
+the construct in current source rather than by adding an offset, plus what the slice made stale beyond
+coordinates. **Line citations in §1–§17 are as measured at `c2369f8` and §18 supersedes them.**
+
 Every measurement below was taken at `c2369f8` and re-checked against `8d0bc67`, which touches only
 the board, a new board-row-id gate and its hook wiring — no source, no mutation registry, no
 generated document — so every figure stands. Suite at `8d0bc67`: **900 tests / 899 pass / 0 fail /
@@ -80,6 +88,7 @@ is the check that matters.
 15. [Risk registry](#15-risk-registry)
 16. [What this does NOT do, each with its consumer named (U2 deferrals)](#16-what-this-does-not-do-each-with-its-consumer-named-u2-deferrals)
 17. [Sequence, owners, exit condition and handoff](#17-sequence-owners-exit-condition-and-handoff)
+18. [Coordinates re-measured at `29c4978`, and what moved beyond them](#18-coordinates-re-measured-at-29c4978-and-what-moved-beyond-them)
 
 ---
 
@@ -1027,3 +1036,135 @@ auditor**.
 **Campaign definition of done:** `Claude/Campaigns/swipe-stage7.json` (to be authored at step 1's
 close). ⚠️ Its `verdictArtifactGlob`s must carry a wildcard on the stem so a later round's `-rN`
 artifact is visible to the stage gate.
+
+---
+
+## 18. Coordinates re-measured at `29c4978`, and what moved beyond them
+
+**Why this pass was owed.** Every `file:line` in §1–§17 and in the `vitruvius-gate` declaration was
+measured against a tree that no longer exists. `PLAN-swipe-navstack-settle-window.md` was built
+underneath this plan across `8acbdff` and `9506f3a`, and it edits `js/app.js` inside two of the five
+declared `source_ranges`. `js/app.js` goes 3096 → 3112 lines. A declared range that names the wrong
+lines sends the project adapter over the wrong source, and a prose citation that names the wrong line
+sends the builder to the wrong construct.
+
+**Method, and why it is not an offset.** Each coordinate was re-derived by taking the line text at
+`c2369f8` and locating that exact text in `js/app.js` at `29c4978`; where the text is not unique the
+construct was disambiguated by its neighbours. No coordinate was obtained by adding a shift to an old
+number. **The shift is not uniform**: two expansion hunks produce three regimes.
+
+| Region of the OLD file | Hunk | Shift |
+|---|---|---|
+| lines 1–698 | `@@ -350,5 +350,5 @@` — five comment lines replaced by five | **0** |
+| lines 700–1032 | `@@ -699 +699,12 @@` — one line becomes twelve | **+11** |
+| lines 1033–3096 | `@@ -1032 +1043,6 @@` — one line becomes six | **+16** |
+
+### 18.1 The `vitruvius-gate` block — every coordinate re-derived
+
+| Declared | The construct it names | At `29c4978` | Shift |
+|---|---|---|---|
+| `js/app.js:346-374` | the `session.hold` ownership comment through `dropRowHold`'s closing `};` | `346-374` | 0 |
+| `js/app.js:424-428` | `const cur = d \|\| session;` through `finishing = false;` in `begin()`'s hard reset | `424-428` | 0 |
+| `js/app.js:499-500` | `revealBase = snapBrowse(true);` and `takeRowHold();` in `start()` | `499-500` | 0 |
+| `js/app.js:1022-1026` | the "Release the row hold BEFORE applyScreen" comment through `dropRowHold();` | **`1033-1037`** | **+11** |
+| `js/app.js:1071-1081` | the "Order matters" comment through the finalize `finally`'s closing `}` | **`1087-1097`** | **+16** |
+| `js/browse.js:117-140` | the owned-token comment through `beginHold`'s `return ++holdGen; }` | `117-140` | 0 |
+| `js/browse.js:242-248` | the invalidation comment through `dropHold`'s closing `}` | `242-248` | 0 |
+| `js/browse.js:960-968` | the export object region | `960-968` | 0 |
+| `callee_ranges` `js/browse.js:159-223` | the `landed` comment through `endHold`'s closing `}` | `159-223` | 0 |
+
+`js/browse.js` and `test/app-harness.js` are byte-unchanged since `c2369f8` (`git log c2369f8..HEAD`
+on each returns no commit), and every construct above was still read at `29c4978` rather than
+inferred from that.
+
+**`affected_contracts` — all eight re-derived, none moved.** `js/browse.js:964` (`beginHold, endHold,
+pageElFor,`); `js/app.js:349` (`takeRowHold`'s definition); `js/app.js:373` (the
+`Browse.endHold(t, currentDesc())` call); `test/app-harness.js:593` and `:597` (the fake's
+`beginHold`/`endHold`); `tools/mutate.mjs:1`; `Claude/Subsystems/swipe-reveal.md:41` (the file changed
+at `9506f3a`/`8e114e0`, but its only hunk is at line 174, so line 41 holds);
+`Claude/Decisions/PolicyLedger.mjs:1`.
+
+### 18.2 Prose coordinates in §1–§17 that moved
+
+`js/app.js`, re-derived by construct: `:701` → **`:712`**; `:702-706` → **`:713-717`**; `:708` →
+**`:719`**; `:1012-1015` → **`:1023-1026`**; `:1026` → **`:1037`**; `:1032` → **`:1047-1048`**;
+`:1038-1039` → **`:1054-1055`**; `:1048` → **`:1064`**; `:1055` → **`:1071`**; `:1060` → **`:1076`**;
+`:1070` → **`:1086`**; `:1078-1081` → **`:1094-1097`**; `:1079` → **`:1095`**; `:1083` → **`:1099`**;
+`:1084` → **`:1100`**.
+
+`tools/mutate.mjs` (changed at `8acbdff`, `9506f3a`, `14352b7`; shift +101 at these sites):
+`:432-438` → **`:533-539`**; `:434-438` → **`:535-539`**; `:555-564` → **`:656-665`**.
+
+**Unmoved and re-verified, not assumed:** `js/app.js:330`, `:346`, `:349`, `:373`, `:386-390`,
+`:398-431`, `:399`, `:413-416`, `:424-428`, `:427`, `:499-500`, `:511-513`, `:515-533`, `:535`,
+`:557`, `:570`, `:578`, `:591`, `:604`, `:616`, `:617`, `:645`; every cited line in `js/swipe.js`,
+`js/nav.js`, `js/virtuallist.js`, `css/app.css`, `test/app-harness.js` (including `:632`),
+`test/swipe-declone-stage2-subtraction.test.js`, `tools/mutation-sweep.mjs` and
+`tools/gen-swipe-model.mjs` — none of those files changed since `c2369f8`. `index.html:233` still
+loads `js/debug.js` (the file changed; only the cache-busting query string on that line did).
+
+### 18.3 Stale beyond coordinates — findings, not formatting
+
+**(1) The landed descriptor gained a THIRD case, and §13 dimension 4 enumerates two.** The slice
+introduced `applies` (`js/app.js:706-709`), so a commit now has two outcomes: an APPLIED commit, whose
+stack mutation runs, and a **stack-SUPERSEDED commit**, whose mutation is skipped because a newer
+navigation moved the stacks inside the settle window. The source comments this plan quotes were
+rewritten to say so (`js/app.js:350-354`, `:1033-1036`): on a stack-superseded commit `currentDesc()`
+— the single read of the landed screen, and the value handed to `finishGestureHold` — names whatever
+screen the newer navigation reached, **not this gesture's destination**. §6 F3 and §8 describe `landed`
+against two outcomes, and §13 dimension 4 states the matrix as "both the commit and the abort
+outcome". At `29c4978` there are three. **Nothing in stage 7's own change alters this** — the rename
+and the status carry the descriptor through unchanged, and the `LANDEDPAGESHOWS` cells are green at
+`29c4978` — so this is a matrix that is short one arm, not a broken prescription. Whether the third
+arm owes a cell is the coverage auditor's call and is **not decided here.**
+
+**(2) Two deferred subjects in §3 row 2 grew an arm.** `commit.stackEffect` is no longer three
+unconditional branches: they are guarded by `applies` (`js/app.js:713-717` behind `:706-709`).
+`commit.screen`/`commit.scroll`/`abort.scroll` are no longer one line: they are three branches at
+`js/app.js:1047-1056`. The deferrals in §16 stand and their consumers are unchanged; their subjects
+are larger than §3 row 2 describes.
+
+**(3) §11's co-change measurement was taken over a 152-entry registry; `MUTATIONS.length` is 163 at
+`29c4978`. RE-MEASURED — the declared figures hold, membership identical.** Measured by importing the
+exported `MUTATIONS` in a subprocess (never the mutating CLI) and scanning each registration's `from`
+and `to`, including `also`, at a word boundary for `takeRowHold`, `dropRowHold`, `beginHold`,
+`endHold`, `dropHold` and for `.hold`:
+
+| Measured at `29c4978` | Result |
+|---|---|
+| class (a) — `from` naming a retired identifier or the session field | **10**, plus the three `toMover` re-anchorings = **thirteen**, by the same names §11 lists |
+| class (b) — `to` injecting a retired identifier | **nine**, by the same names §11 lists |
+| `to` strings injecting the session field `.hold` | **one** — `stage6c G2/G3`, exactly as §17 step 5b clause 2 records |
+| `to` strings of `S2-35`/`S2-36`/`S2-39 MOVERSHAPE` containing `Object.freeze(` | **none** — round 2 F3a's measurement reproduces, so §12's OBLIGATION stands |
+| `grep -rn 'endHold\|dropRowHold' docs/ tools/gen-swipe-model.mjs` | **six lines in two files**, at the same coordinates §11 class (c) item 2 declares |
+
+**None of the eleven registrations added since `c2369f8` touches the retired identifiers**, so §17
+step 5b's equality rule stands unchanged at thirteen and nine. The stale content is §11's stated
+input: "Registry size at measurement: 152" and "the registry is 152 entries" — the figures derived
+from it are re-measured true at 163.
+
+**(4) §12 and §14 D3's six mover-touching sites are the same six.** `.movers` occurs at
+`js/app.js:542`, `:543` (construction) and `:557`, `:578`, `:604`, `:617`, `:712`, `:1099` (read /
+`m.el.style` write) — the identical set, at `:701` → `:712` and `:1083` → `:1099`. The slice adds no
+assignment terminating at depth 1 on a mover-rooted expression, so §12's ruling input is undisturbed.
+
+**(5) The strike's coordinates moved; its exit set did not.**
+`Claude/Loki/STRIKE-swipe-stage7-lease-exits-2026-08-06.md` (`d0201d7`) was executed against HEAD
+`734b393`, **before** the slice, and cites `js/app.js:1026` and `:1078-1081` (now `:1037` and
+`:1094-1097`). MEASURED: the slice's added lines contain **no `return` token**, every addition lands
+inside `runFinalize` (`:682`–`:1058`) between its entry and its `finishing = false`, and the acquire
+site (`:500`) and all three release sites (`:427`, `:1037`, `:1095`) are unchanged in identity. **The
+verdict is not re-opened here**; what is recorded is that no reachable exit was added or removed.
+
+**(6) Two records-currency defects, left for the assistant.** The status block and §17 step 2 predate
+the strike: they read "next seat is the adversary" and step 2's state is "owed", while the strike is
+filed and returned HELD STONE with U1 resolved by execution. Separately, **no plan-review artifact for
+this plan carries a FORGE verdict** — `Claude/Charpy/` holds `-r1` and `-r2` for stage 7, both TEMPER
+with round 3 waived; the three-round FORGE (`b1cbcd0`) belongs to
+`PLAN-swipe-navstack-settle-window.md`. Correcting a seat's state or a verdict is outside this pass.
+
+**(7) One pre-existing imprecision, not slice-induced and not corrected.** `source_ranges`
+`js/browse.js:960-968` covers two lines of the preceding function (`960-961`) and stops one line short
+of the export object's close; the object literal is `963-969`. It was the same at `c2369f8`. Changing
+it changes what the project adapter scans, which is a scope decision rather than a coordinate
+correction.
