@@ -11,11 +11,24 @@ Type: plan
   "staged_records":["Claude/Plans/PLAN-swipe-reveal.md","Claude/Subsystems/swipe-reveal.md","Claude/Zelda/Board.md","Claude/Decisions/DecisionLog.md","Claude/Campaigns/swipe-stage7.json"],
   "blocking_questions":["LEASEPAIRED","LEASEINVALID","LEASEORDER","MOVERFROZEN"]} -->
 
-Status: **TEMPER APPLIED (round 2) — NO ROUND 3 IS OWED; next seat is the adversary, for §17 step 2
-(U1).** Nothing here is cleared to build.
-`Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r2.md` (`c2369f8`), verdict TEMPER, over round 1's
-`Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r1.md` (`5c2c065`). The reviewer waived round 3 on the
-condition that the amendment stay confined to its three edits, and it did.
+Status: **ROUND 3's TEMPER IS APPLIED, AND ROUND 4 IS OWED; the next seat is the plan reviewer.**
+Nothing here is cleared to build.
+**The verdict of record is `Claude/Charpy/PLAN-swipe-stage7-2026-08-07-r3.md` (`e49d50f`), verdict
+TEMPER**, over round 2's `Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r2.md` (`c2369f8`) and round 1's
+`Claude/Charpy/PLAN-swipe-stage7-2026-08-06-r1.md` (`5c2c065`), both also TEMPER. **Round 3 issued no
+conditional waiver**, and scopes round 4 to §13 dimensions 3 and 4 and this status block.
+**What round 3's temper changed here — three items.** F1 (Structural): §13 dimension 4 enumerated two
+commit outcomes and dimension 3 one interleaving, and the source produces three outcomes at
+`js/app.js:1047-1056` behind the `applies` binding at `:706-709`; both cells are corrected, and
+dimension 4 now states what the suite does and does not prove through the hold release. F2 (Weak): the
+two clauses asserting a reviewer's condition satisfied are removed from this block and from §17 step 1.
+F3 (Note): two stale measurement inputs are corrected — §11's registry size and this block's suite
+count. F4 (Note) needs no change; it is recorded at §18.3(2).
+⚠️ **§17 step 2's state cell and §14's U1 are records-currency items, not open work.** The adversary's
+strike is filed — `Claude/Loki/STRIKE-swipe-stage7-lease-exits-2026-08-06.md` (`d0201d7`), verdict
+HELD STONE, U1 resolved by execution — and §18.3(6) routes the correction. It cascades through §14,
+§15 R2, §17's exit condition and §17's handoff order, which is wider than the amendment round 4 is
+scoped to judge, so it is stated here rather than made here.
 ⚠️ **COORDINATES RE-MEASURED AT `29c4978` — see §18.** The settle-window nav-stack slice
 (`PLAN-swipe-navstack-settle-window.md`, built across `8acbdff` and `9506f3a`) landed underneath this
 plan and moved lines in `js/app.js` (3096 → 3112). Two of the five declared `source_ranges` moved and
@@ -24,10 +37,13 @@ from two separate expansion hunks). §18 carries every re-derived coordinate, ea
 the construct in current source rather than by adding an offset, plus what the slice made stale beyond
 coordinates. **Line citations in §1–§17 are as measured at `c2369f8` and §18 supersedes them.**
 
-Every measurement below was taken at `c2369f8` and re-checked against `8d0bc67`, which touches only
-the board, a new board-row-id gate and its hook wiring — no source, no mutation registry, no
-generated document — so every figure stands. Suite at `8d0bc67`: **900 tests / 899 pass / 0 fail /
-1 skip** (count read, not inferred; it rose from 887 because that commit added a gate cell).
+Every measurement below was taken at `c2369f8`, and §18 re-derives every coordinate at `29c4978`.
+MEASURED: `js/app.js`, `js/browse.js` and `tools/mutate.mjs` are unchanged from `29c4978` to HEAD
+`1242ce8` (`git log 29c4978..HEAD --` on those three paths returns no commit), so §18's coordinates
+and re-measured figures hold at HEAD. **Suite at HEAD `1242ce8`: 937 tests / 936 pass / 0 fail /
+1 skipped** (count read from `# tests`, not inferred, with the runner's own exit status captured
+rather than a pipe's). The same count at `8d0bc67` was **900 / 899 / 0 / 1**; that is a dated
+measurement of an earlier tree, not a figure this plan is built against.
 
 **What round 2 changed — three edits, each with its acceptance predicate EXECUTED and its measured
 result recorded beside it.** F1 (Weak): §11's reader class (c) was one and is three — `ADAPTER_DECL`,
@@ -489,7 +505,12 @@ freeze. Round 1 F1 caught it. **The set below was RE-MEASURED here, control-firs
 — the repo was never written to — by applying each transform layer to the source text and running the
 anchors gate's own predicate (`readFile(file).includes(lf(part.from))` over `MUTATIONS` and each
 `m.also`, with the gate's CRLF normalisation) against the result.** The control ran first: **0 rotted
-with no transform applied.** Registry size at measurement: 152.
+with no transform applied.** Registry size at that measurement: **152, at `c2369f8`**.
+⚠️ **`MUTATIONS.length` is 163 at HEAD `1242ce8`** (measured by importing the exported `MUTATIONS` in
+a subprocess, never the mutating CLI). §18.3(3) re-measures every figure derived below against the
+163-entry registry and reproduces each one with identical membership, so the stale input does not
+carry into a stale figure — but the input is stated at the commit it was taken from, not as a claim
+about HEAD.
 
 | Transform layer | Rotted `from` anchors |
 |---|---|
@@ -502,8 +523,8 @@ with no transform applied.** Registry size at measurement: 152.
 | **FULL — the transform this plan specifies, comments included** | **13** |
 
 **The declared co-change set is the union of three classes, and the first draft carried only part of
-class (a).** Cited by name, never by index — the registry is 152 entries and every insertion shifts
-later ones.
+class (a).** Cited by name, never by index — the registry is **163 entries at HEAD `1242ce8`** and
+every insertion shifts later ones.
 
 **(a) `from` anchors that stop matching** — **thirteen.** ⛔ **The comment rename is not optional, so
 thirteen is the declared figure and twelve is a sub-measurement** (round 2 F1): `js/app.js:346-374`,
@@ -795,8 +816,8 @@ measured rect — a cell green because a rect is zero would be a false witness.
 |---|---|---|---|
 | 1 | **Lifetime and reuse** | **Yes — the stage's core.** | Exactly one acquire and one effective release per live gesture, across every §3.7 exit; a second release is a no-op; a gesture that arms and never goes live acquires nothing; **and the two paired resources the release owns are released with it — the scroll suspension once per gesture on both the ready and invalidated paths, and the row-hold flag cleared first so a deferred repaint cannot re-defer.** `LEASEPAIRED` (five mutants; the last two are round 1 F4's, which found §7 and §8 citing this cell for effects it did not assert). |
 | 2 | **Trust boundaries and hostile inputs** | **Yes, narrowly.** | A stale lease presented after a newer gesture acquired must return `'invalidated'` and reconcile nothing — the stale-finalizer class the token semantics exist for. `LEASEINVALID`. |
-| 3 | **Concurrency** | **Yes.** | The interleaving the design permits is supersession: a second gesture acquiring while the first is settling. The first's later release must not reconcile against the second's state. `LEASEINVALID` (supersession route). No thread or worker concurrency exists in this subsystem. |
-| 4 | **Shape and platform matrices** | **Yes, as the landing matrix.** | The landed descriptor's two branches — a landing that names a cached browse page and one that does not — on both the commit and the abort outcome. Retained by the existing `LANDEDPAGESHOWS` cells, which this stage must leave green; no new cell. |
+| 3 | **Concurrency** | **Yes.** | **The design permits TWO interleavings, not one.** (i) **Gesture supersession** — a second gesture acquiring while the first is settling; the first's later release must not reconcile against the second's state. `LEASEINVALID` (supersession route). (ii) **A settle-window navigation** — a navigation landing between arm and finalize and moving the nav stacks, so the gesture's own stack mutation is skipped (`applies`, `js/app.js:706-709`, guarding `:713-717`) and the release is handed the screen that navigation reached instead of this gesture's destination. It is live at HEAD `1242ce8`, and it is what produces the third outcome dimension 4 enumerates; the lease boundary's coverage of it is dimension 4's routed question, not a separate cell here. No thread or worker concurrency exists in this subsystem. |
+| 4 | **Shape and platform matrices** | **Yes, as the landing matrix.** | The landed descriptor's two branches — a landing that names a cached browse page and one that does not — across the **THREE** outcomes the finalize path produces at HEAD `1242ce8` (`js/app.js:1047-1056`, behind the `applies` binding at `:706-709`): an **applied commit**, a **stack-superseded commit** whose stack mutation was skipped, and an **abort**. ⛔ **What the suite proves THROUGH THE HOLD RELEASE, MEASURED at `1242ce8`: the applied-commit arm and the abort arm, and no other.** `LANDEDPAGESHOWS` (`test/swipe-declone-stage2-browse.test.js:324`, `:361`, `:419`) boots `realBrowse`, wraps `Browse.endHold`, and asserts the descriptor handed to it on exactly those two outcomes. ⛔ **What it does not prove: the stack-superseded arm through the hold release.** Every cell driving that arm is in `test/swipe-navstack-settle.test.js`, which MEASURED contains no occurrence of `Browse`, `endHold` or `realBrowse` and reads the landed screen from the classes `js/nav.js` writes (`:69-86`); so no cell drives a superseded descriptor into Browse's reconciliation, and the arm on which the descriptor names a foreign screen is the unexercised one. The two proven arms are retained by `LANDEDPAGESHOWS`, which this stage must leave green. **Whether the third arm owes a cell at the lease boundary is the coverage auditor's decision at §17 step 7 and is NOT decided here** — this plan authors no cell for it, and the enumeration above is what that decision is taken against. |
 | 5 | **Failure and rejection paths** | **Yes.** | A throwing `runFinalize` still releases the lease through the `finally` guard and still clears `finishing`; a destructive Browse operation mid-gesture invalidates and the gesture still settles and reaches IDLE. `LEASEINVALID` + the retained `2 — a throw in finalize restores finishing` and `DESTROYEDMOVER` cells. |
 | 6 | **Numerical edges and determinism** | **No.** | The lease carries no arithmetic. The one numeric property — that `null`/`0` is never a valid lease — is a contract fact covered by `LEASEPAIRED`'s sentinel assertion, not a numerical edge. |
 | 7 | **Contract claims** | **Yes.** | Every absolute claim in §6 and §8: the status enum has exactly two values; `finishGestureHold` is idempotent; `invalidateGestureHold` is idempotent **in observable effect and not in state** (it consumes a generation per call — §6 qualifies it and the cell must assert the qualified claim, not the flat one); nothing returned is a thenable; the reconciliation body's effects are unchanged. `LEASECONTRACT` + the retained `LANDEDPAGESHOWS` cells as the effect witnesses. |
@@ -808,8 +829,9 @@ measured rect — a cell green because a rect is zero would be a false witness.
 value, explicit invalidation, and (added at round 1) **the production trace line that reads the
 status** — and each was crossed against all ten dimensions rather than only the dimension that
 prompted it. Dimension 1 gains `LEASEPAIRED` and its two new clauses; 2/3/5 gain `LEASEINVALID`; 7
-gains `LEASECONTRACT`; 9 is not-applicable-with-reason for all three; 4/8/10 are discharged by
-retained cells that must stay green. **The trace line's own pass:** lifetime — it holds nothing and
+gains `LEASECONTRACT`; 9 is not-applicable-with-reason for all three; 8/10 are discharged by
+retained cells that must stay green, and **4 is discharged by retained cells on two of its three
+outcome arms, with the third routed to the coverage auditor** (dimension 4). **The trace line's own pass:** lifetime — it holds nothing and
 is emitted once per release, covered by `LEASEPAIRED`'s release count; trust — it takes no external
 input; concurrency — it reads `session.id` inside `returnLease`, which the ordering in §9 already
 pins to run before `endOwnership` nulls the session, so it cannot read a successor's id; failure —
@@ -964,7 +986,7 @@ subtraction pass (whose §14 trigger it discharges). It gates nothing and is gat
 
 | # | Step | Owner | State |
 |---|---|---|---|
-| 1 | Temper this plan | the plan reviewer | **DONE — round 1 (TEMPER, `5c2c065`) and round 2 (TEMPER, `c2369f8`), both applied. Round 3 is NOT owed: the reviewer waived it on condition the amendment stay confined to F1, F3a and F3b, and it did.** |
+| 1 | Temper this plan | the plan reviewer | **ROUND 4 OWED.** Round 1 (TEMPER, `5c2c065`), round 2 (TEMPER, `c2369f8`) and round 3 (TEMPER, `e49d50f`) are applied. **The verdict of record is `Claude/Charpy/PLAN-swipe-stage7-2026-08-07-r3.md`, verdict TEMPER**; it issued no conditional waiver and scopes round 4 to §13 dimensions 3 and 4 and the status block. |
 | 2 | **Resolve U1** — strike the load-bearing promise (below) | the adversary | owed |
 | 3 | Author the red suite from §13 | the test author | owed |
 | 4 | Build green | the builder | owed |
@@ -1105,18 +1127,23 @@ loads `js/debug.js` (the file changed; only the cache-busting query string on th
 
 ### 18.3 Stale beyond coordinates — findings, not formatting
 
-**(1) The landed descriptor gained a THIRD case, and §13 dimension 4 enumerates two.** The slice
-introduced `applies` (`js/app.js:706-709`), so a commit now has two outcomes: an APPLIED commit, whose
-stack mutation runs, and a **stack-SUPERSEDED commit**, whose mutation is skipped because a newer
-navigation moved the stacks inside the settle window. The source comments this plan quotes were
+**(1) The landed descriptor gained a THIRD case. §13 enumerated two; round 3's F1 is applied and it
+now enumerates three.** The slice introduced `applies` (`js/app.js:706-709`), so a commit has two
+outcomes: an APPLIED commit, whose stack mutation runs, and a **stack-SUPERSEDED commit**, whose
+mutation is skipped because a newer navigation moved the stacks inside the settle window. With the
+abort that is three outcomes at `js/app.js:1047-1056`. The source comments this plan quotes were
 rewritten to say so (`js/app.js:350-354`, `:1033-1036`): on a stack-superseded commit `currentDesc()`
 — the single read of the landed screen, and the value handed to `finishGestureHold` — names whatever
-screen the newer navigation reached, **not this gesture's destination**. §6 F3 and §8 describe `landed`
-against two outcomes, and §13 dimension 4 states the matrix as "both the commit and the abort
-outcome". At `29c4978` there are three. **Nothing in stage 7's own change alters this** — the rename
-and the status carry the descriptor through unchanged, and the `LANDEDPAGESHOWS` cells are green at
-`29c4978` — so this is a matrix that is short one arm, not a broken prescription. Whether the third
-arm owes a cell is the coverage auditor's call and is **not decided here.**
+screen the newer navigation reached, **not this gesture's destination**. **§13 dimension 4 now states
+the three outcomes and what the suite proves through the hold release, and dimension 3 names the
+settle-window navigation beside gesture supersession.** MEASURED while applying that amendment:
+**neither §6 F3 nor §8 enumerates the commit outcomes at all** — §6 F3 states `landed`'s role and §8's
+rows split on the descriptor axis (a landed branch and a fallback branch), so the outcome enumeration
+lives in §13 alone and no sibling correction is owed there. **Nothing in stage 7's own change alters
+the behaviour** — the rename and the status carry the descriptor through unchanged, and the
+`LANDEDPAGESHOWS` cells are green at HEAD `1242ce8` — so this was a matrix short one arm, not a broken
+prescription. Whether the third arm owes a cell is the coverage auditor's call and is **not decided
+here.**
 
 **(2) Two deferred subjects in §3 row 2 grew an arm.** `commit.stackEffect` is no longer three
 unconditional branches: they are guarded by `applies` (`js/app.js:713-717` behind `:706-709`).
@@ -1139,9 +1166,10 @@ and `to`, including `also`, at a word boundary for `takeRowHold`, `dropRowHold`,
 | `grep -rn 'endHold\|dropRowHold' docs/ tools/gen-swipe-model.mjs` | **six lines in two files**, at the same coordinates §11 class (c) item 2 declares |
 
 **None of the eleven registrations added since `c2369f8` touches the retired identifiers**, so §17
-step 5b's equality rule stands unchanged at thirteen and nine. The stale content is §11's stated
-input: "Registry size at measurement: 152" and "the registry is 152 entries" — the figures derived
-from it are re-measured true at 163.
+step 5b's equality rule stands unchanged at thirteen and nine. The stale content was §11's stated
+input; **round 3's F3 is applied and it is corrected** — §11 now dates the 152 to `c2369f8` as the
+commit its control-first measurement was taken at, and states 163 as the registry's size at HEAD
+`1242ce8`. The figures derived from the 152 are re-measured true at 163, membership identical.
 
 **(4) §12 and §14 D3's six mover-touching sites are the same six.** `.movers` occurs at
 `js/app.js:542`, `:543` (construction) and `:557`, `:578`, `:604`, `:617`, `:712`, `:1099` (read /
@@ -1156,12 +1184,15 @@ inside `runFinalize` (`:682`–`:1058`) between its entry and its `finishing = f
 site (`:500`) and all three release sites (`:427`, `:1037`, `:1095`) are unchanged in identity. **The
 verdict is not re-opened here**; what is recorded is that no reachable exit was added or removed.
 
-**(6) Two records-currency defects, left for the assistant.** The status block and §17 step 2 predate
-the strike: they read "next seat is the adversary" and step 2's state is "owed", while the strike is
-filed and returned HELD STONE with U1 resolved by execution. Separately, **no plan-review artifact for
-this plan carries a FORGE verdict** — `Claude/Charpy/` holds `-r1` and `-r2` for stage 7, both TEMPER
-with round 3 waived; the three-round FORGE (`b1cbcd0`) belongs to
-`PLAN-swipe-navstack-settle-window.md`. Correcting a seat's state or a verdict is outside this pass.
+**(6) One records-currency defect remains, and it is the assistant's.** §17 step 2's state reads
+"owed" and §14's U1 reads OPEN, while the strike is filed and returned HELD STONE with U1 resolved by
+execution (`Claude/Loki/STRIKE-swipe-stage7-lease-exits-2026-08-06.md`, `d0201d7`). Correcting it
+cascades through §14, §15 R2, §17's exit condition and §17's handoff order; the status block states
+the fact and routes the pass. **The status block's own half of this defect is closed** — it no longer
+names the adversary as the next seat. Separately, **no plan-review artifact for this plan carries a
+FORGE verdict**: `Claude/Charpy/` holds `-r1`, `-r2` and `-r3` for stage 7, all three TEMPER, and
+`-r3` (`e49d50f`) is the verdict of record with round 4 owed; the three-round FORGE (`b1cbcd0`)
+belongs to `PLAN-swipe-navstack-settle-window.md`.
 
 **(7) One pre-existing imprecision, not slice-induced and not corrected.** `source_ranges`
 `js/browse.js:960-968` covers two lines of the preceding function (`960-961`) and stops one line short
