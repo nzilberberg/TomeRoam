@@ -37,7 +37,8 @@ conversation that produced it. It carries the spine, the next action, the open i
   REVIEW — round 2 owed.** Stages 8, 9, 10 not started.
 - ⚠️ **Two independent numbering systems both say "stage"** — the reveal spine above, and the de-clone
   workstream whose numbers the campaign manifests use. Always say which one you mean.
-- **Stage 7's plan is through every review gate.** Plan review DONE (round 2 TEMPER `c2369f8`,
+- ⚠️ **Stage 7's plan is NOT through its review gate** — see the FORGE correction above. Plan review
+  reached round 2 TEMPER (`c2369f8`,
   applied `734b393`, no round 3 owed); the adversary's §17 step-2 strike DONE (`d0201d7`, **HELD
   STONE**) — struck blind, and U1 is resolved by execution rather than by a third reading. §17
   **step 3, the test author**, is the next campaign step.
@@ -99,11 +100,24 @@ conversation that produced it. It carries the spine, the next action, the open i
   tree clean, `main` == `origin/main`, no `*.mutbak`, the coverage machine block updated inside the
   same commit, and the two surviving "unable to fail" strings are past-tense history, not live
   claims. Nothing was left half-written.
-- ⛔ **BLOCKED ON THE WEEKLY API LIMIT — resets 3pm America/Los_Angeles.** No further seat can be
-  dispatched until then.
-- **NEXT ACTION when dispatch is available again — stage 7.** Its plan is FORGED and its adversary
-  strike HELD STONE; it owes the per-range re-measure `0/0/0/+11/+16` (never a constant) because the
-  navstack slice landed underneath it and moved its declared source ranges.
+- ⛔⛔ **A BLOCKER WAS RECORDED HERE THAT DID NOT EXIST.** One agent failed on a weekly API limit, and
+  the assistant copied that error into the board as a live blocker **without ever retrying a
+  dispatch**. The very next dispatch succeeded on the first attempt. ⭐⭐ **An error string from a
+  dead agent is a fact about that agent at that moment, never about the current state** — measure by
+  attempting, not by quoting.
+- ⛔⛔ **STAGE 7 HAS NO FORGE VERDICT, AND I SAID IT DID.** Measured: `Claude/Charpy/` holds
+  `PLAN-swipe-stage7-2026-08-06-r1.md` and `-r2.md`, **both TEMPER**, and the string FORGE appears in
+  neither. I conflated the reviewer's *conditional waiver* — "no round 3 is owed **if** the amendment
+  stays confined to three edits" — with an actual verdict, and propagated it. **A waiver is not a
+  verdict, and nobody ever verified the condition was met.** The three-round FORGE (`b1cbcd0`)
+  belongs to the NAVSTACK plan. Caught by the planner correcting my own brief.
+  ⚠️ Consequence: stage 7 has no `Claude/Campaigns/swipe-stage7.json` yet, and when one is filed its
+  plan-review gate would read **MISSING**.
+- ✅ **Stage 7's coordinates ARE re-measured** (`747cf58`, §18), each located by matching the
+  construct rather than adding an offset. `0/0/0/+11/+16` reproduces at HEAD — re-derived, not
+  adopted. The shift is **three regimes from two hunks**, confirming it is not uniform.
+- **NEXT ACTION — the plan reviewer, round 3 on stage 7**, to verify the amendment stayed confined
+  and issue a verdict of record. Everything below waits on it.
 - **15 campaigns now, not 14.** `Claude/Campaigns/swipe-navstack.json` is filed IN_PROGRESS with
   plan-review already passing and four gates owed. ⛔ It binds **no adversary gate** — the plan's
   §13 names none, and that sequence is what three rounds forged.

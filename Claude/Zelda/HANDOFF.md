@@ -32,9 +32,11 @@ settle window empties the stack the committing gesture is about to mutate. Stand
 `Claude/Campaigns/swipe-navstack.json`. Four of its five gates are cleared; the coverage audit is
 the last.
 
-**B — swipe/reveal stage 7**, the Browse lease boundary. Plan forged, adversary held stone, U1
-closed by execution. **Not started, and it must not start until A lands** — because A shifts the
-source ranges stage 7 measured itself against.
+**B — swipe/reveal stage 7**, the Browse lease boundary. Adversary **HELD STONE**, U1 closed by
+execution, coordinates re-measured after A landed. ⛔ **But it carries NO FORGE verdict** — its two
+Charpy casebooks are both TEMPER, and the reviewer's "no round 3 owed" was a **conditional waiver**,
+never a verdict, with the condition never verified. **Do not describe stage 7 as forged or cleared
+to build**; check `Claude/Charpy/PLAN-swipe-stage7-*` for a verdict of record before claiming one.
 
 ⭐⭐ **Stage 7 owes a PER-RANGE re-measure once A lands, never a constant offset.** Measured by the
 plan reviewer: its five declared ranges shift by **0, 0, 0, +11, +16**.
