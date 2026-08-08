@@ -134,8 +134,21 @@ conversation that produced it. It carries the spine, the next action, the open i
   reviewer `a630d40` amended stage 7 — it touches **only** the navstack plan (`git show --name-only`
   confirms). Stage 7's history since round 2 is `734b393` and `747cf58`, nothing else. Same shape as
   the FORGE error: **a fact asserted about an artifact without opening it.**
-- **NEXT ACTION — the planner, round-4 items**: §13 dims 4 and 3, the two self-certifying clauses,
-  and two stale figures (the status block still cites a 900/899 suite; HEAD measures 937/936/0/1).
+- ✅ **Round-3 temper APPLIED** (`969fb8d`). §13 dim 4 now enumerates **three** outcomes and dim 3
+  names **two** interleavings; both self-certifying clauses are gone; both figures corrected
+  (900/899 → **937/936/0/1**, registry 152 dated to `c2369f8` and stated as **163** at HEAD).
+- ⭐⭐ **THE MEASUREMENT THAT MATTERS — what the suite proves THROUGH THE HOLD RELEASE.** Proven:
+  the applied-commit arm and the abort arm, by `LANDEDPAGESHOWS`, which boots `realBrowse`, spies on
+  `Browse.endHold` and asserts the descriptor handed to it. **NOT proven: the stack-superseded arm.**
+  Every cell driving that arm lives in `test/swipe-navstack-settle.test.js`, and a grep of that file
+  for `realBrowse|endHold|Browse` returns **ZERO lines** — its `landed()` helper reads nav classes
+  instead. Verified independently by the assistant. **The cell is the coverage auditor's at step 7;
+  the enumeration was the planner's and is now correct.**
+- **NEXT ACTION — the plan reviewer, round 4.**
+- ⏸️ **Owed to the assistant AFTER round 4 returns, not before:** §17 step 2 still reads "owed" and
+  §14 U1 still reads "OPEN", both stale against the strike `d0201d7`. Correcting them cascades into
+  §14, §15 R2, §17's exit condition and the handoff order — wider than tracking. ⛔ Held because the
+  plan is under review and a frozen artifact takes ZERO edits until the seat returns it.
 - **15 campaigns now, not 14.** `Claude/Campaigns/swipe-navstack.json` is filed IN_PROGRESS with
   plan-review already passing and four gates owed. ⛔ It binds **no adversary gate** — the plan's
   §13 names none, and that sequence is what three rounds forged.
